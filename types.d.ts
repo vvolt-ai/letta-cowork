@@ -1,0 +1,75 @@
+type Statistics = {
+    cpuUsage: number;
+    ramUsage: number;
+    storageData: number;
+}
+
+type StaticData = {
+    totalStorage: number;
+    cpuModel: string;
+    totalMemoryGB: number;
+}
+
+type UnsubscribeFunction = () => void;
+
+interface EmailListParams {
+    folderId: string;
+    start?: number;
+    limit?: number;
+    status?: "read" | "unread" | "all";
+    flagid?: number;
+    labelid?: string;
+    threadId?: string;
+    sortBy?: "date" | "messageId" | "size";
+    sortOrder?: boolean;
+    includeTo?: boolean;
+    includeSent?: boolean;
+    includeArchive?: boolean;
+    attachedMails?: boolean;
+    inlinedMails?: boolean;
+    flaggedMails?: boolean;
+    respondedMails?: boolean;
+    threadedMails?: boolean;
+}
+
+type EventPayloadMapping = {
+    statistics: Statistics;
+    getStaticData: StaticData;
+    "generate-session-title": string;
+    "get-recent-cwds": string[];
+    "select-directory": string | null;
+    "fetch-folders": any;
+    "fetch-emails": any;
+    "fetch-accounts": any;
+    "connect-email": void;
+    "is-email-already-connected": boolean;
+    "fetch-email-by-id": any;
+    "update-messages": any;
+    "search-emails": any;
+}
+
+interface Window {
+    electron: {
+        subscribeStatistics: (callback: (statistics: Statistics) => void) => UnsubscribeFunction;
+        getStaticData: () => Promise<StaticData>;
+        // Letta Agent IPC APIs
+        sendClientEvent: (event: any) => void;
+        onServerEvent: (callback: (event: any) => void) => UnsubscribeFunction;
+        getRecentCwds: (limit?: number) => Promise<string[]>;
+        selectDirectory: () => Promise<string | null>;
+        openExternal: (url: string) => Promise<void>;
+        fetchEmails: (accountId: string, params?: EmailListParams) => Promise<any>;
+        fetchFolders: () => Promise<any>;
+        fetchAccounts: () => Promise<any>;
+        onEmailConnected: (
+            callback: (data: { success: boolean }) => void
+        ) => () => void;
+        connectEmail: () => Promise<void>;
+        checkAlreadyConnected: () => Promise<boolean>;
+        fetchEmailById: (accountId: string, folderId: string, messageId: string) => Promise<any>;
+        downloadEmailAttachment: (folderId: string, messageId: string, accountId: string) => Promise<any>;
+        markMessagesAsRead: (accountId: string, messageIds: (number | string)[]) => Promise<any>;
+        searchEmails: (accountId: string, params: any) => Promise<any>;
+    }
+}
+

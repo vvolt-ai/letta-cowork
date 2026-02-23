@@ -1,0 +1,26 @@
+
+import keytar from "keytar";
+
+export const APP_NAME = "MyElectronApp";
+export const OAUTH_PORT = 4321;
+
+export const BASE_URL = process.env.EMAIL_SERVER_BASE_URL || "http://localhost:8000";
+
+
+
+export async function getAccessToken() {
+  return keytar.getPassword(APP_NAME, "email_access_token");
+}
+
+export async function getRefreshToken() {
+  return keytar.getPassword(APP_NAME, "email_refresh_token");
+}
+
+
+export async function saveAccessToken(token: string) {
+  return keytar.setPassword(APP_NAME, "email_access_token", token);
+}
+
+export async function saveRefreshToken(token: string) {
+  return keytar.setPassword(APP_NAME, "email_refresh_token", token);
+}

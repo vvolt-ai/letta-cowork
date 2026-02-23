@@ -1,0 +1,29 @@
+{
+    "appId": "com.letta.cowork",
+    "productName": "Letta Cowork",
+    "files": [
+        "dist-electron",
+        "dist-react",
+        "node_modules/@letta-ai/letta-code/**/*"
+    ],
+    "extraResources": [
+        "dist-electron/preload.cjs"
+    ],
+    "asarUnpack": [
+        "node_modules/@letta-ai/letta-code-sdk/**/*",
+        "node_modules/@letta-ai/letta-code/**/*",
+        "node_modules/@letta-ai/letta-code/**/*"
+    ],
+    "mac": {
+        "target": "dmg"
+    },
+    "linux": {
+        "target": "AppImage",
+        "category": "Utility"
+    },
+    "win": {
+        "target": [
+            "portable"
+        ]
+    }
+}
