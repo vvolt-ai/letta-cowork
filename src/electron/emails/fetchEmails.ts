@@ -42,22 +42,22 @@ export const fetchEmails = async (
     // process each email asynchronously; don't block the response
     resp.data.forEach((email: any) => {
       void (async () => {
-        let attachmentUrl = "";
+        const attachmentUrl = "";
 
-        try {
-          if (email.hasAttachment === "1" || email.attachments?.length > 0) {
-            const result = await downloadEmailAttachment(
-              String(email.folderId || params.folderId),
-              String(email.messageId),
-              accountId
-            );
-            if (result && typeof result.path === "string") {
-              attachmentUrl = result.path;
-            }
-          }
-        } catch (err) {
-          console.error("Failed to download attachments for message", email.messageId, err);
-        }
+        // try {
+        //   if (email.hasAttachment === "1" || email.attachments?.length > 0) {
+        //     const result = await downloadEmailAttachment(
+        //       String(email.folderId || params.folderId),
+        //       String(email.messageId),
+        //       accountId
+        //     );
+        //     if (result && typeof result.path === "string") {
+        //       attachmentUrl = result.path;
+        //     }
+        //   }
+        // } catch (err) {
+        //   console.error("Failed to download attachments for message", email.messageId, err);
+        // }
 
         const payload: StoreEmailPayload = {
           calendarType: 0,

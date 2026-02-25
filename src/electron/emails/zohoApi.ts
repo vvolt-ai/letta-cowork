@@ -4,7 +4,7 @@
    ZOHO API CLIENT (Direct Zoho Mail API)
 ============================================================ */
 
-import { BASE_URL, getAccessToken, getRefreshToken, saveAccessToken } from "./helper.js";
+import { BASE_URL, getAccessToken, getRefreshToken, removeToken, saveAccessToken } from "./helper.js";
 
 // Prevent multiple simultaneous refresh calls
 let refreshPromise: Promise<string> | null = null;
@@ -27,7 +27,9 @@ export async function refreshToken(): Promise<string> {
     });
 
     if (!response.ok) {
+      removeToken(); // Clear tokens on refresh failure
       throw new Error("Refresh token failed");
+      
     }
 
     const data = await response.json();

@@ -23,6 +23,7 @@ const log = (msg: string, data?: Record<string, unknown>) => {
 
 // Debug-only logging (verbose)
 const debug = (msg: string, data?: Record<string, unknown>) => {
+  console.log(`[${new Date().toISOString()}] [ipc] ${msg}`, data);
   if (!DEBUG) return;
   log(msg, data);
 };

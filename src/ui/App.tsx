@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { CanUseToolResponse, ZohoEmail } from "./types";
 import { useIPC } from "./hooks/useIPC";
 import { useMessageWindow } from "./hooks/useMessageWindow";
-import { useAutoSyncUnread } from "./hooks/useAutoSyncUnread";
+// import { useAutoSyncUnread } from "./hooks/useAutoSyncUnread";
 import { useAppStore } from "./store/useAppStore";
 import type { ServerEvent } from "./types";
 import { Sidebar } from "./components/Sidebar";
@@ -43,12 +43,14 @@ function App() {
   const cwd = useAppStore((s) => s.cwd);
   const setCwd = useAppStore((s) => s.setCwd);
   const pendingStart = useAppStore((s) => s.pendingStart);
+  const defaultFolderId = "2467477000000008014"; 
+  const [folderId, setFolderId] = useState('');
 
   const [selectedEmailId, setSelectedEmailId] = useState<string | undefined>(undefined);
 
   const [isFetchingEmailContent, setIsFetchingEmailContent] = useState(false);  
 
-  const defaultFolderId = "2467477000000008014"; // Default to Inbox, can be updated after fetching folders
+// Default to Inbox, can be updated after fetching folders
 
   const {
     accountId,
@@ -102,10 +104,13 @@ function App() {
   }, [handleServerEvent, handlePartialMessages]);
 
   const { connected, sendEvent } = useIPC(onEvent);
+
+  // automatically sync unread messages when conditions are right
+  // useAutoSyncUnread(sendEvent, accountId, folderId, isMailConnected && !!folderId, 5);
+
   const { handleStartFromModal } = usePromptActions(sendEvent);
 
   // Enable auto-sync of unread emails every 5 minutes (only when email is connected)
-  useAutoSyncUnread(sendEvent, accountId, defaultFolderId, isMailConnected, 5);
 
   const activeSession = activeSessionId ? sessions[activeSessionId] : undefined;
   const messages = activeSession?.messages ?? [];
@@ -125,9 +130,11 @@ function App() {
   useEffect(() => {
     if (accountId && isMailConnected) {
       loadFolders()
-        .then(() => {
+        .then((data) => {
+          console.log("Folders loaded:", data);
+          const inboxFolder = data?.folders?.find((f: any) => f.folderName === "Inbox");
           setIsFetchingEmailContent(true);
-          return loadEmails(defaultFolderId);
+          setFolderId(inboxFolder ? String(inboxFolder.folderId) : defaultFolderId);
         })
         .then(() => setIsFetchingEmailContent(false))
         .catch(err => {
@@ -152,9 +159,21 @@ function App() {
   useEffect(() => {
     if (isMailConnected) {
       // refresh account list when connection is (re)established
-      fetchAccounts().catch(err => console.error("Failed to fetch accounts:", err));
+      fetchAccounts().catch(err => {
+        checkAlreadyConnected(); // Re-check connection status if fetching accounts fails (e.g., due to token issues)
+        console.error("Failed to fetch accounts after connection:", err);
+      });
     }
   }, [isMailConnected, fetchAccounts]);
+
+
+  useEffect(() => {
+    console.log("Folder ID or connection status changed. Folder ID:", folderId, "Is Mail Connected?", isMailConnected);
+    if (isMailConnected && folderId) {
+      loadEmails(folderId);
+    }
+  }, [folderId, isMailConnected, loadEmails]);
+
 
 
   useEffect(() => {

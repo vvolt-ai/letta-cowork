@@ -44,6 +44,7 @@ const log = (msg: string, data?: Record<string, unknown>) => {
 
 // Debug-only logging (verbose)
 const debug = (msg: string, data?: Record<string, unknown>) => {
+  console.log(`[${new Date().toISOString()}] [runner] ${msg}`, data);
   if (!DEBUG) return;
   log(msg, data);
 };
@@ -52,7 +53,7 @@ const debug = (msg: string, data?: Record<string, unknown>) => {
 let activeLettaSession: LettaSession | null = null;
 
 // Store agentId for reuse across conversations
-let cachedAgentId: string | null = null;
+let cachedAgentId: string | null = process.env.LETTA_AGENT_ID || null;
 
 export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
   const { prompt, session, resumeConversationId, onEvent, onSessionUpdate } = options;
@@ -139,7 +140,7 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
           lettaSession = resumeSession(cachedAgentId, sessionOptions);
         } else {
           debug("creating session: createSession (new agent, fallback)");
-          lettaSession = createSession(undefined, sessionOptions);
+          lettaSession = createSession(process.env.LETTA_AGENT_ID, sessionOptions);
         }
       } else if (cachedAgentId) {
         // Create new conversation on existing agent
@@ -148,7 +149,7 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
       } else {
         // First time - create new agent and session
         debug("creating session: createSession (new agent)");
-        lettaSession = createSession(undefined, sessionOptions);
+        lettaSession = createSession(process.env.LETTA_AGENT_ID, sessionOptions);
       }
       debug("session created successfully");
 

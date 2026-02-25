@@ -37,6 +37,7 @@ export function useZohoEmail() {
 
   const fetchEmails = useCallback(
     async (folderId: string, params: Partial<EmailListParams> = {}) => {
+      console.log("Fetching emails for folder", folderId, "with params", params);
       if (!accountId) {
         throw new Error("Zoho accountId is required; call fetchAccounts first");
       }
@@ -86,9 +87,9 @@ export function useZohoEmail() {
   );
 
   // automatically seed account info on mount
-  useEffect(() => {
-    fetchAccounts();
-  }, [fetchAccounts]);
+  // useEffect(() => {
+  //   fetchAccounts();
+  // }, [fetchAccounts]);
 
   const fetchEmailById = useCallback(
     async (folderId: string, messageId: string) => {

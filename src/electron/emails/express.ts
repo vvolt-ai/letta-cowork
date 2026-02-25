@@ -6,7 +6,7 @@
 import { BrowserWindow } from "electron";
 import express, { Request, Response } from "express";
 import { BASE_URL, OAUTH_PORT, saveAccessToken, saveRefreshToken } from "./helper.js";
-import { downloadEmailAttachment, fetchAccounts, fetchEmails, fetchFolders } from "./fetchEmails.js";
+import { downloadEmailAttachment, fetchAccounts, fetchEmails, fetchFolders, searchEmails } from "./fetchEmails.js";
 
 
 
@@ -56,7 +56,9 @@ export const expressServer = (mainWindow: BrowserWindow) => {
 
   api.get("/fetchAccount", async (req: Request, res: Response) => {
     try {
-      fetchAccounts().then(accounts => res.json(accounts))
+      fetchAccounts().then(accounts => res.json(accounts)).catch(err => {
+        res.status(500).send(err.message || "Failed to fetch accounts");
+      })
     } catch (error) {
       console.error("OAuth exchange failed:", error);
       res.status(500).send("Token exchange failed");
@@ -66,7 +68,9 @@ export const expressServer = (mainWindow: BrowserWindow) => {
   api.get("/fetchEmails", async (req: Request, res: Response) => {
     try {
       const { accountId, folderId } = req.query;
-      fetchEmails(accountId as string, { folderId: folderId as string }).then(emails => res.json(emails))
+      fetchEmails(accountId as string, { folderId: folderId as string }).then(emails => res.json(emails)).catch(err => {
+        res.status(500).send(err.message || "Failed to fetch emails");
+      })
     } catch (error) {
       console.error("OAuth exchange failed:", error);
       res.status(500).send("Token exchange failed");
@@ -75,7 +79,9 @@ export const expressServer = (mainWindow: BrowserWindow) => {
 
   api.get("/fetchFolders", async (req: Request, res: Response) => {
     try {
-      fetchFolders().then(folders => res.json(folders))
+      fetchFolders().then(folders => res.json(folders)).catch(err => {
+        res.status(500).send(err.message || "Failed to fetch folders");
+      })
     } catch (error) {
       console.error("OAuth exchange failed:", error);
       res.status(500).send("Token exchange failed");
@@ -85,12 +91,27 @@ export const expressServer = (mainWindow: BrowserWindow) => {
   api.get("/downloadAttachment", async (req: Request, res: Response) => {
     try {
       const { accountId, folderId, messageId } = req.query;
-      downloadEmailAttachment(folderId as string, messageId as string, accountId as string).then(attachment => res.json(attachment))
+      downloadEmailAttachment(folderId as string, messageId as string, accountId as string).then(attachment => res.json(attachment)).catch(err => {
+        res.status(500).send(err.message || "Failed to download attachment");
+      })
     } catch (error) {
       console.error("OAuth exchange failed:", error);
       res.status(500).send("Token exchange failed");
     }
   });
+
+   api.get("/searchEmails", async (req: Request, res: Response) => {
+    try {
+      const { accountId, searchKey } = req.query;
+      searchEmails(accountId as string, { searchKey: searchKey as string }).then(emails => res.json(emails)).catch(err => {
+        res.status(500).send(err.message || "Failed to search emails");
+      })
+    } catch (error) {
+      console.error("OAuth exchange failed:", error);
+      res.status(500).send("Token exchange failed");
+    }
+  });
+  
 
   api.get("/agent-capabilities", (req: Request, res: Response) => {
     res.json({
@@ -146,6 +167,57 @@ export const expressServer = (mainWindow: BrowserWindow) => {
           ],
           example:
             "GET /downloadAttachment?accountId=123&folderId=456&messageId=789",
+        },
+        {
+          name: "searchEmails",
+          method: "GET",
+          path: "/searchEmails",
+          description:
+            "Search emails using Zoho Mail advanced search syntax. The searchKey must follow Zoho's structured format using parameter:value pairs. Multiple conditions can be combined using '::' (AND) or '::or:' (OR).",
+
+          queryParams: [
+            { name: "accountId", type: "string", required: true },
+            { name: "searchKey", type: "string", required: true },
+            { name: "receivedTime", type: "number", required: false },
+            { name: "start", type: "number", required: false },
+            { name: "limit", type: "number", required: false },
+            { name: "includeto", type: "boolean", required: false }
+          ],
+
+          searchSyntax: {
+            format: "parameter:value",
+            combineWithAND: "::",
+            combineWithOR: "::or:",
+            exactPhrase: 'Use double quotes around phrase'
+          },
+
+          supportedParameters: [
+            { name: "entire", description: "Search entire email content (subject + body)." },
+            { name: "content", description: "Search inside email body only." },
+            { name: "sender", description: "Search by sender email address." },
+            { name: "to", description: "Search by recipient email address." },
+            { name: "cc", description: "Search by CC email address." },
+            { name: "subject", description: "Search by subject text." },
+            { name: "fileName", description: "Search by attachment filename." },
+            { name: "fileContent", description: "Search inside attachment content." },
+            { name: "has", description: "Filter by attachment, flags, or conversation." },
+            { name: "in", description: "Search within a specific folder." },
+            { name: "label", description: "Search by label/tag." },
+            { name: "fromDate", description: "Start date in DD-MMM-YYYY format." },
+            { name: "toDate", description: "End date in DD-MMM-YYYY format." },
+            { name: "newMails", description: "Retrieve only unread emails." },
+            { name: "inclspamtrash", description: "Include Spam and Trash folders." },
+            { name: "groupResult", description: "Group conversation results." }
+          ],
+
+          examples: [
+            "GET /searchEmails?accountId=123&searchKey=subject:Invoice",
+            "GET /searchEmails?accountId=123&searchKey=sender:john@example.com::has:attachment",
+            "GET /searchEmails?accountId=123&searchKey=subject:\"Payment Reminder\"",
+            "GET /searchEmails?accountId=123&searchKey=fromDate:01-Jan-2024::toDate:31-Jan-2024",
+            "GET /searchEmails?accountId=123&searchKey=newMails::has:attachment",
+            "GET /searchEmails?accountId=123&searchKey=sender:test@example.com::or:to:test@example.com"
+          ]
         }
       ]
     });

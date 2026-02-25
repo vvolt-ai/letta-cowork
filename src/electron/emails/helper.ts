@@ -24,3 +24,9 @@ export async function saveAccessToken(token: string) {
 export async function saveRefreshToken(token: string) {
   return keytar.setPassword(APP_NAME, "email_refresh_token", token);
 }
+
+export async function removeToken() {
+  keytar.deletePassword(APP_NAME, "email_access_token");
+  return keytar.deletePassword(APP_NAME, "email_refresh_token");
+}
+
