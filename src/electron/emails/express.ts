@@ -67,10 +67,18 @@ export const expressServer = (mainWindow: BrowserWindow) => {
 
   api.get("/fetchEmails", async (req: Request, res: Response) => {
     try {
-      const { accountId, folderId } = req.query;
-      fetchEmails(accountId as string, { folderId: folderId as string }).then(emails => res.json(emails)).catch(err => {
+      const { accountId, ...rest } = req.query;
+      if (!accountId) {
+        return res.status(400).send("Missing accountId");
+      }
+
+      // pass every other query parameter through as part of the EmailListParams object
+      // the fetchEmails helper will stringify/convert values as needed
+      const params = rest as any;
+
+      fetchEmails(accountId as string, params).then(emails => res.json(emails)).catch(err => {
         res.status(500).send(err.message || "Failed to fetch emails");
-      })
+      });
     } catch (error) {
       console.error("OAuth exchange failed:", error);
       res.status(500).send("Token exchange failed");
@@ -102,10 +110,17 @@ export const expressServer = (mainWindow: BrowserWindow) => {
 
    api.get("/searchEmails", async (req: Request, res: Response) => {
     try {
-      const { accountId, searchKey } = req.query;
-      searchEmails(accountId as string, { searchKey: searchKey as string }).then(emails => res.json(emails)).catch(err => {
+      const { accountId, ...rest } = req.query;
+      if (!accountId) {
+        return res.status(400).send("Missing accountId");
+      }
+
+      // convert query parameters into SearchEmailParams
+      const params = rest as any;
+
+      searchEmails(accountId as string, params).then(emails => res.json(emails)).catch(err => {
         res.status(500).send(err.message || "Failed to search emails");
-      })
+      });
     } catch (error) {
       console.error("OAuth exchange failed:", error);
       res.status(500).send("Token exchange failed");
@@ -140,7 +155,7 @@ export const expressServer = (mainWindow: BrowserWindow) => {
           name: "fetchEmails",
           method: "GET",
           path: "/fetchEmails",
-          description: "Fetch emails from a specific folder.",
+          description: "Fetch emails from a specific folder. Supports all Zoho list parameters (folderId, start, limit, status, flagid, labelid, threadId, sortBy, sortOrder, includeTo, includeSent, includeArchive, attachedMails, inlinedMails, flaggedMails, respondedMails, threadedMails, etc.)",
           queryParams: [
             {
               name: "accountId",
@@ -151,10 +166,91 @@ export const expressServer = (mainWindow: BrowserWindow) => {
               name: "folderId",
               type: "string",
               required: true
+            },
+            {
+              name: "start",
+              type: "number",
+              required: false
+            },
+            {
+              name: "limit",
+              type: "number",
+              required: false
+            },
+            {
+              name: "status",
+              type: "string",
+              required: false
+            },
+            {
+              name: "flagid",
+              type: "number",
+              required: false
+            },
+            {
+              name: "labelid",
+              type: "string",
+              required: false
+            },
+            {
+              name: "threadId",
+              type: "string",
+              required: false
+            },
+            {
+              name: "sortBy",
+              type: "string",
+              required: false
+            },
+            {
+              name: "sortOrder",
+              type: "boolean",
+              required: false
+            },
+            {
+              name: "includeTo",
+              type: "boolean",
+              required: false
+            },
+            {
+              name: "includeSent",
+              type: "boolean",
+              required: false
+            },
+            {
+              name: "includeArchive",
+              type: "boolean",
+              required: false
+            },
+            {
+              name: "attachedMails",
+              type: "boolean",
+              required: false
+            },
+            {
+              name: "inlinedMails",
+              type: "boolean",
+              required: false
+            },
+            {
+              name: "flaggedMails",
+              type: "boolean",
+              required: false
+            },
+            {
+              name: "respondedMails",
+              type: "boolean",
+              required: false
+            },
+            {
+              name: "threadedMails",
+              type: "boolean",
+              required: false
             }
           ],
-          example: "GET /fetchEmails?accountId=123&folderId=456",
+          example: "GET /fetchEmails?accountId=123&folderId=456&start=0&limit=50",
         },
+
         {
           name: "downloadAttachment",
           method: "GET",
