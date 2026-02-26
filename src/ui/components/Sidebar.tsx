@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useAppStore } from "../store/useAppStore";
+import { useDownloadSkill } from "../hooks/useDownloadSkill";
+import { SkillDownloadDialog } from "./SkillDownloadDialog";
 
 interface SidebarProps {
   connected: boolean;
@@ -24,7 +26,20 @@ export function Sidebar({
   const setActiveSessionId = useAppStore((state) => state.setActiveSessionId);
   const [resumeSessionId, setResumeSessionId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [skillDownloadOpen, setSkillDownloadOpen] = useState(false);
   const closeTimerRef = useRef<number | null>(null);
+
+  const {
+    skillUrl,
+    setSkillUrl,
+    skillName,
+    setSkillName,
+    skillDownloading,
+    skillDownloadSuccess,
+    skillDownloadError,
+    handleDownloadSkill,
+    resetForm: resetSkillForm,
+  } = useDownloadSkill();
 
   const formatCwd = (cwd?: string) => {
     if (!cwd) return "Working dir unavailable";
@@ -73,18 +88,26 @@ export function Sidebar({
     }, 3000);
   };
 
+
+
   return (
     <aside className="fixed inset-y-0 left-0 flex h-full w-[280px] flex-col gap-4 border-r border-border bg-sidebar px-4 pb-4 pt-12">
       <div
         className="absolute top-0 left-0 right-0 h-12"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       />
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-2">
         <button
           className="flex-1 rounded-xl border border-ink-900/10 bg-surface px-4 py-2.5 text-sm font-medium text-ink-700 hover:bg-surface-tertiary hover:border-ink-900/20 transition-colors"
           onClick={onNewSession}
         >
           + New Task
+        </button>
+        <button
+          className="flex-1 rounded-xl border border-ink-900/10 bg-surface px-4 py-2.5 text-sm font-medium text-ink-700 hover:bg-surface-tertiary hover:border-ink-900/20 transition-colors"
+          onClick={() => setSkillDownloadOpen(true)}
+        >
+          + Download Skill
         </button>
       </div>
       {
@@ -191,6 +214,20 @@ export function Sidebar({
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
+
+      <SkillDownloadDialog
+        open={skillDownloadOpen}
+        onOpenChange={setSkillDownloadOpen}
+        skillUrl={skillUrl}
+        onSkillUrlChange={setSkillUrl}
+        skillName={skillName}
+        onSkillNameChange={setSkillName}
+        skillDownloading={skillDownloading}
+        skillDownloadSuccess={skillDownloadSuccess}
+        skillDownloadError={skillDownloadError}
+        onDownload={handleDownloadSkill}
+        onReset={resetSkillForm}
+      />
     </aside>
   );
 }

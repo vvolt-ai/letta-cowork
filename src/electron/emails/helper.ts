@@ -16,6 +16,14 @@ export async function getRefreshToken() {
   return keytar.getPassword(APP_NAME, "email_refresh_token");
 }
 
+export async function getAccountId() {
+  return keytar.getPassword(APP_NAME, "email_account_id");
+}
+
+export async function getInboxFolderId() {
+  return keytar.getPassword(APP_NAME, "email_inbox_folder_id");
+}
+
 
 export async function saveAccessToken(token: string) {
   return keytar.setPassword(APP_NAME, "email_access_token", token);
@@ -23,6 +31,14 @@ export async function saveAccessToken(token: string) {
 
 export async function saveRefreshToken(token: string) {
   return keytar.setPassword(APP_NAME, "email_refresh_token", token);
+}
+
+export async function saveAccountId(accountId: string) {
+  return keytar.setPassword(APP_NAME, "email_account_id", accountId);
+}
+
+export async function saveInboxFolderId(folderId: string) {
+  return keytar.setPassword(APP_NAME, "email_inbox_folder_id", folderId);
 }
 
 export async function removeToken() {

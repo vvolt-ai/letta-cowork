@@ -5,7 +5,7 @@
 
 import { BrowserWindow } from "electron";
 import express, { Request, Response } from "express";
-import { BASE_URL, OAUTH_PORT, saveAccessToken, saveRefreshToken } from "./helper.js";
+import { BASE_URL, OAUTH_PORT, saveAccessToken, saveRefreshToken, saveAccountId, saveInboxFolderId } from "./helper.js";
 import { downloadEmailAttachment, fetchAccounts, fetchEmails, fetchFolders, searchEmails } from "./fetchEmails.js";
 
 
@@ -41,6 +41,32 @@ export const expressServer = (mainWindow: BrowserWindow) => {
       saveAccessToken(access_token);
       saveRefreshToken(refresh_token);
 
+      // Fetch accounts and save the first account's ID
+      try {
+        const accountsResponse = await fetchAccounts();
+        if (accountsResponse.data && accountsResponse.data.length > 0) {
+          const firstAccount = accountsResponse.data[0];
+          await saveAccountId(firstAccount.accountId);
+
+          // Fetch folders and save the Inbox folder ID
+          try {
+            const foldersResponse = await fetchFolders();
+            if (foldersResponse.data && foldersResponse.data.length > 0) {
+              const inboxFolder = foldersResponse.data.find(
+                (f: any) => f.folderName?.toLowerCase() === "inbox" || f.folderType?.toLowerCase() === "inbox"
+              );
+              if (inboxFolder) {
+                await saveInboxFolderId(inboxFolder.folderId);
+              }
+            }
+          } catch (err) {
+            console.warn("Failed to fetch and save folder ID:", err);
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to fetch and save account ID:", err);
+      }
+
       // Notify renderer
       mainWindow?.webContents.send("email-connected", { success: true });
 
@@ -68,15 +94,13 @@ export const expressServer = (mainWindow: BrowserWindow) => {
   api.get("/fetchEmails", async (req: Request, res: Response) => {
     try {
       const { accountId, ...rest } = req.query;
-      if (!accountId) {
-        return res.status(400).send("Missing accountId");
-      }
 
       // pass every other query parameter through as part of the EmailListParams object
       // the fetchEmails helper will stringify/convert values as needed
       const params = rest as any;
 
-      fetchEmails(accountId as string, params).then(emails => res.json(emails)).catch(err => {
+      // accountId is optional - if not provided, fetchEmails will use the one from keytar
+      fetchEmails(accountId as string | undefined, params).then(emails => res.json(emails)).catch(err => {
         res.status(500).send(err.message || "Failed to fetch emails");
       });
     } catch (error) {
@@ -160,12 +184,12 @@ export const expressServer = (mainWindow: BrowserWindow) => {
             {
               name: "accountId",
               type: "string",
-              required: true
+              required: false
             },
             {
               name: "folderId",
               type: "string",
-              required: true
+              required: false
             },
             {
               name: "start",
@@ -257,8 +281,8 @@ export const expressServer = (mainWindow: BrowserWindow) => {
           path: "/downloadAttachment",
           description: "Download attachment for a specific email.",
           queryParams: [
-            { name: "accountId", type: "string", required: true },
-            { name: "folderId", type: "string", required: true },
+            { name: "accountId", type: "string", required: false },
+            { name: "folderId", type: "string", required: false },
             { name: "messageId", type: "string", required: true }
           ],
           example:
@@ -272,7 +296,7 @@ export const expressServer = (mainWindow: BrowserWindow) => {
             "Search emails using Zoho Mail advanced search syntax. The searchKey must follow Zoho's structured format using parameter:value pairs. Multiple conditions can be combined using '::' (AND) or '::or:' (OR).",
 
           queryParams: [
-            { name: "accountId", type: "string", required: true },
+            { name: "accountId", type: "string", required: false },
             { name: "searchKey", type: "string", required: true },
             { name: "receivedTime", type: "number", required: false },
             { name: "start", type: "number", required: false },

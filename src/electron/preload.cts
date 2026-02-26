@@ -53,7 +53,9 @@ electron.contextBridge.exposeInMainWorld("electron", {
     markMessagesAsRead: (accountId: string, messageIds: (number | string)[]) =>
         electron.ipcRenderer.invoke("update-messages", accountId, { mode: "markAsRead", messageId: messageIds }),
     searchEmails: (accountId: string, params: any) =>
-        electron.ipcRenderer.invoke("search-emails", accountId, params)
+        electron.ipcRenderer.invoke("search-emails", accountId, params),
+    downloadSkill: (handles: string | string[], skillName?: string, branch?: string) =>
+        electron.ipcRenderer.invoke("download-skill", handles, skillName, branch)
 } satisfies Window['electron'])
 
 function ipcInvoke<Key extends keyof EventPayloadMapping>(key: Key, ...args: any[]): Promise<EventPayloadMapping[Key]> {

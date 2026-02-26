@@ -46,6 +46,9 @@ type EventPayloadMapping = {
     "fetch-email-by-id": any;
     "update-messages": any;
     "search-emails": any;
+    // download one or more skills from GitHub into the global skills directory
+    // resolves to an object containing success flag and an array of directories
+    "download-skill": { success: boolean; skillDirs: string[] };
 }
 
 interface Window {
@@ -70,6 +73,7 @@ interface Window {
         downloadEmailAttachment: (folderId: string, messageId: string, accountId: string) => Promise<any>;
         markMessagesAsRead: (accountId: string, messageIds: (number | string)[]) => Promise<any>;
         searchEmails: (accountId: string, params: any) => Promise<any>;
+        downloadSkill: (handles: string | string[], skillName?: string, branch?: string) => Promise<{ success: boolean; skillDirs: string[] }>;
     }
 }
 

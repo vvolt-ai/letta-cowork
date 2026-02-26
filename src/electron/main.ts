@@ -59,6 +59,7 @@ import { handleClientEvent, cleanupAllSessions } from "./ipc-handlers.js";
 import type { ClientEvent } from "./types.js";
 import { checkAlreadyConnected, connectEmail, fetchEmailById, fetchEmails, fetchFolders, downloadEmailAttachment, fetchAccounts, updateMessages, searchEmails } from "./emails/fetchEmails.js";
 import { expressServer } from "./emails/express.js";
+import { downloadSkillsFromGitHub, GLOBAL_SKILLS_DIR2 } from "./skillDownloader.js";
 
 let cleanupComplete = false;
 let mainWindow: BrowserWindow | null = null;
@@ -179,6 +180,12 @@ app.on("ready", () => {
     // search emails
     ipcMain.handle("search-emails", async (event, accountId, params) => {
         return await searchEmails(accountId, params);
+    });
+
+    // download one or more skills from GitHub; stores files under GLOBAL_SKILLS_DIR2/<skillName>
+    ipcMain.handle("download-skill", async (event, handles: string | string[], skillName?: string, branch?: string) => {
+        const dirs = await downloadSkillsFromGitHub(handles, skillName, branch);
+        return { success: true, skillDirs: dirs };
     });
 
     

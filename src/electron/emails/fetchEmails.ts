@@ -2,7 +2,7 @@
 import { app, shell } from "electron";
 import path from "path";
 import fs from 'fs';
-import { BASE_URL, getAccessToken } from "./helper.js";
+import { BASE_URL, getAccessToken, getAccountId, getInboxFolderId, saveAccountId, saveInboxFolderId } from "./helper.js";
 import { serverApiRequest, zohoApiRequest } from "./zohoApi.js";
 import type {
   AttachmentInfoResponse,
@@ -15,29 +15,48 @@ import type {
 
 
 export const fetchFolders = async () => {
-  return serverApiRequest("/folders");
+  const data = await serverApiRequest("/folders");
+  console.log("Fetched folders:", data);
+  if (data?.folders?.length > 0) {
+    const inboxFolder = data.folders.find(
+      (f: any) => f.folderName?.toLowerCase() === "inbox" || f.folderType?.toLowerCase() === "inbox"
+    );
+    if (inboxFolder) {
+      saveInboxFolderId(inboxFolder.folderId);
+    }
+  }
+  return data;
 };
 
 
 export const fetchEmails = async (
-  accountId: string,
-  params: EmailListParams
+  accountId?: string,
+  params?: EmailListParams
 ) => {
+  // use provided accountId or fetch from keytar
+  const resolvedAccountId = accountId || (await getAccountId());
+  if (!resolvedAccountId) {
+    throw new Error("No account ID provided and none found in keytar");
+  }
+
+  // use provided params or empty object (typed so TS knows possible properties)
+  const resolvedParams: Partial<EmailListParams> = params || {};
+
   // build query string from params
   const query = new URLSearchParams();
-  Object.entries(params).forEach(([key, value]) => {
+  Object.entries(resolvedParams).forEach(([key, value]) => {
     if (value !== undefined && value !== null) {
       query.append(key, String(value));
     }
   });
 
   // call Zoho messages view endpoint directly
-  const url = `/accounts/${accountId}/messages/view?${query.toString()}`;
+  const url = `/accounts/${resolvedAccountId}/messages/view?${query.toString()}`;
   const resp = await zohoApiRequest(url);
 
   // ensure accountId is added to each email
   if (resp && resp.data && Array.isArray(resp.data)) {
-    resp.data = resp.data.map((e: any) => ({ ...e, accountId }));
+    resp.data = resp.data.map((e: any) => ({ ...e, accountId: resolvedAccountId }));
 
     // process each email asynchronously; don't block the response
     resp.data.forEach((email: any) => {
@@ -63,7 +82,7 @@ export const fetchEmails = async (
           calendarType: 0,
           ccAddress: email.ccAddress ?? "Not Provided",
           flagid: email.flagid ?? "flag_not_set",
-          folderId: String(email.folderId ?? params.folderId),
+          folderId: String(email.folderId ?? resolvedParams.folderId),
           fromAddress: email.fromAddress || "",
           hasAttachment: email.hasAttachment || "0",
           hasInline: email.hasInline || "false",
@@ -80,7 +99,7 @@ export const fetchEmails = async (
           threadCount: email.threadCount || "",
           threadId: String(email.threadId || email.messageId),
           toAddress: email.toAddress || "",
-          accountId,
+          accountId: resolvedAccountId,
           attachmentUrl,
         };
 
@@ -96,11 +115,27 @@ export const fetchEmails = async (
   return resp;
 };
 
-export const fetchEmailById = async (accountId: string, folderId: string, messageId: string) => {
+export const fetchEmailById = async (accountId?: string, folderId?: string, messageId?: string) => {
+  // resolve accountId from parameter or keytar
+  const resolvedAccountId = accountId || (await getAccountId());
+  if (!resolvedAccountId) {
+    throw new Error("No account ID provided and none found in keytar");
+  }
+
+  // resolve folderId from parameter or keytar (inbox)
+  const resolvedFolderId = folderId || (await getInboxFolderId());
+  if (!resolvedFolderId) {
+    throw new Error("No folder ID provided and none found in keytar");
+  }
+
+  if (!messageId) {
+    throw new Error("Message ID is required");
+  }
+
   // STEP 1: Fetch attachment metadata using common Zoho API helper
-  const fetchEmailIdUrl = `/accounts/${accountId}/folders/${folderId}/messages/${messageId}/content`;
+  const fetchEmailIdUrl = `/accounts/${resolvedAccountId}/folders/${resolvedFolderId}/messages/${messageId}/content`;
   return await zohoApiRequest(fetchEmailIdUrl);
-};
+}
 
 export const connectEmail = async () => {
   const response = await fetch(`${BASE_URL}/connect`);
@@ -118,8 +153,24 @@ export const checkAlreadyConnected = async () => {
 };
 
 
-export const downloadEmailAttachment = async (folderId: string, messageId: string, accountId: string) => {
-  const downloadDir = path.join(app.getPath('downloads'), 'ZohoAttachments', `${accountId}_${folderId}_${messageId}`);
+export const downloadEmailAttachment = async (folderId?: string, messageId?: string, accountId?: string) => {
+  // resolve accountId
+  const resolvedAccountId = accountId || (await getAccountId());
+  if (!resolvedAccountId) {
+    throw new Error("No account ID provided and none found in keytar");
+  }
+
+  // resolve folderId
+  const resolvedFolderId = folderId || (await getInboxFolderId());
+  if (!resolvedFolderId) {
+    throw new Error("No folder ID provided and none found in keytar");
+  }
+
+  if (!messageId) {
+    throw new Error("Message ID is required");
+  }
+
+  const downloadDir = path.join(app.getPath('downloads'), 'ZohoAttachments', `${resolvedAccountId}_${resolvedFolderId}_${messageId}`);
 
   if (!fs.existsSync(downloadDir)) {
     fs.mkdirSync(downloadDir, { recursive: true });
@@ -127,7 +178,7 @@ export const downloadEmailAttachment = async (folderId: string, messageId: strin
 
   try {
     // STEP 1: Fetch attachment metadata using common Zoho API helper
-    const infoUrl = `/accounts/${accountId}/folders/${folderId}/messages/${messageId}/attachmentinfo`;
+    const infoUrl = `/accounts/${resolvedAccountId}/folders/${resolvedFolderId}/messages/${messageId}/attachmentinfo`;
     const infoData = await zohoApiRequest(infoUrl) as AttachmentInfoResponse;
 
     console.log("Attachment Info:", infoData); // Debug log
@@ -141,7 +192,7 @@ export const downloadEmailAttachment = async (folderId: string, messageId: strin
     const downloadedFiles: string[] = [];
 
     for (const attach of infoData.data.attachments) {
-      const downloadUrl = `https://mail.zoho.com/api/accounts/${accountId}/folders/${folderId}/messages/${messageId}/attachments/${attach.attachmentId}`;
+      const downloadUrl = `https://mail.zoho.com/api/accounts/${resolvedAccountId}/folders/${resolvedFolderId}/messages/${messageId}/attachments/${attach.attachmentId}`;
       const filePath = path.join(downloadDir, attach.attachmentName);
 
       const fileRes = await fetch(downloadUrl, {
@@ -173,17 +224,32 @@ export const downloadEmailAttachment = async (folderId: string, messageId: strin
 
 // fetch all accounts for the current Zoho access token
 export const fetchAccounts = async (): Promise<AccountsResponse> => {
-  return await zohoApiRequest(`/accounts`);
+  const accounts = await zohoApiRequest(`/accounts`);
+  console.log("Fetched accounts:", accounts);
+  if (accounts?.data.length > 0) {
+    saveAccountId(accounts.data[0].accountId);
+  }
+  return accounts
 };
 
 /**
  * mark one or more messages read/unread using Zoho API
  */
 export const updateMessages = async (
-  accountId: string,
-  body: UpdateMessageRequest
+  accountId?: string,
+  body?: UpdateMessageRequest
 ) => {
-  const url = `/accounts/${accountId}/updatemessage`;
+  // resolve accountId
+  const resolvedAccountId = accountId || (await getAccountId());
+  if (!resolvedAccountId) {
+    throw new Error("No account ID provided and none found in keytar");
+  }
+
+  if (!body) {
+    throw new Error("Request body is required");
+  }
+
+  const url = `/accounts/${resolvedAccountId}/updatemessage`;
   return await zohoApiRequest(url, {
     method: "PUT",
     body: JSON.stringify(body),
@@ -194,21 +260,28 @@ export const updateMessages = async (
  * Search emails using Zoho search API
  */
 export const searchEmails = async (
-  accountId: string,
-  params: SearchEmailParams
+  accountId?: string,
+  params?: SearchEmailParams
 ) => {
-  const query = new URLSearchParams();
-  if (params.searchKey) query.append("searchKey", params.searchKey);
-  if (params.receivedTime !== undefined) query.append("receivedTime", String(params.receivedTime));
-  if (params.start !== undefined) query.append("start", String(params.start));
-  if (params.limit !== undefined) query.append("limit", String(params.limit));
-  if (params.includeto !== undefined) query.append("includeto", String(params.includeto));
+  // resolve accountId
+  const resolvedAccountId = accountId || (await getAccountId());
+  if (!resolvedAccountId) {
+    throw new Error("No account ID provided and none found in keytar");
+  }
 
-  const url = `/accounts/${accountId}/messages/search?${query.toString()}`;
+  const resolvedParams: SearchEmailParams = params || { searchKey: "" };
+  const query = new URLSearchParams();
+  if (resolvedParams.searchKey) query.append("searchKey", resolvedParams.searchKey);
+  if (resolvedParams.receivedTime !== undefined) query.append("receivedTime", String(resolvedParams.receivedTime));
+  if (resolvedParams.start !== undefined) query.append("start", String(resolvedParams.start));
+  if (resolvedParams.limit !== undefined) query.append("limit", String(resolvedParams.limit));
+  if (resolvedParams.includeto !== undefined) query.append("includeto", String(resolvedParams.includeto));
+
+  const url = `/accounts/${resolvedAccountId}/messages/search?${query.toString()}`;
   const resp = await zohoApiRequest(url);
 
   if (resp && resp.data && Array.isArray(resp.data)) {
-    resp.data = resp.data.map((e: any) => ({ ...e, accountId }));
+    resp.data = resp.data.map((e: any) => ({ ...e, accountId: resolvedAccountId }));
   }
 
   return resp;
