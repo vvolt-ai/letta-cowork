@@ -53,7 +53,7 @@ const debug = (msg: string, data?: Record<string, unknown>) => {
 let activeLettaSession: LettaSession | null = null;
 
 // Store agentId for reuse across conversations
-let cachedAgentId: string | null = process.env.LETTA_AGENT_ID || null;
+let cachedAgentId: string | null = null;
 
 export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
   const { prompt, session, resumeConversationId, onEvent, onSessionUpdate } = options;
