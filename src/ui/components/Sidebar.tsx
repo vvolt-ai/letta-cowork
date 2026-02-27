@@ -6,6 +6,7 @@ import { useDownloadSkill } from "../hooks/useDownloadSkill";
 import { SkillDownloadDialog } from "./SkillDownloadDialog";
 import type { ZohoEmail } from "../types";
 import { SidebarEmailList } from "./SidebarEmailList";
+import { ChangeEnv } from "./ChangeEnv";
 
 interface SidebarProps {
   connected: boolean;
@@ -124,8 +125,6 @@ export function Sidebar({
     }, 3000);
   };
 
-
-
   return (
     <aside className="fixed inset-y-0 left-0 flex h-full w-[280px] flex-col gap-4 border-r border-border bg-sidebar px-4 pb-4 pt-12">
       <div
@@ -144,6 +143,7 @@ export function Sidebar({
         />
       ) : (
         <>
+          <ChangeEnv />
           <div className="flex flex-col gap-2">
             <button
               className="flex-1 rounded-xl border border-ink-900/10 bg-surface px-4 py-2.5 text-sm font-medium text-ink-700 hover:bg-surface-tertiary hover:border-ink-900/20 transition-colors"

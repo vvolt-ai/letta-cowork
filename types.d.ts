@@ -11,6 +11,11 @@ type StaticData = {
 }
 
 type UnsubscribeFunction = () => void;
+type LettaEnvConfig = {
+    LETTA_API_KEY: string;
+    LETTA_BASE_URL: string;
+    LETTA_AGENT_ID: string;
+}
 
 interface EmailListParams {
     folderId: string;
@@ -47,6 +52,8 @@ type EventPayloadMapping = {
     "fetch-email-by-id": any;
     "update-messages": any;
     "search-emails": any;
+    "get-letta-env": LettaEnvConfig;
+    "update-letta-env": { success: boolean };
     // download one or more skills from GitHub into the global skills directory
     // resolves to an object containing success flag and an array of directories
     "download-skill": { success: boolean; skillDirs: string[] };
@@ -75,6 +82,8 @@ interface Window {
         downloadEmailAttachment: (folderId: string, messageId: string, accountId: string) => Promise<any>;
         markMessagesAsRead: (accountId: string, messageIds: (number | string)[]) => Promise<any>;
         searchEmails: (accountId: string, params: any) => Promise<any>;
+        getLettaEnv: () => Promise<LettaEnvConfig>;
+        updateLettaEnv: (values: LettaEnvConfig) => Promise<{ success: boolean }>;
         downloadSkill: (handles: string | string[], skillName?: string, branch?: string) => Promise<{ success: boolean; skillDirs: string[] }>;
     }
 }

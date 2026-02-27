@@ -1,22 +1,10 @@
 import { app, BrowserWindow, ipcMain, dialog, globalShortcut, Menu } from "electron"
 import { execSync } from "child_process";
-import { config as dotenvConfig } from "dotenv";
 import path, { join } from "path";
 import { ipcMainHandle, isDev, DEV_PORT } from "./util.js";
+import { getLettaEnvConfig, initializeLettaEnv, type LettaEnvConfig, updateLettaEnvConfig } from "./envManager.js";
 
-
-// Load .env file from project root
-dotenvConfig({ path: join(process.cwd(), ".env") });
-
-// Default to Letta Cloud if no base URL set
-if (!process.env.LETTA_BASE_URL) {
-    process.env.LETTA_BASE_URL = "https://api.letta.com";
-}
-
-// Set dummy API key for localhost (local server doesn't check it)
-if (!process.env.LETTA_API_KEY && process.env.LETTA_BASE_URL?.includes("localhost")) {
-    process.env.LETTA_API_KEY = "local-dev-key";
-}
+initializeLettaEnv();
 
 
 
@@ -181,6 +169,20 @@ app.on("ready", () => {
     // search emails
     ipcMain.handle("search-emails", async (event, accountId, params) => {
         return await searchEmails(accountId, params);
+    });
+
+    ipcMain.handle("get-letta-env", () => {
+        return getLettaEnvConfig();
+    });
+
+    ipcMain.handle("update-letta-env", async (_, values: LettaEnvConfig) => {
+        try {
+            updateLettaEnvConfig(values);
+            return { success: true };
+        } catch (error) {
+            console.error("Failed to update Letta env:", error);
+            throw new Error("Failed to persist environment variables on this system.");
+        }
     });
 
     // download one or more skills from GitHub; stores files under GLOBAL_SKILLS_DIR2/<skillName>

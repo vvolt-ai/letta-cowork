@@ -1,0 +1,4 @@
+interface:
+  display_name: "PDF Reader"
+  short_description: "Read text from local PDF folders"
+  default_prompt: "Use $pdf-reader to list and extract text from PDF files in a local folder."
