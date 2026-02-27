@@ -4,13 +4,14 @@ import path from "path";
 import fs from 'fs';
 import { BASE_URL, clearEmailCredentials, getAccessToken, getAccountId, getInboxFolderId, getRefreshToken, saveAccountId, saveInboxFolderId } from "./helper.js";
 import { serverApiRequest, zohoApiRequest } from "./zohoApi.js";
+import { attachFilesToAgentFolder } from "../lettaFilesystem.js";
 import type {
   AttachmentInfoResponse,
   AccountsResponse,
   EmailListParams,
+  SearchEmailParams,
   StoreEmailPayload,
   UpdateMessageRequest,
-  SearchEmailParams,
 } from "./types.js";
 
 
@@ -181,7 +182,7 @@ export const disconnectEmail = async () => {
 };
 
 
-export const downloadEmailAttachment = async (folderId?: string, messageId?: string, accountId?: string) => {
+export const downloadEmailAttachment = async (folderId?: string, messageId?: string, accountId?: string, agentId?: string) => {
   // resolve accountId
   const resolvedAccountId = accountId || (await getAccountId());
   if (!resolvedAccountId) {
@@ -218,6 +219,7 @@ export const downloadEmailAttachment = async (folderId?: string, messageId?: str
     // (can't use zohoApiRequest here because we need the binary body stream)
     const accessToken = await getAccessToken();
     const downloadedFiles: string[] = [];
+    const downloadedFilePaths: string[] = [];
 
     for (const attach of infoData.data.attachments) {
       const downloadUrl = `https://mail.zoho.com/api/accounts/${resolvedAccountId}/folders/${resolvedFolderId}/messages/${messageId}/attachments/${attach.attachmentId}`;
@@ -241,13 +243,52 @@ export const downloadEmailAttachment = async (folderId?: string, messageId?: str
       }
       writer.end();
       downloadedFiles.push(attach.attachmentName);
+      downloadedFilePaths.push(filePath);
     }
 
-    return { status: 'success', files: downloadedFiles, path: downloadDir };
+    const resolvedAgentId = agentId || process.env.LETTA_AGENT_ID;
+    let lettaAttachment:
+      | Awaited<ReturnType<typeof attachFilesToAgentFolder>>
+      | { status: "skipped"; reason: string } = {
+      status: "skipped",
+      reason: "No Letta agent configured for folder attachment.",
+    };
+
+    if (resolvedAgentId) {
+      try {
+        lettaAttachment = await attachFilesToAgentFolder({
+          agentId: resolvedAgentId,
+          filePaths: downloadedFilePaths,
+          folderNamePrefix: `zoho_${resolvedAccountId}_${messageId}`,
+        });
+      } catch (attachError) {
+        console.error("Failed to upload/attach attachments to Letta folder:", attachError);
+        lettaAttachment = {
+          status: "skipped",
+          reason: attachError instanceof Error ? attachError.message : String(attachError),
+        };
+      }
+    }
+
+    return { status: 'success', files: downloadedFiles, path: downloadDir, lettaAttachment };
   } catch (error) {
     console.error("Zoho Download Error:", error);
     throw error;
   }
+};
+
+export const uploadEmailAttachmentToAgent = async (
+  folderId?: string,
+  messageId?: string,
+  accountId?: string,
+  agentId?: string
+) => {
+  const resolvedAgentId = agentId || process.env.LETTA_AGENT_ID;
+  if (!resolvedAgentId) {
+    throw new Error("No Letta agent ID provided and LETTA_AGENT_ID is not configured");
+  }
+
+  return await downloadEmailAttachment(folderId, messageId, accountId, resolvedAgentId);
 };
 
 // fetch all accounts for the current Zoho access token

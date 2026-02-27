@@ -7,7 +7,11 @@ type LettaEnvForm = {
   LETTA_AGENT_ID: string;
 };
 
-export function ChangeEnv() {
+interface ChangeEnvProps {
+  className?: string;
+}
+
+export function ChangeEnv({ className }: ChangeEnvProps = {}) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -54,14 +58,12 @@ export function ChangeEnv() {
 
   return (
     <>
-      <div className="flex justify-end">
-        <button
-          className="rounded-lg border border-ink-900/10 bg-surface px-2.5 py-1 text-[11px] font-medium text-ink-700 hover:bg-surface-tertiary hover:border-ink-900/20 transition-colors"
-          onClick={openDialog}
-        >
-          Letta Env
-        </button>
-      </div>
+      <button
+        className={className ?? "rounded-lg border border-ink-900/10 bg-surface px-2.5 py-1 text-[11px] font-medium text-ink-700 hover:bg-surface-tertiary hover:border-ink-900/20 transition-colors"}
+        onClick={openDialog}
+      >
+        Letta Env
+      </button>
 
       <Dialog.Root
         open={open}

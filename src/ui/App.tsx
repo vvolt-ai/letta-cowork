@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useIPC } from "./hooks/useIPC";
 import { useMessageWindow } from "./hooks/useMessageWindow";
 import { useAppStore } from "./store/useAppStore";
@@ -13,10 +13,19 @@ import { ChatMainPanel } from "./components/ChatMainPanel";
 import { GlobalErrorToast } from "./components/GlobalErrorToast";
 import { EmailDetailsDialog } from "./components/EmailDetailsDialog";
 import { useSessionController } from "./hooks/useSessionController";
+import { useAutoSyncUnread } from "./hooks/useAutoSyncUnread";
 
 const SCROLL_THRESHOLD = 50;
 const PARTIAL_MESSAGE_RESET_DELAY_MS = 500;
 const SESSION_CHANGE_SCROLL_DELAY_MS = 100;
+const AUTO_SYNC_ENABLED_KEY = "auto_sync_unread_enabled";
+const AUTO_SYNC_AGENT_IDS_KEY = "auto_sync_selected_agent_ids";
+const AUTO_SYNC_ROUTING_RULES_KEY = "auto_sync_routing_rules";
+
+type AutoSyncRoutingRule = {
+  fromPattern: string;
+  agentId: string;
+};
 
 type StreamEventMessage = {
   type: "stream_event";
@@ -38,10 +47,42 @@ function App() {
   const [showPartialMessage, setShowPartialMessage] = useState(false);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [hasNewMessages, setHasNewMessages] = useState(false);
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState<boolean>(() => {
+    return localStorage.getItem(AUTO_SYNC_ENABLED_KEY) === "true";
+  });
+  const [autoSyncAgentIds, setAutoSyncAgentIds] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(AUTO_SYNC_AGENT_IDS_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw) as string[];
+      return Array.isArray(parsed) ? parsed.filter((id) => typeof id === "string" && id.trim().length > 0) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [autoSyncRoutingRules, setAutoSyncRoutingRules] = useState<AutoSyncRoutingRule[]>(() => {
+    try {
+      const raw = localStorage.getItem(AUTO_SYNC_ROUTING_RULES_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw) as AutoSyncRoutingRule[];
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter(
+        (rule) =>
+          typeof rule?.fromPattern === "string" &&
+          rule.fromPattern.trim().length > 0 &&
+          typeof rule?.agentId === "string" &&
+          rule.agentId.trim().length > 0
+      );
+    } catch {
+      return [];
+    }
+  });
   const handleServerEvent = useAppStore((s) => s.handleServerEvent);
 
   // Email APIs
   const {
+    accountId,
+    folderId,
     emails: zohoEmailsResponse,
     fetchEmailById: loadEmailById,
     markMessagesAsRead,
@@ -69,6 +110,36 @@ function App() {
     refreshEmailsForFolder,
   });
   const emails = zohoEmailsResponse?.data ?? [];
+  const selectedAutoSyncAgentIds = useMemo(() => autoSyncAgentIds, [autoSyncAgentIds]);
+
+  const handleAddAutoSyncAgent = useCallback((agentId: string) => {
+    const trimmed = agentId.trim();
+    if (!trimmed) return;
+    setAutoSyncAgentIds((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
+  }, []);
+
+  const handleRemoveAutoSyncAgent = useCallback((agentId: string) => {
+    setAutoSyncAgentIds((prev) => prev.filter((id) => id !== agentId));
+  }, []);
+
+  const handleAddAutoSyncRoutingRule = useCallback((fromPattern: string, agentId: string) => {
+    const normalizedFrom = fromPattern.trim().toLowerCase();
+    const normalizedAgent = agentId.trim();
+    if (!normalizedFrom || !normalizedAgent) return;
+    setAutoSyncRoutingRules((prev) => {
+      const exists = prev.some(
+        (rule) =>
+          rule.fromPattern.toLowerCase() === normalizedFrom &&
+          rule.agentId === normalizedAgent
+      );
+      if (exists) return prev;
+      return [...prev, { fromPattern: normalizedFrom, agentId: normalizedAgent }];
+    });
+  }, []);
+
+  const handleRemoveAutoSyncRoutingRule = useCallback((index: number) => {
+    setAutoSyncRoutingRules((prev) => prev.filter((_, idx) => idx !== index));
+  }, []);
 
   // Handle partial streaming tokens for assistant responses
   const handlePartialMessages = useCallback((partialEvent: ServerEvent) => {
@@ -130,6 +201,28 @@ function App() {
     handlePermissionResult,
   } = useSessionController({ connected, sendEvent });
   const { handleStartFromModal } = usePromptActions(sendEvent);
+
+  useEffect(() => {
+    localStorage.setItem(AUTO_SYNC_ENABLED_KEY, String(autoSyncEnabled));
+  }, [autoSyncEnabled]);
+
+  useEffect(() => {
+    localStorage.setItem(AUTO_SYNC_AGENT_IDS_KEY, JSON.stringify(selectedAutoSyncAgentIds));
+  }, [selectedAutoSyncAgentIds]);
+
+  useEffect(() => {
+    localStorage.setItem(AUTO_SYNC_ROUTING_RULES_KEY, JSON.stringify(autoSyncRoutingRules));
+  }, [autoSyncRoutingRules]);
+
+  useAutoSyncUnread(
+    sendEvent,
+    accountId,
+    folderId,
+    selectedAutoSyncAgentIds,
+    autoSyncRoutingRules,
+    autoSyncEnabled,
+    1
+  );
 
   const {
     visibleMessages,
@@ -245,6 +338,14 @@ function App() {
         onViewEmail={handleViewEmail}
         onUseEmailAsInput={setEmailAsInput}
         isFetchingEmails={isFetchingEmailContent}
+        autoSyncEnabled={autoSyncEnabled}
+        onToggleAutoSync={setAutoSyncEnabled}
+        autoSyncAgentIds={selectedAutoSyncAgentIds}
+        onAddAutoSyncAgent={handleAddAutoSyncAgent}
+        onRemoveAutoSyncAgent={handleRemoveAutoSyncAgent}
+        autoSyncRoutingRules={autoSyncRoutingRules}
+        onAddAutoSyncRoutingRule={handleAddAutoSyncRoutingRule}
+        onRemoveAutoSyncRoutingRule={handleRemoveAutoSyncRoutingRule}
       />
       <ChatMainPanel
         title={activeSession?.title}

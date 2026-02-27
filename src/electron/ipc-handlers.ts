@@ -80,6 +80,7 @@ export async function handleClientEvent(event: ClientEvent) {
       debug("session.start: calling runLetta");
       handle = await runLetta({
         prompt: event.payload.prompt,
+        preferredAgentId: event.payload.agentId,
         session: {
           id: "pending",
           title: event.payload.title,

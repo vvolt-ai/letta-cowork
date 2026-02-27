@@ -6,7 +6,8 @@
 import { BrowserWindow } from "electron";
 import express, { Request, Response } from "express";
 import { BASE_URL, OAUTH_PORT, saveAccessToken, saveRefreshToken, saveAccountId, saveInboxFolderId } from "./helper.js";
-import { downloadEmailAttachment, fetchAccounts, fetchEmails, fetchFolders, searchEmails } from "./fetchEmails.js";
+import { downloadEmailAttachment, fetchAccounts, fetchEmails, fetchFolders, searchEmails, uploadEmailAttachmentToAgent } from "./fetchEmails.js";
+import { getCurrentAgentId } from "../libs/runner.js";
 
 
 
@@ -129,6 +130,38 @@ export const expressServer = (mainWindow: BrowserWindow) => {
     } catch (error) {
       console.error("OAuth exchange failed:", error);
       res.status(500).send("Token exchange failed");
+    }
+  });
+
+  api.get("/uploadToAgent", async (req: Request, res: Response) => {
+    try {
+      const { accountId, folderId, messageId, agentId } = req.query;
+      if (!messageId) {
+        return res.status(400).send("Missing messageId");
+      }
+
+      const targetAgentId =
+        (agentId as string | undefined) ||
+        getCurrentAgentId() ||
+        process.env.LETTA_AGENT_ID;
+
+      if (!targetAgentId) {
+        return res.status(400).send("Missing agentId and no active/default Letta agent is available");
+      }
+
+      uploadEmailAttachmentToAgent(
+        folderId as string | undefined,
+        messageId as string,
+        accountId as string | undefined,
+        targetAgentId
+      )
+        .then((result) => res.json(result))
+        .catch((err) => {
+          res.status(500).send(err.message || "Failed to upload attachment to agent");
+        });
+    } catch (error) {
+      console.error("Upload to agent failed:", error);
+      res.status(500).send("Upload to agent failed");
     }
   });
 
@@ -287,6 +320,21 @@ export const expressServer = (mainWindow: BrowserWindow) => {
           ],
           example:
             "GET /downloadAttachment?accountId=123&folderId=456&messageId=789",
+        },
+        {
+          name: "uploadToAgent",
+          method: "GET",
+          path: "/uploadToAgent",
+          description:
+            "Download attachments for a message and upload supported files (.pdf, .txt, .md, .json, .docx, .html) to Letta Filesystem, then attach the created folder to an agent.",
+          queryParams: [
+            { name: "messageId", type: "string", required: true },
+            { name: "agentId", type: "string", required: false },
+            { name: "accountId", type: "string", required: false },
+            { name: "folderId", type: "string", required: false }
+          ],
+          example:
+            "GET /uploadToAgent?messageId=789&agentId=agent-xxx",
         },
         {
           name: "searchEmails",

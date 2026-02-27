@@ -1,6 +1,6 @@
 ---
 name: zoho-mail-local
-description: Interacts with Zoho Mail via a local Express server. Use this for fetching accounts, folders, and emails.
+description: Interacts with Zoho Mail via a local Express server. Use this for fetching accounts, folders, emails, and uploading attachments to agents.
 allowed-tools: Bash
 ---
 
@@ -26,27 +26,37 @@ allowed-tools: Bash
 
 ### 2. Fetching Emails
 `GET /fetchEmails`
-- **Params:** `accountId`, `folderId`, `start`, `limit`, `status` (`new` for unread), `attachedMails` (bool), `threadedMails` (bool).
+- **Default behavior:** server uses Primary `accountId` and Inbox `folderId` automatically.
+- **Params:** `start`, `limit`, `status` (`new` for unread), `attachedMails` (bool), `threadedMails` (bool), optional `accountId`, optional `folderId`.
+- **Rule:** Do not call `/fetchAccount` or `/fetchFolders` only to discover default IDs.
 - **Example (Unread with Attachments):**
   `curl "http://localhost:4321/fetchEmails?status=new&attachedMails=true"`
 
 ### 3. Searching Emails
-`GET /searchEmails` (**Requires** `accountId` and `searchKey`)
+`GET /searchEmails`
+- **Default behavior:** if `accountId` is omitted, server uses Primary account.
+- **Params:** `searchKey` (required), optional `accountId`.
 - **Key Parameters:** `entire`, `sender`, `to`, `subject`, `has:attachment`, `fromDate`, `toDate`.
 - **Logic:** Use `::` for AND, `::or:` for OR.
 
 **Search Examples:**
-- **Exact Phrase:** `curl "http://localhost:4321/searchEmails?accountId=123&searchKey=subject:\"Payment Reminder\""`
-- **Date Range:** `curl "http://localhost:4321/searchEmails?accountId=123&searchKey=fromDate:01-Jan-2024::toDate:31-Jan-2024"`
-- **Sender OR Recipient:** `curl "http://localhost:4321/searchEmails?accountId=123&searchKey=sender:test@ex.com::or:to:test@ex.com"`
+- **Exact Phrase:** `curl "http://localhost:4321/searchEmails?searchKey=subject:\"Payment Reminder\""`
+- **Date Range:** `curl "http://localhost:4321/searchEmails?searchKey=fromDate:01-Jan-2024::toDate:31-Jan-2024"`
+- **Sender OR Recipient:** `curl "http://localhost:4321/searchEmails?searchKey=sender:test@ex.com::or:to:test@ex.com"`
 
 ### 4. Attachments
-`GET /downloadAttachment`
-- **Params:** `messageId` (Required), `folderId`, `accountId`.
-- **Example:** `curl "http://localhost:4321/downloadAttachment?messageId=MSG_123"`
+`GET /uploadToAgent`
+- **Primary behavior:** download message attachments and upload supported files to Letta agent filesystem.
+- **Supported formats:** `.pdf`, `.txt`, `.md`, `.json`, `.docx`, `.html`
+- **Params:** `messageId` (required), optional `agentId`, optional `folderId`, optional `accountId`.
+- **Agent resolution:** if `agentId` is omitted, server uses active agent first, then `LETTA_AGENT_ID`.
+- **Example:** `curl "http://localhost:4321/uploadToAgent?messageId=MSG_123"`
+
+`GET /downloadAttachment` (legacy)
+- Use only when explicitly asked for local file download; avoid it for agent ingestion.
 
 ---
 
 ## ⚠️ Error Handling
 - If a port error occurs, verify the server is running on `4321`.
-- If a search yields no results, verify the `accountId` is correct by running `/fetchAccount` first.
+- If a search yields no results, verify `searchKey` first; only pass explicit `accountId`/`folderId` when you need a non-default mailbox.

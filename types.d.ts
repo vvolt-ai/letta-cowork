@@ -50,6 +50,7 @@ type EventPayloadMapping = {
     "disconnect-email": { success: boolean };
     "is-email-already-connected": boolean;
     "fetch-email-by-id": any;
+    "upload-email-attachment-to-agent": any;
     "update-messages": any;
     "search-emails": any;
     "get-letta-env": LettaEnvConfig;
@@ -79,6 +80,7 @@ interface Window {
         disconnectEmail: () => Promise<{ success: boolean }>;
         checkAlreadyConnected: () => Promise<boolean>;
         fetchEmailById: (accountId: string, folderId: string, messageId: string) => Promise<any>;
+        uploadEmailAttachmentToAgent: (folderId: string, messageId: string, accountId: string, agentId: string) => Promise<any>;
         downloadEmailAttachment: (folderId: string, messageId: string, accountId: string) => Promise<any>;
         markMessagesAsRead: (accountId: string, messageIds: (number | string)[]) => Promise<any>;
         searchEmails: (accountId: string, params: any) => Promise<any>;

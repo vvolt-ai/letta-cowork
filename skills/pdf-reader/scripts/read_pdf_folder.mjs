@@ -65,9 +65,51 @@ async function collectFiles(dir, recursive) {
 async function loadPdfParse() {
   try {
     const mod = await import('pdf-parse');
-    return mod.default || mod;
+    if (typeof mod.default === 'function') {
+      return { mode: 'v1', parseFn: mod.default };
+    }
+    if (typeof mod === 'function') {
+      return { mode: 'v1', parseFn: mod };
+    }
+    if (typeof mod.PDFParse === 'function') {
+      return { mode: 'v2', PDFParse: mod.PDFParse };
+    }
+    return null;
   } catch {
     return null;
+  }
+}
+
+function buildParseOptions(maxPages) {
+  if (!maxPages || maxPages <= 0) return undefined;
+  return { first: maxPages };
+}
+
+async function parsePdfBuffer(pdfLoader, dataBuffer, maxPages) {
+  if (pdfLoader.mode === 'v1') {
+    const parsed = await pdfLoader.parseFn(
+      dataBuffer,
+      maxPages > 0 ? { max: maxPages } : undefined
+    );
+    return {
+      text: (parsed.text || '').trim(),
+      pagesTotal: Number(parsed.numpages || 0),
+      pagesRead: Number(parsed.numrender || parsed.numpages || 0),
+    };
+  }
+
+  const parser = new pdfLoader.PDFParse({ data: dataBuffer });
+  try {
+    const parsed = await parser.getText(buildParseOptions(maxPages));
+    const pagesTotal = Number(parsed.total || parsed.pages?.length || 0);
+    const pagesRead = Number(parsed.pages?.length || 0);
+    return {
+      text: (parsed.text || '').trim(),
+      pagesTotal,
+      pagesRead,
+    };
+  } finally {
+    await parser.destroy();
   }
 }
 
@@ -98,11 +140,12 @@ async function main() {
     process.exit(1);
   }
 
-  const pdfParse = await loadPdfParse();
-  if (!pdfParse) {
+  const pdfLoader = await loadPdfParse();
+  if (!pdfLoader) {
     console.log(
       JSON.stringify({
-        error: "Missing dependency 'pdf-parse'. Run: npm i pdf-parse",
+        error:
+          "Missing or incompatible dependency 'pdf-parse'. Run: npm i pdf-parse",
       })
     );
     process.exit(1);
@@ -140,13 +183,10 @@ async function main() {
 
     try {
       const dataBuffer = await fs.readFile(pdfPath);
-      const parsed = await pdfParse(
-        dataBuffer,
-        args.maxPages > 0 ? { max: args.maxPages } : undefined
-      );
-      const text = (parsed.text || '').trim();
-      item.pages_total = Number(parsed.numpages || 0);
-      item.pages_read = Number(parsed.numrender || item.pages_total || 0);
+      const parsed = await parsePdfBuffer(pdfLoader, dataBuffer, args.maxPages);
+      const text = parsed.text;
+      item.pages_total = parsed.pagesTotal;
+      item.pages_read = parsed.pagesRead;
       item.text_length = text.length;
       item.text = text;
 

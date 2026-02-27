@@ -44,8 +44,9 @@ try {
 import { getPreloadPath, getUIPath, getIconPath } from "./pathResolver.js";
 import { getStaticData, pollResources, stopPolling } from "./test.js";
 import { handleClientEvent, cleanupAllSessions } from "./ipc-handlers.js";
+import { getCurrentAgentId } from "./libs/runner.js";
 import type { ClientEvent } from "./types.js";
-import { checkAlreadyConnected, connectEmail, disconnectEmail, fetchEmailById, fetchEmails, fetchFolders, downloadEmailAttachment, fetchAccounts, updateMessages, searchEmails } from "./emails/fetchEmails.js";
+import { checkAlreadyConnected, connectEmail, disconnectEmail, fetchEmailById, fetchEmails, fetchFolders, downloadEmailAttachment, fetchAccounts, updateMessages, searchEmails, uploadEmailAttachmentToAgent } from "./emails/fetchEmails.js";
 import { expressServer } from "./emails/express.js";
 import { downloadSkillsFromGitHub, GLOBAL_SKILLS_DIR2 } from "./skillDownloader.js";
 
@@ -103,6 +104,7 @@ app.on("ready", () => {
         minHeight: 600,
         webPreferences: {
             preload: getPreloadPath(),
+            backgroundThrottling: false,
         },
         icon: getIconPath(),
         titleBarStyle: "hiddenInset",
@@ -156,9 +158,15 @@ app.on("ready", () => {
         return await fetchEmailById(accountId, folderId, messageId);
     });
 
+    ipcMain.handle("upload-email-attachment-to-agent", async (event, folderId, messageId, accountId, agentId) => {
+        const targetAgentId = agentId || getCurrentAgentId() || process.env.LETTA_AGENT_ID;
+        return await uploadEmailAttachmentToAgent(folderId, messageId, accountId, targetAgentId);
+    });
+
     // handler for downloading email attachments
     ipcMain.handle("download-email-attachment", async (event, folderId, messageId, accountId) => {
-        return await downloadEmailAttachment(folderId, messageId, accountId);
+        const activeAgentId = getCurrentAgentId() || process.env.LETTA_AGENT_ID;
+        return await downloadEmailAttachment(folderId, messageId, accountId, activeAgentId);
     });
 
     // mark messages read/unread

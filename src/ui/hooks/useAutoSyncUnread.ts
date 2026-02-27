@@ -1,5 +1,11 @@
 import { useEffect, useRef, useCallback } from "react";
-import { ClientEvent } from "../types";
+import type { ClientEvent, ZohoEmail } from "../types";
+
+const PROCESSED_EMAILS_KEY_PREFIX = "auto_sync_processed_unread";
+type AutoSyncRoutingRule = {
+  fromPattern: string;
+  agentId: string;
+};
 
 /**
  * Hook that runs a background job to fetch unread emails every 5 minutes
@@ -18,13 +24,52 @@ export function useAutoSyncUnread(
   sendEvent: (event: ClientEvent) => void,
   accountId: string,
   folderId: string,
+  selectedAgentIds: string[],
+  routingRules: AutoSyncRoutingRule[],
   isEnabled: boolean = true,
   intervalMinutes: number = 5
 ) {
   const syncInProgressRef = useRef(false);
+  const selectedAgentsRef = useRef<string[]>(selectedAgentIds);
+  const routingRulesRef = useRef<AutoSyncRoutingRule[]>(routingRules);
+
+  useEffect(() => {
+    selectedAgentsRef.current = selectedAgentIds;
+  }, [selectedAgentIds]);
+
+  useEffect(() => {
+    routingRulesRef.current = routingRules;
+  }, [routingRules]);
+
+  const getProcessedKey = useCallback(
+    () => `${PROCESSED_EMAILS_KEY_PREFIX}_${accountId}_${folderId}`,
+    [accountId, folderId]
+  );
+
+  const loadProcessedIds = useCallback((): Set<string> => {
+    try {
+      const raw = localStorage.getItem(getProcessedKey());
+      if (!raw) return new Set<string>();
+      const parsed = JSON.parse(raw) as string[];
+      if (!Array.isArray(parsed)) return new Set<string>();
+      return new Set(parsed.filter((id) => typeof id === "string" && id.length > 0));
+    } catch {
+      return new Set<string>();
+    }
+  }, [getProcessedKey]);
+
+  const persistProcessedIds = useCallback((ids: Set<string>) => {
+    localStorage.setItem(getProcessedKey(), JSON.stringify(Array.from(ids)));
+  }, [getProcessedKey]);
+
+  const uploadToAgent = useCallback(async (email: ZohoEmail, agentId: string): Promise<void> => {
+    await window.electron.uploadEmailAttachmentToAgent(folderId, String(email.messageId), accountId, agentId);
+  }, [accountId, folderId]);
 
   const performSync = useCallback(async () => {
-    if (!accountId || !folderId || syncInProgressRef.current) {
+    const selectedAgents = selectedAgentsRef.current;
+    const rules = routingRulesRef.current;
+    if (!accountId || !folderId || (selectedAgents.length === 0 && rules.length === 0) || syncInProgressRef.current) {
       return;
     }
 
@@ -45,28 +90,82 @@ export function useAutoSyncUnread(
         return;
       }
 
-      console.log(`[useAutoSyncUnread] Found ${resp.data.length} unread emails`);
+      const processedIds = loadProcessedIds();
+      const unreadEmails = (resp.data as ZohoEmail[]).filter(
+        (email) => !processedIds.has(String(email.messageId))
+      );
 
-      // Step 2: Extract message IDs
-      // const messageIds = resp.data.map((email: any) => email.messageId);
+      if (unreadEmails.length === 0) {
+        console.log("[useAutoSyncUnread] No new unread emails to process.");
+        return;
+      }
 
-      // Step 3: Mark as read
-      // const result = await window.electron.markMessagesAsRead(accountId, messageIds);
+      console.log(`[useAutoSyncUnread] Found ${unreadEmails.length} new unread emails`);
 
-      const prompt = `Please analyze the following email conversation and summarize the key points:\n\n ${JSON.stringify(resp.data, null, 2)}`;
+      const processedThisRun: string[] = [];
+      for (const email of unreadEmails) {
+        const senderText = String(email.fromAddress || email.sender || "").toLowerCase();
+        const routedAgents = rules
+          .filter((rule) => senderText.includes(rule.fromPattern.toLowerCase()))
+          .map((rule) => rule.agentId);
+        const targetAgents = Array.from(new Set(routedAgents.length > 0 ? routedAgents : selectedAgents));
+        if (targetAgents.length === 0) continue;
 
-     sendEvent({ type: "session.continue", payload: { sessionId: "conv-d57ed528-26e9-4807-9e1e-7da0090184b9", prompt, cwd: ''  } });
+        let allAgentsSucceeded = true;
 
-      //console.log(`[useAutoSyncUnread] Marked emails as read`);
+        for (const agentId of targetAgents) {
+          try {
+            if (String(email.hasAttachment ?? "0") === "1") {
+              await uploadToAgent(email, agentId);
+            }
+
+            const prompt = [
+              "A new unread email arrived. Process it and provide next actions.",
+              `Agent target: ${agentId}`,
+              "Email payload:",
+              JSON.stringify(email, null, 2),
+              "If attachments were uploaded, inspect them with file tools and include findings.",
+            ].join("\n\n");
+
+            sendEvent({
+              type: "session.start",
+              payload: {
+                title: `Auto Email: ${email.subject || email.messageId}`,
+                prompt,
+                cwd: "",
+                agentId,
+              },
+            });
+          } catch (error) {
+            allAgentsSucceeded = false;
+            console.error(
+              `[useAutoSyncUnread] Failed to process message ${email.messageId} for agent ${agentId}:`,
+              error
+            );
+          }
+        }
+
+        if (allAgentsSucceeded) {
+          const messageId = String(email.messageId);
+          processedIds.add(messageId);
+          processedThisRun.push(messageId);
+        }
+      }
+
+      if (processedThisRun.length > 0) {
+        await window.electron.markMessagesAsRead(accountId, processedThisRun);
+        persistProcessedIds(processedIds);
+        console.log(`[useAutoSyncUnread] Processed and marked as read: ${processedThisRun.length} emails`);
+      }
     } catch (err) {
       console.error("[useAutoSyncUnread] Sync failed:", err);
     } finally {
       syncInProgressRef.current = false;
     }
-  }, [accountId, folderId]);
+  }, [accountId, folderId, loadProcessedIds, persistProcessedIds, sendEvent, uploadToAgent]);
 
   useEffect(() => {
-    if (!isEnabled || !accountId || !folderId) {
+    if (!isEnabled || !accountId || !folderId || (selectedAgentIds.length === 0 && routingRules.length === 0)) {
       return;
     }
 
@@ -78,5 +177,5 @@ export function useAutoSyncUnread(
     const intervalId = setInterval(performSync, intervalMs);
 
     return () => clearInterval(intervalId);
-  }, [accountId, folderId, isEnabled, intervalMinutes, performSync]);
+  }, [accountId, folderId, isEnabled, intervalMinutes, performSync, selectedAgentIds.length, routingRules.length]);
 }

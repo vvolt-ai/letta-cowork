@@ -50,6 +50,8 @@ electron.contextBridge.exposeInMainWorld("electron", {
         electron.ipcRenderer.invoke("is-email-already-connected"),
     fetchEmailById: (accountId: string, folderId: string, messageId: string) =>
         electron.ipcRenderer.invoke("fetch-email-by-id", accountId, folderId, messageId),
+    uploadEmailAttachmentToAgent: (folderId: string, messageId: string, accountId: string, agentId: string) =>
+        electron.ipcRenderer.invoke("upload-email-attachment-to-agent", folderId, messageId, accountId, agentId),
     downloadEmailAttachment: (folderId: string, messageId: string, accountId: string) =>
         electron.ipcRenderer.invoke("download-email-attachment", folderId, messageId, accountId),
     markMessagesAsRead: (accountId: string, messageIds: (number | string)[]) =>

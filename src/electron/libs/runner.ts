@@ -21,6 +21,7 @@ export type RunnerOptions = {
   prompt: string;
   session: RunnerSession;
   resumeConversationId?: string;
+  preferredAgentId?: string;
   onEvent: (event: ServerEvent) => void;
   onSessionUpdate?: (updates: { lettaConversationId?: string }) => void;
 };
@@ -55,13 +56,19 @@ let activeLettaSession: LettaSession | null = null;
 // Store agentId for reuse across conversations
 let cachedAgentId: string | null = null;
 
+export function getCurrentAgentId(): string | null {
+  return activeLettaSession?.agentId ?? cachedAgentId;
+}
+
 export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
-  const { prompt, session, resumeConversationId, onEvent, onSessionUpdate } = options;
+  const { prompt, session, resumeConversationId, preferredAgentId, onEvent, onSessionUpdate } = options;
+  const targetAgentId = preferredAgentId?.trim() || undefined;
   
   debug("runLetta called", {
     prompt: prompt.slice(0, 100) + (prompt.length > 100 ? "..." : ""),
     sessionId: session.id,
     resumeConversationId,
+    preferredAgentId: targetAgentId,
     cachedAgentId,
     cwd: session.cwd,
   });
@@ -133,19 +140,26 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
         // Invalid ID provided - log warning and fall back to cachedAgentId
         log("WARNING: invalid resumeConversationId, falling back", { 
           invalidId: resumeConversationId, 
-          fallbackTo: cachedAgentId ? "cachedAgentId" : "createSession" 
+          fallbackTo: targetAgentId ? "preferredAgentId" : cachedAgentId ? "cachedAgentId" : "createSession"
         });
-        if (cachedAgentId) {
+        if (targetAgentId) {
+          debug("creating session: createSession with preferredAgentId (fallback)", { preferredAgentId: targetAgentId });
+          lettaSession = createSession(targetAgentId, sessionOptions);
+        } else if (cachedAgentId) {
           debug("creating session: resumeSession with cachedAgentId (fallback)", { cachedAgentId });
           lettaSession = resumeSession(cachedAgentId, sessionOptions);
         } else {
           debug("creating session: createSession (new agent, fallback)");
           lettaSession = createSession(process.env.LETTA_AGENT_ID, sessionOptions);
         }
+      } else if (targetAgentId) {
+        // Start on explicit agent
+        debug("creating session: createSession with preferredAgentId", { preferredAgentId: targetAgentId });
+        lettaSession = createSession(targetAgentId, sessionOptions);
       } else if (cachedAgentId) {
         // Create new conversation on existing agent
         debug("creating session: resumeSession with cachedAgentId", { cachedAgentId });
-        lettaSession = resumeSession(cachedAgentId, sessionOptions);
+        lettaSession = createSession(cachedAgentId, sessionOptions);
       } else {
         // First time - create new agent and session
         debug("creating session: createSession (new agent)");
