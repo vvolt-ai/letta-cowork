@@ -4,6 +4,21 @@
 
 Use `scripts/read_pdf_folder.mjs` to read PDF files from a local folder and return extracted text as JSON.
 
+## Mandatory Preflight
+
+Always install and verify required dependencies before script execution:
+
+```bash
+npm i pdf-parse
+npm ls pdf-parse --depth=0
+```
+
+Resolve script path first (do not assume current working directory):
+
+```bash
+SCRIPT_PATH="$(find . -path '*/skills/pdf-reader/scripts/read_pdf_folder.mjs' -print -quit)"
+```
+
 ## Arguments
 
 - `--folder` (required): Folder that contains PDF files.
@@ -15,10 +30,9 @@ Use `scripts/read_pdf_folder.mjs` to read PDF files from a local folder and retu
 ## Example Commands
 
 ```bash
-npm i pdf-parse
-node scripts/read_pdf_folder.mjs --folder ./docs
-node scripts/read_pdf_folder.mjs --folder ./docs --recursive --max-pages 5
-node scripts/read_pdf_folder.mjs --folder ./docs --recursive --export-dir ./out
+node "$SCRIPT_PATH" --folder ./docs
+node "$SCRIPT_PATH" --folder ./docs --recursive --max-pages 5
+node "$SCRIPT_PATH" --folder ./docs --recursive --export-dir ./out
 ```
 
 ## Notes

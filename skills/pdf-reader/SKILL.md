@@ -10,30 +10,47 @@ Prefer this skill for batch extraction across multiple files rather than writing
 
 ## Workflow
 
-1. Resolve the target folder path from the user request.
-2. Run `scripts/read_pdf_folder.mjs` to extract text:
+1. Install and verify required dependencies before any use:
+- Run `npm i pdf-parse` in the project root.
+- Verify with `npm ls pdf-parse --depth=0`.
+2. Resolve script path with an absolute path (do not assume current working directory):
+- Preferred: `<workspace>/skills/pdf-reader/scripts/read_pdf_folder.mjs`
+- Fallback discovery: `find . -path '*/skills/pdf-reader/scripts/read_pdf_folder.mjs' -print -quit`
+3. Resolve the target folder path from the user request.
+4. Run the script using the absolute path:
 - Use `--recursive` when PDFs may exist in nested folders.
 - Use `--max-pages` to limit extraction for quick previews.
 - Use `--export-dir` to save `.txt` files per PDF.
-3. Inspect output summary (file counts, page counts, extracted characters).
-4. If extraction is empty for scanned/image PDFs, report that OCR is needed (this skill does not run OCR).
-5. Continue with summarization or analysis using the extracted text.
+5. Inspect output summary (file counts, page counts, extracted characters).
+6. If extraction is empty for scanned/image PDFs, report that OCR is needed (this skill does not run OCR).
+7. Continue with summarization or analysis using the extracted text.
 
 ## Commands
 
 ```bash
+# Mandatory preflight
+npm i pdf-parse
+npm ls pdf-parse --depth=0
+```
+
+```bash
+# Resolve script path first
+SCRIPT_PATH="$(find . -path '*/skills/pdf-reader/scripts/read_pdf_folder.mjs' -print -quit)"
+```
+
+```bash
 # Extract all PDFs in a folder (non-recursive)
-node scripts/read_pdf_folder.mjs --folder /path/to/pdfs
+node "$SCRIPT_PATH" --folder /path/to/pdfs
 ```
 
 ```bash
 # Include nested folders and limit to first 3 pages per file
-node scripts/read_pdf_folder.mjs --folder /path/to/pdfs --recursive --max-pages 3
+node "$SCRIPT_PATH" --folder /path/to/pdfs --recursive --max-pages 3
 ```
 
 ```bash
 # Export extracted text files to a destination folder
-node scripts/read_pdf_folder.mjs --folder /path/to/pdfs --recursive --export-dir /tmp/pdf-text
+node "$SCRIPT_PATH" --folder /path/to/pdfs --recursive --export-dir /tmp/pdf-text
 ```
 
 ## Output Contract
@@ -45,7 +62,16 @@ node scripts/read_pdf_folder.mjs --folder /path/to/pdfs --recursive --export-dir
 
 ## Dependency
 
-- Install once in the project root: `npm i pdf-parse`
+- Required package: `pdf-parse`
+- Always install and verify before use:
+  - `npm i pdf-parse`
+  - `npm ls pdf-parse --depth=0`
+
+## Hard Rule
+
+- Never run the reader script before confirming required dependencies are installed.
+- Never assume `scripts/read_pdf_folder.mjs` exists relative to the current working directory.
+- If dependency check fails, install dependencies first, then rerun the command.
 
 ## Limitations
 
