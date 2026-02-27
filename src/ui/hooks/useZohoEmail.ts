@@ -1,5 +1,7 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { FolderResponse, ZohoEmailResponse, EmailListParams } from "../types";
+
+const DEFAULT_FOLDER_ID = "2467477000000008014";
 
 /**
  * Helper hook to interact with Zoho Mail via the Electron APIs.
@@ -14,6 +16,9 @@ export function useZohoEmail() {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [folders, setFolders] = useState<FolderResponse | null>(null);
   const [emails, setEmails] = useState<ZohoEmailResponse | null>(null);
+  const [isMailConnected, setIsMailConnected] = useState(false);
+  const [folderId, setFolderId] = useState("");
+  const [isFetchingEmailContent, setIsFetchingEmailContent] = useState(false);
 
   const fetchAccounts = useCallback(async () => {
     const resp = await window.electron.fetchAccounts();
@@ -92,21 +97,23 @@ export function useZohoEmail() {
   // }, [fetchAccounts]);
 
   const fetchEmailById = useCallback(
-    async (folderId: string, messageId: string) => {
-      if (!accountId) {
+    async (folderId: string, messageId: string, accountIdOverride?: string) => {
+      const targetAccountId = accountIdOverride || accountId;
+      if (!targetAccountId) {
         throw new Error("Zoho accountId is required; call fetchAccounts first");
       }
-      return await window.electron.fetchEmailById(accountId, folderId, messageId);
+      return await window.electron.fetchEmailById(targetAccountId, folderId, messageId);
     },
     [accountId]
   );
 
   const markMessagesAsRead = useCallback(
-    async (messageIds: (number | string)[]) => {
-      if (!accountId) {
+    async (messageIds: (number | string)[], accountIdOverride?: string) => {
+      const targetAccountId = accountIdOverride || accountId;
+      if (!targetAccountId) {
         throw new Error("Zoho accountId is required");
       }
-      return await window.electron.markMessagesAsRead(accountId, messageIds);
+      return await window.electron.markMessagesAsRead(targetAccountId, messageIds);
     },
     [accountId]
   );
@@ -135,11 +142,121 @@ export function useZohoEmail() {
     [accountId]
   );
 
+  const checkAlreadyConnected = useCallback(async () => {
+    try {
+      const alreadyConnected = await window.electron.checkAlreadyConnected();
+      setIsMailConnected(alreadyConnected);
+      console.log("Is email already connected?", alreadyConnected);
+      return alreadyConnected;
+    } catch (error) {
+      console.error("Failed to check email connection:", error);
+      return false;
+    }
+  }, []);
+
+  const loadInboxFolder = useCallback(async () => {
+    setIsFetchingEmailContent(true);
+    try {
+      const data = await fetchFolders();
+      const inboxFolder = data?.folders?.find((f: any) => f.folderName === "Inbox");
+      const resolvedFolderId = inboxFolder ? String(inboxFolder.folderId) : DEFAULT_FOLDER_ID;
+      setFolderId(resolvedFolderId);
+      return resolvedFolderId;
+    } catch (err) {
+      console.error("Failed to load folders/emails:", err);
+      return DEFAULT_FOLDER_ID;
+    } finally {
+      setIsFetchingEmailContent(false);
+    }
+  }, [fetchFolders]);
+
+  const refetchEmails = useCallback(async () => {
+    const targetFolderId = folderId || DEFAULT_FOLDER_ID;
+    resetEmailsPosition(targetFolderId);
+    return fetchEmails(targetFolderId);
+  }, [fetchEmails, folderId, resetEmailsPosition]);
+
+  const refreshEmailsForFolder = useCallback(async (targetFolderId: string) => {
+    resetEmailsPosition(targetFolderId);
+    return fetchEmails(targetFolderId, { start: 0 });
+  }, [fetchEmails, resetEmailsPosition]);
+
+  const connectEmail = useCallback(async () => {
+    try {
+      await window.electron.connectEmail();
+    } catch (error) {
+      console.error("Email connect error:", error);
+      alert("Unable to start email connection.");
+    }
+  }, []);
+
+  const disconnectEmail = useCallback(async () => {
+    try {
+      await window.electron.disconnectEmail();
+      setIsMailConnected(false);
+      setAccountId("");
+      setAccounts([]);
+      setFolders(null);
+      setEmails(null);
+      setFolderId("");
+      setIsFetchingEmailContent(false);
+    } catch (error) {
+      console.error("Email disconnect error:", error);
+      throw error;
+    }
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const initializeEmailCheck = async () => {
+      if (isMounted) {
+        await checkAlreadyConnected();
+      }
+    };
+
+    initializeEmailCheck();
+
+    const unsubscribe = window.electron.onEmailConnected((data) => {
+      if (data.success && isMounted) {
+        console.log("Email connected. Fetching folders...");
+        checkAlreadyConnected();
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, [checkAlreadyConnected]);
+
+  useEffect(() => {
+    if (!isMailConnected) return;
+    fetchAccounts().catch((err) => {
+      checkAlreadyConnected();
+      console.error("Failed to fetch accounts after connection:", err);
+    });
+  }, [checkAlreadyConnected, fetchAccounts, isMailConnected]);
+
+  useEffect(() => {
+    if (!accountId || !isMailConnected) return;
+    void loadInboxFolder();
+  }, [accountId, isMailConnected, loadInboxFolder]);
+
+  useEffect(() => {
+    if (!isMailConnected || !folderId) return;
+    console.log("Folder ID or connection status changed. Folder ID:", folderId, "Is Mail Connected?", isMailConnected);
+    fetchEmails(folderId);
+  }, [fetchEmails, folderId, isMailConnected]);
+
   return {
     accountId,
     accounts,
     folders,
     emails,
+    isMailConnected,
+    folderId,
+    isFetchingEmailContent,
     fetchAccounts,
     fetchFolders,
     fetchEmails,
@@ -147,5 +264,11 @@ export function useZohoEmail() {
     markMessagesAsRead,
     resetEmailsPosition,
     searchForEmails,
+    checkAlreadyConnected,
+    loadInboxFolder,
+    refetchEmails,
+    refreshEmailsForFolder,
+    connectEmail,
+    disconnectEmail,
   };
 }

@@ -44,6 +44,8 @@ electron.contextBridge.exposeInMainWorld("electron", {
     },
     connectEmail: () =>
         electron.ipcRenderer.invoke("connect-email"),
+    disconnectEmail: () =>
+        electron.ipcRenderer.invoke("disconnect-email"),
     checkAlreadyConnected: () =>
         electron.ipcRenderer.invoke("is-email-already-connected"),
     fetchEmailById: (accountId: string, folderId: string, messageId: string) =>

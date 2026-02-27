@@ -1,0 +1,4 @@
+interface:
+  display_name: "Neo4j Email Expert"
+  short_description: "Query email graph data from Neo4j safely"
+  default_prompt: "Use $neo4j-email to answer this email-data question from Neo4j using only the defined schema."

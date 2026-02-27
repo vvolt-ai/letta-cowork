@@ -1,74 +1,80 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CanUseToolResponse, ZohoEmail } from "./types";
 import { useIPC } from "./hooks/useIPC";
 import { useMessageWindow } from "./hooks/useMessageWindow";
-// import { useAutoSyncUnread } from "./hooks/useAutoSyncUnread";
 import { useAppStore } from "./store/useAppStore";
 import type { ServerEvent } from "./types";
 import { Sidebar } from "./components/Sidebar";
 import { StartSessionModal } from "./components/StartSessionModal";
-import { PromptInput, usePromptActions } from "./components/PromptInput";
-import { MessageCard } from "./components/EventCard";
-import MDContent from "./render/markdown";
-import { MailSidebar } from "./components/MailSidebar";
+import { usePromptActions } from "./components/PromptInput";
 import { useZohoEmail } from "./hooks/useZohoEmail";
+import { useEmailAsInput } from "./hooks/useEmailAsInput";
+import { useEmailSelection } from "./hooks/useEmailSelection";
+import { ChatMainPanel } from "./components/ChatMainPanel";
+import { GlobalErrorToast } from "./components/GlobalErrorToast";
+import { EmailDetailsDialog } from "./components/EmailDetailsDialog";
+import { useSessionController } from "./hooks/useSessionController";
 
 const SCROLL_THRESHOLD = 50;
+const PARTIAL_MESSAGE_RESET_DELAY_MS = 500;
+const SESSION_CHANGE_SCROLL_DELAY_MS = 100;
+
+type StreamEventMessage = {
+  type: "stream_event";
+  event: { type: string; delta?: { text?: string; reasoning?: string } };
+};
 
 function App() {
+  // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const topSentinelRef = useRef<HTMLDivElement>(null);
   const partialMessageRef = useRef("");
+  const prevMessagesLengthRef = useRef(0);
+  const scrollHeightBeforeLoadRef = useRef(0);
+  const shouldRestoreScrollRef = useRef(false);
+
+  // Local UI state
   const [partialMessage, setPartialMessage] = useState("");
   const [showPartialMessage, setShowPartialMessage] = useState(false);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [hasNewMessages, setHasNewMessages] = useState(false);
-  const prevMessagesLengthRef = useRef(0);
-  const scrollHeightBeforeLoadRef = useRef(0);
-  const shouldRestoreScrollRef = useRef(false);
-  const [isMailConnected, setIsMailConnected] = useState(false);
-  const sessions = useAppStore((s) => s.sessions);
-  const activeSessionId = useAppStore((s) => s.activeSessionId);
-  const showStartModal = useAppStore((s) => s.showStartModal);
-  const setShowStartModal = useAppStore((s) => s.setShowStartModal);
-  const globalError = useAppStore((s) => s.globalError);
-  const setGlobalError = useAppStore((s) => s.setGlobalError);
-  const historyRequested = useAppStore((s) => s.historyRequested);
-  const markHistoryRequested = useAppStore((s) => s.markHistoryRequested);
-  const resolvePermissionRequest = useAppStore((s) => s.resolvePermissionRequest);
   const handleServerEvent = useAppStore((s) => s.handleServerEvent);
-  const prompt = useAppStore((s) => s.prompt);
-  const setPrompt = useAppStore((s) => s.setPrompt);
-  const cwd = useAppStore((s) => s.cwd);
-  const setCwd = useAppStore((s) => s.setCwd);
-  const pendingStart = useAppStore((s) => s.pendingStart);
-  const defaultFolderId = "2467477000000008014"; 
-  const [folderId, setFolderId] = useState('');
 
-  const [selectedEmailId, setSelectedEmailId] = useState<string | undefined>(undefined);
-
-  const [isFetchingEmailContent, setIsFetchingEmailContent] = useState(false);  
-
-// Default to Inbox, can be updated after fetching folders
-
+  // Email APIs
   const {
-    accountId,
     emails: zohoEmailsResponse,
-    fetchAccounts,
-    fetchFolders: loadFolders,
-    fetchEmails: loadEmails,
     fetchEmailById: loadEmailById,
-    resetEmailsPosition,
+    markMessagesAsRead,
+    isMailConnected,
+    isFetchingEmailContent,
+    refetchEmails,
+    refreshEmailsForFolder,
+    connectEmail,
+    disconnectEmail,
   } = useZohoEmail();
-
+  const { setEmailAsInput } = useEmailAsInput();
+  const {
+    selectedEmailId,
+    handleSelectEmail,
+    isEmailDetailsOpen,
+    isEmailDetailsLoading,
+    emailDetailsError,
+    viewingEmail,
+    emailDetails,
+    setIsEmailDetailsOpen,
+    handleViewEmail,
+  } = useEmailSelection({
+    fetchEmailById: loadEmailById,
+    markMessagesAsRead,
+    refreshEmailsForFolder,
+  });
   const emails = zohoEmailsResponse?.data ?? [];
 
-  // Handle partial messages from stream events
+  // Handle partial streaming tokens for assistant responses
   const handlePartialMessages = useCallback((partialEvent: ServerEvent) => {
     if (partialEvent.type !== "stream.message" || partialEvent.payload.message.type !== "stream_event") return;
 
-    const message = partialEvent.payload.message as { type: "stream_event"; event: { type: string; delta?: { text?: string; reasoning?: string } } };
+    const message = partialEvent.payload.message as StreamEventMessage;
     const event = message.event;
 
     if (event.type === "content_block_start") {
@@ -93,29 +99,37 @@ function App() {
       setTimeout(() => {
         partialMessageRef.current = "";
         setPartialMessage(partialMessageRef.current);
-      }, 500);
+      }, PARTIAL_MESSAGE_RESET_DELAY_MS);
     }
   }, [shouldAutoScroll]);
 
-  // Event handler
+  // Unified event handler from IPC stream
   const onEvent = useCallback((event: ServerEvent) => {
     handleServerEvent(event);
     handlePartialMessages(event);
   }, [handleServerEvent, handlePartialMessages]);
 
   const { connected, sendEvent } = useIPC(onEvent);
-
-  // automatically sync unread messages when conditions are right
-  // useAutoSyncUnread(sendEvent, accountId, folderId, isMailConnected && !!folderId, 5);
-
+  const {
+    activeSessionId,
+    showStartModal,
+    setShowStartModal,
+    globalError,
+    setGlobalError,
+    prompt,
+    setPrompt,
+    cwd,
+    setCwd,
+    pendingStart,
+    activeSession,
+    messages,
+    permissionRequests,
+    isRunning,
+    handleNewSession,
+    handleDeleteSession,
+    handlePermissionResult,
+  } = useSessionController({ connected, sendEvent });
   const { handleStartFromModal } = usePromptActions(sendEvent);
-
-  // Enable auto-sync of unread emails every 5 minutes (only when email is connected)
-
-  const activeSession = activeSessionId ? sessions[activeSessionId] : undefined;
-  const messages = activeSession?.messages ?? [];
-  const permissionRequests = activeSession?.permissionRequests ?? [];
-  const isRunning = activeSession?.status === "running";
 
   const {
     visibleMessages,
@@ -125,94 +139,6 @@ function App() {
     resetToLatest,
     totalMessages,
   } = useMessageWindow(messages, permissionRequests, activeSessionId);
-
-  // when accountId becomes available and email is connected, automatically load folders + default inbox
-  useEffect(() => {
-    if (accountId && isMailConnected) {
-      loadFolders()
-        .then((data) => {
-          console.log("Folders loaded:", data);
-          const inboxFolder = data?.folders?.find((f: any) => f.folderName === "Inbox");
-          setIsFetchingEmailContent(true);
-          setFolderId(inboxFolder ? String(inboxFolder.folderId) : defaultFolderId);
-        })
-        .then(() => setIsFetchingEmailContent(false))
-        .catch(err => {
-          console.error("Failed to load folders/emails:", err);
-          setIsFetchingEmailContent(false);
-        });
-    }
-  }, [accountId, isMailConnected, loadFolders, loadEmails]);
-
-
-
-  const checkAlreadyConnected = async () => {
-    try {
-      const alreadyConnected = await window.electron.checkAlreadyConnected();
-      setIsMailConnected(alreadyConnected);
-      console.log("Is email already connected?", alreadyConnected);
-    } catch (error) {
-      console.error("Failed to check email connection:", error);
-    }
-  }
-
-  useEffect(() => {
-    if (isMailConnected) {
-      // refresh account list when connection is (re)established
-      fetchAccounts().catch(err => {
-        checkAlreadyConnected(); // Re-check connection status if fetching accounts fails (e.g., due to token issues)
-        console.error("Failed to fetch accounts after connection:", err);
-      });
-    }
-  }, [isMailConnected, fetchAccounts]);
-
-
-  useEffect(() => {
-    console.log("Folder ID or connection status changed. Folder ID:", folderId, "Is Mail Connected?", isMailConnected);
-    if (isMailConnected && folderId) {
-      loadEmails(folderId);
-    }
-  }, [folderId, isMailConnected, loadEmails]);
-
-
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const initializeEmailCheck = async () => {
-      if (isMounted) {
-        await checkAlreadyConnected();
-      }
-    };
-
-    initializeEmailCheck();
-
-    const unsubscribe = window.electron.onEmailConnected((data) => {
-      if (data.success && isMounted) {
-        console.log("Email connected. Fetching folders...");
-        checkAlreadyConnected();
-      }
-    });
-
-    return () => {
-      isMounted = false;
-      unsubscribe();
-    };
-  }, []);
-
-  // 启动时检查 API 配置
-  useEffect(() => {
-    if (connected) sendEvent({ type: "session.list" });
-  }, [connected, sendEvent]);
-
-  useEffect(() => {
-    if (!activeSessionId || !connected) return;
-    const session = sessions[activeSessionId];
-    if (session && !session.hydrated && !historyRequested.has(activeSessionId)) {
-      markHistoryRequested(activeSessionId);
-      sendEvent({ type: "session.history", payload: { sessionId: activeSessionId } });
-    }
-  }, [activeSessionId, connected, sessions, historyRequested, markHistoryRequested, sendEvent]);
 
   const handleScroll = useCallback(() => {
     const container = scrollContainerRef.current;
@@ -229,7 +155,7 @@ function App() {
     }
   }, [shouldAutoScroll]);
 
-  // Set up IntersectionObserver for top sentinel
+  // Top sentinel triggers incremental history load
   useEffect(() => {
     const sentinel = topSentinelRef.current;
     const container = scrollContainerRef.current;
@@ -258,7 +184,7 @@ function App() {
     };
   }, [hasMoreHistory, isLoadingHistory, loadMoreMessages]);
 
-  // Restore scroll position after loading history
+  // Keep viewport stable when prepending old history
   useEffect(() => {
     if (shouldRestoreScrollRef.current && !isLoadingHistory) {
       const container = scrollContainerRef.current;
@@ -271,14 +197,14 @@ function App() {
     }
   }, [visibleMessages, isLoadingHistory]);
 
-  // Reset scroll state on session change
+  // Reset scroll behavior on session switch
   useEffect(() => {
     setShouldAutoScroll(true);
     setHasNewMessages(false);
     prevMessagesLengthRef.current = 0;
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
-    }, 100);
+    }, SESSION_CHANGE_SCROLL_DELAY_MS);
   }, [activeSessionId]);
 
   useEffect(() => {
@@ -297,53 +223,11 @@ function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [resetToLatest]);
 
-  const handleNewSession = useCallback(() => {
-    useAppStore.getState().setActiveSessionId(null);
-    setShowStartModal(true);
-  }, [setShowStartModal]);
-
-  const handleConnectEmail = async () => {
-    try {
-      await window.electron.connectEmail();
-    } catch (error) {
-      console.error("Email connect error:", error);
-      alert("Unable to start email connection.");
-    }
-  }
-
-  const handleDeleteSession = useCallback((sessionId: string) => {
-    sendEvent({ type: "session.delete", payload: { sessionId } });
-  }, [sendEvent]);
-
-  const handlePermissionResult = useCallback((toolUseId: string, result: CanUseToolResponse) => {
-    if (!activeSessionId) return;
-    sendEvent({ type: "permission.response", payload: { sessionId: activeSessionId, toolUseId, result } });
-    resolvePermissionRequest(activeSessionId, toolUseId);
-  }, [activeSessionId, sendEvent, resolvePermissionRequest]);
-
   const handleSendMessage = useCallback(() => {
     setShouldAutoScroll(true);
     setHasNewMessages(false);
     resetToLatest();
   }, [resetToLatest]);
-
-  const handleSelectEmail = useCallback((email: ZohoEmail) => {
-    setSelectedEmailId(email.messageId);
-    loadEmailById(email.folderId, email.messageId).catch(err => console.error("failed to load email by id", err));
-
-    // kick off attachment download if accountId is known
-    if (accountId && email.folderId) {
-      window.electron
-        .downloadEmailAttachment(email.folderId, email.messageId, accountId)
-        .then(res => {
-          console.log("Download result:", res);
-        })
-        .catch(err => {
-          console.error("Failed to download attachments:", err);
-        });
-    }
-    // Here you can implement additional logic to open the email or start a session based on the email content
-  }, [accountId, loadEmailById]);
 
   return (
     <div className="flex h-screen bg-surface">
@@ -351,106 +235,39 @@ function App() {
         connected={connected}
         onNewSession={handleNewSession}
         onDeleteSession={handleDeleteSession}
-        onConnectEmail={handleConnectEmail}
+        onConnectEmail={connectEmail}
+        onDisconnectEmail={disconnectEmail}
         isEmailConnected={isMailConnected}
-        refetchEmails={() => { resetEmailsPosition(defaultFolderId); loadEmails(defaultFolderId); }}
+        refetchEmails={refetchEmails}
+        emails={emails}
+        selectedEmailId={selectedEmailId}
+        onSelectEmail={handleSelectEmail}
+        onViewEmail={handleViewEmail}
+        onUseEmailAsInput={setEmailAsInput}
+        isFetchingEmails={isFetchingEmailContent}
       />
-
-      <main className="flex flex-1 flex-col ml-[280px] bg-surface-cream">
-        <div
-          className="flex items-center justify-center h-12 border-b border-ink-900/10 bg-surface-cream select-none"
-          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-        >
-          <span className="text-sm font-medium text-ink-700">{activeSession?.title || "Letta Cowork"}</span>
-        </div>
-
-        <div
-          ref={scrollContainerRef}
-          onScroll={handleScroll}
-          className="flex-1 overflow-y-auto px-8 pb-40 pt-3"
-        >
-          <div className="mx-auto">
-            <div ref={topSentinelRef} className="h-1" />
-
-            {!hasMoreHistory && totalMessages > 0 && (
-              <div className="flex items-center justify-center py-4 mb-4">
-                <div className="flex items-center gap-2 text-xs text-muted">
-                  <div className="h-px w-12 bg-ink-900/10" />
-                  <span>Beginning of conversation</span>
-                  <div className="h-px w-12 bg-ink-900/10" />
-                </div>
-              </div>
-            )}
-
-            {isLoadingHistory && (
-              <div className="flex items-center justify-center py-4 mb-4">
-                <div className="flex items-center gap-2 text-xs text-muted">
-                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  <span>Loading...</span>
-                </div>
-              </div>
-            )}
-
-            {visibleMessages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-center">
-                <div className="text-lg font-medium text-ink-700">No messages yet</div>
-                <p className="mt-2 text-sm text-muted">Start a conversation with Letta Cowork</p>
-              </div>
-            ) : (
-              visibleMessages.map((item, idx) => (
-                <MessageCard
-                  key={`${activeSessionId}-msg-${item.originalIndex}`}
-                  message={item.message}
-                  isLast={idx === visibleMessages.length - 1}
-                  isRunning={isRunning}
-                  permissionRequest={permissionRequests[0]}
-                  onPermissionResult={handlePermissionResult}
-                />
-              ))
-            )}
-
-            {/* Partial message display with skeleton loading */}
-            {partialMessage && (
-              <div className="partial-message mt-4">
-                <div className="header text-accent">Assistant</div>
-                <MDContent text={partialMessage} />
-              </div>
-            )}
-            {showPartialMessage && !partialMessage && (
-              <div className="mt-3 flex flex-col gap-2 px-1">
-                <div className="relative h-3 w-2/12 overflow-hidden rounded-full bg-ink-900/10">
-                  <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-ink-900/30 to-transparent animate-shimmer" />
-                </div>
-                <div className="relative h-3 w-full overflow-hidden rounded-full bg-ink-900/10">
-                  <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-ink-900/30 to-transparent animate-shimmer" />
-                </div>
-              </div>
-            )}
-
-            <div ref={messagesEndRef} />
-          </div>
-        </div>
-
-        <PromptInput sendEvent={sendEvent} onSendMessage={handleSendMessage} disabled={visibleMessages.length === 0} />
-
-        {hasNewMessages && !shouldAutoScroll && (
-          <button
-            onClick={scrollToBottom}
-            className="fixed bottom-28 left-1/2 ml-[140px] z-40 -translate-x-1/2 flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-medium text-white shadow-lg transition-all hover:bg-accent-hover hover:scale-105 animate-bounce-subtle"
-          >
-            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 5v14M5 12l7 7 7-7" />
-            </svg>
-            <span>New messages</span>
-          </button>
-        )}
-      </main>
-      <MailSidebar emails={emails} selectedId={selectedEmailId} onSelect={handleSelectEmail} isFetching={isFetchingEmailContent}   />
-
-
+      <ChatMainPanel
+        title={activeSession?.title}
+        activeSessionId={activeSessionId}
+        isRunning={isRunning}
+        permissionRequests={permissionRequests}
+        visibleMessages={visibleMessages}
+        hasMoreHistory={hasMoreHistory}
+        totalMessages={totalMessages}
+        isLoadingHistory={isLoadingHistory}
+        partialMessage={partialMessage}
+        showPartialMessage={showPartialMessage}
+        hasNewMessages={hasNewMessages}
+        shouldAutoScroll={shouldAutoScroll}
+        onPermissionResult={handlePermissionResult}
+        onScroll={handleScroll}
+        onScrollToBottom={scrollToBottom}
+        onSendMessage={handleSendMessage}
+        sendEvent={sendEvent}
+        scrollContainerRef={scrollContainerRef}
+        topSentinelRef={topSentinelRef}
+        messagesEndRef={messagesEndRef}
+      />
       {showStartModal && (
         <StartSessionModal
           cwd={cwd}
@@ -463,16 +280,15 @@ function App() {
         />
       )}
 
-      {globalError && (
-        <div className="fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-xl border border-error/20 bg-error-light px-4 py-3 shadow-lg">
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-error">{globalError}</span>
-            <button className="text-error hover:text-error/80" onClick={() => setGlobalError(null)}>
-              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
-            </button>
-          </div>
-        </div>
-      )}
+      {globalError && <GlobalErrorToast message={globalError} onClose={() => setGlobalError(null)} />}
+      <EmailDetailsDialog
+        open={isEmailDetailsOpen}
+        onOpenChange={setIsEmailDetailsOpen}
+        email={viewingEmail}
+        details={emailDetails}
+        loading={isEmailDetailsLoading}
+        error={emailDetailsError}
+      />
     </div>
   );
 }

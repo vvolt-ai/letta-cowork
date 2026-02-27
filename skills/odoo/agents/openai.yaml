@@ -1,0 +1,4 @@
+interface:
+  display_name: "Odoo Expert"
+  short_description: "Use Odoo MCP tools for CRM and sales workflows"
+  default_prompt: "Use $odoo to solve this Odoo workflow with odoo_search/odoo_count first, then odoo_create/odoo_update only if changes are explicitly requested."

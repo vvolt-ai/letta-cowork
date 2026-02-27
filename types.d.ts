@@ -42,6 +42,7 @@ type EventPayloadMapping = {
     "fetch-emails": any;
     "fetch-accounts": any;
     "connect-email": void;
+    "disconnect-email": { success: boolean };
     "is-email-already-connected": boolean;
     "fetch-email-by-id": any;
     "update-messages": any;
@@ -68,6 +69,7 @@ interface Window {
             callback: (data: { success: boolean }) => void
         ) => () => void;
         connectEmail: () => Promise<void>;
+        disconnectEmail: () => Promise<{ success: boolean }>;
         checkAlreadyConnected: () => Promise<boolean>;
         fetchEmailById: (accountId: string, folderId: string, messageId: string) => Promise<any>;
         downloadEmailAttachment: (folderId: string, messageId: string, accountId: string) => Promise<any>;
@@ -76,4 +78,3 @@ interface Window {
         downloadSkill: (handles: string | string[], skillName?: string, branch?: string) => Promise<{ success: boolean; skillDirs: string[] }>;
     }
 }
-

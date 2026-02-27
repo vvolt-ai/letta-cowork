@@ -42,7 +42,15 @@ export async function saveInboxFolderId(folderId: string) {
 }
 
 export async function removeToken() {
-  keytar.deletePassword(APP_NAME, "email_access_token");
+  await keytar.deletePassword(APP_NAME, "email_access_token");
   return keytar.deletePassword(APP_NAME, "email_refresh_token");
 }
 
+export async function clearEmailCredentials() {
+  await Promise.all([
+    keytar.deletePassword(APP_NAME, "email_access_token"),
+    keytar.deletePassword(APP_NAME, "email_refresh_token"),
+    keytar.deletePassword(APP_NAME, "email_account_id"),
+    keytar.deletePassword(APP_NAME, "email_inbox_folder_id"),
+  ]);
+}

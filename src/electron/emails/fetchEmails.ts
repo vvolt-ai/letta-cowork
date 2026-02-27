@@ -2,7 +2,7 @@
 import { app, shell } from "electron";
 import path from "path";
 import fs from 'fs';
-import { BASE_URL, getAccessToken, getAccountId, getInboxFolderId, saveAccountId, saveInboxFolderId } from "./helper.js";
+import { BASE_URL, clearEmailCredentials, getAccessToken, getAccountId, getInboxFolderId, getRefreshToken, saveAccountId, saveInboxFolderId } from "./helper.js";
 import { serverApiRequest, zohoApiRequest } from "./zohoApi.js";
 import type {
   AttachmentInfoResponse,
@@ -150,6 +150,34 @@ export const connectEmail = async () => {
 export const checkAlreadyConnected = async () => {
   const accessToken = await getAccessToken();
   return !!accessToken;
+};
+
+const revokeTokenBestEffort = async (token?: string | null) => {
+  if (!token) return;
+
+  const encodedToken = encodeURIComponent(token);
+
+  try {
+    await fetch(`https://accounts.zoho.com/oauth/v2/token/revoke?token=${encodedToken}`, { method: "POST" });
+  } catch {
+    // best-effort only
+  }
+};
+
+export const disconnectEmail = async () => {
+  // Revoke first, then remove local credentials
+  const [accessToken, refreshToken] = await Promise.all([
+    getAccessToken(),
+    getRefreshToken(),
+  ]);
+
+  await Promise.all([
+    revokeTokenBestEffort(refreshToken),
+    revokeTokenBestEffort(accessToken),
+  ]);
+
+  await clearEmailCredentials();
+  return { success: true };
 };
 
 

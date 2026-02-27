@@ -57,7 +57,7 @@ import { getPreloadPath, getUIPath, getIconPath } from "./pathResolver.js";
 import { getStaticData, pollResources, stopPolling } from "./test.js";
 import { handleClientEvent, cleanupAllSessions } from "./ipc-handlers.js";
 import type { ClientEvent } from "./types.js";
-import { checkAlreadyConnected, connectEmail, fetchEmailById, fetchEmails, fetchFolders, downloadEmailAttachment, fetchAccounts, updateMessages, searchEmails } from "./emails/fetchEmails.js";
+import { checkAlreadyConnected, connectEmail, disconnectEmail, fetchEmailById, fetchEmails, fetchFolders, downloadEmailAttachment, fetchAccounts, updateMessages, searchEmails } from "./emails/fetchEmails.js";
 import { expressServer } from "./emails/express.js";
 import { downloadSkillsFromGitHub, GLOBAL_SKILLS_DIR2 } from "./skillDownloader.js";
 
@@ -159,6 +159,7 @@ app.on("ready", () => {
     });
 
     ipcMain.handle("connect-email", connectEmail)
+    ipcMain.handle("disconnect-email", disconnectEmail)
 
     ipcMain.handle("is-email-already-connected", checkAlreadyConnected)
 
