@@ -3,6 +3,11 @@ import path from "path";
 import { Letta } from "@letta-ai/letta-client";
 
 const SUPPORTED_FILE_EXTENSIONS = new Set([
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".webp",
+  ".gif",
   ".pdf",
   ".txt",
   ".md",
@@ -15,6 +20,8 @@ export type AttachFilesToAgentResult =
   | {
       status: "skipped";
       reason: string;
+      skippedFiles?: string[];
+      failedFiles?: { file: string; error: string }[];
     }
   | {
       status: "attached";
@@ -72,6 +79,8 @@ export async function attachFilesToAgentFolder({
     return {
       status: "skipped",
       reason: "No supported attachment formats found to upload.",
+      skippedFiles,
+      failedFiles: [],
     };
   }
 
@@ -100,9 +109,15 @@ export async function attachFilesToAgentFolder({
   }
 
   if (uploadedFiles.length === 0) {
+    const details =
+      failedFiles.length > 0
+        ? ` Failures: ${failedFiles.map((item) => `${item.file}: ${item.error}`).join(" | ")}`
+        : "";
     return {
       status: "skipped",
-      reason: "All supported files failed to upload.",
+      reason: `All supported files failed to upload.${details}`,
+      skippedFiles,
+      failedFiles,
     };
   }
 

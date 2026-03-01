@@ -110,10 +110,29 @@ export function getLettaEnvConfig(): LettaEnvConfig {
   };
 }
 
+function validateLettaEnvConfig(values: LettaEnvConfig): void {
+  const missing: (keyof LettaEnvConfig)[] = [];
+  if (!values.LETTA_API_KEY.trim()) missing.push("LETTA_API_KEY");
+  if (!values.LETTA_BASE_URL.trim()) missing.push("LETTA_BASE_URL");
+  if (!values.LETTA_AGENT_ID.trim()) missing.push("LETTA_AGENT_ID");
+
+  if (missing.length > 0) {
+    throw new Error(`Missing required env value(s): ${missing.join(", ")}`);
+  }
+}
+
 export function updateLettaEnvConfig(values: LettaEnvConfig): void {
-  process.env.LETTA_API_KEY = values.LETTA_API_KEY;
-  process.env.LETTA_BASE_URL = values.LETTA_BASE_URL;
-  process.env.LETTA_AGENT_ID = values.LETTA_AGENT_ID;
-  writeLettaEnvToUserFile(values);
-  updateSystemEnvironment(values);
+  const normalized: LettaEnvConfig = {
+    LETTA_API_KEY: values.LETTA_API_KEY.trim(),
+    LETTA_BASE_URL: values.LETTA_BASE_URL.trim(),
+    LETTA_AGENT_ID: values.LETTA_AGENT_ID.trim(),
+  };
+
+  validateLettaEnvConfig(normalized);
+
+  process.env.LETTA_API_KEY = normalized.LETTA_API_KEY;
+  process.env.LETTA_BASE_URL = normalized.LETTA_BASE_URL;
+  process.env.LETTA_AGENT_ID = normalized.LETTA_AGENT_ID;
+  writeLettaEnvToUserFile(normalized);
+  updateSystemEnvironment(normalized);
 }

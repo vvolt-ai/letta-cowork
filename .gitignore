@@ -31,3 +31,4 @@ bun.lock
 
 # Letta
 .letta/
+data/

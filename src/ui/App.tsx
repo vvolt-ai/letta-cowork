@@ -47,6 +47,7 @@ function App() {
   const [showPartialMessage, setShowPartialMessage] = useState(false);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [hasNewMessages, setHasNewMessages] = useState(false);
+  const [lettaEnvOpen, setLettaEnvOpen] = useState(false);
   const [autoSyncEnabled, setAutoSyncEnabled] = useState<boolean>(() => {
     return localStorage.getItem(AUTO_SYNC_ENABLED_KEY) === "true";
   });
@@ -202,6 +203,41 @@ function App() {
   } = useSessionController({ connected, sendEvent });
   const { handleStartFromModal } = usePromptActions(sendEvent);
 
+  const isLettaEnvConfigured = useCallback(async () => {
+    try {
+      const env = await window.electron.getLettaEnv();
+      const baseUrl = env.LETTA_BASE_URL.trim();
+      const apiKey = env.LETTA_API_KEY.trim();
+      const agentId = env.LETTA_AGENT_ID.trim();
+      return baseUrl.length > 0 && apiKey.length > 0 && agentId.length > 0;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const handleStartSessionClick = useCallback(async () => {
+    const configured = await isLettaEnvConfigured();
+    if (!configured) {
+      setShowStartModal(false);
+      setLettaEnvOpen(true);
+      return;
+    }
+    handleNewSession();
+  }, [handleNewSession, isLettaEnvConfigured, setShowStartModal]);
+
+  useEffect(() => {
+    if (!showStartModal) return;
+    let cancelled = false;
+    isLettaEnvConfigured().then((configured) => {
+      if (cancelled || configured) return;
+      setShowStartModal(false);
+      setLettaEnvOpen(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isLettaEnvConfigured, setShowStartModal, showStartModal]);
+
   useEffect(() => {
     localStorage.setItem(AUTO_SYNC_ENABLED_KEY, String(autoSyncEnabled));
   }, [autoSyncEnabled]);
@@ -326,7 +362,9 @@ function App() {
     <div className="flex h-screen bg-surface">
       <Sidebar
         connected={connected}
-        onNewSession={handleNewSession}
+        onNewSession={handleStartSessionClick}
+        lettaEnvOpen={lettaEnvOpen}
+        onLettaEnvOpenChange={setLettaEnvOpen}
         onDeleteSession={handleDeleteSession}
         onConnectEmail={connectEmail}
         onDisconnectEmail={disconnectEmail}

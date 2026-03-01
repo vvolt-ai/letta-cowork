@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, globalShortcut, Menu } from "electron"
+import { app, BrowserWindow, ipcMain, dialog, globalShortcut, Menu, shell } from "electron"
 import { execSync } from "child_process";
 import path, { join } from "path";
 import { ipcMainHandle, isDev, DEV_PORT } from "./util.js";
@@ -49,6 +49,24 @@ import type { ClientEvent } from "./types.js";
 import { checkAlreadyConnected, connectEmail, disconnectEmail, fetchEmailById, fetchEmails, fetchFolders, downloadEmailAttachment, fetchAccounts, updateMessages, searchEmails, uploadEmailAttachmentToAgent } from "./emails/fetchEmails.js";
 import { expressServer } from "./emails/express.js";
 import { downloadSkillsFromGitHub, GLOBAL_SKILLS_DIR2 } from "./skillDownloader.js";
+import {
+    getBridgesConfig,
+    getWhatsAppBridgeStatus,
+    getTelegramBridgeStatus,
+    getDiscordBridgeStatus,
+    getSlackBridgeStatus,
+    initializeChannelBridges,
+    startWhatsAppBridge,
+    stopWhatsAppBridge,
+    startTelegramBridge,
+    stopTelegramBridge,
+    startDiscordBridge,
+    stopDiscordBridge,
+    startSlackBridge,
+    stopSlackBridge,
+    updateBridgesConfig,
+} from "./bridges/channelBridgeManager.js";
+import type { ChannelBridgeConfig } from "./bridges/channelConfig.js";
 
 let cleanupComplete = false;
 let mainWindow: BrowserWindow | null = null;
@@ -136,6 +154,17 @@ app.on("ready", () => {
         return [process.cwd()]; // Just return current directory
     });
 
+    ipcMain.handle("open-external", async (_event, url: string) => {
+        if (typeof url !== "string") {
+            throw new Error("Invalid URL");
+        }
+        const normalized = url.trim();
+        if (!/^https?:\/\//i.test(normalized)) {
+            throw new Error("Only http(s) URLs are allowed");
+        }
+        await shell.openExternal(normalized);
+    });
+
     ipcMain.handle("fetch-folders", async () => {
         return await fetchFolders();
     });
@@ -193,6 +222,62 @@ app.on("ready", () => {
         }
     });
 
+    ipcMain.handle("get-channel-bridges-config", () => {
+        return getBridgesConfig();
+    });
+
+    ipcMain.handle("update-channel-bridges-config", async (_, values: ChannelBridgeConfig) => {
+        return updateBridgesConfig(values);
+    });
+
+    ipcMain.handle("get-whatsapp-bridge-status", () => {
+        return getWhatsAppBridgeStatus();
+    });
+
+    ipcMain.handle("start-whatsapp-bridge", async () => {
+        return await startWhatsAppBridge();
+    });
+
+    ipcMain.handle("stop-whatsapp-bridge", async () => {
+        return await stopWhatsAppBridge();
+    });
+
+    ipcMain.handle("get-telegram-bridge-status", () => {
+        return getTelegramBridgeStatus();
+    });
+
+    ipcMain.handle("start-telegram-bridge", async () => {
+        return await startTelegramBridge();
+    });
+
+    ipcMain.handle("stop-telegram-bridge", async () => {
+        return await stopTelegramBridge();
+    });
+
+    ipcMain.handle("get-discord-bridge-status", () => {
+        return getDiscordBridgeStatus();
+    });
+
+    ipcMain.handle("start-discord-bridge", async () => {
+        return await startDiscordBridge();
+    });
+
+    ipcMain.handle("stop-discord-bridge", async () => {
+        return await stopDiscordBridge();
+    });
+
+    ipcMain.handle("get-slack-bridge-status", () => {
+        return getSlackBridgeStatus();
+    });
+
+    ipcMain.handle("start-slack-bridge", async () => {
+        return await startSlackBridge();
+    });
+
+    ipcMain.handle("stop-slack-bridge", async () => {
+        return await stopSlackBridge();
+    });
+
     // download one or more skills from GitHub; stores files under GLOBAL_SKILLS_DIR2/<skillName>
     ipcMain.handle("download-skill", async (event, handles: string | string[], skillName?: string, branch?: string) => {
         const dirs = await downloadSkillsFromGitHub(handles, skillName, branch);
@@ -215,4 +300,5 @@ app.on("ready", () => {
     });
 
     expressServer(mainWindow)
+    void initializeChannelBridges();
 })

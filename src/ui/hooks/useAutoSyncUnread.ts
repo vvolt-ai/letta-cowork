@@ -7,6 +7,93 @@ type AutoSyncRoutingRule = {
   agentId: string;
 };
 
+const escapeMd = (value: unknown): string => {
+  const text = String(value ?? "");
+  return text
+    .replace(/\\/g, "\\\\")
+    .replace(/\|/g, "\\|")
+    .replace(/\r?\n/g, "<br/>")
+    .trim();
+};
+
+const toCodeBlock = (content: string, language = ""): string => {
+  if (!content.trim()) return "_No content available._";
+  const fence = "```";
+  return `${fence}${language}\n${content}\n${fence}`;
+};
+
+const extractEmailContent = (details: unknown): string => {
+  if (!details || typeof details !== "object") return "";
+  const data = (details as { data?: Record<string, unknown> }).data ?? (details as Record<string, unknown>);
+  const content = data?.content ?? data?.htmlContent ?? data?.message ?? data?.summary ?? "";
+  return typeof content === "string" ? content.trim() : "";
+};
+
+const buildEmailMarkdownPrompt = (email: ZohoEmail, agentId: string, emailContent: string, hasAttachment: boolean): string => {
+  const metadataTable = [
+    "| Field | Value |",
+    "| --- | --- |",
+    `| Subject | ${escapeMd(email.subject || "(No subject)")} |`,
+    `| From | ${escapeMd(email.sender || email.fromAddress || "Unknown sender")} |`,
+    `| To | ${escapeMd(email.toAddress || "N/A")} |`,
+    `| CC | ${escapeMd(email.ccAddress || "N/A")} |`,
+    `| Message ID | ${escapeMd(email.messageId)} |`,
+    `| Folder ID | ${escapeMd(email.folderId)} |`,
+    `| Received Time | ${escapeMd(email.receivedTime || "N/A")} |`,
+    `| Sent Time (GMT) | ${escapeMd(email.sentDateInGMT || "N/A")} |`,
+    `| Size | ${escapeMd(email.size || "N/A")} |`,
+    `| Has Attachment | ${hasAttachment ? "Yes" : "No"} |`,
+    `| Priority | ${escapeMd(email.priority || "N/A")} |`,
+    `| Status | ${escapeMd(email.status || "N/A")} |`,
+    `| Status2 | ${escapeMd(email.status2 || "N/A")} |`,
+  ].join("\n");
+
+  const allFieldsTable = [
+    "| Key | Value |",
+    "| --- | --- |",
+    ...Object.entries(email).map(([key, value]) => `| ${escapeMd(key)} | ${escapeMd(value)} |`),
+  ].join("\n");
+
+  return [
+    "# Unread Email Intake",
+    "A new unread email arrived. Analyze it and provide clear next actions.",
+    `## Target Agent\n\`${escapeMd(agentId)}\``,
+    "## Email Metadata",
+    metadataTable,
+    "## Email Summary",
+    email.summary?.trim() ? email.summary : "_No summary provided._",
+    "## Email Full Content",
+    toCodeBlock(emailContent || email.summary || "", "text"),
+    "## Email Raw Fields",
+    allFieldsTable,
+    "## Attachments",
+    hasAttachment
+      ? "Attachments were uploaded to the agent folder. Inspect them with file tools and include findings."
+      : "No attachments reported for this email.",
+  ].join("\n\n");
+};
+
+const extractAttachmentFileNames = (uploadResult: unknown): string[] => {
+  if (!uploadResult || typeof uploadResult !== "object") return [];
+  const files = (uploadResult as { files?: unknown }).files;
+  if (!Array.isArray(files)) return [];
+  return files
+    .map((file) => String(file ?? "").trim())
+    .filter((file) => file.length > 0);
+};
+
+const buildAttachmentsSection = (hasAttachment: boolean, attachmentFileNames: string[]): string => {
+  if (!hasAttachment) return "No attachments reported for this email.";
+  if (attachmentFileNames.length === 0) {
+    return "Attachments exist and were uploaded, but file names could not be resolved. Inspect the latest uploaded files.";
+  }
+
+  return [
+    "Attachments were uploaded to the agent folder. Refer to these files:",
+    ...attachmentFileNames.map((name) => `- \`${name}\``),
+  ].join("\n");
+};
+
 /**
  * Hook that runs a background job to fetch unread emails every 5 minutes
  * and automatically mark them as read.
@@ -62,8 +149,8 @@ export function useAutoSyncUnread(
     localStorage.setItem(getProcessedKey(), JSON.stringify(Array.from(ids)));
   }, [getProcessedKey]);
 
-  const uploadToAgent = useCallback(async (email: ZohoEmail, agentId: string): Promise<void> => {
-    await window.electron.uploadEmailAttachmentToAgent(folderId, String(email.messageId), accountId, agentId);
+  const uploadToAgent = useCallback(async (email: ZohoEmail, agentId: string): Promise<unknown> => {
+    return await window.electron.uploadEmailAttachmentToAgent(folderId, String(email.messageId), accountId, agentId);
   }, [accountId, folderId]);
 
   const performSync = useCallback(async () => {
@@ -91,7 +178,7 @@ export function useAutoSyncUnread(
       }
 
       const processedIds = loadProcessedIds();
-      const unreadEmails = (resp.data as ZohoEmail[]).filter(
+      const unreadEmails = resp.data;(resp.data as ZohoEmail[]).filter(
         (email) => !processedIds.has(String(email.messageId))
       );
 
@@ -115,16 +202,32 @@ export function useAutoSyncUnread(
 
         for (const agentId of targetAgents) {
           try {
-            if (String(email.hasAttachment ?? "0") === "1") {
-              await uploadToAgent(email, agentId);
+            const hasAttachment = String(email.hasAttachment ?? "0") === "1";
+            let attachmentFileNames: string[] = [];
+            if (hasAttachment) {
+              const uploadResult = await uploadToAgent(email, agentId);
+              attachmentFileNames = extractAttachmentFileNames(uploadResult);
+            }
+
+            let emailContent = "";
+            try {
+              const details = await window.electron.fetchEmailById(
+                accountId,
+                email.folderId,
+                String(email.messageId)
+              );
+              emailContent = extractEmailContent(details);
+            } catch (detailError) {
+              console.warn(
+                `[useAutoSyncUnread] Failed to fetch full content for message ${email.messageId}:`,
+                detailError
+              );
             }
 
             const prompt = [
-              "A new unread email arrived. Process it and provide next actions.",
-              `Agent target: ${agentId}`,
-              "Email payload:",
-              JSON.stringify(email, null, 2),
-              "If attachments were uploaded, inspect them with file tools and include findings.",
+              buildEmailMarkdownPrompt(email, agentId, emailContent, hasAttachment),
+              "## Attachment Files",
+              buildAttachmentsSection(hasAttachment, attachmentFileNames),
             ].join("\n\n");
 
             sendEvent({

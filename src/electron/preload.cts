@@ -62,6 +62,34 @@ electron.contextBridge.exposeInMainWorld("electron", {
         electron.ipcRenderer.invoke("get-letta-env"),
     updateLettaEnv: (values: { LETTA_API_KEY: string; LETTA_BASE_URL: string; LETTA_AGENT_ID: string }) =>
         electron.ipcRenderer.invoke("update-letta-env", values),
+    getChannelBridgesConfig: () =>
+        electron.ipcRenderer.invoke("get-channel-bridges-config"),
+    updateChannelBridgesConfig: (values: any) =>
+        electron.ipcRenderer.invoke("update-channel-bridges-config", values),
+    getWhatsAppBridgeStatus: () =>
+        electron.ipcRenderer.invoke("get-whatsapp-bridge-status"),
+    startWhatsAppBridge: () =>
+        electron.ipcRenderer.invoke("start-whatsapp-bridge"),
+    stopWhatsAppBridge: () =>
+        electron.ipcRenderer.invoke("stop-whatsapp-bridge"),
+    getTelegramBridgeStatus: () =>
+        electron.ipcRenderer.invoke("get-telegram-bridge-status"),
+    startTelegramBridge: () =>
+        electron.ipcRenderer.invoke("start-telegram-bridge"),
+    stopTelegramBridge: () =>
+        electron.ipcRenderer.invoke("stop-telegram-bridge"),
+    getDiscordBridgeStatus: () =>
+        electron.ipcRenderer.invoke("get-discord-bridge-status"),
+    startDiscordBridge: () =>
+        electron.ipcRenderer.invoke("start-discord-bridge"),
+    stopDiscordBridge: () =>
+        electron.ipcRenderer.invoke("stop-discord-bridge"),
+    getSlackBridgeStatus: () =>
+        electron.ipcRenderer.invoke("get-slack-bridge-status"),
+    startSlackBridge: () =>
+        electron.ipcRenderer.invoke("start-slack-bridge"),
+    stopSlackBridge: () =>
+        electron.ipcRenderer.invoke("stop-slack-bridge"),
     downloadSkill: (handles: string | string[], skillName?: string, branch?: string) =>
         electron.ipcRenderer.invoke("download-skill", handles, skillName, branch)
 } satisfies Window['electron'])

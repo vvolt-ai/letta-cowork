@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 
 type LettaEnvForm = {
@@ -9,10 +9,12 @@ type LettaEnvForm = {
 
 interface ChangeEnvProps {
   className?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function ChangeEnv({ className }: ChangeEnvProps = {}) {
-  const [open, setOpen] = useState(false);
+export function ChangeEnv({ className, open: controlledOpen, onOpenChange }: ChangeEnvProps = {}) {
+  const [internalOpen, setInternalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,38 +25,62 @@ export function ChangeEnv({ className }: ChangeEnvProps = {}) {
     LETTA_AGENT_ID: "",
   });
 
-  const openDialog = async () => {
-    setOpen(true);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
+  const trimmedForm: LettaEnvForm = {
+    LETTA_API_KEY: form.LETTA_API_KEY.trim(),
+    LETTA_BASE_URL: form.LETTA_BASE_URL.trim(),
+    LETTA_AGENT_ID: form.LETTA_AGENT_ID.trim(),
+  };
+  const isFormValid =
+    trimmedForm.LETTA_API_KEY.length > 0 &&
+    trimmedForm.LETTA_BASE_URL.length > 0 &&
+    trimmedForm.LETTA_AGENT_ID.length > 0;
+
+  const openDialog = () => {
     setSuccess(null);
     setError(null);
-    setLoading(true);
-    try {
-      const values = await window.electron.getLettaEnv();
-      setForm(values);
-    } catch {
-      setError("Failed to load Letta configuration.");
-    } finally {
-      setLoading(false);
-    }
+    setOpen(true);
   };
 
   const handleSave = async () => {
+    if (!isFormValid) {
+      setError("LETTA_API_KEY, LETTA_BASE_URL, and LETTA_AGENT_ID cannot be blank.");
+      return;
+    }
     setSaving(true);
     setSuccess(null);
     setError(null);
     try {
-      await window.electron.updateLettaEnv({
-        LETTA_API_KEY: form.LETTA_API_KEY.trim(),
-        LETTA_BASE_URL: form.LETTA_BASE_URL.trim(),
-        LETTA_AGENT_ID: form.LETTA_AGENT_ID.trim(),
-      });
+      await window.electron.updateLettaEnv(trimmedForm);
       setSuccess("Saved. New sessions will use these values.");
+      setOpen(false);
     } catch {
       setError("Failed to save Letta configuration.");
     } finally {
       setSaving(false);
     }
   };
+
+  useEffect(() => {
+    if (!open) return;
+
+    setLoading(true);
+    setSuccess(null);
+    setError(null);
+
+    window.electron
+      .getLettaEnv()
+      .then((values) => {
+        setForm(values);
+      })
+      .catch(() => {
+        setError("Failed to load Letta configuration.");
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [open]);
 
   return (
     <>
@@ -97,6 +123,7 @@ export function ChangeEnv({ className }: ChangeEnvProps = {}) {
                   value={form.LETTA_API_KEY}
                   onChange={(e) => setForm((prev) => ({ ...prev, LETTA_API_KEY: e.target.value }))}
                   disabled={loading || saving}
+                  required
                 />
               </label>
 
@@ -107,6 +134,7 @@ export function ChangeEnv({ className }: ChangeEnvProps = {}) {
                   value={form.LETTA_BASE_URL}
                   onChange={(e) => setForm((prev) => ({ ...prev, LETTA_BASE_URL: e.target.value }))}
                   disabled={loading || saving}
+                  required
                 />
               </label>
 
@@ -117,6 +145,7 @@ export function ChangeEnv({ className }: ChangeEnvProps = {}) {
                   value={form.LETTA_AGENT_ID}
                   onChange={(e) => setForm((prev) => ({ ...prev, LETTA_AGENT_ID: e.target.value }))}
                   disabled={loading || saving}
+                  required
                 />
               </label>
             </div>
@@ -137,7 +166,7 @@ export function ChangeEnv({ className }: ChangeEnvProps = {}) {
               <button
                 className="rounded-lg bg-accent px-3 py-2 text-sm text-white hover:bg-accent-hover transition-colors disabled:opacity-60"
                 onClick={handleSave}
-                disabled={loading || saving}
+                disabled={loading || saving || !isFormValid}
               >
                 {saving ? "Saving..." : "Save"}
               </button>

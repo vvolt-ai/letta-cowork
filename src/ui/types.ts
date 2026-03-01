@@ -46,7 +46,20 @@ export type ServerEvent =
   | { type: "session.history"; payload: { sessionId: string; status: SessionStatus; messages: StreamMessage[] } }
   | { type: "session.deleted"; payload: { sessionId: string } }
   | { type: "permission.request"; payload: { sessionId: string; toolUseId: string; toolName: string; input: unknown } }
-  | { type: "runner.error"; payload: { sessionId?: string; message: string } };
+  | { type: "runner.error"; payload: { sessionId?: string; message: string } }
+  | {
+      type: "whatsapp-bridge-status";
+      payload: {
+        state: "stopped" | "starting" | "qr" | "connected" | "reconnecting" | "error";
+        connected: boolean;
+        selfJid: string;
+        qrAvailable: boolean;
+        qrDataUrl: string;
+        message: string;
+        lastError: string;
+        updatedAt: number;
+      };
+    };
 
 // Client -> Server events
 export type ClientEvent =

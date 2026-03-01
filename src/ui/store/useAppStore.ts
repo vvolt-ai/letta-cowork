@@ -157,7 +157,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       case "session.status": {
-        const { sessionId, status, title, cwd } = event.payload;
+        const { sessionId, status, title, cwd, error } = event.payload;
         set((state) => {
           const existing = state.sessions[sessionId] ?? createSession(sessionId);
           return {
@@ -175,8 +175,16 @@ export const useAppStore = create<AppState>((set, get) => ({
         });
 
         if (state.pendingStart) {
-          get().setActiveSessionId(sessionId);
-          set({ pendingStart: false, showStartModal: false, prompt: "" });
+          if (status === "running") {
+            get().setActiveSessionId(sessionId);
+            set({ pendingStart: false, showStartModal: false, prompt: "" });
+          } else {
+            set({
+              pendingStart: false,
+              showStartModal: true,
+              ...(status === "error" ? { globalError: error ?? "Failed to start session." } : {}),
+            });
+          }
         }
         break;
       }
@@ -290,7 +298,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       case "runner.error": {
-        set({ globalError: event.payload.message });
+        set({ globalError: event.payload.message, pendingStart: false, showStartModal: true });
         break;
       }
     }

@@ -16,11 +16,13 @@ interface PromptInputProps {
 export function usePromptActions(sendEvent: (event: ClientEvent) => void) {
   const prompt = useAppStore((state) => state.prompt);
   const cwd = useAppStore((state) => state.cwd);
+  const pendingStart = useAppStore((state) => state.pendingStart);
   const activeSessionId = useAppStore((state) => state.activeSessionId);
   const sessions = useAppStore((state) => state.sessions);
   const setPrompt = useAppStore((state) => state.setPrompt);
   const setPendingStart = useAppStore((state) => state.setPendingStart);
   const setGlobalError = useAppStore((state) => state.setGlobalError);
+  const startTimeoutRef = useRef<number | null>(null);
 
   const activeSession = activeSessionId ? sessions[activeSessionId] : undefined;
   const isRunning = activeSession?.status === "running";
@@ -58,6 +60,29 @@ export function usePromptActions(sendEvent: (event: ClientEvent) => void) {
     }
     handleSend();
   }, [cwd, handleSend, setGlobalError]);
+
+  useEffect(() => {
+    if (!pendingStart) {
+      if (startTimeoutRef.current) {
+        window.clearTimeout(startTimeoutRef.current);
+        startTimeoutRef.current = null;
+      }
+      return;
+    }
+
+    startTimeoutRef.current = window.setTimeout(() => {
+      setPendingStart(false);
+      setGlobalError("Failed to start session. Please try again.");
+      startTimeoutRef.current = null;
+    }, 15000);
+
+    return () => {
+      if (startTimeoutRef.current) {
+        window.clearTimeout(startTimeoutRef.current);
+        startTimeoutRef.current = null;
+      }
+    };
+  }, [pendingStart, setGlobalError, setPendingStart]);
 
   return { prompt, setPrompt, isRunning, handleSend, handleStop, handleStartFromModal };
 }
