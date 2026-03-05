@@ -73,25 +73,44 @@ const buildEmailMarkdownPrompt = (email: ZohoEmail, agentId: string, emailConten
   ].join("\n\n");
 };
 
-const extractAttachmentFileNames = (uploadResult: unknown): string[] => {
-  if (!uploadResult || typeof uploadResult !== "object") return [];
-  const files = (uploadResult as { files?: unknown }).files;
-  if (!Array.isArray(files)) return [];
-  return files
-    .map((file) => String(file ?? "").trim())
-    .filter((file) => file.length > 0);
-};
+/**
+ * Interface for email with attachments from fetchEmailById
+ */
+interface EmailWithAttachments {
+  emailContent: Record<string, unknown>;
+  attachments: {
+    files: string[];
+    markdownFiles: string[];
+    path: string;
+    lettaAttachment?: unknown;
+  } | null;
+}
 
-const buildAttachmentsSection = (hasAttachment: boolean, attachmentFileNames: string[]): string => {
+const buildAttachmentsSection = (hasAttachment: boolean, attachmentFileNames: string[], markdownFileNames: string[] = []): string => {
   if (!hasAttachment) return "No attachments reported for this email.";
-  if (attachmentFileNames.length === 0) {
+  
+  const sections: string[] = [];
+  
+  // Original files
+  if (attachmentFileNames.length > 0) {
+    sections.push("### Original Files");
+    sections.push(...attachmentFileNames.map((name) => `- \`${name}\``));
+  }
+  
+  // Markdown converted files
+  if (markdownFileNames.length > 0) {
+    sections.push("");
+    sections.push("### Converted Documents (Markdown)");
+    sections.push(...markdownFileNames.map((name) => `- \`${name}\` (ready for agent processing)`));
+    sections.push("");
+    sections.push("_Note: PDF attachments have been converted to markdown format for better agent understanding._");
+  }
+  
+  if (sections.length === 0) {
     return "Attachments exist and were uploaded, but file names could not be resolved. Inspect the latest uploaded files.";
   }
 
-  return [
-    "Attachments were uploaded to the agent folder. Refer to these files:",
-    ...attachmentFileNames.map((name) => `- \`${name}\``),
-  ].join("\n");
+  return sections.join("\n");
 };
 
 /**
@@ -204,19 +223,37 @@ export function useAutoSyncUnread(
           try {
             const hasAttachment = String(email.hasAttachment ?? "0") === "1";
             let attachmentFileNames: string[] = [];
-            if (hasAttachment) {
-              const uploadResult = await uploadToAgent(email, agentId);
-              attachmentFileNames = extractAttachmentFileNames(uploadResult);
-            }
-
+            let markdownFileNames: string[] = [];
             let emailContent = "";
+            
+            // Use fetchEmailById to get full content AND download attachments
             try {
-              const details = await window.electron.fetchEmailById(
+              const emailWithAttachments = await window.electron.fetchEmailById(
                 accountId,
                 email.folderId,
                 String(email.messageId)
-              );
-              emailContent = extractEmailContent(details);
+              ) as EmailWithAttachments;
+              
+              // Extract email content
+              if (emailWithAttachments?.emailContent) {
+                emailContent = extractEmailContent(emailWithAttachments.emailContent);
+              }
+              
+              // Extract attachment info including markdown files
+              if (emailWithAttachments?.attachments) {
+                attachmentFileNames = emailWithAttachments.attachments.files;
+                
+                // Add absolute paths to markdown files
+                const downloadPath = emailWithAttachments.attachments.path;
+                if (downloadPath && emailWithAttachments.attachments.markdownFiles.length > 0) {
+                  markdownFileNames = emailWithAttachments.attachments.markdownFiles.map(mdFile => {
+                    const fileName = mdFile.split(/[/\\]/).pop() || mdFile;
+                    return `${downloadPath}/${fileName}`;
+                  });
+                } else {
+                  markdownFileNames = emailWithAttachments.attachments.markdownFiles;
+                }
+              }
             } catch (detailError) {
               console.warn(
                 `[useAutoSyncUnread] Failed to fetch full content for message ${email.messageId}:`,
@@ -227,7 +264,7 @@ export function useAutoSyncUnread(
             const prompt = [
               buildEmailMarkdownPrompt(email, agentId, emailContent, hasAttachment),
               "## Attachment Files",
-              buildAttachmentsSection(hasAttachment, attachmentFileNames),
+              buildAttachmentsSection(hasAttachment, attachmentFileNames, markdownFileNames),
             ].join("\n\n");
 
             sendEvent({

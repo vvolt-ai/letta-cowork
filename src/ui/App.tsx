@@ -14,6 +14,7 @@ import { GlobalErrorToast } from "./components/GlobalErrorToast";
 import { EmailDetailsDialog } from "./components/EmailDetailsDialog";
 import { useSessionController } from "./hooks/useSessionController";
 import { useAutoSyncUnread } from "./hooks/useAutoSyncUnread";
+import { useProcessEmailToAgent } from "./hooks/useProcessEmailToAgent";
 
 const SCROLL_THRESHOLD = 50;
 const PARTIAL_MESSAGE_RESET_DELAY_MS = 500;
@@ -94,7 +95,8 @@ function App() {
     connectEmail,
     disconnectEmail,
   } = useZohoEmail();
-  const { setEmailAsInput } = useEmailAsInput();
+  const { processEmailToAgent, processingEmailId, successEmailId } = useProcessEmailToAgent();
+  const { setEmailAsInput, isLoading: isProcessingEmailInput } = useEmailAsInput();
   const {
     selectedEmailId,
     handleSelectEmail,
@@ -375,6 +377,7 @@ function App() {
         onSelectEmail={handleSelectEmail}
         onViewEmail={handleViewEmail}
         onUseEmailAsInput={setEmailAsInput}
+        isProcessingEmailInput={isProcessingEmailInput}
         isFetchingEmails={isFetchingEmailContent}
         autoSyncEnabled={autoSyncEnabled}
         onToggleAutoSync={setAutoSyncEnabled}
@@ -384,6 +387,10 @@ function App() {
         autoSyncRoutingRules={autoSyncRoutingRules}
         onAddAutoSyncRoutingRule={handleAddAutoSyncRoutingRule}
         onRemoveAutoSyncRoutingRule={handleRemoveAutoSyncRoutingRule}
+        selectedAgentId={selectedAutoSyncAgentIds[0]}
+        onProcessEmailToAgent={processEmailToAgent}
+        processingEmailId={processingEmailId}
+        successEmailId={successEmailId}
       />
       <ChatMainPanel
         title={activeSession?.title}

@@ -5,6 +5,7 @@ import fs from 'fs';
 import { BASE_URL, clearEmailCredentials, getAccessToken, getAccountId, getInboxFolderId, getRefreshToken, saveAccountId, saveInboxFolderId } from "./helper.js";
 import { serverApiRequest, zohoApiRequest } from "./zohoApi.js";
 import { attachFilesToAgentFolder } from "../lettaFilesystem.js";
+import { isPdfFile, convertMultiplePdfsToMarkdown } from "./pdfConverter.js";
 import type {
   AttachmentInfoResponse,
   AccountsResponse,
@@ -116,7 +117,23 @@ export const fetchEmails = async (
   return resp;
 };
 
-export const fetchEmailById = async (messageId: string, accountId?: string, folderId?: string) => {
+export interface EmailWithAttachments {
+  /** The raw email content from Zoho */
+  emailContent: unknown;
+  /** Downloaded attachment information */
+  attachments: {
+    /** Original file paths */
+    files: string[];
+    /** Converted markdown file paths (for PDFs) */
+    markdownFiles: string[];
+    /** Path to the download directory */
+    path: string;
+    /** Letta attachment result */
+    lettaAttachment?: unknown;
+  } | null;
+}
+
+export const fetchEmailDetails = async (messageId: string, accountId?: string, folderId?: string) => {
   // resolve accountId from parameter or keytar
   const resolvedAccountId = accountId || (await getAccountId());
   if (!resolvedAccountId) {
@@ -133,9 +150,63 @@ export const fetchEmailById = async (messageId: string, accountId?: string, fold
     throw new Error("Message ID is required");
   }
 
-  // STEP 1: Fetch attachment metadata using common Zoho API helper
+  // Fetch email metadata to check for attachments
+  const fetchEmailDetailsUrl = `/accounts/${resolvedAccountId}/folders/${resolvedFolderId}/messages/${messageId}/details`;
+  return await zohoApiRequest(fetchEmailDetailsUrl);
+};
+
+export const fetchEmailById = async (messageId: string, accountId?: string, folderId?: string): Promise<EmailWithAttachments> => {
+  // resolve accountId from parameter or keytar
+  const resolvedAccountId = accountId || (await getAccountId());
+  if (!resolvedAccountId) {
+    throw new Error("No account ID provided and none found in keytar");
+  }
+
+  // resolve folderId from parameter or keytar (inbox)
+  const resolvedFolderId = folderId || (await getInboxFolderId());
+  if (!resolvedFolderId) {
+    throw new Error("No folder ID provided and none found in keytar");
+  }
+
+  if (!messageId) {
+    throw new Error("Message ID is required");
+  }
+
+  // STEP 1: Fetch email metadata to check for attachments
+  const emailMetadata = await fetchEmailDetails(messageId, resolvedAccountId, resolvedFolderId);
+  
+  // Extract hasAttachment from the data object
+  const hasAttachments = emailMetadata?.data?.hasAttachment === "1" || 
+                        emailMetadata?.data?.hasInline === "true";
+
+  // STEP 2: Fetch the email content
   const fetchEmailIdUrl = `/accounts/${resolvedAccountId}/folders/${resolvedFolderId}/messages/${messageId}/content`;
-  return await zohoApiRequest(fetchEmailIdUrl);
+  const emailContent = await zohoApiRequest(fetchEmailIdUrl);
+
+  // STEP 3: Download attachments if present
+  let attachmentsResult = null;
+  
+  if (hasAttachments) {
+    try {
+      // Download attachments - this will also convert PDFs to markdown
+      const attachmentResult = await downloadEmailAttachment(resolvedFolderId, messageId, resolvedAccountId);
+      
+      attachmentsResult = {
+        files: attachmentResult.files || [],
+        markdownFiles: attachmentResult.markdownFiles || [],
+        path: attachmentResult.path || "",
+        lettaAttachment: (attachmentResult as { lettaAttachment?: unknown }).lettaAttachment,
+      };
+    } catch (attachError) {
+      console.error("Failed to download attachments:", attachError);
+      // Continue without attachments - don't fail the whole request
+    }
+  }
+
+  return {
+    emailContent,
+    attachments: attachmentsResult,
+  };
 }
 
 export const connectEmail = async () => {
@@ -246,31 +317,29 @@ export const downloadEmailAttachment = async (folderId?: string, messageId?: str
       downloadedFilePaths.push(filePath);
     }
 
-    const resolvedAgentId = agentId || process.env.LETTA_AGENT_ID;
-    let lettaAttachment:
-      | Awaited<ReturnType<typeof attachFilesToAgentFolder>>
-      | { status: "skipped"; reason: string } = {
-      status: "skipped",
-      reason: "No Letta agent configured for folder attachment.",
-    };
+    // STEP 3: Convert PDF attachments to markdown
+    const pdfFiles = downloadedFilePaths.filter(filePath => isPdfFile(filePath));
+    let markdownFiles: string[] = [];
 
-    if (resolvedAgentId) {
+    if (pdfFiles.length > 0) {
+      console.log(`Found ${pdfFiles.length} PDF file(s) to convert to markdown`);
       try {
-        lettaAttachment = await attachFilesToAgentFolder({
-          agentId: resolvedAgentId,
-          filePaths: downloadedFilePaths,
-          folderNamePrefix: `zoho_${resolvedAccountId}_${messageId}`,
+        const conversionResults = await convertMultiplePdfsToMarkdown(pdfFiles, {
+          doTableStructure: true,
+          tableMode: "accurate",
+          doOcr: true,
         });
-      } catch (attachError) {
-        console.error("Failed to upload/attach attachments to Letta folder:", attachError);
-        lettaAttachment = {
-          status: "skipped",
-          reason: attachError instanceof Error ? attachError.message : String(attachError),
-        };
+
+        markdownFiles = conversionResults.map(result => result.markdownPath);
+        console.log(`Successfully converted ${markdownFiles.length} PDF(s) to markdown`);
+      } catch (convertError) {
+        console.error("Error converting PDFs to markdown:", convertError);
+        // Continue with original files even if conversion fails
       }
     }
 
-    return { status: 'success', files: downloadedFiles, path: downloadDir, lettaAttachment };
+
+    return { status: 'success', files: downloadedFiles, markdownFiles, path: downloadDir };
   } catch (error) {
     console.error("Zoho Download Error:", error);
     throw error;

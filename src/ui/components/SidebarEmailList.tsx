@@ -4,10 +4,15 @@ interface SidebarEmailListProps {
   emails: ZohoEmail[];
   selectedEmailId?: string;
   isFetching: boolean;
+  isProcessingEmailInput?: boolean;
   onSelectEmail: (email: ZohoEmail) => void;
   onViewEmail: (email: ZohoEmail) => void;
   onUseEmailAsInput: (email: ZohoEmail) => void;
   onClose: () => void;
+  selectedAgentId?: string;
+  onProcessEmailToAgent?: (email: ZohoEmail, agentId: string) => void;
+  processingEmailId?: string | null;
+  successEmailId?: string | null;
 }
 
 const isUnreadEmail = (email: ZohoEmail) => {
@@ -25,10 +30,15 @@ export function SidebarEmailList({
   emails,
   selectedEmailId,
   isFetching,
+  isProcessingEmailInput,
   onSelectEmail,
   onViewEmail,
   onUseEmailAsInput,
   onClose,
+  selectedAgentId,
+  onProcessEmailToAgent,
+  processingEmailId,
+  successEmailId,
 }: SidebarEmailListProps) {
   const formatDate = (timestamp: string) => {
     const ms = Number(timestamp);
@@ -106,18 +116,53 @@ export function SidebarEmailList({
                           </svg>
                         </button>
                         <button
-                          className="rounded-md border border-ink-900/10 bg-surface p-1 text-ink-600 hover:bg-surface-tertiary"
+                          className="rounded-md border border-ink-900/10 bg-surface p-1 text-ink-600 hover:bg-surface-tertiary disabled:opacity-50"
                           onClick={(e) => {
                             e.stopPropagation();
                             onUseEmailAsInput(email);
                           }}
+                          disabled={isProcessingEmailInput}
                           aria-label="Use email as chat input"
-                          title="Use email as chat input"
+                          title={isProcessingEmailInput ? "Processing email..." : "Use email as chat input"}
                         >
-                          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
-                            <path d="M4 5h16v10H7l-3 3z" />
-                          </svg>
+                          {isProcessingEmailInput ? (
+                            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 animate-spin" fill="none" stroke="currentColor" strokeWidth="1.8">
+                              <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+                              <path d="M12 2a10 10 0 0 1 10 10" />
+                            </svg>
+                          ) : (
+                            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
+                              <path d="M4 5h16v10H7l-3 3z" />
+                            </svg>
+                          )}
                         </button>
+                        {selectedAgentId && onProcessEmailToAgent && (
+                          <button
+                            className="rounded-md border border-ink-900/10 bg-surface p-1 text-ink-600 hover:bg-surface-tertiary disabled:opacity-50"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onProcessEmailToAgent(email, selectedAgentId);
+                            }}
+                            disabled={!!processingEmailId}
+                            aria-label="Process email to agent"
+                            title={String(processingEmailId) === String(email.messageId) ? "Processing..." : String(successEmailId) === String(email.messageId) ? "Sent to agent!" : "Process email to agent session"}
+                          >
+                            {String(successEmailId) === String(email.messageId) ? (
+                              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-green-600" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                <path d="M20 6L9 17l-5-5" />
+                              </svg>
+                            ) : String(processingEmailId) === String(email.messageId) ? (
+                              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 animate-spin" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+                                <path d="M12 2a10 10 0 0 1 10 10" />
+                              </svg>
+                            ) : (
+                              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+                              </svg>
+                            )}
+                          </button>
+                        )}
                       </div>
                     </div>
                     <div className={`mt-1 truncate text-xs ${isUnread ? "font-semibold text-ink-900" : "text-ink-700"}`}>

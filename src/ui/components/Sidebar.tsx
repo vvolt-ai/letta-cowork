@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useAppStore } from "../store/useAppStore";
 import { useDownloadSkill } from "../hooks/useDownloadSkill";
 import { SkillDownloadDialog } from "./SkillDownloadDialog";
@@ -25,6 +25,7 @@ interface SidebarProps {
   onSelectEmail: (email: ZohoEmail) => void;
   onViewEmail: (email: ZohoEmail) => void;
   onUseEmailAsInput: (email: ZohoEmail) => void;
+  isProcessingEmailInput?: boolean;
   isFetchingEmails: boolean;
   autoSyncEnabled: boolean;
   onToggleAutoSync: (enabled: boolean) => void;
@@ -34,6 +35,11 @@ interface SidebarProps {
   autoSyncRoutingRules: { fromPattern: string; agentId: string }[];
   onAddAutoSyncRoutingRule: (fromPattern: string, agentId: string) => void;
   onRemoveAutoSyncRoutingRule: (index: number) => void;
+  selectedAgentId?: string;
+  onProcessEmailToAgent?: (email: ZohoEmail, agentId: string) => void;
+  isProcessingEmailToAgent?: boolean;
+  processingEmailId?: string | null;
+  successEmailId?: string | null;
 }
 
 export function Sidebar({
@@ -50,6 +56,7 @@ export function Sidebar({
   onSelectEmail,
   onViewEmail,
   onUseEmailAsInput,
+  isProcessingEmailInput,
   isFetchingEmails,
   autoSyncEnabled,
   onToggleAutoSync,
@@ -59,13 +66,17 @@ export function Sidebar({
   autoSyncRoutingRules,
   onAddAutoSyncRoutingRule,
   onRemoveAutoSyncRoutingRule,
+  selectedAgentId,
+  onProcessEmailToAgent,
+  processingEmailId,
+  successEmailId,
 }: SidebarProps) {
   const sessions = useAppStore((state) => state.sessions);
   const activeSessionId = useAppStore((state) => state.activeSessionId);
   const setActiveSessionId = useAppStore((state) => state.setActiveSessionId);
   const [resumeSessionId, setResumeSessionId] = useState<string | null>(null);
   const [skillDownloadOpen, setSkillDownloadOpen] = useState(false);
-  const [showEmailView, setShowEmailView] = useState(false);
+  const [showEmailView, setShowEmailView] = useState(() => isEmailConnected);
   const [showPipelineRuns, setShowPipelineRuns] = useState(false);
   const [showAddAgentsModal, setShowAddAgentsModal] = useState(false);
   const [channelSetupOpen, setChannelSetupOpen] = useState(false);
@@ -120,12 +131,6 @@ export function Sidebar({
     }).length;
   }, [emails]);
 
-  useEffect(() => {
-    if (!isEmailConnected) {
-      setShowEmailView(false);
-    }
-  }, [isEmailConnected]);
-
   const openChannelSetup = (channel: ChannelType) => {
     setSetupChannel(channel);
     setChannelSetupOpen(true);
@@ -142,10 +147,15 @@ export function Sidebar({
           emails={emails}
           selectedEmailId={selectedEmailId}
           isFetching={isFetchingEmails}
+          isProcessingEmailInput={isProcessingEmailInput}
           onSelectEmail={onSelectEmail}
           onViewEmail={onViewEmail}
           onUseEmailAsInput={onUseEmailAsInput}
           onClose={() => setShowEmailView(false)}
+          selectedAgentId={selectedAgentId}
+          onProcessEmailToAgent={onProcessEmailToAgent}
+          processingEmailId={processingEmailId}
+          successEmailId={successEmailId}
         />
       ) : (
         <>

@@ -46,7 +46,7 @@ import { getStaticData, pollResources, stopPolling } from "./test.js";
 import { handleClientEvent, cleanupAllSessions } from "./ipc-handlers.js";
 import { getCurrentAgentId } from "./libs/runner.js";
 import type { ClientEvent } from "./types.js";
-import { checkAlreadyConnected, connectEmail, disconnectEmail, fetchEmailById, fetchEmails, fetchFolders, downloadEmailAttachment, fetchAccounts, updateMessages, searchEmails, uploadEmailAttachmentToAgent } from "./emails/fetchEmails.js";
+import { checkAlreadyConnected, connectEmail, disconnectEmail, fetchEmailById, fetchEmailDetails, fetchEmails, fetchFolders, downloadEmailAttachment, fetchAccounts, updateMessages, searchEmails, uploadEmailAttachmentToAgent } from "./emails/fetchEmails.js";
 import { expressServer } from "./emails/express.js";
 import { downloadSkillsFromGitHub, GLOBAL_SKILLS_DIR2 } from "./skillDownloader.js";
 import {
@@ -185,6 +185,10 @@ app.on("ready", () => {
 
     ipcMain.handle("fetch-email-by-id", async (event, accountId, folderId, messageId) => {
         return await fetchEmailById(messageId, accountId, folderId);
+    });
+
+    ipcMain.handle("fetch-email-details", async (event, accountId, folderId, messageId) => {
+        return await fetchEmailDetails(messageId, accountId, folderId);
     });
 
     ipcMain.handle("upload-email-attachment-to-agent", async (event, folderId, messageId, accountId, agentId) => {

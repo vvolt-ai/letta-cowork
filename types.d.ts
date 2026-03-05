@@ -196,6 +196,7 @@ interface Window {
         disconnectEmail: () => Promise<{ success: boolean }>;
         checkAlreadyConnected: () => Promise<boolean>;
         fetchEmailById: (accountId: string, folderId: string, messageId: string) => Promise<any>;
+        fetchEmailDetails: (accountId: string, folderId: string, messageId: string) => Promise<any>;
         uploadEmailAttachmentToAgent: (folderId: string, messageId: string, accountId: string, agentId: string) => Promise<any>;
         downloadEmailAttachment: (folderId: string, messageId: string, accountId: string) => Promise<any>;
         markMessagesAsRead: (accountId: string, messageIds: (number | string)[]) => Promise<any>;
