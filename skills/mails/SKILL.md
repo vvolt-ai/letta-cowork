@@ -1,63 +1,241 @@
 ---
 name: zoho-mail-local
-description: Use this skill when interacting with a local Zoho Mail Express API server for account, folder, email fetch, search, and attachment-to-agent upload tasks. Trigger when users need operational mail data from localhost endpoints and command-based execution guidance.
+description: Execute Zoho Mail operations against the local Zoho Mail Express API (localhost:4321). All API calls must be executed using the Bash tool.
 ---
 
-# Zoho Mail Local API
+# Zoho Mail Local Operations
 
-## Execution Rules
+This skill interacts with a locally running Zoho Mail Express API server.
 
-1. Execute commands directly (do not only describe them).
-2. On Windows PowerShell, use:
-`(Invoke-WebRequest -Uri "http://localhost:4321/endpoint").Content`
-3. On macOS/Linux, use:
-`curl "http://localhost:4321/endpoint"`
+Base URL:
+http://localhost:4321
 
-## Endpoints
+--------------------------------------------------
+CRITICAL EXECUTION MODEL
+--------------------------------------------------
 
-### Account and Structure
+This skill executes Zoho Mail API calls via the Bash tool.
 
-| Endpoint | Description | Example |
-| :--- | :--- | :--- |
-| `/fetchAccount` | List connected accounts | `curl "http://localhost:4321/fetchAccount"` |
-| `/fetchFolders` | List Inbox, Sent, Trash, etc. | `curl "http://localhost:4321/fetchFolders"` |
-| `/agent-capabilities` | Return metadata for all endpoints | `curl "http://localhost:4321/agent-capabilities"` |
+The Bash tool is the ONLY allowed execution mechanism.
 
-### Fetching Emails
+You MUST:
 
-`GET /fetchEmails`
-- Default behavior: server automatically uses Primary `accountId` and Inbox `folderId`.
-- Params: `start`, `limit`, `status` (`new` for unread), `attachedMails` (bool), `threadedMails` (bool), optional `accountId`, optional `folderId`
-- Rule: Do not call `/fetchAccount` or `/fetchFolders` only to resolve default IDs.
-- Example:
-`curl "http://localhost:4321/fetchEmails?status=new&attachedMails=true"`
+1. Construct a valid curl command.
+2. Call the Bash tool.
+3. Pass the command using the `cmd` field.
+4. Wait for stdout JSON.
+5. Parse the returned JSON.
+6. Continue reasoning using ONLY returned data.
 
-### Searching Emails
+Never:
+- Use local_shell (not available)
+- Return curl commands as plain text
+- Simulate API responses
+- Fabricate messageId or accountId
+- Retry malformed commands blindly
+- Invent attachment content
 
-`GET /searchEmails`
-- Default behavior: if `accountId` is not provided, server uses Primary account.
-- Params: `searchKey` (required), optional `accountId`
-- Key search fragments: `entire`, `sender`, `to`, `subject`, `has:attachment`, `fromDate`, `toDate`
-- Use `::` for AND and `::or:` for OR
-- Examples:
-`curl "http://localhost:4321/searchEmails?searchKey=subject:\"Payment Reminder\""`
-`curl "http://localhost:4321/searchEmails?searchKey=fromDate:01-Jan-2024::toDate:31-Jan-2024"`
-`curl "http://localhost:4321/searchEmails?searchKey=sender:test@ex.com::or:to:test@ex.com"`
+If Bash returns:
+- Empty output → treat as failure
+- Error text → report execution failure
+- JSON → parse strictly
 
-### Attachments
+--------------------------------------------------
+BASH TOOL FORMAT
+--------------------------------------------------
 
-`GET /uploadToAgent`
-- Primary behavior: use this endpoint to download message attachments and upload supported files to the Letta agent filesystem.
-- Supported upload formats: `.pdf`, `.txt`, `.md`, `.json`, `.docx`, `.html`
-- Params: `messageId` (required), optional `agentId`, optional `folderId`, optional `accountId`
-- Agent resolution: if `agentId` is omitted, server uses active agent first, then `LETTA_AGENT_ID`.
-- Example:
-`curl "http://localhost:4321/uploadToAgent?messageId=MSG_123"`
+When calling Bash, use EXACTLY this structure:
 
-`GET /downloadAttachment` (legacy)
-- Use only when local file download is explicitly requested; do not use it for agent ingestion flows.
+{
+  "cmd": "curl \"http://localhost:4321/endpoint\""
+}
 
-## Error Handling
+Important:
+- The key MUST be `cmd`
+- Do NOT use `command`
+- Do NOT use `script`
+- Do NOT wrap in markdown
+- Do NOT explain the command before executing
 
-- If a port error occurs, verify the server is running on `4321`.
-- If a search yields no results, check the `searchKey` first; only provide explicit `accountId`/`folderId` when a non-default mailbox is intended.
+--------------------------------------------------
+OS HANDLING
+--------------------------------------------------
+
+Assume Linux/macOS unless explicitly told Windows.
+
+Default format:
+
+curl "http://localhost:4321/endpoint"
+
+Only use PowerShell if explicitly requested:
+
+powershell -Command "(Invoke-WebRequest -Uri 'http://localhost:4321/endpoint').Content"
+
+--------------------------------------------------
+DISCOVERY ENDPOINT POLICY
+--------------------------------------------------
+
+Discovery endpoints:
+
+- /fetchAccount
+- /fetchFolders
+- /agent-capabilities
+
+Never call them automatically.
+
+Only call them if user explicitly requests:
+- Account listing
+- Folder listing
+- API inspection
+
+Do not call discovery endpoints before operational endpoints.
+
+--------------------------------------------------
+EMAIL FETCHING
+--------------------------------------------------
+
+Endpoint:
+GET /fetchEmails
+
+Defaults:
+- Server auto-resolves primary accountId
+- Server auto-resolves Inbox folderId
+
+Never call /fetchAccount to resolve defaults.
+Never call /fetchFolders to resolve defaults.
+
+Example Bash call:
+
+{
+  "cmd": "curl \"http://localhost:4321/fetchEmails?status=new&limit=20&attachedMails=true\""
+}
+
+--------------------------------------------------
+EMAIL FETCH BY ID
+--------------------------------------------------
+
+Endpoint:
+GET /fetchEmailById
+
+Required:
+messageId
+
+Optional:
+accountId (omit unless explicitly required)
+folderId (omit unless explicitly required)
+
+Behavior:
+- Returns full email content including body
+
+Example:
+
+{
+  "cmd": "curl \"http://localhost:4321/fetchEmailById?messageId=789\""
+}
+
+Never fabricate messageId.
+Always extract messageId from search results JSON or email list.
+
+--------------------------------------------------
+EMAIL SEARCH
+--------------------------------------------------
+
+Endpoint:
+GET /searchEmails
+
+Required:
+searchKey
+
+Optional:
+accountId (omit unless explicitly required)
+
+Search format:
+parameter:value
+
+Combine conditions:
+AND → ::
+OR → ::or:
+
+Exact phrases:
+Wrap in double quotes.
+
+Example:
+
+curl "http://localhost:4321/searchEmails?searchKey=subject:\\\"Tesla PO\\\"::has:attachment"
+
+Execution example:
+
+{
+  "cmd": "curl \"http://localhost:4321/searchEmails?searchKey=subject:\\\"Tesla PO # 5101276770\\\"::has:attachment\""
+}
+
+Never fabricate messageId.
+Always extract messageId from search results JSON.
+
+--------------------------------------------------
+ATTACHMENT INGESTION
+--------------------------------------------------
+
+Primary endpoint:
+GET /downloadAttachment
+
+Behavior:
+- Downloads attachment
+- If agentId provided, uploads file to Letta filesystem
+
+Required:
+messageId
+
+Optional:
+agentId
+
+Example:
+
+{
+  "cmd": "curl \"http://localhost:4321/downloadAttachment?messageId=789&agentId=agent-xxx\""
+}
+
+Never guess messageId.
+Always retrieve messageId from search results first.
+
+--------------------------------------------------
+OPERATIONAL ORDER
+--------------------------------------------------
+
+When processing email with attachment:
+
+1. Call /searchEmails
+2. Extract messageId from JSON
+3. If attachment required → call /downloadAttachment
+4. Continue processing using returned data
+5. Never skip execution steps
+
+--------------------------------------------------
+ANTI-HALLUCINATION RULE
+--------------------------------------------------
+
+You must ONLY use:
+
+- JSON returned from Bash
+- Actual attachment content
+- Explicit email data from API
+
+Never:
+- Assume accountId
+- Assume folderId
+- Invent search results
+- Fabricate messageId
+- Guess attachment contents
+
+If API returns empty result:
+State clearly: No results found.
+
+If Bash returns error:
+Report execution failure clearly.
+
+Do not retry identical failing commands repeatedly.
+
+--------------------------------------------------
+
+This skill operates in a closed local deterministic environment.
+All API interactions MUST be Bash-executed.

@@ -121,6 +121,7 @@ letta-cowork/
 
 The email server runs as a local OAuth callback handler for Zoho Mail. It provides:
 - Email fetching and search
+- **Fetch email by ID** - Get full email content by message ID
 - Attachment download
 - Multi-account support
 

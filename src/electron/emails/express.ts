@@ -6,7 +6,7 @@
 import { BrowserWindow } from "electron";
 import express, { Request, Response } from "express";
 import { BASE_URL, OAUTH_PORT, saveAccessToken, saveRefreshToken, saveAccountId, saveInboxFolderId } from "./helper.js";
-import { downloadEmailAttachment, fetchAccounts, fetchEmails, fetchFolders, searchEmails, uploadEmailAttachmentToAgent } from "./fetchEmails.js";
+import { downloadEmailAttachment, fetchAccounts, fetchEmails, fetchEmailById, fetchFolders, searchEmails, uploadEmailAttachmentToAgent } from "./fetchEmails.js";
 import { getCurrentAgentId } from "../libs/runner.js";
 
 
@@ -110,6 +110,23 @@ export const expressServer = (mainWindow: BrowserWindow) => {
     }
   });
 
+  api.get("/fetchEmailById", async (req: Request, res: Response) => {
+    try {
+      const { accountId, folderId, messageId } = req.query;
+
+      if (!messageId) {
+        return res.status(400).send("Missing messageId");
+      }
+
+      fetchEmailById(messageId as string, accountId as string | undefined, folderId as string | undefined).then(email => res.json(email)).catch(err => {
+        res.status(500).send(err.message || "Failed to fetch email by id");
+      });
+    } catch (error) {
+      console.error("Failed to fetch email by id:", error);
+      res.status(500).send("Failed to fetch email by id");
+    }
+  });
+
   api.get("/fetchFolders", async (req: Request, res: Response) => {
     try {
       fetchFolders().then(folders => res.json(folders)).catch(err => {
@@ -123,8 +140,8 @@ export const expressServer = (mainWindow: BrowserWindow) => {
 
   api.get("/downloadAttachment", async (req: Request, res: Response) => {
     try {
-      const { accountId, folderId, messageId } = req.query;
-      downloadEmailAttachment(folderId as string, messageId as string, accountId as string).then(attachment => res.json(attachment)).catch(err => {
+      const { accountId, folderId, messageId, agentId } = req.query;
+      downloadEmailAttachment(folderId as string, messageId as string, accountId as string, agentId as string | undefined).then(attachment => res.json(attachment)).catch(err => {
         res.status(500).send(err.message || "Failed to download attachment");
       })
     } catch (error) {
@@ -168,14 +185,11 @@ export const expressServer = (mainWindow: BrowserWindow) => {
    api.get("/searchEmails", async (req: Request, res: Response) => {
     try {
       const { accountId, ...rest } = req.query;
-      if (!accountId) {
-        return res.status(400).send("Missing accountId");
-      }
 
       // convert query parameters into SearchEmailParams
       const params = rest as any;
 
-      searchEmails(accountId as string, params).then(emails => res.json(emails)).catch(err => {
+      searchEmails(accountId as string | undefined, params).then(emails => res.json(emails)).catch(err => {
         res.status(500).send(err.message || "Failed to search emails");
       });
     } catch (error) {
@@ -307,6 +321,18 @@ export const expressServer = (mainWindow: BrowserWindow) => {
           ],
           example: "GET /fetchEmails?accountId=123&folderId=456&start=0&limit=50",
         },
+        {
+          name: "fetchEmailById",
+          method: "GET",
+          path: "/fetchEmailById",
+          description: "Fetch a single email by its message ID. Returns the full email content including body.",
+          queryParams: [
+            { name: "messageId", type: "string", required: true },
+            { name: "accountId", type: "string", required: false },
+            { name: "folderId", type: "string", required: false }
+          ],
+          example: "GET /fetchEmailById?messageId=789&accountId=123&folderId=456"
+        },
 
         {
           name: "downloadAttachment",
@@ -316,7 +342,8 @@ export const expressServer = (mainWindow: BrowserWindow) => {
           queryParams: [
             { name: "accountId", type: "string", required: false },
             { name: "folderId", type: "string", required: false },
-            { name: "messageId", type: "string", required: true }
+            { name: "messageId", type: "string", required: true },
+            { name: "agentId", type: "string", required: false }
           ],
           example:
             "GET /downloadAttachment?accountId=123&folderId=456&messageId=789",
@@ -381,10 +408,8 @@ export const expressServer = (mainWindow: BrowserWindow) => {
           examples: [
             "GET /searchEmails?accountId=123&searchKey=subject:Invoice",
             "GET /searchEmails?accountId=123&searchKey=sender:john@example.com::has:attachment",
-            "GET /searchEmails?accountId=123&searchKey=subject:\"Payment Reminder\"",
-            "GET /searchEmails?accountId=123&searchKey=fromDate:01-Jan-2024::toDate:31-Jan-2024",
-            "GET /searchEmails?accountId=123&searchKey=newMails::has:attachment",
-            "GET /searchEmails?accountId=123&searchKey=sender:test@example.com::or:to:test@example.com"
+            "GET /searchEmails?searchKey=subject:Invoice",
+            "GET /searchEmails?searchKey=sender:john@example.com::has:attachment"
           ]
         }
       ]

@@ -184,7 +184,7 @@ app.on("ready", () => {
 
 
     ipcMain.handle("fetch-email-by-id", async (event, accountId, folderId, messageId) => {
-        return await fetchEmailById(accountId, folderId, messageId);
+        return await fetchEmailById(messageId, accountId, folderId);
     });
 
     ipcMain.handle("upload-email-attachment-to-agent", async (event, folderId, messageId, accountId, agentId) => {

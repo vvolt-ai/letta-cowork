@@ -116,7 +116,7 @@ export const fetchEmails = async (
   return resp;
 };
 
-export const fetchEmailById = async (accountId?: string, folderId?: string, messageId?: string) => {
+export const fetchEmailById = async (messageId: string, accountId?: string, folderId?: string) => {
   // resolve accountId from parameter or keytar
   const resolvedAccountId = accountId || (await getAccountId());
   if (!resolvedAccountId) {

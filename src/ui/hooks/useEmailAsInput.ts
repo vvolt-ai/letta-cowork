@@ -10,9 +10,15 @@ export function useEmailAsInput() {
     (email: ZohoEmail) => {
       const emailPrompt = [
         "Please help me with this email:",
+        `messageId: ${email.messageId}`,
+        `accountId: ${email.accountId}`,
+        `accountId: ${email.accountId}`,
         `From: ${email.sender || email.fromAddress || "Unknown sender"}`,
         `Subject: ${email.subject || "(No subject)"}`,
         `Summary: ${email.summary || "No preview"}`,
+        `hasAttachment: ${email.hasAttachment}`,
+        `sender: ${email.sender}`,
+        `sender: ${email.sender}`
       ].join("\n");
 
       setPrompt(prompt.trim() ? `${prompt}\n\n${emailPrompt}` : emailPrompt);
