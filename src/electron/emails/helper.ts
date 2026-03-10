@@ -4,6 +4,7 @@ import keytar from "keytar";
 export const APP_NAME = "MyElectronApp";
 export const OAUTH_PORT = 4321;
 
+console.log("process.env.EMAIL_SERVER_BASE_URL" , process.env.EMAIL_SERVER_BASE_URL)
 export const BASE_URL = process.env.EMAIL_SERVER_BASE_URL || "https://zoho.ngrok.app";
 
 

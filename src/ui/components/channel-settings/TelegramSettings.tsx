@@ -1,5 +1,6 @@
 import type { TelegramConfig, TelegramBridgeStatus } from "./telegramConfig";
 import { defaultTelegramConfig } from "./telegramConfig";
+import { AgentDropdown } from "../AgentDropdown";
 
 // Re-export for convenience
 export { defaultTelegramConfig };
@@ -17,7 +18,6 @@ interface TelegramSettingsProps {
   isStarting: boolean;
   isStopping: boolean;
   loading: boolean;
-  agents?: Array<{ id: string; name: string }>;
 }
 
 export function TelegramSettings({
@@ -29,7 +29,6 @@ export function TelegramSettings({
   isStarting,
   isStopping,
   loading,
-  agents = [],
 }: TelegramSettingsProps) {
   const handleChange = (field: keyof TelegramConfig, value: string | boolean | string[]) => {
     onConfigChange({ ...config, [field]: value });
@@ -53,18 +52,10 @@ export function TelegramSettings({
 
       <label className="text-xs text-ink-700">
         Default Agent ID
-        <select
-          className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink-800 outline-none focus:border-accent/40"
+        <AgentDropdown
           value={config.defaultAgentId}
-          onChange={(e) => handleChange("defaultAgentId", e.target.value)}
-        >
-          <option value="">-- Select Agent --</option>
-          {agents.map((agent) => (
-            <option key={agent.id} value={agent.id}>
-              {agent.name}
-            </option>
-          ))}
-        </select>
+          onChange={(agentId) => handleChange("defaultAgentId", agentId)}
+        />
         <span className="text-xs text-ink-500">Optional: Agent ID to use by default for Telegram messages</span>
       </label>
 

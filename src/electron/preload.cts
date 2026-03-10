@@ -62,8 +62,12 @@ electron.contextBridge.exposeInMainWorld("electron", {
         electron.ipcRenderer.invoke("search-emails", accountId, params),
     getLettaEnv: () =>
         electron.ipcRenderer.invoke("get-letta-env"),
+    listLettaAgents: () =>
+        electron.ipcRenderer.invoke("list-letta-agents"),
     updateLettaEnv: (values: { LETTA_API_KEY: string; LETTA_BASE_URL: string; LETTA_AGENT_ID: string }) =>
         electron.ipcRenderer.invoke("update-letta-env", values),
+    isAdmin: () =>
+        electron.ipcRenderer.invoke("is-admin"),
     getChannelBridgesConfig: () =>
         electron.ipcRenderer.invoke("get-channel-bridges-config"),
     updateChannelBridgesConfig: (values: any) =>

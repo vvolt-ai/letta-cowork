@@ -49,6 +49,7 @@ import type { ClientEvent } from "./types.js";
 import { checkAlreadyConnected, connectEmail, disconnectEmail, fetchEmailById, fetchEmailDetails, fetchEmails, fetchFolders, downloadEmailAttachment, fetchAccounts, updateMessages, searchEmails, uploadEmailAttachmentToAgent } from "./emails/fetchEmails.js";
 import { expressServer } from "./emails/express.js";
 import { downloadSkillsFromGitHub, GLOBAL_SKILLS_DIR2 } from "./skillDownloader.js";
+import { listLettaAgents } from "./lettaAgents.js";
 import {
     getBridgesConfig,
     getWhatsAppBridgeStatus,
@@ -214,6 +215,19 @@ app.on("ready", () => {
 
     ipcMain.handle("get-letta-env", () => {
         return getLettaEnvConfig();
+    });
+
+    ipcMain.handle("is-admin", () => {
+        return process.env.IS_ADMIN === "true";
+    });
+
+    ipcMain.handle("list-letta-agents", async () => {
+        try {
+            return await listLettaAgents();
+        } catch (error) {
+            console.error("Failed to list agents:", error);
+            throw error;
+        }
     });
 
     ipcMain.handle("update-letta-env", async (_, values: LettaEnvConfig) => {

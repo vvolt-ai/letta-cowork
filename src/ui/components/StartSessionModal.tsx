@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { AgentDropdown } from "./AgentDropdown";
 
 interface StartSessionModalProps {
   cwd: string;
@@ -6,7 +7,7 @@ interface StartSessionModalProps {
   pendingStart: boolean;
   onCwdChange: (value: string) => void;
   onPromptChange: (value: string) => void;
-  onStart: () => void;
+  onStart: (agentId: string) => void;
   onClose: () => void;
 }
 
@@ -20,9 +21,19 @@ export function StartSessionModal({
   onClose
 }: StartSessionModalProps) {
   const [recentCwds, setRecentCwds] = useState<string[]>([]);
+  const [selectedAgentId, setSelectedAgentId] = useState<string>("");
 
   useEffect(() => {
     window.electron.getRecentCwds().then(setRecentCwds).catch(console.error);
+  }, []);
+
+  // Load default agent ID from Letta environment
+  useEffect(() => {
+    window.electron.getLettaEnv().then((env) => {
+      if (env.LETTA_AGENT_ID) {
+        setSelectedAgentId(env.LETTA_AGENT_ID);
+      }
+    }).catch(console.error);
   }, []);
 
   const handleSelectDirectory = async () => {
@@ -81,6 +92,14 @@ export function StartSessionModal({
             )}
           </label>
           <label className="grid gap-1.5">
+            <span className="text-xs font-medium text-muted">Agent</span>
+            <AgentDropdown
+              value={selectedAgentId}
+              onChange={setSelectedAgentId}
+              disabled={pendingStart}
+            />
+          </label>
+          <label className="grid gap-1.5">
             <span className="text-xs font-medium text-muted">Prompt</span>
             <textarea
               rows={4}
@@ -92,7 +111,7 @@ export function StartSessionModal({
           </label>
           <button
             className="flex flex-col items-center rounded-full bg-accent px-5 py-3 text-sm font-medium text-white shadow-soft hover:bg-accent-hover transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-            onClick={onStart}
+            onClick={() => onStart(selectedAgentId)}
             disabled={pendingStart || !cwd.trim() || !prompt.trim()}
           >
             {pendingStart ? (

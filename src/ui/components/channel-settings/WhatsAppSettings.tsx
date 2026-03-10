@@ -1,5 +1,6 @@
 import type { WhatsAppConfig, WhatsAppBridgeStatus } from "./whatsappConfig";
 import { defaultWhatsAppConfig } from "./whatsappConfig";
+import { AgentDropdown } from "../AgentDropdown";
 
 // Re-export for convenience
 export { defaultWhatsAppConfig };
@@ -33,11 +34,9 @@ export function WhatsAppSettings({
     <div className="mt-3 grid gap-2">
       <label className="text-xs text-ink-700">
         Default Letta Agent ID
-        <input
-          className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink-800 outline-none focus:border-accent/40"
+        <AgentDropdown
           value={config.defaultAgentId}
-          onChange={(e) => onConfigChange({ ...config, defaultAgentId: e.target.value })}
-          placeholder="agent-xxxx"
+          onChange={(agentId) => onConfigChange({ ...config, defaultAgentId: agentId })}
         />
       </label>
 

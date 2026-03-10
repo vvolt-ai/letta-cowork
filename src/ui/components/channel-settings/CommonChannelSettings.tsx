@@ -1,4 +1,5 @@
 import type { ChannelConfig, ChannelType } from "./channelConfig";
+import { AgentDropdown } from "../AgentDropdown";
 
 interface CommonChannelSettingsProps {
   config: ChannelConfig;
@@ -31,11 +32,9 @@ export function CommonChannelSettings({
       </label>
       <label className="text-xs text-ink-700">
         Default Letta Agent ID
-        <input
-          className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink-800 outline-none focus:border-accent/40"
+        <AgentDropdown
           value={config.defaultAgentId}
-          onChange={(e) => onChange("defaultAgentId", e.target.value)}
-          placeholder="agent-xxxx"
+          onChange={(agentId) => onChange("defaultAgentId", agentId)}
         />
       </label>
       <label className="text-xs text-ink-700">

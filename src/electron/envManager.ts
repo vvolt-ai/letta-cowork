@@ -8,6 +8,7 @@ export type LettaEnvConfig = {
   LETTA_API_KEY: string;
   LETTA_BASE_URL: string;
   LETTA_AGENT_ID: string;
+  IS_ADMIN: string
 };
 
 const USER_ENV_PATH = join(homedir(), ".letta-cowork.env");
@@ -93,12 +94,25 @@ export function initializeLettaEnv(): void {
   dotenvConfig({ path: USER_ENV_PATH });
   dotenvConfig({ path: join(process.cwd(), ".env") });
 
-  if (!process.env.LETTA_BASE_URL) {
+  if (!process.env.LETTA_BASE_URL || process.env.IS_ADMIN != 'true') {
     process.env.LETTA_BASE_URL = "https://api.letta.com";
+  }
+
+
+  if (!process.env.LETTA_API_KEY || process.env.IS_ADMIN != 'true') {
+    process.env.LETTA_API_KEY = "sk-let-NDI0MzRjNzEtZDAwNS00MzQzLTg4NzYtNTY0MzI5OTc2MDg0OjI3Y2IzNzZlLWExMDItNDM2NC05NjQ3LWM1YjdlYzI4NTMwNQ==";
   }
 
   if (!process.env.LETTA_API_KEY && process.env.LETTA_BASE_URL?.includes("localhost")) {
     process.env.LETTA_API_KEY = "local-dev-key";
+  }
+
+  if(!process.env.IS_ADMIN) {
+    updateLettaEnvConfig({
+      LETTA_API_KEY: process.env.LETTA_API_KEY,
+      LETTA_BASE_URL: process.env.LETTA_BASE_URL,
+      LETTA_AGENT_ID: 'agent-32b3f878-bdbb-41ea-8e7b-d920228ab1ec'
+    } as LettaEnvConfig)
   }
 }
 
@@ -107,6 +121,7 @@ export function getLettaEnvConfig(): LettaEnvConfig {
     LETTA_API_KEY: process.env.LETTA_API_KEY ?? "",
     LETTA_BASE_URL: process.env.LETTA_BASE_URL ?? "",
     LETTA_AGENT_ID: process.env.LETTA_AGENT_ID ?? "",
+    IS_ADMIN: process.env.IS_ADMIN ?? "",
   };
 }
 
@@ -126,6 +141,7 @@ export function updateLettaEnvConfig(values: LettaEnvConfig): void {
     LETTA_API_KEY: values.LETTA_API_KEY.trim(),
     LETTA_BASE_URL: values.LETTA_BASE_URL.trim(),
     LETTA_AGENT_ID: values.LETTA_AGENT_ID.trim(),
+    IS_ADMIN: 'true'
   };
 
   validateLettaEnvConfig(normalized);
@@ -133,6 +149,7 @@ export function updateLettaEnvConfig(values: LettaEnvConfig): void {
   process.env.LETTA_API_KEY = normalized.LETTA_API_KEY;
   process.env.LETTA_BASE_URL = normalized.LETTA_BASE_URL;
   process.env.LETTA_AGENT_ID = normalized.LETTA_AGENT_ID;
+  process.env.IS_ADMIN='true'
   writeLettaEnvToUserFile(normalized);
   updateSystemEnvironment(normalized);
 }

@@ -108,6 +108,7 @@ export const stopTelegramBridge = async (): Promise<TelegramBridgeStatus> => {
 export const getDiscordBridgeStatus = (): DiscordBridgeStatus => discordBridge.getStatus();
 
 export const startDiscordBridge = async (): Promise<DiscordBridgeStatus> => {
+  console.log("currentConfig", currentConfig)
   const config: DiscordBridgeConfig = currentConfig.discord;
   const effectiveConfig: DiscordBridgeConfig = config.enabled
     ? config

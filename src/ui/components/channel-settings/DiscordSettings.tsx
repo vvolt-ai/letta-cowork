@@ -10,6 +10,8 @@ interface DiscordConfig {
   groups: Record<string, { mode: "open" | "listen" | "mention-only" | "disabled"; allowedUsers?: string[] }>;
 }
 
+import { AgentDropdown } from "../AgentDropdown";
+
 interface DiscordBridgeStatus {
   state: "stopped" | "starting" | "running" | "error";
   connected: boolean;
@@ -58,11 +60,9 @@ export function DiscordSettings({
 
       <label className="text-xs text-ink-700">
         Default Agent ID
-        <input
-          className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink-800 outline-none focus:border-accent/40"
+        <AgentDropdown
           value={config.defaultAgentId}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange("defaultAgentId", e.target.value)}
-          placeholder="agent-xxxx"
+          onChange={(agentId) => handleChange("defaultAgentId", agentId)}
         />
       </label>
 

@@ -229,14 +229,24 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
         debug("session aborted");
         return;
       }
-      log("ERROR in runLetta", { 
-        error: String(error), 
+      
+      // Log detailed error info for debugging
+      const errorDetails = {
+        error: String(error),
         name: (error as Error).name,
-        stack: (error as Error).stack 
-      });
+        stack: (error as Error).stack,
+        agentId: targetAgentId || cachedAgentId || process.env.LETTA_AGENT_ID,
+        baseURL: process.env.LETTA_BASE_URL,
+        apiKeyMasked: process.env.LETTA_API_KEY ? process.env.LETTA_API_KEY.substring(0, 10) + "..." : "not set",
+      };
+      log("ERROR in runLetta", errorDetails);
+      
+      // Send detailed error to UI
+      const errorMessage = `Failed to start session: ${String(error)}\n\nAgent ID: ${errorDetails.agentId}\nBase URL: ${errorDetails.baseURL}\nAPI Key: ${errorDetails.apiKeyMasked}`;
+      
       onEvent({
         type: "session.status",
-        payload: { sessionId: currentSessionId, status: "error", title: currentSessionId, error: String(error) }
+        payload: { sessionId: currentSessionId, status: "error", title: currentSessionId, error: errorMessage }
       });
     } finally {
       debug("runLetta finally block, clearing activeLettaSession");

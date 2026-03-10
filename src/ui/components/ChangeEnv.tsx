@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
+import { AgentDropdown } from "./AgentDropdown";
 
 type LettaEnvForm = {
   LETTA_API_KEY: string;
@@ -19,6 +20,7 @@ export function ChangeEnv({ className, open: controlledOpen, onOpenChange }: Cha
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [form, setForm] = useState<LettaEnvForm>({
     LETTA_API_KEY: "",
     LETTA_BASE_URL: "",
@@ -36,6 +38,10 @@ export function ChangeEnv({ className, open: controlledOpen, onOpenChange }: Cha
     trimmedForm.LETTA_API_KEY.length > 0 &&
     trimmedForm.LETTA_BASE_URL.length > 0 &&
     trimmedForm.LETTA_AGENT_ID.length > 0;
+
+  useEffect(() => {
+    window.electron.isAdmin().then(setIsAdmin);
+  }, []);
 
   const openDialog = () => {
     setSuccess(null);
@@ -84,12 +90,14 @@ export function ChangeEnv({ className, open: controlledOpen, onOpenChange }: Cha
 
   return (
     <>
-      <button
-        className={className ?? "rounded-lg border border-ink-900/10 bg-surface px-2.5 py-1 text-[11px] font-medium text-ink-700 hover:bg-surface-tertiary hover:border-ink-900/20 transition-colors"}
-        onClick={openDialog}
-      >
-        Letta Env
-      </button>
+      {isAdmin && (
+        <button
+          className={className ?? "rounded-lg border border-ink-900/10 bg-surface px-2.5 py-1 text-[11px] font-medium text-ink-700 hover:bg-surface-tertiary hover:border-ink-900/20 transition-colors"}
+          onClick={openDialog}
+        >
+          Letta Env
+        </button>
+      )}
 
       <Dialog.Root
         open={open}
@@ -140,12 +148,10 @@ export function ChangeEnv({ className, open: controlledOpen, onOpenChange }: Cha
 
               <label className="text-xs text-ink-700">
                 LETTA_AGENT_ID
-                <input
-                  className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink-800 outline-none focus:border-accent/40"
+                <AgentDropdown
                   value={form.LETTA_AGENT_ID}
-                  onChange={(e) => setForm((prev) => ({ ...prev, LETTA_AGENT_ID: e.target.value }))}
+                  onChange={(agentId) => setForm((prev) => ({ ...prev, LETTA_AGENT_ID: agentId }))}
                   disabled={loading || saving}
-                  required
                 />
               </label>
             </div>

@@ -27,6 +27,7 @@ interface ChatMainPanelProps {
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
   topSentinelRef: React.RefObject<HTMLDivElement | null>;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
+  sidebarCollapsed?: boolean;
 }
 
 export function ChatMainPanel({
@@ -50,9 +51,11 @@ export function ChatMainPanel({
   scrollContainerRef,
   topSentinelRef,
   messagesEndRef,
+  sidebarCollapsed = false,
 }: ChatMainPanelProps) {
+  const marginLeft = sidebarCollapsed ? 'ml-16' : 'ml-[280px]';
   return (
-    <main className="flex flex-1 flex-col ml-[280px] bg-surface-cream">
+    <main className={`flex flex-1 flex-col ${marginLeft} bg-surface-cream`}>
       <div
         className="flex items-center justify-center h-12 border-b border-ink-900/10 bg-surface-cream select-none"
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
@@ -134,7 +137,7 @@ export function ChatMainPanel({
       {hasNewMessages && !shouldAutoScroll && (
         <button
           onClick={onScrollToBottom}
-          className="fixed bottom-28 left-1/2 ml-[140px] z-40 -translate-x-1/2 flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-medium text-white shadow-lg transition-all hover:bg-accent-hover hover:scale-105 animate-bounce-subtle"
+          className={`fixed bottom-28 z-40 -translate-x-1/2 flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-medium text-white shadow-lg transition-all hover:bg-accent-hover hover:scale-105 animate-bounce-subtle ${sidebarCollapsed ? 'ml-8 left-[88px]' : 'ml-[140px] left-1/2'}`}
         >
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M12 5v14M5 12l7 7 7-7" />

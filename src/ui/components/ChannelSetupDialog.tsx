@@ -63,6 +63,7 @@ export function ChannelSetupDialog({ open, onOpenChange, initialChannel }: Chann
       setWhatsAppConfig(config.whatsapp);
       setTelegramConfig(config.telegram);
       setSlackConfig(config.slack);
+      setDiscordConfig(config.discord);
       setConfigs({
         telegram: {
           enabled: config.telegram.enabled,
@@ -107,6 +108,8 @@ export function ChannelSetupDialog({ open, onOpenChange, initialChannel }: Chann
       setTelegramStatus(telegramBridgeStatus);
       const slackBridgeStatus = await window.electron.getSlackBridgeStatus();
       setSlackStatus(slackBridgeStatus);
+      const discordBridgeStatus = await window.electron.getDiscordBridgeStatus();
+      setDiscordStatus(discordBridgeStatus);
     } finally {
       setLoading(false);
     }
@@ -152,6 +155,18 @@ export function ChannelSetupDialog({ open, onOpenChange, initialChannel }: Chann
     return () => clearInterval(intervalId);
   }, [activeChannel, open]);
 
+  // Discord status polling
+  useEffect(() => {
+    if (!open || activeChannel !== "discord") return;
+    const intervalId = setInterval(() => {
+      window.electron
+        .getDiscordBridgeStatus()
+        .then((status) => setDiscordStatus(status))
+        .catch(() => undefined);
+    }, 2000);
+    return () => clearInterval(intervalId);
+  }, [activeChannel, open]);
+
   const currentConfig = useMemo(() => configs[activeChannel], [activeChannel, configs]);
 
   const updateField = (field: keyof ChannelConfig, value: string | boolean) => {
@@ -186,15 +201,13 @@ export function ChannelSetupDialog({ open, onOpenChange, initialChannel }: Chann
         allowedUsers: slackConfig.allowedUsers.map((entry) => entry.trim()).filter((entry) => entry.length > 0),
       },
       discord: {
+        ...discordConfig,
         enabled: true,
-        autoStart: configs.discord.extra === "autoStart",
-        botToken: configs.discord.token.trim(),
-        dmPolicy: "pairing",
-        respondToGroups: true,
-        allowedUsers: configs.discord.extra.split(",").map((u: string) => u.trim()).filter(Boolean),
-        defaultAgentId: configs.discord.defaultAgentId.trim(),
-        typingIndicator: true,
-        groups: {},
+        botToken: discordConfig.botToken.trim(),
+        dmPolicy: discordConfig.dmPolicy,
+        respondToGroups: discordConfig.respondToGroups,
+        allowedUsers: discordConfig.allowedUsers.map((u: string) => u.trim()).filter(Boolean),
+        groups: discordConfig.groups,
       },
     };
 
@@ -239,7 +252,7 @@ export function ChannelSetupDialog({ open, onOpenChange, initialChannel }: Chann
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-ink-900/40 backdrop-blur-sm" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 w-[94vw] max-w-2xl -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-surface p-5 shadow-xl">
+        <Dialog.Content className="fixed left-1/2 top-1/2 w-[94vw] max-w-2xl -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-surface p-5 shadow-xl max-h-[90vh] overflow-y-auto">
           <div className="flex items-start justify-between gap-4">
             <Dialog.Title className="text-lg font-semibold text-ink-800">Channel Setup</Dialog.Title>
             <Dialog.Close asChild>
@@ -274,7 +287,7 @@ export function ChannelSetupDialog({ open, onOpenChange, initialChannel }: Chann
                 <label className="flex items-center gap-2 text-xs text-ink-700">
                   <input
                     type="checkbox"
-                    checked={activeChannel === "whatsapp" ? whatsappConfig.enabled : activeChannel === "telegram" ? telegramConfig.enabled : activeChannel === "slack" ? slackConfig.enabled : currentConfig.enabled}
+                    checked={activeChannel === "whatsapp" ? whatsappConfig.enabled : activeChannel === "telegram" ? telegramConfig.enabled : activeChannel === "slack" ? slackConfig.enabled : activeChannel === "discord" ? discordConfig.enabled : currentConfig.enabled}
                     onChange={(e) => {
                       if (activeChannel === "whatsapp") {
                         setWhatsAppConfig((prev) => ({ ...prev, enabled: e.target.checked }));
@@ -286,6 +299,10 @@ export function ChannelSetupDialog({ open, onOpenChange, initialChannel }: Chann
                       }
                       if (activeChannel === "slack") {
                         setSlackConfig((prev) => ({ ...prev, enabled: e.target.checked }));
+                        return;
+                      }
+                      if (activeChannel === "discord") {
+                        setDiscordConfig((prev) => ({ ...prev, enabled: e.target.checked }));
                         return;
                       }
                       updateField("enabled", e.target.checked);

@@ -49,6 +49,9 @@ function App() {
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [hasNewMessages, setHasNewMessages] = useState(false);
   const [lettaEnvOpen, setLettaEnvOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    return localStorage.getItem('sidebar_collapsed') === 'true';
+  });
   const [autoSyncEnabled, setAutoSyncEnabled] = useState<boolean>(() => {
     return localStorage.getItem(AUTO_SYNC_ENABLED_KEY) === "true";
   });
@@ -205,6 +208,24 @@ function App() {
   } = useSessionController({ connected, sendEvent });
   const { handleStartFromModal } = usePromptActions(sendEvent);
 
+  // Handle starting session with selected agent - save agent to env first, then start
+  const handleStartWithAgent = useCallback(async (agentId: string) => {
+    if (agentId) {
+      try {
+        // Get current env and update only the agent ID
+        const currentEnv = await window.electron.getLettaEnv();
+        await window.electron.updateLettaEnv({
+          ...currentEnv,
+          LETTA_AGENT_ID: agentId
+        });
+      } catch (err) {
+        console.error("Failed to update agent in env:", err);
+      }
+    }
+    // Then start the session
+    handleStartFromModal();
+  }, [handleStartFromModal]);
+
   const isLettaEnvConfigured = useCallback(async () => {
     try {
       const env = await window.electron.getLettaEnv();
@@ -251,6 +272,11 @@ function App() {
   useEffect(() => {
     localStorage.setItem(AUTO_SYNC_ROUTING_RULES_KEY, JSON.stringify(autoSyncRoutingRules));
   }, [autoSyncRoutingRules]);
+
+  // Persist sidebar collapsed state
+  useEffect(() => {
+    localStorage.setItem('sidebar_collapsed', String(sidebarCollapsed));
+  }, [sidebarCollapsed]);
 
   useAutoSyncUnread(
     sendEvent,
@@ -391,6 +417,7 @@ function App() {
         onProcessEmailToAgent={processEmailToAgent}
         processingEmailId={processingEmailId}
         successEmailId={successEmailId}
+        onCollapsedChange={setSidebarCollapsed}
       />
       <ChatMainPanel
         title={activeSession?.title}
@@ -413,6 +440,7 @@ function App() {
         scrollContainerRef={scrollContainerRef}
         topSentinelRef={topSentinelRef}
         messagesEndRef={messagesEndRef}
+        sidebarCollapsed={sidebarCollapsed}
       />
       {showStartModal && (
         <StartSessionModal
@@ -421,7 +449,7 @@ function App() {
           pendingStart={pendingStart}
           onCwdChange={setCwd}
           onPromptChange={setPrompt}
-          onStart={handleStartFromModal}
+          onStart={handleStartWithAgent}
           onClose={() => setShowStartModal(false)}
         />
       )}

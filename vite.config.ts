@@ -17,5 +17,9 @@ export default defineConfig(({ mode }) => {
 			port, // MUST BE LOWERCASE
 			strictPort: true,
 		},
+		define: {
+			'SHOW_CHANNELS': JSON.stringify(env.SHOW_CHANNELS === 'true'),
+			'SHOW_EMAIL_OPTION': JSON.stringify(env.SHOW_EMAIL_OPTION === 'true'),
+		},
 	};
 });

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
+import { AgentDropdown } from "../AgentDropdown";
 
 interface NewMailPipelineSettingProps {
   open: boolean;
@@ -58,18 +59,12 @@ export function NewMailPipelineSetting({
             </Dialog.Close>
           </div>
           <div className="mt-3 flex items-center gap-2">
-            <input
-              className="flex-1 rounded-lg border border-ink-900/10 bg-white px-2.5 py-2 text-xs text-ink-800 focus:outline-none focus:ring-1 focus:ring-accent/30"
-              placeholder="agent-xxxx"
-              value={newAgentId}
-              onChange={(e) => setNewAgentId(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  handleAddAgent();
-                }
-              }}
-            />
+            <div className="flex-1">
+              <AgentDropdown
+                value={newAgentId}
+                onChange={setNewAgentId}
+              />
+            </div>
             <button
               className="rounded-lg border border-ink-900/10 bg-surface px-3 py-2 text-xs font-medium text-ink-700 hover:bg-surface-tertiary"
               onClick={handleAddAgent}
@@ -108,18 +103,12 @@ export function NewMailPipelineSetting({
                 onChange={(e) => setNewRuleFromPattern(e.target.value)}
               />
               <div className="flex items-center gap-2">
-                <input
-                  className="flex-1 rounded-lg border border-ink-900/10 bg-white px-2.5 py-2 text-xs text-ink-800 focus:outline-none focus:ring-1 focus:ring-accent/30"
-                  placeholder="Target agent ID"
-                  value={newRuleAgentId}
-                  onChange={(e) => setNewRuleAgentId(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      handleAddRule();
-                    }
-                  }}
-                />
+                <div className="flex-1">
+                  <AgentDropdown
+                    value={newRuleAgentId}
+                    onChange={setNewRuleAgentId}
+                  />
+                </div>
                 <button
                   className="rounded-lg border border-ink-900/10 bg-surface px-3 py-2 text-xs font-medium text-ink-700 hover:bg-surface-tertiary"
                   onClick={handleAddRule}
