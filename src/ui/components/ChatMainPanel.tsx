@@ -8,6 +8,7 @@ import MDContent from "../render/markdown";
 
 interface ChatMainPanelProps {
   title?: string;
+  agentName?: string;
   activeSessionId: string | null;
   isRunning: boolean;
   permissionRequests: PermissionRequest[];
@@ -32,6 +33,7 @@ interface ChatMainPanelProps {
 
 export function ChatMainPanel({
   title,
+  agentName,
   activeSessionId,
   isRunning,
   permissionRequests,
@@ -107,13 +109,14 @@ export function ChatMainPanel({
                 isRunning={isRunning}
                 permissionRequest={permissionRequests[0]}
                 onPermissionResult={onPermissionResult}
+                agentName={agentName}
               />
             ))
           )}
 
           {partialMessage && (
             <div className="partial-message mt-4">
-              <div className="header text-accent">Assistant</div>
+              <div className="header text-accent">{agentName || "Assistant"}</div>
               <MDContent text={partialMessage} />
             </div>
           )}

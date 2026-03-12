@@ -15,6 +15,7 @@ import {
   removeStoredSession,
   type StoredSession,
 } from "./settings.js";
+import { getLettaAgent } from "./lettaAgents.js";
 
 const DEBUG = process.env.DEBUG_IPC === "true";
 
@@ -78,6 +79,7 @@ export async function handleClientEvent(event: ClientEvent) {
     const sessions = storedSessions.map((session: StoredSession) => ({
       id: session.id,
       title: session.title,
+      agentName: session.agentName,
       status: getSession(session.id)?.status || "idle",
       createdAt: session.createdAt,
       updatedAt: session.updatedAt,
@@ -118,29 +120,11 @@ export async function handleClientEvent(event: ClientEvent) {
       // Convert Letta messages to SDK message format for the UI
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const messages: any[] = [];
-
-      console.log(items);
+      console.log("msg",items)
       for (const msg of items) {
         // Map Letta message types to SDK message types
         const msgType = msg.message_type || msg.type;
         
-        // Filter out non-display message types
-        // system_message = agent's system prompt/instructions
-        // reasoning_message = internal agent thinking
-        // approval_request_message = requests to run tools (Skill/Bash)
-        // approval_response_message = approval responses
-        // tool_return_message = tool execution results
-        if (msgType === "system_message" || 
-            msgType === "reasoning_message" || 
-            msgType === "approval_request_message" ||
-            msgType === "approval_response_message" ||
-            msgType === "tool_return_message" ||
-            msgType === "tool_call" || 
-            msgType === "tool_use" ||
-            msgType === "tool_result") {
-          continue;
-        }
-
         // Letta uses: user_message, agent_message, assistant_message, etc.
         // SDK expects: init, assistant, reasoning, tool_call, tool_result
         // Map accordingly
@@ -164,6 +148,10 @@ export async function handleClientEvent(event: ClientEvent) {
             prompt: promptText,
             createdAt: msg.created_at || Date.now(),
           });
+          continue;
+        }
+
+        if(['system_message', 'reasoning', 'tool_call', 'tool_result'].includes(msgType)){
           continue;
         }
         
@@ -239,7 +227,7 @@ export async function handleClientEvent(event: ClientEvent) {
           }
           emit(e);
         },
-        onSessionUpdate: (updates) => {
+        onSessionUpdate: async (updates) => {
           // Called when session is initialized with conversationId
           debug("session.start: onSessionUpdate called", { updates });
           if (updates.lettaConversationId && !conversationId) {
@@ -251,9 +239,24 @@ export async function handleClientEvent(event: ClientEvent) {
             
             // Store session in electron-store for persistence
             const agentId = event.payload.agentId || process.env.LETTA_AGENT_ID || "";
+            
+            // Get agent name for storage
+            let agentName: string | undefined = undefined;
+            try {
+              console.log("[ipc] Getting agent name for agentId:", agentId);
+              const agent = await getLettaAgent(agentId);
+              console.log("[ipc] Got agent:", agent);
+              if (agent) {
+                agentName = agent.name;
+              }
+            } catch (e) {
+              console.log("[ipc] Failed to get agent name:", e);
+            }
+            
             addStoredSession({
               id: conversationId,
               agentId,
+              agentName,
               title: event.payload.title || conversationId,
               createdAt: Date.now(),
               updatedAt: Date.now(),
@@ -268,7 +271,7 @@ export async function handleClientEvent(event: ClientEvent) {
             // Emit session.status to unblock UI - use conversationId as title
             emit({
               type: "session.status",
-              payload: { sessionId: conversationId, status: "running", title: conversationId, cwd: event.payload.cwd },
+              payload: { sessionId: conversationId, status: "running", title: conversationId, cwd: event.payload.cwd, agentName },
             });
             emit({
               type: "stream.user_prompt",

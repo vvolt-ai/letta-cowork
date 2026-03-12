@@ -41,3 +41,24 @@ export async function listLettaAgents(): Promise<LettaAgent[]> {
     throw new Error("Failed to fetch agents from Letta");
   }
 }
+
+export async function getLettaAgent(agentId: string): Promise<LettaAgent | null> {
+  console.log("[lettaAgents] getLettaAgent called with agentId:", agentId);
+  const client = createLettaClient();
+  
+  try {
+    const agent = await client.agents.retrieve(agentId);
+    console.log("[lettaAgents] retrieved agent:", agent);
+    return {
+      id: agent.id,
+      name: agent.name,
+      description: agent.description,
+      createdAt: agent.created_at,
+      metadata: agent.metadata,
+      tags: agent.tags,
+    };
+  } catch (error) {
+    console.error("Failed to get agent:", error);
+    return null;
+  }
+}

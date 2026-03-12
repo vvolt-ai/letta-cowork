@@ -12,6 +12,7 @@ export type SessionView = {
   title: string;
   status: SessionStatus;
   cwd?: string;
+  agentName?: string;
   messages: StreamMessage[];
   permissionRequests: PermissionRequest[];
   lastPrompt?: string;
@@ -197,6 +198,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             ...existing,
             status: session.status,
             title: session.title,
+            agentName: session.agentName,
             cwd: session.cwd,
             createdAt: session.createdAt,
             updatedAt: session.updatedAt
@@ -261,7 +263,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       case "session.status": {
-        const { sessionId, status, title, cwd, error } = event.payload;
+        const { sessionId, status, title, cwd, error, agentName } = event.payload;
         set((state) => {
           const existing = state.sessions[sessionId] ?? createSession(sessionId);
           return {
@@ -272,6 +274,7 @@ export const useAppStore = create<AppState>((set, get) => ({
                 status,
                 title: title ?? existing.title,
                 cwd: cwd ?? existing.cwd,
+                agentName: agentName ?? existing.agentName,
                 updatedAt: Date.now()
               }
             }

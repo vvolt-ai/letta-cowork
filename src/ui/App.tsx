@@ -387,6 +387,7 @@ function App() {
       />
       <ChatMainPanel
         title={activeSession?.title}
+        agentName={activeSession?.agentName}
         activeSessionId={activeSessionId}
         isRunning={isRunning}
         permissionRequests={permissionRequests}
