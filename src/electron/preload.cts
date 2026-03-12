@@ -97,7 +97,15 @@ electron.contextBridge.exposeInMainWorld("electron", {
     stopSlackBridge: () =>
         electron.ipcRenderer.invoke("stop-slack-bridge"),
     downloadSkill: (handles: string | string[], skillName?: string, branch?: string) =>
-        electron.ipcRenderer.invoke("download-skill", handles, skillName, branch)
+        electron.ipcRenderer.invoke("download-skill", handles, skillName, branch),
+    
+    // Cowork settings
+    getCoworkSettings: () =>
+        electron.ipcRenderer.invoke("get-cowork-settings"),
+    updateCoworkSettings: (updates: any) =>
+        electron.ipcRenderer.invoke("update-cowork-settings", updates),
+    resetCoworkSettings: () =>
+        electron.ipcRenderer.invoke("reset-cowork-settings"),
 } satisfies Window['electron'])
 
 function ipcInvoke<Key extends keyof EventPayloadMapping>(key: Key, ...args: any[]): Promise<EventPayloadMapping[Key]> {

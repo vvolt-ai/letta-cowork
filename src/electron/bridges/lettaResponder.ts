@@ -52,6 +52,7 @@ export class LettaResponder {
       cwd: process.cwd(),
       permissionMode: "bypassPermissions" as const,
       canUseTool: async () => ({ behavior: "allow" as const }),
+      systemInfoReminder: false,
     };
 
     if (this.activeConversationId) {

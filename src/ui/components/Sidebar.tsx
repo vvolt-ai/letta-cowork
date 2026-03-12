@@ -41,6 +41,7 @@ interface SidebarProps {
   processingEmailId?: string | null;
   successEmailId?: string | null;
   onCollapsedChange?: (collapsed: boolean) => void;
+  onOpenSettings?: () => void;
 }
 
 export function Sidebar({
@@ -72,10 +73,12 @@ export function Sidebar({
   processingEmailId,
   successEmailId,
   onCollapsedChange,
+  onOpenSettings,
 }: SidebarProps) {
   const sessions = useAppStore((state) => state.sessions);
   const activeSessionId = useAppStore((state) => state.activeSessionId);
   const setActiveSessionId = useAppStore((state) => state.setActiveSessionId);
+  const coworkSettings = useAppStore((state) => state.coworkSettings);
   const [resumeSessionId, setResumeSessionId] = useState<string | null>(null);
   const [skillDownloadOpen, setSkillDownloadOpen] = useState(false);
   const [showEmailView, setShowEmailView] = useState(() => isEmailConnected);
@@ -182,19 +185,19 @@ export function Sidebar({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
           </button>
-          {/* Environment */}
+          {/* Environment - opens Letta env or settings based on setting */}
           <button
             className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-tertiary text-ink-600 hover:bg-accent hover:text-white transition-colors"
-            onClick={() => onLettaEnvOpenChange(!lettaEnvOpen)}
-            title="Environment Settings"
+            onClick={() => coworkSettings.showLettaEnv ? onLettaEnvOpenChange(!lettaEnvOpen) : onOpenSettings?.()}
+            title={coworkSettings.showLettaEnv ? "Environment Settings" : "Settings"}
           >
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
           </button>
-          {/* Channels - only show if SHOW_CHANNELS is true */}
-          {SHOW_CHANNELS === true && (
+          {/* Channels - only show if enabled in settings */}
+          {(coworkSettings.showWhatsApp || coworkSettings.showTelegram || coworkSettings.showSlack || coworkSettings.showDiscord) && (
             <button
               className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-tertiary text-ink-600 hover:bg-accent hover:text-white transition-colors"
               onClick={() => openChannelSetup('whatsapp')}
@@ -205,8 +208,20 @@ export function Sidebar({
               </svg>
             </button>
           )}
-          {/* Email - only show if SHOW_EMAIL_OPTION is true */}
-          {SHOW_EMAIL_OPTION === true && (
+
+          {/* Settings */}
+          <button
+            className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-tertiary text-ink-600 hover:bg-accent hover:text-white transition-colors"
+            onClick={onOpenSettings}
+            title="Settings"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </button>
+          {/* Email - only show if enabled in settings */}
+          {coworkSettings.showEmailAutomation && (
             <button
               className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-tertiary text-ink-600 hover:bg-accent hover:text-white transition-colors relative"
               onClick={() => setShowEmailView(true)}
@@ -244,8 +259,8 @@ export function Sidebar({
         </div>
       )}
 
-      {/* Show email view only if SHOW_EMAIL_OPTION is true */}
-      {(showEmailView && SHOW_EMAIL_OPTION === true) ? (
+      {/* Show email view only if enabled in settings */}
+      {(showEmailView && coworkSettings.showEmailAutomation) ? (
         <SidebarEmailList
           emails={emails}
           selectedEmailId={selectedEmailId}
@@ -264,21 +279,34 @@ export function Sidebar({
         <>
           <div className={`flex flex-col gap-2 ${collapsed ? 'hidden' : ''}`}>
             <ActionButtons
-              lettaEnvOpen={lettaEnvOpen}
+              lettaEnvOpen={coworkSettings.showLettaEnv && lettaEnvOpen}
               onLettaEnvOpenChange={onLettaEnvOpenChange}
               onNewSession={onNewSession}
               onOpenSkillDownload={() => setSkillDownloadOpen(true)}
+              onOpenSettings={() => onOpenSettings?.()}
             />
-            {/* ChannelButtons - only show if SHOW_CHANNELS is true */}
-            {SHOW_CHANNELS === true && (
+            {/* ChannelButtons - only show if any channel is enabled */}
+            {(coworkSettings.showWhatsApp || coworkSettings.showTelegram || coworkSettings.showSlack || coworkSettings.showDiscord) && (
               <ChannelButtons
                 expanded={channelsExpanded}
                 onToggle={() => setChannelsExpanded(!channelsExpanded)}
                 onSelectChannel={openChannelSetup}
               />
             )}
-            {/* EmailSection - only show if SHOW_EMAIL_OPTION is true */}
-            {SHOW_EMAIL_OPTION === true && (
+
+            {/* Settings Button - always visible in expanded mode */}
+            <button
+              className="flex items-center justify-center rounded-lg border border-ink-900/10 bg-surface px-3 py-1.5 text-[11px] font-medium text-ink-700 hover:bg-surface-tertiary hover:border-ink-900/20 transition-colors gap-1.5"
+              onClick={onOpenSettings}
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              Settings
+            </button>
+            {/* EmailSection - only show if enabled in settings */}
+            {coworkSettings.showEmailAutomation && (
               <EmailSection
                 isConnected={isEmailConnected}
                 unreadCount={unreadCount}

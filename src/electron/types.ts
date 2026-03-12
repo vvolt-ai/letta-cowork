@@ -42,7 +42,7 @@ export type ServerEvent =
   | { type: "stream.user_prompt"; payload: { sessionId: string; prompt: string } }
   | { type: "session.status"; payload: { sessionId: string; status: SessionStatus; title?: string; cwd?: string; error?: string } }
   | { type: "session.list"; payload: { sessions: SessionInfo[] } }
-  | { type: "session.history"; payload: { sessionId: string; status: SessionStatus; messages: StreamMessage[] } }
+  | { type: "session.history"; payload: { sessionId: string; status: SessionStatus; messages: any[]; error?: string; hasMore?: boolean; before?: string } }
   | { type: "session.deleted"; payload: { sessionId: string } }
   | { type: "permission.request"; payload: { sessionId: string; toolUseId: string; toolName: string; input: unknown } }
   | { type: "runner.error"; payload: { sessionId?: string; message: string } }
@@ -67,5 +67,5 @@ export type ClientEvent =
   | { type: "session.stop"; payload: { sessionId: string } }
   | { type: "session.delete"; payload: { sessionId: string } }
   | { type: "session.list" }
-  | { type: "session.history"; payload: { sessionId: string } }
+  | { type: "session.history"; payload: { sessionId: string; limit?: number; before?: string } }
   | { type: "permission.response"; payload: { sessionId: string; toolUseId: string; result: CanUseToolResponse } };

@@ -4,7 +4,8 @@
     "files": [
         "dist-electron",
         "dist-react",
-        "node_modules/@letta-ai/letta-code/**/*"
+        "node_modules/@letta-ai/letta-code/**/*",
+        "node_modules/ws/**/*"
     ],
     "extraResources": [
         "dist-electron/preload.cjs"
@@ -12,7 +13,8 @@
     "asarUnpack": [
         "node_modules/@letta-ai/letta-code-sdk/**/*",
         "node_modules/@letta-ai/letta-code/**/*",
-        "node_modules/@letta-ai/letta-code/**/*"
+        "node_modules/@letta-ai/letta-code/**/*",
+        "node_modules/ws/**/*"
     ],
     "mac": {
         "target": "dmg"

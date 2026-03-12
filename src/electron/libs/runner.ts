@@ -5,8 +5,27 @@ import {
   type SDKMessage,
   type CanUseToolResponse,
 } from "@letta-ai/letta-code-sdk";
+import { Letta } from "@letta-ai/letta-client";
 import type { ServerEvent } from "../types.js";
 import type { PendingPermission } from "./runtime-state.js";
+
+// Create Letta client for direct server communication (for cancel operations)
+function createLettaClient(): Letta | null {
+  try {
+    const baseURL = (process.env.LETTA_BASE_URL || "https://api.letta.com").trim();
+    const apiKey = (process.env.LETTA_API_KEY || "").trim();
+    if (!apiKey) return null;
+    return new Letta({
+      baseURL,
+      apiKey: apiKey || null,
+    });
+  } catch {
+    return null;
+  }
+}
+
+// Track all active sessions for abort handling
+const activeSessions = new Map<string, LettaSession>();
 
 // Simplified session type for runner
 export type RunnerSession = {
@@ -27,11 +46,12 @@ export type RunnerOptions = {
 };
 
 export type RunnerHandle = {
-  abort: () => void;
+  abort: () => Promise<void>;
+  sessionId: string;
 };
 
 const DEFAULT_CWD = process.cwd();
-const DEBUG = process.env.DEBUG_RUNNER === "true";
+const DEBUG = true; // Enable debug logging for stop issue debugging
 
 // Simple logger for runner
 const log = (msg: string, data?: Record<string, unknown>) => {
@@ -53,6 +73,9 @@ const debug = (msg: string, data?: Record<string, unknown>) => {
 // Store active Letta sessions for abort handling
 let activeLettaSession: LettaSession | null = null;
 
+// Store the current abort controller for external access
+let currentAbortController: AbortController | null = null;
+
 // Store agentId for reuse across conversations
 let cachedAgentId: string | null = null;
 
@@ -60,9 +83,34 @@ export function getCurrentAgentId(): string | null {
   return activeLettaSession?.agentId ?? cachedAgentId;
 }
 
+// Abort all active sessions
+export async function abortAllSessions(): Promise<void> {
+  console.log("[runner] abortAllSessions called, active sessions:", activeSessions.size);
+  for (const [sessionId, lettaSession] of activeSessions) {
+    try {
+      console.log(`[runner] aborting session: ${sessionId}`);
+      await lettaSession.abort();
+    } catch (err) {
+      console.log(`[runner] error aborting session ${sessionId}:`, err);
+    }
+  }
+  activeSessions.clear();
+}
+
 export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
   const { prompt, session, resumeConversationId, preferredAgentId, onEvent, onSessionUpdate } = options;
   const targetAgentId = preferredAgentId?.trim() || undefined;
+  
+  // Create AbortController for stopping the session
+  const abortController = new AbortController();
+  const signal = abortController.signal;
+  
+  // Store abort controller globally for external access
+  currentAbortController = abortController;
+  
+  // Session key - will be set when session is created
+  let sessionKey: string = `pending-${Date.now()}`;
+  let lettaSessionRef: LettaSession | null = null;
   
   debug("runLetta called", {
     prompt: prompt.slice(0, 100) + (prompt.length > 100 ? "..." : ""),
@@ -77,6 +125,15 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
   let currentSessionId = session.id;
 
   const sendMessage = (message: SDKMessage) => {
+    // Filter out background process messages for display
+    const msgType = message.type;
+    if (msgType === "reasoning" || 
+        msgType === "tool_call" || 
+        msgType === "tool_result" ||
+        msgType === "init") {
+      return; // Skip these message types - they run in background
+    }
+    
     onEvent({
       type: "stream.message",
       payload: { sessionId: currentSessionId, message }
@@ -119,6 +176,7 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
         cwd: session.cwd ?? DEFAULT_CWD,
         permissionMode: "bypassPermissions" as const,
         canUseTool,
+        systemInfoReminder: false,
       };
 
       // Create or resume session
@@ -167,8 +225,11 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
       }
       debug("session created successfully");
 
-      // Store for abort handling
+      // Update sessionKey and store for abort handling
+      sessionKey = lettaSession.conversationId || `temp-${Date.now()}`;
+      activeSessions.set(sessionKey, lettaSession);
       activeLettaSession = lettaSession;
+      lettaSessionRef = lettaSession;
 
       // Send the prompt (triggers init internally)
       debug("calling send()");
@@ -196,21 +257,57 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
       // Stream messages
       debug("starting stream");
       let messageCount = 0;
-      for await (const message of lettaSession.stream()) {
-        messageCount++;
-        debug("received message", { type: message.type, count: messageCount });
-        
-        // Send message directly to frontend (no transform needed)
-        sendMessage(message);
+      
+      // Check abort signal before starting stream
+      if (signal.aborted) {
+        debug("session aborted before stream started");
+        onEvent({
+          type: "session.status",
+          payload: { sessionId: currentSessionId, status: "idle", title: currentSessionId }
+        });
+        activeSessions.delete(sessionKey);
+        return;
+      }
+      
+      try {
+        for await (const message of lettaSession.stream()) {
+          // Check if abort was requested
+          if (signal.aborted) {
+            debug("stream aborted, stopping message processing");
+            onEvent({
+              type: "session.status",
+              payload: { sessionId: currentSessionId, status: "idle", title: currentSessionId }
+            });
+            break;
+          }
+          
+          messageCount++;
+          debug("received message", { type: message.type, count: messageCount });
+          
+          // Send message directly to frontend (no transform needed)
+          sendMessage(message);
 
-        // Check for result to update session status
-        if (message.type === "result") {
-          const status = message.success ? "completed" : "error";
-          debug("result received", { success: message.success, status });
+          // Check for result to update session status
+          if (message.type === "result") {
+            const status = message.success ? "completed" : "error";
+            debug("result received", { success: message.success, status });
+            onEvent({
+              type: "session.status",
+              payload: { sessionId: currentSessionId, status, title: currentSessionId }
+            });
+          }
+        }
+      } catch (streamError) {
+        // Check if this was an abort error
+        if (signal.aborted || (streamError as Error).name === "AbortError") {
+          debug("stream aborted (caught error)");
           onEvent({
             type: "session.status",
-            payload: { sessionId: currentSessionId, status, title: currentSessionId }
+            payload: { sessionId: currentSessionId, status: "idle", title: currentSessionId }
           });
+        } else {
+          // Re-throw non-abort errors
+          throw streamError;
         }
       }
       debug("stream ended", { totalMessages: messageCount });
@@ -224,9 +321,14 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
         });
       }
     } catch (error) {
-      if ((error as Error).name === "AbortError") {
+      // Check if this was an abort
+      if (signal.aborted || (error as Error).name === "AbortError") {
         // Session was aborted, don't treat as error
-        debug("session aborted");
+        debug("session aborted (caught)");
+        onEvent({
+          type: "session.status",
+          payload: { sessionId: currentSessionId, status: "idle", title: currentSessionId }
+        });
         return;
       }
       
@@ -249,16 +351,122 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
         payload: { sessionId: currentSessionId, status: "error", title: currentSessionId, error: errorMessage }
       });
     } finally {
-      debug("runLetta finally block, clearing activeLettaSession");
-      activeLettaSession = null;
+      debug("runLetta finally block");
+      // Remove from active sessions
+      if (sessionKey) {
+        activeSessions.delete(sessionKey);
+      }
+      if (lettaSessionRef && activeLettaSession === lettaSessionRef) {
+        activeLettaSession = null;
+      }
+      currentAbortController = null;
     }
   })();
 
   return {
     abort: async () => {
-      if (activeLettaSession) {
-        await activeLettaSession.abort();
+      console.log("[runner] abort called for session:", sessionKey);
+      debug("abort called", { sessionKey, hasActiveSession: !!activeLettaSession, activeSessionsCount: activeSessions.size });
+      
+      // Get the agent ID and conversation ID if available for cancel operations
+      const agentId = lettaSessionRef?.agentId || activeLettaSession?.agentId || null;
+      const conversationId = lettaSessionRef?.conversationId || activeLettaSession?.conversationId || sessionKey;
+      
+      // First, call abort on the Letta session (SDK) - try multiple approaches
+      let sessionToAbort = activeSessions.get(sessionKey);
+      
+      // If not found by sessionKey, try to find any active session
+      if (!sessionToAbort) {
+        console.log("[runner] session not found by sessionKey, searching all sessions");
+        for (const [, s] of activeSessions) {
+          if (s) {
+            sessionToAbort = s;
+            break;
+          }
+        }
       }
-    }
+      
+      // Fallback to lettaSessionRef or activeLettaSession
+      if (!sessionToAbort) {
+        sessionToAbort = lettaSessionRef ?? activeLettaSession ?? undefined;
+      }
+      
+      if (sessionToAbort) {
+        try {
+          console.log("[runner] calling lettaSession.abort() (SDK)");
+          await sessionToAbort.abort();
+          console.log("[runner] lettaSession.abort() completed");
+        } catch (err) {
+          console.log("[runner] lettaSession.abort() error", err);
+          debug("lettaSession.abort() error", { error: String(err) });
+        }
+      } else {
+        console.log("[runner] no activeLettaSession to abort via SDK");
+      }
+      
+      // Also try to cancel via Letta client API directly (more reliable)
+      // Use the actual conversation ID from the session if available
+      const effectiveConversationId = conversationId && /^conv-/.test(conversationId) ? conversationId : sessionKey;
+      
+      // Try to cancel using conversation ID (if valid)
+      if (effectiveConversationId && /^conv-/.test(effectiveConversationId)) {
+        const lettaClient = createLettaClient();
+        if (lettaClient) {
+          try {
+            console.log("[runner] attempting to cancel via Letta client API with conversationId:", effectiveConversationId);
+            // Try to cancel using conversation ID
+            await lettaClient.conversations.cancel(effectiveConversationId);
+            console.log("[runner] Letta client cancel successful");
+          } catch (err) {
+            console.log("[runner] Letta client cancel error:", err);
+          }
+        } else {
+          console.log("[runner] no Letta client available");
+        }
+        
+        // Also try messages.cancel with agent ID if available
+        if (agentId) {
+          const lettaClient2 = createLettaClient();
+          if (lettaClient2) {
+            try {
+              console.log("[runner] attempting to cancel via Letta agent messages API with agentId:", agentId);
+              await lettaClient2.agents.messages.cancel(agentId);
+              console.log("[runner] Letta agent messages cancel successful");
+            } catch (err) {
+              console.log("[runner] Letta agent messages cancel error:", err);
+            }
+          }
+        }
+      } else {
+        console.log("[runner] no valid conversationId to cancel via Letta client API, trying agent-level stop");
+        
+        // Try to stop at agent level if we have an agent ID but no valid conversation ID
+        if (agentId) {
+          const lettaClient = createLettaClient();
+          if (lettaClient) {
+            try {
+              console.log("[runner] attempting to stop agent via Letta client API with agentId:", agentId);
+              // Try to get the agent and stop it
+              const agent = await lettaClient.agents.retrieve(agentId);
+              console.log("[runner] agent retrieved:", agent);
+            } catch (err) {
+              console.log("[runner] Letta client agent retrieve error:", err);
+            }
+          }
+        }
+      }
+      
+      // Also try currentAbortController for global abort
+      if (currentAbortController && !currentAbortController.signal.aborted) {
+        console.log("[runner] calling currentAbortController.abort()");
+        currentAbortController.abort();
+      }
+      
+      // Abort our AbortController to stop any streaming
+      console.log("[runner] calling abortController.abort()");
+      abortController.abort();
+      console.log("[runner] abortController.abort() called");
+    },
+    sessionId: sessionKey
   };
 }

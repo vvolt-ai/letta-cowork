@@ -5,19 +5,19 @@ import { useAppStore } from "./store/useAppStore";
 import type { ServerEvent } from "./types";
 import { Sidebar } from "./components/Sidebar";
 import { StartSessionModal } from "./components/StartSessionModal";
-import { usePromptActions } from "./components/PromptInput";
 import { useZohoEmail } from "./hooks/useZohoEmail";
 import { useEmailAsInput } from "./hooks/useEmailAsInput";
 import { useEmailSelection } from "./hooks/useEmailSelection";
 import { ChatMainPanel } from "./components/ChatMainPanel";
 import { GlobalErrorToast } from "./components/GlobalErrorToast";
 import { EmailDetailsDialog } from "./components/EmailDetailsDialog";
+import { CoworkSettingsDialog } from "./components/CoworkSettingsDialog";
 import { useSessionController } from "./hooks/useSessionController";
+import { useCoworkSettings } from "./hooks/useCoworkSettings";
 import { useAutoSyncUnread } from "./hooks/useAutoSyncUnread";
 import { useProcessEmailToAgent } from "./hooks/useProcessEmailToAgent";
 
 const SCROLL_THRESHOLD = 50;
-const PARTIAL_MESSAGE_RESET_DELAY_MS = 500;
 const SESSION_CHANGE_SCROLL_DELAY_MS = 100;
 const AUTO_SYNC_ENABLED_KEY = "auto_sync_unread_enabled";
 const AUTO_SYNC_AGENT_IDS_KEY = "auto_sync_selected_agent_ids";
@@ -28,24 +28,16 @@ type AutoSyncRoutingRule = {
   agentId: string;
 };
 
-type StreamEventMessage = {
-  type: "stream_event";
-  event: { type: string; delta?: { text?: string; reasoning?: string } };
-};
-
 function App() {
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const topSentinelRef = useRef<HTMLDivElement>(null);
-  const partialMessageRef = useRef("");
   const prevMessagesLengthRef = useRef(0);
   const scrollHeightBeforeLoadRef = useRef(0);
   const shouldRestoreScrollRef = useRef(false);
 
   // Local UI state
-  const [partialMessage, setPartialMessage] = useState("");
-  const [showPartialMessage, setShowPartialMessage] = useState(false);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [hasNewMessages, setHasNewMessages] = useState(false);
   const [lettaEnvOpen, setLettaEnvOpen] = useState(false);
@@ -83,6 +75,7 @@ function App() {
     }
   });
   const handleServerEvent = useAppStore((s) => s.handleServerEvent);
+  const { showCoworkSettings, setShowCoworkSettings, updateCoworkSettings } = useCoworkSettings();
 
   // Email APIs
   const {
@@ -147,46 +140,20 @@ function App() {
     setAutoSyncRoutingRules((prev) => prev.filter((_, idx) => idx !== index));
   }, []);
 
-  // Handle partial streaming tokens for assistant responses
-  const handlePartialMessages = useCallback((partialEvent: ServerEvent) => {
-    if (partialEvent.type !== "stream.message" || partialEvent.payload.message.type !== "stream_event") return;
+  // Store handlePartialMessages in a ref so it can be used in onEvent before useMessageWindow is called
+  const handlePartialMessagesRef = useRef<((event: ServerEvent) => void) | null>(null);
 
-    const message = partialEvent.payload.message as StreamEventMessage;
-    const event = message.event;
-
-    if (event.type === "content_block_start") {
-      partialMessageRef.current = "";
-      setPartialMessage(partialMessageRef.current);
-      setShowPartialMessage(true);
-    }
-
-    if (event.type === "content_block_delta" && event.delta) {
-      const text = event.delta.text || event.delta.reasoning || "";
-      partialMessageRef.current += text;
-      setPartialMessage(partialMessageRef.current);
-      if (shouldAutoScroll) {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-      } else {
-        setHasNewMessages(true);
-      }
-    }
-
-    if (event.type === "content_block_stop") {
-      setShowPartialMessage(false);
-      setTimeout(() => {
-        partialMessageRef.current = "";
-        setPartialMessage(partialMessageRef.current);
-      }, PARTIAL_MESSAGE_RESET_DELAY_MS);
-    }
-  }, [shouldAutoScroll]);
-
-  // Unified event handler from IPC stream
+  // Define onEvent early - it will read handlePartialMessages from ref
   const onEvent = useCallback((event: ServerEvent) => {
     handleServerEvent(event);
-    handlePartialMessages(event);
-  }, [handleServerEvent, handlePartialMessages]);
+    if (handlePartialMessagesRef.current) {
+      handlePartialMessagesRef.current(event);
+    }
+  }, [handleServerEvent]);
 
   const { connected, sendEvent } = useIPC(onEvent);
+  
+  // Session controller - provides activeSessionId and session management
   const {
     activeSessionId,
     showStartModal,
@@ -202,51 +169,50 @@ function App() {
     messages,
     permissionRequests,
     isRunning,
-    handleNewSession,
     handleDeleteSession,
     handlePermissionResult,
+    isLettaEnvConfigured,
+    handleStartSessionClick,
+    handleStartWithAgent,
   } = useSessionController({ connected, sendEvent });
-  const { handleStartFromModal } = usePromptActions(sendEvent);
+  
+  // Message window hook - must be called after useSessionController to get activeSessionId
+  const {
+    visibleMessages,
+    hasMoreHistory,
+    isLoadingHistory,
+    loadMoreMessages,
+    resetToLatest,
+    totalMessages,
+    partialMessage,
+    showPartialMessage,
+    handlePartialMessages,
+  } = useMessageWindow(
+    messages, 
+    permissionRequests, 
+    activeSessionId,
+    messagesEndRef,
+    shouldAutoScroll,
+    () => setHasNewMessages(true)
+  );
 
-  // Handle starting session with selected agent - save agent to env first, then start
-  const handleStartWithAgent = useCallback(async (agentId: string) => {
-    if (agentId) {
-      try {
-        // Get current env and update only the agent ID
-        const currentEnv = await window.electron.getLettaEnv();
-        await window.electron.updateLettaEnv({
-          ...currentEnv,
-          LETTA_AGENT_ID: agentId
-        });
-      } catch (err) {
-        console.error("Failed to update agent in env:", err);
-      }
-    }
-    // Then start the session
-    handleStartFromModal();
-  }, [handleStartFromModal]);
+  // Update the ref with handlePartialMessages after useMessageWindow is called
+  useEffect(() => {
+    handlePartialMessagesRef.current = handlePartialMessages;
+  }, [handlePartialMessages]);
 
-  const isLettaEnvConfigured = useCallback(async () => {
-    try {
-      const env = await window.electron.getLettaEnv();
-      const baseUrl = env.LETTA_BASE_URL.trim();
-      const apiKey = env.LETTA_API_KEY.trim();
-      const agentId = env.LETTA_AGENT_ID.trim();
-      return baseUrl.length > 0 && apiKey.length > 0 && agentId.length > 0;
-    } catch {
-      return false;
-    }
-  }, []);
+  // Wrapped handleStartSessionClick for Sidebar - calls with setLettaEnvOpen callback
+  const handleStartSessionClickWithEnv = useCallback(() => {
+    handleStartSessionClick(setLettaEnvOpen);
+  }, [handleStartSessionClick, setLettaEnvOpen]);
 
-  const handleStartSessionClick = useCallback(async () => {
-    const configured = await isLettaEnvConfigured();
-    if (!configured) {
-      setShowStartModal(false);
-      setLettaEnvOpen(true);
-      return;
-    }
-    handleNewSession();
-  }, [handleNewSession, isLettaEnvConfigured, setShowStartModal]);
+  // Wrapped handleStartWithAgent for StartSessionModal - just updates env and lets the modal close
+  // The session.start event is already sent by handleStartWithAgent
+  const handleStartWithAgentAndStart = useCallback(async (agentId: string) => {
+    await handleStartWithAgent(agentId);
+    // Don't call handleStartFromModal - handleStartWithAgent already sends session.start
+    setShowStartModal(false);
+  }, [handleStartWithAgent, setShowStartModal]);
 
   useEffect(() => {
     if (!showStartModal) return;
@@ -273,10 +239,18 @@ function App() {
     localStorage.setItem(AUTO_SYNC_ROUTING_RULES_KEY, JSON.stringify(autoSyncRoutingRules));
   }, [autoSyncRoutingRules]);
 
-  // Persist sidebar collapsed state
+  // Load cowork settings on mount
   useEffect(() => {
-    localStorage.setItem('sidebar_collapsed', String(sidebarCollapsed));
-  }, [sidebarCollapsed]);
+    const loadSettings = async () => {
+      try {
+        const settings = await window.electron.getCoworkSettings();
+        updateCoworkSettings(settings);
+      } catch (err) {
+        console.error("Failed to load cowork settings:", err);
+      }
+    };
+    loadSettings();
+  }, [updateCoworkSettings]);
 
   useAutoSyncUnread(
     sendEvent,
@@ -287,15 +261,6 @@ function App() {
     autoSyncEnabled,
     1
   );
-
-  const {
-    visibleMessages,
-    hasMoreHistory,
-    isLoadingHistory,
-    loadMoreMessages,
-    resetToLatest,
-    totalMessages,
-  } = useMessageWindow(messages, permissionRequests, activeSessionId);
 
   const handleScroll = useCallback(() => {
     const container = scrollContainerRef.current;
@@ -390,7 +355,7 @@ function App() {
     <div className="flex h-screen bg-surface">
       <Sidebar
         connected={connected}
-        onNewSession={handleStartSessionClick}
+        onNewSession={handleStartSessionClickWithEnv}
         lettaEnvOpen={lettaEnvOpen}
         onLettaEnvOpenChange={setLettaEnvOpen}
         onDeleteSession={handleDeleteSession}
@@ -418,6 +383,7 @@ function App() {
         processingEmailId={processingEmailId}
         successEmailId={successEmailId}
         onCollapsedChange={setSidebarCollapsed}
+        onOpenSettings={() => setShowCoworkSettings(true)}
       />
       <ChatMainPanel
         title={activeSession?.title}
@@ -449,12 +415,16 @@ function App() {
           pendingStart={pendingStart}
           onCwdChange={setCwd}
           onPromptChange={setPrompt}
-          onStart={handleStartWithAgent}
+          onStart={handleStartWithAgentAndStart}
           onClose={() => setShowStartModal(false)}
         />
       )}
 
       {globalError && <GlobalErrorToast message={globalError} onClose={() => setGlobalError(null)} />}
+      <CoworkSettingsDialog
+        open={showCoworkSettings}
+        onOpenChange={setShowCoworkSettings}
+      />
       <EmailDetailsDialog
         open={isEmailDetailsOpen}
         onOpenChange={setIsEmailDetailsOpen}

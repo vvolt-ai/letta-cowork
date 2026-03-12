@@ -1,9 +1,16 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
-import type { StreamMessage } from "../types";
-import type { PermissionRequest } from "../store/useAppStore";
+import type { StreamMessage, ServerEvent } from "../types";
+import { useAppStore, type PermissionRequest } from "../store/useAppStore";
 
-const VISIBLE_WINDOW_SIZE = 3;
-const LOAD_BATCH_SIZE = 3;
+const VISIBLE_WINDOW_SIZE = 20; // Show 20 messages initially
+const LOAD_BATCH_SIZE = 20; // Load 20 more on scroll
+const MAX_VISIBLE_MESSAGES = 100; // Maximum 100 messages at a time
+const PARTIAL_MESSAGE_RESET_DELAY_MS = 500;
+
+type StreamEventMessage = {
+  type: "stream_event";
+  event: { type: string; delta?: { text?: string; reasoning?: string } };
+};
 
 export interface IndexedMessage {
     originalIndex: number;
@@ -20,6 +27,10 @@ export interface MessageWindowState {
     totalMessages: number;
     totalUserInputs: number;
     visibleUserInputs: number;
+    // Partial message handling
+    partialMessage: string;
+    showPartialMessage: boolean;
+    handlePartialMessages: (event: ServerEvent) => void;
 }
 
 function getUserInputIndices(messages: StreamMessage[]): number[] {
@@ -50,11 +61,27 @@ function calculateVisibleStartIndex(
 export function useMessageWindow(
     messages: StreamMessage[],
     permissionRequests: PermissionRequest[],
-    sessionId: string | null
+    sessionId: string | null,
+    // Optional refs for scrolling - passed from parent
+    messagesEndRef?: React.RefObject<HTMLDivElement | null>,
+    shouldAutoScroll?: boolean,
+    onNewMessage?: () => void
 ): MessageWindowState {
     const [visibleUserInputCount, setVisibleUserInputCount] = useState(VISIBLE_WINDOW_SIZE);
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
     const prevSessionIdRef = useRef<string | null>(null);
+    
+    // Partial message state
+    const [partialMessage, setPartialMessage] = useState("");
+    const [showPartialMessage, setShowPartialMessage] = useState(false);
+    const partialMessageRef = useRef("");
+    
+    // Get session info from store for pagination
+    const sessionInfo = useAppStore((state) => sessionId ? state.sessions[sessionId] : null);
+    const hasMoreFromServer = sessionInfo?.hasMoreHistory ?? false;
+    const historyBefore = sessionInfo?.historyBefore;
+    const isLoadingFromServer = sessionInfo?.isLoadingHistory ?? false;
+    const fetchSessionHistory = useAppStore((state) => state.fetchSessionHistory);
 
     const userInputIndices = useMemo(() => getUserInputIndices(messages), [messages]);
     const totalUserInputs = userInputIndices.length;
@@ -75,7 +102,10 @@ export function useMessageWindow(
 
         const startIndex = calculateVisibleStartIndex(messages, visibleUserInputCount);
 
-        const visible: IndexedMessage[] = messages
+        // Filter out system messages (they are shown as part of agent init, not in chat)
+        const filteredMessages = messages.filter(() => true);
+
+        const visible: IndexedMessage[] = filteredMessages
             .slice(startIndex)
             .map((message, idx) => ({
                 originalIndex: startIndex + idx,
@@ -88,22 +118,63 @@ export function useMessageWindow(
     const hasMoreHistory = visibleStartIndex > 0;
 
     const loadMoreMessages = useCallback(() => {
+        // If we have more history from the server and not currently loading, fetch more
+        if (sessionId && hasMoreFromServer && !isLoadingFromServer && !isLoadingHistory) {
+            fetchSessionHistory(sessionId, LOAD_BATCH_SIZE, historyBefore);
+            setIsLoadingHistory(true);
+            return;
+        }
+        
+        // Otherwise, just show more messages from local buffer
         if (!hasMoreHistory || isLoadingHistory) return;
 
         setIsLoadingHistory(true);
 
         requestAnimationFrame(() => {
-            setVisibleUserInputCount((prev) => Math.min(prev + LOAD_BATCH_SIZE, totalUserInputs));
+            setVisibleUserInputCount((prev) => Math.min(prev + LOAD_BATCH_SIZE, totalUserInputs, MAX_VISIBLE_MESSAGES));
 
             setTimeout(() => {
                 setIsLoadingHistory(false);
             }, 100);
         });
-    }, [hasMoreHistory, isLoadingHistory, totalUserInputs]);
+    }, [hasMoreHistory, isLoadingHistory, totalUserInputs, sessionId, hasMoreFromServer, isLoadingFromServer, historyBefore, fetchSessionHistory]);
 
     const resetToLatest = useCallback(() => {
         setVisibleUserInputCount(VISIBLE_WINDOW_SIZE);
     }, []);
+
+    // Handle partial streaming tokens for assistant responses
+    const handlePartialMessages = useCallback((partialEvent: ServerEvent) => {
+        if (partialEvent.type !== "stream.message" || partialEvent.payload.message.type !== "stream_event") return;
+
+        const message = partialEvent.payload.message as StreamEventMessage;
+        const event = message.event;
+
+        if (event.type === "content_block_start") {
+            partialMessageRef.current = "";
+            setPartialMessage(partialMessageRef.current);
+            setShowPartialMessage(true);
+        }
+
+        if (event.type === "content_block_delta" && event.delta) {
+            const text = event.delta.text || event.delta.reasoning || "";
+            partialMessageRef.current += text;
+            setPartialMessage(partialMessageRef.current);
+            if (shouldAutoScroll && messagesEndRef?.current) {
+                messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+            } else if (onNewMessage) {
+                onNewMessage();
+            }
+        }
+
+        if (event.type === "content_block_stop") {
+            setShowPartialMessage(false);
+            setTimeout(() => {
+                partialMessageRef.current = "";
+                setPartialMessage(partialMessageRef.current);
+            }, PARTIAL_MESSAGE_RESET_DELAY_MS);
+        }
+    }, [shouldAutoScroll, messagesEndRef, onNewMessage]);
 
     const visibleUserInputs = useMemo(() => {
         return visibleMessages.filter((item) => item.message.type === "user_prompt").length;
@@ -119,5 +190,9 @@ export function useMessageWindow(
         totalMessages: messages.length,
         totalUserInputs,
         visibleUserInputs,
+        // Partial message handling
+        partialMessage,
+        showPartialMessage,
+        handlePartialMessages,
     };
 }

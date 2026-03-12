@@ -11,6 +11,7 @@ export function useSessionController({ connected, sendEvent }: UseSessionControl
   const sessions = useAppStore((s) => s.sessions);
   const activeSessionId = useAppStore((s) => s.activeSessionId);
   const setActiveSessionId = useAppStore((s) => s.setActiveSessionId);
+  const setIPCSendEvent = useAppStore((s) => s.setIPCSendEvent);
   const showStartModal = useAppStore((s) => s.showStartModal);
   const setShowStartModal = useAppStore((s) => s.setShowStartModal);
   const globalError = useAppStore((s) => s.globalError);
@@ -23,17 +24,21 @@ export function useSessionController({ connected, sendEvent }: UseSessionControl
   const cwd = useAppStore((s) => s.cwd);
   const setCwd = useAppStore((s) => s.setCwd);
   const pendingStart = useAppStore((s) => s.pendingStart);
+  const setPendingStart = useAppStore((s) => s.setPendingStart);
 
   const activeSession = activeSessionId ? sessions[activeSessionId] : undefined;
   const messages = activeSession?.messages ?? [];
   const permissionRequests = activeSession?.permissionRequests ?? [];
   const isRunning = activeSession?.status === "running";
 
+  // Initialize IPC send function and load sessions when connected
   useEffect(() => {
-    if (connected) {
+    if (connected && sendEvent) {
+      setIPCSendEvent(sendEvent);
+      // Load stored sessions from electron-store
       sendEvent({ type: "session.list" });
     }
-  }, [connected, sendEvent]);
+  }, [connected, sendEvent, setIPCSendEvent]);
 
   useEffect(() => {
     if (!activeSessionId || !connected) return;
@@ -59,6 +64,58 @@ export function useSessionController({ connected, sendEvent }: UseSessionControl
     resolvePermissionRequest(activeSessionId, toolUseId);
   }, [activeSessionId, resolvePermissionRequest, sendEvent]);
 
+  // Check if Letta environment is configured
+  const isLettaEnvConfigured = useCallback(async () => {
+    try {
+      const env = await window.electron.getLettaEnv();
+      const baseUrl = env.LETTA_BASE_URL.trim();
+      const apiKey = env.LETTA_API_KEY.trim();
+      const agentId = env.LETTA_AGENT_ID.trim();
+      return baseUrl.length > 0 && apiKey.length > 0 && agentId.length > 0;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  // Handle starting session - checks config first
+  const handleStartSessionClick = useCallback(async (setLettaEnvOpen?: (open: boolean) => void) => {
+    const configured = await isLettaEnvConfigured();
+    if (!configured) {
+      setShowStartModal(false);
+      if (setLettaEnvOpen) {
+        setLettaEnvOpen(true);
+      }
+      return;
+    }
+    handleNewSession();
+  }, [handleNewSession, isLettaEnvConfigured, setShowStartModal]);
+
+  // Handle starting session with a specific agent - updates env first, then starts
+  const handleStartWithAgent = useCallback(async (agentId: string) => {
+    if (agentId) {
+      try {
+        const currentEnv = await window.electron.getLettaEnv();
+        await window.electron.updateLettaEnv({
+          ...currentEnv,
+          LETTA_AGENT_ID: agentId
+        });
+      } catch (err) {
+        console.error("Failed to update agent in env:", err);
+      }
+    }
+    // Start session with the selected agent
+    setPendingStart(true);
+    sendEvent({
+      type: "session.start",
+      payload: { 
+        title: "", 
+        prompt, 
+        cwd: cwd.trim() || undefined, 
+        allowedTools: "Read,Edit,Bash" 
+      }
+    });
+  }, [cwd, prompt, sendEvent, setPendingStart]);
+
   return {
     sessions,
     activeSessionId,
@@ -78,5 +135,8 @@ export function useSessionController({ connected, sendEvent }: UseSessionControl
     handleNewSession,
     handleDeleteSession,
     handlePermissionResult,
+    isLettaEnvConfigured,
+    handleStartSessionClick,
+    handleStartWithAgent,
   };
 }

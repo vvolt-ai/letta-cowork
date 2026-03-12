@@ -17,6 +17,15 @@ type LettaEnvConfig = {
     LETTA_AGENT_ID: string;
 }
 
+type CoworkSettings = {
+    showWhatsApp: boolean;
+    showTelegram: boolean;
+    showSlack: boolean;
+    showDiscord: boolean;
+    showEmailAutomation: boolean;
+    showLettaEnv: boolean;
+}
+
 type LettaAgent = {
     id: string;
     name: string;
@@ -185,6 +194,9 @@ type EventPayloadMapping = {
     // download one or more skills from GitHub into the global skills directory
     // resolves to an object containing success flag and an array of directories
     "download-skill": { success: boolean; skillDirs: string[] };
+    "get-cowork-settings": CoworkSettings;
+    "update-cowork-settings": CoworkSettings;
+    "reset-cowork-settings": CoworkSettings;
 }
 
 interface Window {
@@ -231,5 +243,8 @@ interface Window {
         startSlackBridge: () => Promise<SlackBridgeStatus>;
         stopSlackBridge: () => Promise<SlackBridgeStatus>;
         downloadSkill: (handles: string | string[], skillName?: string, branch?: string) => Promise<{ success: boolean; skillDirs: string[] }>;
+        getCoworkSettings: () => Promise<CoworkSettings>;
+        updateCoworkSettings: (updates: Partial<CoworkSettings>) => Promise<CoworkSettings>;
+        resetCoworkSettings: () => Promise<CoworkSettings>;
     }
 }

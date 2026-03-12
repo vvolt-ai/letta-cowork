@@ -1,6 +1,6 @@
 import { BrowserWindow } from "electron";
 import type { ClientEvent, ServerEvent } from "./types.js";
-import { runLetta, type RunnerHandle } from "./libs/runner.js";
+import { runLetta, type RunnerHandle, getCurrentAgentId } from "./libs/runner.js";
 import type { PendingPermission } from "./libs/runtime-state.js";
 import {
   createRuntimeSession,
@@ -8,6 +8,13 @@ import {
   updateSession,
   deleteSession,
 } from "./libs/runtime-state.js";
+import { Letta } from "@letta-ai/letta-client";
+import {
+  getStoredSessions,
+  addStoredSession,
+  removeStoredSession,
+  type StoredSession,
+} from "./settings.js";
 
 const DEBUG = process.env.DEBUG_IPC === "true";
 
@@ -27,6 +34,21 @@ const debug = (msg: string, data?: Record<string, unknown>) => {
   if (!DEBUG) return;
   log(msg, data);
 };
+
+// Create Letta client helper
+function createLettaClient(): Letta | null {
+  try {
+    const baseURL = (process.env.LETTA_BASE_URL || "https://api.letta.com").trim();
+    const apiKey = (process.env.LETTA_API_KEY || "").trim();
+    if (!apiKey) return null;
+    return new Letta({
+      baseURL,
+      apiKey: apiKey || null,
+    });
+  } catch {
+    return null;
+  }
+}
 
 // Track active runner handles
 const runnerHandles = new Map<string, RunnerHandle>();
@@ -51,32 +73,153 @@ export async function handleClientEvent(event: ClientEvent) {
   debug(`handleClientEvent: ${event.type}`, { payload: 'payload' in event ? event.payload : undefined });
   
   if (event.type === "session.list") {
-    // TODO: Implement listing via letta-client once we track agentId
-    // For now, return empty - sessions are created via SDK
-    emit({ type: "session.list", payload: { sessions: [] } });
+    // Return stored sessions from electron-store
+    const storedSessions = getStoredSessions();
+    const sessions = storedSessions.map((session: StoredSession) => ({
+      id: session.id,
+      title: session.title,
+      status: getSession(session.id)?.status || "idle",
+      createdAt: session.createdAt,
+      updatedAt: session.updatedAt,
+    }));
+    emit({ type: "session.list", payload: { sessions } });
     return;
   }
 
   if (event.type === "session.history") {
-    // TODO: Implement history fetch via letta-client
-    // For now, return empty - messages stream in real-time
+    // Fetch messages from Letta API
     const conversationId = event.payload.sessionId;
+    const limit = event.payload.limit || 20;
+    const before = event.payload.before || undefined;
     const status = getSession(conversationId)?.status || "idle";
-    emit({
-      type: "session.history",
-      payload: { sessionId: conversationId, status, messages: [] },
-    });
+    
+    const lettaClient = createLettaClient();
+    if (!lettaClient) {
+      emit({
+        type: "session.history",
+        payload: { sessionId: conversationId, status, messages: [], error: "Letta client not available" },
+      });
+      return;
+    }
+    
+    try {
+      // Fetch messages from Letta
+      const response = await lettaClient.conversations.messages.list(conversationId, {
+        limit,
+        order: "asc", // Oldest first - so we can append newer messages at the end
+        order_by: 'created_at',
+        after: before
+      });
+      
+      // Get messages from the paginated response - cast to any to handle Letta's complex types
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const items: any[] = response.items;
+      
+      // Convert Letta messages to SDK message format for the UI
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const messages: any[] = [];
+
+      console.log(items);
+      for (const msg of items) {
+        // Map Letta message types to SDK message types
+        const msgType = msg.message_type || msg.type;
+        
+        // Filter out non-display message types
+        // system_message = agent's system prompt/instructions
+        // reasoning_message = internal agent thinking
+        // approval_request_message = requests to run tools (Skill/Bash)
+        // approval_response_message = approval responses
+        // tool_return_message = tool execution results
+        if (msgType === "system_message" || 
+            msgType === "reasoning_message" || 
+            msgType === "approval_request_message" ||
+            msgType === "approval_response_message" ||
+            msgType === "tool_return_message" ||
+            msgType === "tool_call" || 
+            msgType === "tool_use" ||
+            msgType === "tool_result") {
+          continue;
+        }
+
+        // Letta uses: user_message, agent_message, assistant_message, etc.
+        // SDK expects: init, assistant, reasoning, tool_call, tool_result
+        // Map accordingly
+        if (msgType === "user_message") {
+          const content = msg.content;
+          // Handle Letta's content format: array of {type: "text", text: string} blocks
+          // Get only the last message from the array
+          let promptText = "";
+          if (Array.isArray(content) && content.length > 0) {
+            const lastBlock = content[content.length - 1];
+            promptText = lastBlock?.text || "";
+          } else if (typeof content === "string") {
+            promptText = content;
+          } else if (content) {
+            promptText = JSON.stringify(content);
+          }
+          
+          messages.push({
+            id: msg.id || msg.message_id,
+            type: "user_prompt", // Use local user_prompt type
+            prompt: promptText,
+            createdAt: msg.created_at || Date.now(),
+          });
+          continue;
+        }
+        
+        // For agent/assistant messages - also get only the last message
+        const agentContent = msg.content;
+        let agentText = "";
+        if (Array.isArray(agentContent) && agentContent.length > 0) {
+          const lastBlock = agentContent[agentContent.length - 1];
+          agentText = lastBlock?.text || "";
+        } else if (typeof agentContent === "string") {
+          agentText = agentContent;
+        } else if (agentContent) {
+          agentText = JSON.stringify(agentContent);
+        }
+        
+        // Skip empty assistant messages
+        if (!agentText || agentText.trim() === "") {
+          continue;
+        }
+        
+        messages.push({
+          id: msg.id || msg.message_id,
+          type: "assistant",
+          role: "assistant",
+          content: agentText,
+          createdAt: msg.created_at || Date.now(),
+        });
+      }
+      
+      emit({
+        type: "session.history",
+        payload: { 
+          sessionId: conversationId, 
+          status, 
+          messages,
+          hasMore: items.length === limit,
+          before: items.length > 0 ? items[items.length - 1].id : undefined, // For asc order, this is the newest message
+        },
+      });
+    } catch (error) {
+      console.error("Failed to fetch session history:", error);
+      emit({
+        type: "session.history",
+        payload: { sessionId: conversationId, status, messages: [], error: String(error) },
+      });
+    }
     return;
   }
 
   if (event.type === "session.start") {
     debug("session.start: starting new session", { prompt: event.payload.prompt.slice(0, 50), cwd: event.payload.cwd });
     const pendingPermissions = new Map<string, PendingPermission>();
-
+    let conversationId: string | null = null;
+    let handle: RunnerHandle | null = null;
+    
     try {
-      let conversationId: string | null = null;
-      let handle: RunnerHandle | null = null;
-      
       debug("session.start: calling runLetta");
       handle = await runLetta({
         prompt: event.payload.prompt,
@@ -105,7 +248,22 @@ export async function handleClientEvent(event: ClientEvent) {
             
             createRuntimeSession(conversationId);
             updateSession(conversationId, { status: "running" });
-            if (handle) runnerHandles.set(conversationId, handle);
+            
+            // Store session in electron-store for persistence
+            const agentId = event.payload.agentId || process.env.LETTA_AGENT_ID || "";
+            addStoredSession({
+              id: conversationId,
+              agentId,
+              title: event.payload.title || conversationId,
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+            });
+            
+            // Store handle with the correct conversationId and remove pending key
+            if (handle) {
+              runnerHandles.delete("pending");
+              runnerHandles.set(conversationId, handle);
+            }
             
             // Emit session.status to unblock UI - use conversationId as title
             emit({
@@ -119,6 +277,12 @@ export async function handleClientEvent(event: ClientEvent) {
           }
         },
       });
+      
+      // Store handle immediately after runLetta returns with a temporary key
+      // This ensures we can abort even before onSessionUpdate is called
+      if (handle) {
+        runnerHandles.set("pending", handle);
+      }
       debug("session.start: runLetta returned handle");
     } catch (error) {
       log("session.start: ERROR", { error: String(error) });
@@ -227,12 +391,37 @@ export async function handleClientEvent(event: ClientEvent) {
 
   if (event.type === "session.stop") {
     const conversationId = event.payload.sessionId;
-    debug("session.stop: stopping session", { conversationId });
-    const handle = runnerHandles.get(conversationId);
+    debug("session.stop: stopping session", { conversationId, availableHandles: Array.from(runnerHandles.keys()) });
+    
+    // Try to get handle by conversationId first, then by "pending" key
+    let handle = runnerHandles.get(conversationId);
+    if (!handle) {
+      handle = runnerHandles.get("pending");
+    }
+    
+    // Also try to find by sessionId property (new approach)
+    if (!handle) {
+      for (const [key, h] of runnerHandles) {
+        if (h.sessionId === conversationId || h.sessionId === "pending") {
+          handle = h;
+          debug("session.stop: found handle by sessionId property", { key, sessionId: h.sessionId });
+          break;
+        }
+      }
+    }
+    
     if (handle) {
       debug("session.stop: aborting handle");
-      handle.abort();
+      // Await the abort to ensure it completes
+      await handle.abort();
       runnerHandles.delete(conversationId);
+      runnerHandles.delete("pending");
+      // Also delete by sessionId if different
+      for (const [key, h] of runnerHandles) {
+        if (h.sessionId === conversationId) {
+          runnerHandles.delete(key);
+        }
+      }
     } else {
       debug("session.stop: no handle found");
     }
@@ -251,10 +440,20 @@ export async function handleClientEvent(event: ClientEvent) {
       handle.abort();
       runnerHandles.delete(conversationId);
     }
-    deleteSession(conversationId);
     
-    // Note: Letta client may not have a delete method for conversations
-    // The conversation will remain in Letta but be removed from our UI
+    // Also delete from Letta server
+    const lettaClient = createLettaClient();
+    if (lettaClient && conversationId) {
+      try {
+        await lettaClient.conversations.delete(conversationId);
+      } catch (err) {
+        console.error("Failed to delete conversation from Letta:", err);
+      }
+    }
+    
+    // Remove from electron-store
+    deleteSession(conversationId);
+    removeStoredSession(conversationId);
     
     emit({ type: "session.deleted", payload: { sessionId: conversationId } });
     return;
@@ -272,9 +471,11 @@ export async function handleClientEvent(event: ClientEvent) {
   }
 }
 
-export function cleanupAllSessions(): void {
+export async function cleanupAllSessions(): Promise<void> {
+  const abortPromises: Promise<void>[] = [];
   for (const [, handle] of runnerHandles) {
-    handle.abort();
+    abortPromises.push(handle.abort());
   }
+  await Promise.all(abortPromises);
   runnerHandles.clear();
 }

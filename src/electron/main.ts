@@ -3,6 +3,7 @@ import { execSync } from "child_process";
 import path, { join } from "path";
 import { ipcMainHandle, isDev, DEV_PORT } from "./util.js";
 import { getLettaEnvConfig, initializeLettaEnv, type LettaEnvConfig, updateLettaEnvConfig } from "./envManager.js";
+import { getCoworkSettings, updateCoworkSettings, resetCoworkSettings, type CoworkSettings } from "./settings.js";
 
 initializeLettaEnv();
 
@@ -85,13 +86,13 @@ function killViteDevServer(): void {
     }
 }
 
-function cleanup(): void {
+async function cleanup(): Promise<void> {
     if (cleanupComplete) return;
     cleanupComplete = true;
 
     globalShortcut.unregisterAll();
     stopPolling();
-    cleanupAllSessions();
+    await cleanupAllSessions();
     killViteDevServer();
 }
 
@@ -300,6 +301,19 @@ app.on("ready", () => {
     ipcMain.handle("download-skill", async (event, handles: string | string[], skillName?: string, branch?: string) => {
         const dirs = await downloadSkillsFromGitHub(handles, skillName, branch);
         return { success: true, skillDirs: dirs };
+    });
+
+    // Cowork settings handlers
+    ipcMain.handle("get-cowork-settings", (): CoworkSettings => {
+        return getCoworkSettings();
+    });
+
+    ipcMain.handle("update-cowork-settings", (_, updates: Partial<CoworkSettings>): CoworkSettings => {
+        return updateCoworkSettings(updates);
+    });
+
+    ipcMain.handle("reset-cowork-settings", (): CoworkSettings => {
+        return resetCoworkSettings();
     });
 
     

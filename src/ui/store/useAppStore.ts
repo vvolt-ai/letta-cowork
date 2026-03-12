@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ServerEvent, SessionStatus, StreamMessage } from "../types";
+import type { ServerEvent, ClientEvent, SessionStatus, StreamMessage } from "../types";
 
 export type PermissionRequest = {
   toolUseId: string;
@@ -18,6 +18,18 @@ export type SessionView = {
   createdAt?: number;
   updatedAt?: number;
   hydrated: boolean;
+  hasMoreHistory?: boolean;
+  historyBefore?: string;
+  isLoadingHistory?: boolean;
+};
+
+export type CoworkSettings = {
+  showWhatsApp: boolean;
+  showTelegram: boolean;
+  showSlack: boolean;
+  showDiscord: boolean;
+  showEmailAutomation: boolean;
+  showLettaEnv: boolean;
 };
 
 interface AppState {
@@ -31,16 +43,22 @@ interface AppState {
   sessionsLoaded: boolean;
   showStartModal: boolean;
   historyRequested: Set<string>;
+  coworkSettings: CoworkSettings;
+  // IPC function reference
+  ipcSendEvent: ((event: ClientEvent) => void) | null;
 
+  setIPCSendEvent: (sendEvent: (event: ClientEvent) => void) => void;
   setPrompt: (prompt: string) => void;
   setCwd: (cwd: string) => void;
   setPendingStart: (pending: boolean) => void;
   setGlobalError: (error: string | null) => void;
   setShowStartModal: (show: boolean) => void;
-  setActiveSessionId: (id: string | null) => void;
+  setActiveSessionId: (id: string | null, fetchHistory?: boolean) => void;
+  fetchSessionHistory: (sessionId: string, limit?: number, before?: string) => void;
   setEmailSessionId: (id: string) => void;
   markHistoryRequested: (sessionId: string) => void;
   resolvePermissionRequest: (sessionId: string, toolUseId: string) => void;
+  setCoworkSettings: (settings: CoworkSettings) => void;
   handleServerEvent: (event: ServerEvent) => void;
 }
 
@@ -59,13 +77,84 @@ export const useAppStore = create<AppState>((set, get) => ({
   sessionsLoaded: false,
   showStartModal: false,
   historyRequested: new Set(),
+  coworkSettings: {
+    showWhatsApp: false,
+    showTelegram: false,
+    showSlack: false,
+    showDiscord: false,
+    showEmailAutomation: false,
+    showLettaEnv: false,
+  },
+  ipcSendEvent: null,
+
+  setIPCSendEvent: (sendEvent) => set({ ipcSendEvent: sendEvent }),
+
+  fetchSessionHistory: (sessionId, limit = 20, before) => {
+    const state = get();
+    const session = state.sessions[sessionId];
+    if (!session || session.isLoadingHistory) return;
+    
+    // Update loading state
+    set((state) => ({
+      sessions: {
+        ...state.sessions,
+        [sessionId]: { ...session, isLoadingHistory: true }
+      }
+    }));
+    
+    // Send IPC event to fetch history
+    if (state.ipcSendEvent) {
+      state.ipcSendEvent({
+        type: "session.history",
+        payload: { sessionId, limit, before }
+      });
+    }
+  },
 
   setPrompt: (prompt) => set({ prompt }),
   setCwd: (cwd) => set({ cwd }),
   setPendingStart: (pendingStart) => set({ pendingStart }),
   setGlobalError: (globalError) => set({ globalError }),
   setShowStartModal: (showStartModal) => set({ showStartModal }),
-  setActiveSessionId: (id) => set({ activeSessionId: id }),
+  setActiveSessionId: (id, fetchHistory = true) => {
+    set((state) => {
+      // Clear messages from other sessions when switching to improve performance
+      const updatedSessions: Record<string, SessionView> = {};
+      
+      for (const [sessionId, sess] of Object.entries(state.sessions)) {
+        if (sessionId === id) {
+          updatedSessions[sessionId] = sess;
+        } else {
+          // Keep session but clear messages to free memory
+          updatedSessions[sessionId] = {
+            ...sess,
+            messages: [],
+            hydrated: false,
+          };
+        }
+      }
+      
+      return { activeSessionId: id, sessions: updatedSessions };
+    });
+    
+    // Always try to fetch history - the useEffect will also try, but this ensures it happens
+    // We don't clear historyRequested here anymore to avoid race conditions
+    if (fetchHistory && id) {
+      // Use setTimeout to ensure state is updated first
+      setTimeout(() => {
+        const state = get();
+        const session = state.sessions[id];
+        // Only fetch if session exists, not hydrated, and not currently loading
+        if (session && !session.hydrated && !session.isLoadingHistory && state.ipcSendEvent) {
+          state.ipcSendEvent({
+            type: "session.history",
+            payload: { sessionId: id, limit: 20 }
+          });
+        }
+      }, 0);
+    }
+  },
+
   setEmailSessionId: (id: string) => set({ emailSessionId: id }),
 
   markHistoryRequested: (sessionId) => {
@@ -74,6 +163,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       next.add(sessionId);
       return { historyRequested: next };
     });
+  },
+
+  setCoworkSettings: (settings) => {
+    set({ coworkSettings: settings });
   },
 
   resolvePermissionRequest: (sessionId, toolUseId) => {
@@ -141,15 +234,26 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       case "session.history": {
-        const { sessionId, messages: historyMessages, status } = event.payload;
+        const { sessionId, messages: historyMessages, status, hasMore, before } = event.payload as any;
         set((state) => {
           const existing = state.sessions[sessionId] ?? createSession(sessionId);
-          // Merge: history messages first, then any existing messages (like user_prompt added during init)
-          const mergedMessages = [...historyMessages, ...existing.messages];
+          // With order: "asc" (oldest first), we append newer messages at the end
+          // For pagination (loading more), we append new messages to existing ones
+          const mergedMessages = before 
+            ? [...existing.messages, ...historyMessages] // Loading more (append at end)
+            : [...existing.messages, ...historyMessages]; // Initial load
           return {
             sessions: {
               ...state.sessions,
-              [sessionId]: { ...existing, status, messages: mergedMessages, hydrated: true }
+              [sessionId]: { 
+                ...existing, 
+                status, 
+                messages: mergedMessages, 
+                hydrated: true,
+                hasMoreHistory: hasMore,
+                historyBefore: before,
+                isLoadingHistory: false,
+              }
             }
           };
         });
