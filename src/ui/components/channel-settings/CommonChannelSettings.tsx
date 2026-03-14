@@ -31,7 +31,7 @@ export function CommonChannelSettings({
         />
       </label>
       <label className="text-xs text-ink-700">
-        Default Letta Agent ID
+        Default Agent ID
         <AgentDropdown
           value={config.defaultAgentId}
           onChange={(agentId) => onChange("defaultAgentId", agentId)}

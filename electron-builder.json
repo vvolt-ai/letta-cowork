@@ -1,6 +1,6 @@
 {
-    "appId": "com.letta.cowork",
-    "productName": "Letta Cowork",
+    "appId": "com.vera.cowork",
+    "productName": "Vera Cowork",
     "files": [
         "dist-electron",
         "dist-react",
@@ -17,15 +17,18 @@
         "node_modules/ws/**/*"
     ],
     "mac": {
-        "target": "dmg"
+        "target": "dmg",
+        "icon": "assets/vera-icon.png"
     },
     "linux": {
         "target": "AppImage",
-        "category": "Utility"
+        "category": "Utility",
+        "icon": "assets/vera-icon.png"
     },
     "win": {
         "target": [
             "portable"
-        ]
+        ],
+        "icon": "assets/vera-icon.png"
     }
 }

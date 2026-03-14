@@ -64,6 +64,10 @@ electron.contextBridge.exposeInMainWorld("electron", {
         electron.ipcRenderer.invoke("get-letta-env"),
     listLettaAgents: () =>
         electron.ipcRenderer.invoke("list-letta-agents"),
+    listLettaModels: () =>
+        electron.ipcRenderer.invoke("list-letta-models"),
+    getLettaAgent: (agentId: string) =>
+        electron.ipcRenderer.invoke("get-letta-agent", agentId),
     updateLettaEnv: (values: { LETTA_API_KEY: string; LETTA_BASE_URL: string; LETTA_AGENT_ID: string }) =>
         electron.ipcRenderer.invoke("update-letta-env", values),
     isAdmin: () =>

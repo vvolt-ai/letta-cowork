@@ -33,7 +33,7 @@ export function WhatsAppSettings({
   return (
     <div className="mt-3 grid gap-2">
       <label className="text-xs text-ink-700">
-        Default Letta Agent ID
+        Default Agent ID
         <AgentDropdown
           value={config.defaultAgentId}
           onChange={(agentId) => onConfigChange({ ...config, defaultAgentId: agentId })}

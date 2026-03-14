@@ -38,9 +38,10 @@ interface ChannelSetupDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialChannel: ChannelType;
+  enabledChannels: ChannelType[];
 }
 
-export function ChannelSetupDialog({ open, onOpenChange, initialChannel }: ChannelSetupDialogProps) {
+export function ChannelSetupDialog({ open, onOpenChange, initialChannel, enabledChannels }: ChannelSetupDialogProps) {
   const [activeChannel, setActiveChannel] = useState<ChannelType>(initialChannel);
   const [configs, setConfigs] = useState<ChannelConfigMap>(() => createDefaultMap());
   const [whatsappConfig, setWhatsAppConfig] = useState<WhatsAppConfig>(() => defaultWhatsAppConfig());
@@ -117,10 +118,24 @@ export function ChannelSetupDialog({ open, onOpenChange, initialChannel }: Chann
 
   useEffect(() => {
     if (!open) return;
-    setActiveChannel(initialChannel);
     setSaveMessage("");
     void loadBridgeConfig();
-  }, [initialChannel, loadBridgeConfig, open]);
+  }, [loadBridgeConfig, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (enabledChannels.length === 0) return;
+    const preferred = enabledChannels.includes(initialChannel) ? initialChannel : enabledChannels[0];
+    setActiveChannel(preferred);
+  }, [enabledChannels, initialChannel, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (enabledChannels.length === 0) return;
+    if (!enabledChannels.includes(activeChannel)) {
+      setActiveChannel(enabledChannels[0]);
+    }
+  }, [activeChannel, enabledChannels, open]);
 
   useEffect(() => {
     if (!open || activeChannel !== "whatsapp") return;
@@ -166,6 +181,8 @@ export function ChannelSetupDialog({ open, onOpenChange, initialChannel }: Chann
     }, 2000);
     return () => clearInterval(intervalId);
   }, [activeChannel, open]);
+
+  const hasEnabledChannels = enabledChannels.length > 0;
 
   const currentConfig = useMemo(() => configs[activeChannel], [activeChannel, configs]);
 
@@ -248,6 +265,31 @@ export function ChannelSetupDialog({ open, onOpenChange, initialChannel }: Chann
     }
   };
 
+  if (!hasEnabledChannels) {
+    return (
+      <Dialog.Root open={open} onOpenChange={onOpenChange}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 bg-ink-900/40 backdrop-blur-sm" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 w-[94vw] max-w-xl -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-surface p-5 shadow-xl">
+            <div className="flex items-start justify-between gap-4">
+              <Dialog.Title className="text-lg font-semibold text-ink-800">Channel Setup</Dialog.Title>
+              <Dialog.Close asChild>
+                <button className="rounded-full p-1 text-ink-500 hover:bg-ink-900/10" aria-label="Close dialog">
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M6 6l12 12M18 6l-12 12" />
+                  </svg>
+                </button>
+              </Dialog.Close>
+            </div>
+            <div className="mt-6 rounded-xl border border-ink-900/10 bg-white/80 p-4 text-sm text-ink-700">
+              Enable a channel in Cowork Settings to configure integrations.
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+    );
+  }
+
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
@@ -265,7 +307,7 @@ export function ChannelSetupDialog({ open, onOpenChange, initialChannel }: Chann
           </div>
 
           <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {(Object.keys(CHANNEL_LABELS) as ChannelType[]).map((channel) => (
+            {enabledChannels.map((channel) => (
               <button
                 key={channel}
                 className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${

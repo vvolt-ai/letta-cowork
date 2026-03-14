@@ -33,6 +33,17 @@ type LettaAgent = {
     createdAt?: string | null;
     metadata?: Record<string, unknown> | null;
     tags?: string[];
+    model?: string | null;
+    models?: string[] | null;
+    availableModels?: string[] | null;
+    inferenceConfig?: Record<string, unknown> | null;
+}
+
+type LettaModel = {
+    name: string;
+    display_name?: string | null;
+    provider_type: string;
+    model_type?: string;
 }
 
 type WhatsAppBridgeConfig = {
@@ -180,7 +191,9 @@ type EventPayloadMapping = {
     "update-messages": any;
     "search-emails": any;
     "get-letta-env": LettaEnvConfig;
+    "get-letta-agent": LettaAgent | null;
     "list-letta-agents": LettaAgent[];
+    "list-letta-models": LettaModel[];
     "update-letta-env": { success: boolean };
     "is-admin": boolean;
     "get-channel-bridges-config": ChannelBridgeConfig;
@@ -226,6 +239,8 @@ interface Window {
         searchEmails: (accountId: string, params: any) => Promise<any>;
         getLettaEnv: () => Promise<LettaEnvConfig>;
         listLettaAgents: () => Promise<LettaAgent[]>;
+        listLettaModels: () => Promise<LettaModel[]>;
+        getLettaAgent: (agentId: string) => Promise<LettaAgent | null>;
         updateLettaEnv: (values: LettaEnvConfig) => Promise<{ success: boolean }>;
         isAdmin: () => Promise<boolean>;
         getChannelBridgesConfig: () => Promise<ChannelBridgeConfig>;

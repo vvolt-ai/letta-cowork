@@ -73,7 +73,7 @@ export function DecisionPanel({
   if (request.toolName === "AskUserQuestion" && questions.length > 0) {
     return (
       <div className="rounded-2xl border border-accent/20 bg-accent-subtle p-5">
-        <div className="text-xs font-semibold text-accent">Question from Letta</div>
+        <div className="text-xs font-semibold text-accent">Question from Vera</div>
         {questions.map((q, qIndex) => (
           <div key={qIndex} className="mt-4">
             <p className="text-sm text-ink-700">{q.question}</p>
@@ -153,7 +153,7 @@ export function DecisionPanel({
     <div className="rounded-2xl border border-accent/20 bg-accent-subtle p-5">
       <div className="text-xs font-semibold text-accent">Permission Request</div>
       <p className="mt-2 text-sm text-ink-700">
-        Letta wants to use: <span className="font-medium">{request.toolName}</span>
+        Vera wants to use: <span className="font-medium">{request.toolName}</span>
       </p>
       <div className="mt-3 rounded-xl bg-surface-tertiary p-3">
         <pre className="text-xs text-ink-600 font-mono whitespace-pre-wrap break-words max-h-40 overflow-auto">

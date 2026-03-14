@@ -17,6 +17,7 @@ export type SessionStatus = "idle" | "running" | "completed" | "error";
 export type RuntimeSession = {
   conversationId: string;
   agentId?: string;
+  title?: string;
   status: SessionStatus;
   pendingPermissions: Map<string, PendingPermission>;
   abortController?: AbortController;

@@ -62,7 +62,7 @@ export function ChangeEnv({ className, open: controlledOpen, onOpenChange }: Cha
       setSuccess("Saved. New sessions will use these values.");
       setOpen(false);
     } catch {
-      setError("Failed to save Letta configuration.");
+      setError("Failed to save Vera configuration.");
     } finally {
       setSaving(false);
     }
@@ -81,7 +81,7 @@ export function ChangeEnv({ className, open: controlledOpen, onOpenChange }: Cha
         setForm(values);
       })
       .catch(() => {
-        setError("Failed to load Letta configuration.");
+        setError("Failed to load Vera configuration.");
       })
       .finally(() => {
         setLoading(false);
@@ -95,7 +95,7 @@ export function ChangeEnv({ className, open: controlledOpen, onOpenChange }: Cha
           className={className ?? "rounded-lg border border-ink-900/10 bg-surface px-2.5 py-1 text-[11px] font-medium text-ink-700 hover:bg-surface-tertiary hover:border-ink-900/20 transition-colors"}
           onClick={openDialog}
         >
-          Letta Env
+          Vera Environment
         </button>
       )}
 
@@ -113,7 +113,7 @@ export function ChangeEnv({ className, open: controlledOpen, onOpenChange }: Cha
           <Dialog.Overlay className="fixed inset-0 bg-ink-900/40 backdrop-blur-sm" />
           <Dialog.Content className="fixed left-1/2 top-1/2 w-[92vw] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-surface p-6 shadow-xl">
             <div className="flex items-start justify-between gap-4">
-              <Dialog.Title className="text-lg font-semibold text-ink-800">Letta Environment</Dialog.Title>
+              <Dialog.Title className="text-lg font-semibold text-ink-800">Vera Environment</Dialog.Title>
               <Dialog.Close asChild>
                 <button className="rounded-full p-1 text-ink-500 hover:bg-ink-900/10" aria-label="Close dialog">
                   <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">

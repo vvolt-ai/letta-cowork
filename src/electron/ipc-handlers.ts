@@ -1,5 +1,5 @@
 import { BrowserWindow } from "electron";
-import type { ClientEvent, ServerEvent } from "./types.js";
+import type { ClientEvent, ServerEvent, StreamMessage } from "./types.js";
 import { runLetta, type RunnerHandle, getCurrentAgentId } from "./libs/runner.js";
 import type { PendingPermission } from "./libs/runtime-state.js";
 import {
@@ -9,10 +9,12 @@ import {
   deleteSession,
 } from "./libs/runtime-state.js";
 import { Letta } from "@letta-ai/letta-client";
+import { normaliseHistoryBatch, type LettaMessage } from "./libs/conversation.js";
 import {
   getStoredSessions,
   addStoredSession,
   removeStoredSession,
+  updateStoredSession,
   type StoredSession,
 } from "./settings.js";
 import { getLettaAgent } from "./lettaAgents.js";
@@ -54,6 +56,66 @@ function createLettaClient(): Letta | null {
 // Track active runner handles
 const runnerHandles = new Map<string, RunnerHandle>();
 
+function extractMessageText(content: unknown): string {
+  if (!content) return "";
+  if (typeof content === "string") return content;
+  if (Array.isArray(content) && content.length > 0) {
+    const lastBlock = content[content.length - 1] as any;
+    if (lastBlock && typeof lastBlock.text === "string") {
+      return lastBlock.text;
+    }
+    if (typeof lastBlock === "string") {
+      return lastBlock;
+    }
+    try {
+      return JSON.stringify(lastBlock);
+    } catch {
+      return String(lastBlock ?? "");
+    }
+  }
+  if (typeof content === "object") {
+    try {
+      return JSON.stringify(content);
+    } catch {
+      return String(content ?? "");
+    }
+  }
+  return String(content ?? "");
+}
+
+function mapLettaMessagesToStreamMessages(rawMessages: LettaMessage[]): StreamMessage[] {
+  const sorted = [...rawMessages].sort((a, b) => (a.created_at ?? 0) - (b.created_at ?? 0));
+  const messages: StreamMessage[] = [];
+
+  for (const msg of sorted) {
+    const msgType = (msg.message_type || msg.type || "").toLowerCase();
+
+    if (msgType === "user_message") {
+      const promptText = extractMessageText(msg.content).trim();
+      if (!promptText) continue;
+      messages.push({
+        type: "user_prompt",
+        prompt: promptText,
+        attachments: undefined,
+        content: undefined,
+      });
+      continue;
+    }
+
+    if (msgType === "assistant_message") {
+      const agentText = extractMessageText(msg.content).trim();
+      if (!agentText) continue;
+      messages.push({
+        type: "assistant",
+        content: agentText,
+      } as StreamMessage);
+      continue;
+    }
+  }
+
+  return messages;
+}
+
 function broadcast(event: ServerEvent) {
   const payload = JSON.stringify(event);
   const windows = BrowserWindow.getAllWindows();
@@ -80,6 +142,7 @@ export async function handleClientEvent(event: ClientEvent) {
       id: session.id,
       title: session.title,
       agentName: session.agentName,
+      agentId: session.agentId,
       status: getSession(session.id)?.status || "idle",
       createdAt: session.createdAt,
       updatedAt: session.updatedAt,
@@ -89,13 +152,17 @@ export async function handleClientEvent(event: ClientEvent) {
   }
 
   if (event.type === "session.history") {
-    // Fetch messages from Letta API
     const conversationId = event.payload.sessionId;
     const limit = event.payload.limit || 20;
-    const before = event.payload.before || undefined;
+    const requestedBefore = event.payload.before || undefined;
     const status = getSession(conversationId)?.status || "idle";
     
     const lettaClient = createLettaClient();
+    debug("session.history: request", {
+      conversationId,
+      limit,
+      requestedBefore,
+    });
     if (!lettaClient) {
       emit({
         type: "session.history",
@@ -105,90 +172,33 @@ export async function handleClientEvent(event: ClientEvent) {
     }
     
     try {
-      // Fetch messages from Letta
-      const response = await lettaClient.conversations.messages.list(conversationId, {
-        limit,
-        order: "asc", // Oldest first - so we can append newer messages at the end
-        order_by: 'created_at',
-        after: before
-      });
-      
-      // Get messages from the paginated response - cast to any to handle Letta's complex types
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const items: any[] = response.items;
-      
-      // Convert Letta messages to SDK message format for the UI
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const messages: any[] = [];
-      console.log("msg",items)
-      for (const msg of items) {
-        // Map Letta message types to SDK message types
-        const msgType = msg.message_type || msg.type;
-        
-        // Letta uses: user_message, agent_message, assistant_message, etc.
-        // SDK expects: init, assistant, reasoning, tool_call, tool_result
-        // Map accordingly
-        if (msgType === "user_message") {
-          const content = msg.content;
-          // Handle Letta's content format: array of {type: "text", text: string} blocks
-          // Get only the last message from the array
-          let promptText = "";
-          if (Array.isArray(content) && content.length > 0) {
-            const lastBlock = content[content.length - 1];
-            promptText = lastBlock?.text || "";
-          } else if (typeof content === "string") {
-            promptText = content;
-          } else if (content) {
-            promptText = JSON.stringify(content);
-          }
-          
-          messages.push({
-            id: msg.id || msg.message_id,
-            type: "user_prompt", // Use local user_prompt type
-            prompt: promptText,
-            createdAt: msg.created_at || Date.now(),
-          });
-          continue;
-        }
+      // Fetch the entire conversation history so the renderer can paginate locally.
+      const response = await lettaClient.conversations.messages.list(conversationId);
+      const items = (Array.isArray(response.items) ? response.items : []) as unknown as LettaMessage[];
 
-        if(['system_message', 'reasoning', 'tool_call', 'tool_result'].includes(msgType)){
-          continue;
-        }
-        
-        // For agent/assistant messages - also get only the last message
-        const agentContent = msg.content;
-        let agentText = "";
-        if (Array.isArray(agentContent) && agentContent.length > 0) {
-          const lastBlock = agentContent[agentContent.length - 1];
-          agentText = lastBlock?.text || "";
-        } else if (typeof agentContent === "string") {
-          agentText = agentContent;
-        } else if (agentContent) {
-          agentText = JSON.stringify(agentContent);
-        }
-        
-        // Skip empty assistant messages
-        if (!agentText || agentText.trim() === "") {
-          continue;
-        }
-        
-        messages.push({
-          id: msg.id || msg.message_id,
-          type: "assistant",
-          role: "assistant",
-          content: agentText,
-          createdAt: msg.created_at || Date.now(),
-        });
-      }
-      
+      const normalised = normaliseHistoryBatch(items, items.length || limit);
+      const messages = normalised.messages.filter((msg) => (msg as any)?.type !== "reasoning");
+      const hasMore = false;
+      const nextBefore = undefined;
+
+      debug("session.history: response", {
+        conversationId,
+        requestedBefore,
+        returned: messages.length,
+        filteredTotal: normalised.allFiltered.length,
+        hasMore,
+        nextBefore,
+      });
+
       emit({
         type: "session.history",
-        payload: { 
-          sessionId: conversationId, 
-          status, 
+        payload: {
+          sessionId: conversationId,
+          status,
           messages,
-          hasMore: items.length === limit,
-          before: items.length > 0 ? items[items.length - 1].id : undefined, // For asc order, this is the newest message
+          hasMore,
+          nextBefore,
+          requestedBefore,
         },
       });
     } catch (error) {
@@ -202,7 +212,13 @@ export async function handleClientEvent(event: ClientEvent) {
   }
 
   if (event.type === "session.start") {
-    debug("session.start: starting new session", { prompt: event.payload.prompt.slice(0, 50), cwd: event.payload.cwd });
+    const { prompt, content, attachments, cwd, agentId, model, title } = event.payload;
+    debug("session.start: starting new session", {
+      prompt: (prompt ?? "").slice(0, 50),
+      cwd,
+      contentType: Array.isArray(content) ? "multimodal" : "text",
+      attachments: attachments?.length ?? 0,
+    });
     const pendingPermissions = new Map<string, PendingPermission>();
     let conversationId: string | null = null;
     let handle: RunnerHandle | null = null;
@@ -210,13 +226,15 @@ export async function handleClientEvent(event: ClientEvent) {
     try {
       debug("session.start: calling runLetta");
       handle = await runLetta({
-        prompt: event.payload.prompt,
-        preferredAgentId: event.payload.agentId,
+        prompt,
+        content,
+        preferredAgentId: agentId,
+        model,
         session: {
           id: "pending",
-          title: event.payload.title,
+          title,
           status: "running",
-          cwd: event.payload.cwd,
+          cwd,
           pendingPermissions,
         },
         onEvent: (e) => {
@@ -234,17 +252,19 @@ export async function handleClientEvent(event: ClientEvent) {
             conversationId = updates.lettaConversationId;
             debug("session.start: session initialized", { conversationId });
             
+            const sessionTitle = (title?.trim() ?? "") || conversationId;
+
             createRuntimeSession(conversationId);
-            updateSession(conversationId, { status: "running" });
+            updateSession(conversationId, { status: "running", title: sessionTitle });
             
             // Store session in electron-store for persistence
-            const agentId = event.payload.agentId || process.env.LETTA_AGENT_ID || "";
+            const resolvedAgentId = agentId || process.env.LETTA_AGENT_ID || "";
             
             // Get agent name for storage
             let agentName: string | undefined = undefined;
             try {
-              console.log("[ipc] Getting agent name for agentId:", agentId);
-              const agent = await getLettaAgent(agentId);
+              console.log("[ipc] Getting agent name for agentId:", resolvedAgentId);
+              const agent = await getLettaAgent(resolvedAgentId);
               console.log("[ipc] Got agent:", agent);
               if (agent) {
                 agentName = agent.name;
@@ -255,9 +275,9 @@ export async function handleClientEvent(event: ClientEvent) {
             
             addStoredSession({
               id: conversationId,
-              agentId,
+              agentId: resolvedAgentId,
               agentName,
-              title: event.payload.title || conversationId,
+              title: sessionTitle,
               createdAt: Date.now(),
               updatedAt: Date.now(),
             });
@@ -268,14 +288,14 @@ export async function handleClientEvent(event: ClientEvent) {
               runnerHandles.set(conversationId, handle);
             }
             
-            // Emit session.status to unblock UI - use conversationId as title
+            // Emit session.status to unblock UI with resolved title
             emit({
               type: "session.status",
-              payload: { sessionId: conversationId, status: "running", title: conversationId, cwd: event.payload.cwd, agentName },
+              payload: { sessionId: conversationId, status: "running", title: sessionTitle, cwd, agentName, agentId: resolvedAgentId },
             });
             emit({
               type: "stream.user_prompt",
-              payload: { sessionId: conversationId, prompt: event.payload.prompt },
+              payload: { sessionId: conversationId, prompt, attachments, content },
             });
           }
         },
@@ -299,8 +319,20 @@ export async function handleClientEvent(event: ClientEvent) {
   }
 
   if (event.type === "session.continue") {
-    const conversationId = event.payload.sessionId;
-    debug("session.continue: continuing session", { conversationId, prompt: event.payload.prompt.slice(0, 50) });
+    const {
+      sessionId: conversationId,
+      prompt,
+      content,
+      attachments,
+      cwd,
+    } = event.payload;
+    const previewPrompt = (prompt ?? "").slice(0, 50);
+    debug("session.continue: continuing session", {
+      conversationId,
+      prompt: previewPrompt,
+      contentType: Array.isArray(content) ? "multimodal" : "text",
+      attachments: attachments?.length ?? 0,
+    });
     
     let runtimeSession = getSession(conversationId);
     
@@ -311,15 +343,24 @@ export async function handleClientEvent(event: ClientEvent) {
       debug("session.continue: found existing runtime session", { status: runtimeSession.status });
     }
 
-    updateSession(conversationId, { status: "running" });
+    const storedSession = runtimeSession.title
+      ? undefined
+      : getStoredSessions().find((session) => session.id === conversationId);
+    const resolvedTitle = runtimeSession.title ?? storedSession?.title ?? conversationId;
+
+    runtimeSession = updateSession(conversationId, {
+      status: "running",
+      title: resolvedTitle,
+    }) ?? runtimeSession;
+
     emit({
       type: "session.status",
-      payload: { sessionId: conversationId, status: "running" },
+      payload: { sessionId: conversationId, status: "running", title: resolvedTitle },
     });
 
     emit({
       type: "stream.user_prompt",
-      payload: { sessionId: conversationId, prompt: event.payload.prompt },
+      payload: { sessionId: conversationId, prompt, attachments, content },
     });
 
     try {
@@ -327,12 +368,13 @@ export async function handleClientEvent(event: ClientEvent) {
       let actualConversationId = conversationId;
       
       const handle = await runLetta({
-        prompt: event.payload.prompt,
+        prompt,
+        content,
         session: {
           id: conversationId,
-          title: conversationId,
+          title: resolvedTitle,
           status: "running",
-          cwd: event.payload.cwd,
+          cwd,
           pendingPermissions: runtimeSession.pendingPermissions,
         },
         resumeConversationId: conversationId,
@@ -368,13 +410,13 @@ export async function handleClientEvent(event: ClientEvent) {
                 sessionId: actualConversationId, 
                 status: "running", 
                 title: actualConversationId, 
-                cwd: event.payload.cwd 
+                cwd,
               },
             });
             // Re-emit the user prompt for the new session
             emit({
               type: "stream.user_prompt",
-              payload: { sessionId: actualConversationId, prompt: event.payload.prompt },
+              payload: { sessionId: actualConversationId, prompt, attachments, content },
             });
           }
         },
@@ -459,6 +501,21 @@ export async function handleClientEvent(event: ClientEvent) {
     removeStoredSession(conversationId);
     
     emit({ type: "session.deleted", payload: { sessionId: conversationId } });
+    return;
+  }
+
+  if (event.type === "session.rename") {
+    const { sessionId, title } = event.payload;
+    updateStoredSession(sessionId, { title, updatedAt: Date.now() });
+    const runtime = updateSession(sessionId, { title }) ?? getSession(sessionId);
+    emit({
+      type: "session.status",
+      payload: {
+        sessionId,
+        status: runtime?.status ?? "idle",
+        title,
+      },
+    });
     return;
   }
 

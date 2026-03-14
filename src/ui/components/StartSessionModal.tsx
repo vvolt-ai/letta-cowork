@@ -1,5 +1,93 @@
 import { useEffect, useState } from "react";
 import { AgentDropdown } from "./AgentDropdown";
+import { useAppStore } from "../store/useAppStore";
+
+interface Model {
+  name: string;
+  display_name?: string | null;
+  provider_type: string;
+}
+
+const MODEL_KEY_REGEX = /model/i;
+
+function collectModelStrings(value: unknown, set: Set<string>, force = false): void {
+  if (!value) return;
+
+  if (typeof value === "string") {
+    if (force) {
+      const trimmed = value.trim();
+      if (trimmed) set.add(trimmed);
+    }
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      collectModelStrings(entry, set, force);
+    }
+    return;
+  }
+
+  if (typeof value === "object") {
+    for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+      const nextForce = force || MODEL_KEY_REGEX.test(key);
+      collectModelStrings(nested, set, nextForce);
+    }
+  }
+}
+
+function extractAgentModelNames(agent: any): string[] {
+  if (!agent) return [];
+  const set = new Set<string>();
+
+  collectModelStrings(agent?.model, set, true);
+  collectModelStrings(agent?.models, set, true);
+  collectModelStrings(agent?.availableModels, set, true);
+  collectModelStrings(agent?.available_models, set, true);
+  collectModelStrings(agent?.inferenceConfig?.models, set, true);
+  collectModelStrings(agent?.inference_config?.models, set, true);
+  collectModelStrings(agent?.metadata, set, false);
+
+  return Array.from(set);
+}
+
+function guessProviderType(modelName: string): string {
+  if (!modelName) return "custom";
+  if (modelName.includes("/")) {
+    return modelName.split("/")[0] ?? "custom";
+  }
+  if (modelName.includes(":")) {
+    return modelName.split(":")[0] ?? "custom";
+  }
+  return "custom";
+}
+
+function mapModelNamesToOptions(names: string[], catalog: Model[]): Model[] {
+  if (!names.length) return catalog;
+  const catalogMap = new Map(catalog.map((model) => [model.name, model]));
+  const unique = Array.from(new Set(names));
+  return unique.map((name) => {
+    const match = catalogMap.get(name);
+    if (match) return match;
+    return {
+      name,
+      display_name: name,
+      provider_type: guessProviderType(name),
+    } satisfies Model;
+  });
+}
+
+function mergeModelOptions(primary: Model[], secondary: Model[]): Model[] {
+  const merged: Model[] = [];
+  const seen = new Set<string>();
+  for (const model of [...primary, ...secondary]) {
+    if (!seen.has(model.name)) {
+      merged.push(model);
+      seen.add(model.name);
+    }
+  }
+  return merged;
+}
 
 interface StartSessionModalProps {
   cwd: string;
@@ -7,7 +95,7 @@ interface StartSessionModalProps {
   pendingStart: boolean;
   onCwdChange: (value: string) => void;
   onPromptChange: (value: string) => void;
-  onStart: (agentId: string) => void;
+  onStart: (agentId: string, model?: string) => void;
   onClose: () => void;
 }
 
@@ -22,10 +110,28 @@ export function StartSessionModal({
 }: StartSessionModalProps) {
   const [recentCwds, setRecentCwds] = useState<string[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string>("");
+  const storeSelectedModel = useAppStore((state) => state.selectedModel);
+  const setSelectedModelStore = useAppStore((state) => state.setSelectedModel);
+  const [selectedModel, setSelectedModel] = useState<string>(storeSelectedModel);
+  const [allModels, setAllModels] = useState<Model[]>([]);
+  const [models, setModels] = useState<Model[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelTouched, setModelTouched] = useState(false);
+
+  const hasSelectedModelOption = selectedModel
+    ? !models.some((model) => model.name === selectedModel)
+    : false;
 
   useEffect(() => {
     window.electron.getRecentCwds().then(setRecentCwds).catch(console.error);
   }, []);
+
+  useEffect(() => {
+    if (!storeSelectedModel) return;
+    if (modelTouched) return;
+    if (selectedAgentId) return;
+    setSelectedModel(storeSelectedModel);
+  }, [modelTouched, selectedAgentId, storeSelectedModel]);
 
   // Load default agent ID from Letta environment
   useEffect(() => {
@@ -35,6 +141,123 @@ export function StartSessionModal({
       }
     }).catch(console.error);
   }, []);
+
+  useEffect(() => {
+    setModelTouched(false);
+  }, [selectedAgentId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchCatalog = async () => {
+      try {
+        const fetchedModels = await window.electron.listLettaModels();
+        if (cancelled) return;
+        setAllModels(fetchedModels);
+        setModels((current) => (current.length > 0 ? current : fetchedModels));
+      } catch (err) {
+        if (!cancelled) {
+          console.error("Failed to fetch models:", err);
+        }
+      }
+    };
+
+    fetchCatalog();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (storeSelectedModel) {
+      return;
+    }
+    let cancelled = false;
+
+    const resolveDefaultModel = async () => {
+      try {
+        const env = await window.electron.getLettaEnv();
+        const envAgentId = env?.LETTA_AGENT_ID?.trim();
+        if (!envAgentId || !window.electron.getLettaAgent) return;
+        const agent = await window.electron.getLettaAgent(envAgentId);
+        if (cancelled) return;
+        const names = extractAgentModelNames(agent);
+        const preferred = typeof agent?.model === "string" && agent.model?.trim()
+          ? agent.model.trim()
+          : names[0];
+        if (preferred) {
+          setSelectedModel(preferred);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Failed to resolve default agent model:", error);
+        }
+      }
+    };
+
+    resolveDefaultModel();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [storeSelectedModel]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const applyModels = async () => {
+      if (!selectedAgentId) {
+        setModels(allModels);
+        setModelsLoading(false);
+        return;
+      }
+
+      if (!window.electron.getLettaAgent) {
+        setModels(allModels);
+        setModelsLoading(false);
+        return;
+      }
+
+      setModelsLoading(true);
+      try {
+        const agent = await window.electron.getLettaAgent(selectedAgentId);
+        if (cancelled) return;
+        const names = extractAgentModelNames(agent);
+        const derived = mapModelNamesToOptions(names, allModels);
+        const nextModels = mergeModelOptions(derived, allModels);
+        setModels(nextModels);
+
+        const preferred = typeof agent?.model === "string" && agent.model?.trim()
+          ? agent.model.trim()
+          : names[0];
+
+        if (!modelTouched) {
+          if (preferred && preferred !== selectedModel) {
+            setSelectedModel(preferred);
+          } else if (!preferred && !selectedModel && nextModels[0]) {
+            const fallback = nextModels[0].name;
+            setSelectedModel(fallback);
+          }
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Failed to load agent models:", error);
+          setModels(allModels);
+        }
+      } finally {
+        if (!cancelled) {
+          setModelsLoading(false);
+        }
+      }
+    };
+
+    applyModels();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedAgentId, allModels, modelTouched, selectedModel, setSelectedModel]);
 
   const handleSelectDirectory = async () => {
     const result = await window.electron.selectDirectory();
@@ -99,6 +322,32 @@ export function StartSessionModal({
               disabled={pendingStart}
             />
           </label>
+          {(modelsLoading || models.length > 0) && (
+            <label className="grid gap-1.5">
+              <span className="text-xs font-medium text-muted">Model (Optional)</span>
+              <select
+                className="rounded-xl border border-ink-900/10 bg-surface-secondary px-4 py-2.5 text-sm text-ink-800 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20 transition-colors"
+                value={selectedModel}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setModelTouched(true);
+                  setSelectedModel(value);
+                }}
+                disabled={pendingStart}
+              >
+                <option value="">Default (Agent's model)</option>
+                {hasSelectedModelOption ? (
+                  <option value={selectedModel}>{selectedModel}</option>
+                ) : null}
+                {models.map((model) => (
+                  <option key={model.name} value={model.name}>
+                    {model.display_name || model.name} ({model.provider_type})
+                  </option>
+                ))}
+              </select>
+              {modelsLoading ? <span className="text-[11px] text-muted">Loading…</span> : null}
+            </label>
+          )}
           <label className="grid gap-1.5">
             <span className="text-xs font-medium text-muted">Prompt</span>
             <textarea
@@ -111,7 +360,10 @@ export function StartSessionModal({
           </label>
           <button
             className="flex flex-col items-center rounded-full bg-accent px-5 py-3 text-sm font-medium text-white shadow-soft hover:bg-accent-hover transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-            onClick={() => onStart(selectedAgentId)}
+            onClick={() => {
+              setSelectedModelStore(selectedModel);
+              onStart(selectedAgentId, selectedModel);
+            }}
             disabled={pendingStart || !cwd.trim() || !prompt.trim()}
           >
             {pendingStart ? (

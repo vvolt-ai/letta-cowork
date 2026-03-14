@@ -4,6 +4,7 @@ import {
   type Session as LettaSession,
   type SDKMessage,
   type CanUseToolResponse,
+  type MessageContentItem,
 } from "@letta-ai/letta-code-sdk";
 import { Letta } from "@letta-ai/letta-client";
 import type { ServerEvent } from "../types.js";
@@ -39,9 +40,11 @@ export type RunnerSession = {
 
 export type RunnerOptions = {
   prompt: string;
+  content?: MessageContentItem[];
   session: RunnerSession;
   resumeConversationId?: string;
   preferredAgentId?: string;
+  model?: string;
   onEvent: (event: ServerEvent) => void;
   onSessionUpdate?: (updates: { lettaConversationId?: string }) => void;
 };
@@ -124,7 +127,7 @@ export async function abortAllSessions(): Promise<void> {
 }
 
 export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
-  const { prompt, session, resumeConversationId, preferredAgentId, onEvent, onSessionUpdate } = options;
+  const { prompt, content, session, resumeConversationId, preferredAgentId, model, onEvent, onSessionUpdate } = options;
   const targetAgentId = preferredAgentId?.trim() || undefined;
   
   // Create AbortController for stopping the session
@@ -138,8 +141,11 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
   let sessionKey: string = `pending-${Date.now()}`;
   let lettaSessionRef: LettaSession | null = null;
   
+  const promptPreview = (prompt ?? "").slice(0, 100);
   debug("runLetta called", {
-    prompt: prompt.slice(0, 100) + (prompt.length > 100 ? "..." : ""),
+    prompt: promptPreview + ((prompt ?? "").length > 100 ? "..." : ""),
+    hasContent: Array.isArray(content),
+    contentItems: content?.length ?? 0,
     sessionId: session.id,
     resumeConversationId,
     preferredAgentId: targetAgentId,
@@ -195,6 +201,7 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
         permissionMode: "bypassPermissions" as const,
         canUseTool,
         systemInfoReminder: false,
+        model: model,
       };
 
       // Create or resume session
@@ -253,7 +260,8 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
 
       // Send the prompt (triggers init internally)
       debug("calling send()");
-      await lettaSession.send(prompt);
+      const payload = Array.isArray(content) && content.length > 0 ? content : prompt;
+      await lettaSession.send(payload);
       debug("send() completed", {
         conversationId: lettaSession.conversationId,
         agentId: lettaSession.agentId,

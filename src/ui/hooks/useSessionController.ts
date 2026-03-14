@@ -91,7 +91,7 @@ export function useSessionController({ connected, sendEvent }: UseSessionControl
   }, [handleNewSession, isLettaEnvConfigured, setShowStartModal]);
 
   // Handle starting session with a specific agent - updates env first, then starts
-  const handleStartWithAgent = useCallback(async (agentId: string) => {
+  const handleStartWithAgent = useCallback(async (agentId: string, model?: string) => {
     if (agentId) {
       try {
         const currentEnv = await window.electron.getLettaEnv();
@@ -111,7 +111,8 @@ export function useSessionController({ connected, sendEvent }: UseSessionControl
         title: "", 
         prompt, 
         cwd: cwd.trim() || undefined, 
-        allowedTools: "Read,Edit,Bash" 
+        allowedTools: "Read,Edit,Bash",
+        model: model || undefined
       }
     });
   }, [cwd, prompt, sendEvent, setPendingStart]);

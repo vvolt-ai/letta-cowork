@@ -8,7 +8,9 @@ import { StartSessionModal } from "./components/StartSessionModal";
 import { useZohoEmail } from "./hooks/useZohoEmail";
 import { useEmailAsInput } from "./hooks/useEmailAsInput";
 import { useEmailSelection } from "./hooks/useEmailSelection";
-import { ChatMainPanel } from "./components/ChatMainPanel";
+import { WorkspaceLayout } from "./components/layout/WorkspaceLayout";
+import { ChatWorkspace } from "./components/chat/ChatWorkspace";
+import { ActivityPanel } from "./components/activity/ActivityPanel";
 import { GlobalErrorToast } from "./components/GlobalErrorToast";
 import { EmailDetailsDialog } from "./components/EmailDetailsDialog";
 import { CoworkSettingsDialog } from "./components/CoworkSettingsDialog";
@@ -32,18 +34,13 @@ function App() {
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const topSentinelRef = useRef<HTMLDivElement>(null);
   const prevMessagesLengthRef = useRef(0);
-  const scrollHeightBeforeLoadRef = useRef(0);
-  const shouldRestoreScrollRef = useRef(false);
+  const pendingHistoryLoadRef = useRef<{ prevScrollHeight: number; prevScrollTop: number } | null>(null);
 
   // Local UI state
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [hasNewMessages, setHasNewMessages] = useState(false);
   const [lettaEnvOpen, setLettaEnvOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
-    return localStorage.getItem('sidebar_collapsed') === 'true';
-  });
   const [autoSyncEnabled, setAutoSyncEnabled] = useState<boolean>(() => {
     return localStorage.getItem(AUTO_SYNC_ENABLED_KEY) === "true";
   });
@@ -52,7 +49,9 @@ function App() {
       const raw = localStorage.getItem(AUTO_SYNC_AGENT_IDS_KEY);
       if (!raw) return [];
       const parsed = JSON.parse(raw) as string[];
-      return Array.isArray(parsed) ? parsed.filter((id) => typeof id === "string" && id.trim().length > 0) : [];
+      return Array.isArray(parsed)
+        ? parsed.filter((id) => typeof id === "string" && id.trim().length > 0)
+        : [];
     } catch {
       return [];
     }
@@ -75,7 +74,8 @@ function App() {
     }
   });
   const handleServerEvent = useAppStore((s) => s.handleServerEvent);
-  const { showCoworkSettings, setShowCoworkSettings, updateCoworkSettings } = useCoworkSettings();
+  const fetchSessionHistory = useAppStore((s) => s.fetchSessionHistory);
+  const { coworkSettings, showCoworkSettings, setShowCoworkSettings, updateCoworkSettings } = useCoworkSettings();
 
   // Email APIs
   const {
@@ -168,7 +168,6 @@ function App() {
     activeSession,
     messages,
     permissionRequests,
-    isRunning,
     handleDeleteSession,
     handlePermissionResult,
     isLettaEnvConfigured,
@@ -179,17 +178,11 @@ function App() {
   // Message window hook - must be called after useSessionController to get activeSessionId
   const {
     visibleMessages,
-    hasMoreHistory,
-    isLoadingHistory,
-    loadMoreMessages,
-    resetToLatest,
-    totalMessages,
     partialMessage,
     showPartialMessage,
     handlePartialMessages,
   } = useMessageWindow(
-    messages, 
-    permissionRequests, 
+    messages,
     activeSessionId,
     messagesEndRef,
     shouldAutoScroll,
@@ -208,8 +201,8 @@ function App() {
 
   // Wrapped handleStartWithAgent for StartSessionModal - just updates env and lets the modal close
   // The session.start event is already sent by handleStartWithAgent
-  const handleStartWithAgentAndStart = useCallback(async (agentId: string) => {
-    await handleStartWithAgent(agentId);
+  const handleStartWithAgentAndStart = useCallback(async (agentId: string, model?: string) => {
+    await handleStartWithAgent(agentId, model);
     // Don't call handleStartFromModal - handleStartWithAgent already sends session.start
     setShowStartModal(false);
   }, [handleStartWithAgent, setShowStartModal]);
@@ -275,49 +268,21 @@ function App() {
         setHasNewMessages(false);
       }
     }
-  }, [shouldAutoScroll]);
 
-  // Top sentinel triggers incremental history load
-  useEffect(() => {
-    const sentinel = topSentinelRef.current;
-    const container = scrollContainerRef.current;
-    if (!sentinel || !container) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        if (entry.isIntersecting && hasMoreHistory && !isLoadingHistory) {
-          scrollHeightBeforeLoadRef.current = container.scrollHeight;
-          shouldRestoreScrollRef.current = true;
-          loadMoreMessages();
-        }
-      },
-      {
-        root: container,
-        rootMargin: "100px 0px 0px 0px",
-        threshold: 0,
-      }
-    );
-
-    observer.observe(sentinel);
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [hasMoreHistory, isLoadingHistory, loadMoreMessages]);
-
-  // Keep viewport stable when prepending old history
-  useEffect(() => {
-    if (shouldRestoreScrollRef.current && !isLoadingHistory) {
-      const container = scrollContainerRef.current;
-      if (container) {
-        const newScrollHeight = container.scrollHeight;
-        const scrollDiff = newScrollHeight - scrollHeightBeforeLoadRef.current;
-        container.scrollTop += scrollDiff;
-      }
-      shouldRestoreScrollRef.current = false;
+    const reachedTop = scrollTop <= SCROLL_THRESHOLD;
+    if (
+      reachedTop &&
+      activeSessionId &&
+      activeSession?.hasMoreHistory &&
+      !activeSession?.isLoadingHistory
+    ) {
+      pendingHistoryLoadRef.current = {
+        prevScrollHeight: scrollHeight,
+        prevScrollTop: scrollTop,
+      };
+      fetchSessionHistory(activeSessionId, 200, activeSession.oldestMessageId ?? undefined);
     }
-  }, [visibleMessages, isLoadingHistory]);
+  }, [activeSession, activeSessionId, fetchSessionHistory, shouldAutoScroll]);
 
   // Reset scroll behavior on session switch
   useEffect(() => {
@@ -330,85 +295,125 @@ function App() {
   }, [activeSessionId]);
 
   useEffect(() => {
-    if (shouldAutoScroll) {
+    if (!scrollContainerRef.current) {
+      prevMessagesLengthRef.current = messages.length;
+      return;
+    }
+
+    const container = scrollContainerRef.current;
+
+    if (pendingHistoryLoadRef.current) {
+      const { prevScrollHeight, prevScrollTop } = pendingHistoryLoadRef.current;
+      const heightDelta = container.scrollHeight - prevScrollHeight;
+      container.scrollTop = Math.max(prevScrollTop + heightDelta, 0);
+      pendingHistoryLoadRef.current = null;
+    } else if (shouldAutoScroll) {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     } else if (messages.length > prevMessagesLengthRef.current && prevMessagesLengthRef.current > 0) {
       setHasNewMessages(true);
     }
+
     prevMessagesLengthRef.current = messages.length;
-  }, [messages, partialMessage, shouldAutoScroll]);
+  }, [messages, partialMessage, showPartialMessage, shouldAutoScroll]);
 
   const scrollToBottom = useCallback(() => {
     setShouldAutoScroll(true);
     setHasNewMessages(false);
-    resetToLatest();
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [resetToLatest]);
+  }, []);
 
   const handleSendMessage = useCallback(() => {
     setShouldAutoScroll(true);
     setHasNewMessages(false);
-    resetToLatest();
-  }, [resetToLatest]);
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, []);
+
+  const agentStatus = activeSession?.ephemeral.status ?? "idle";
+  const ephemeralState = activeSession?.ephemeral;
+  const reasoningSteps = ephemeralState?.reasoning ?? [];
 
   return (
-    <div className="flex h-screen bg-surface">
-      <Sidebar
-        connected={connected}
-        onNewSession={handleStartSessionClickWithEnv}
-        lettaEnvOpen={lettaEnvOpen}
-        onLettaEnvOpenChange={setLettaEnvOpen}
-        onDeleteSession={handleDeleteSession}
-        onConnectEmail={connectEmail}
-        onDisconnectEmail={disconnectEmail}
-        isEmailConnected={isMailConnected}
-        refetchEmails={refetchEmails}
-        emails={emails}
-        selectedEmailId={selectedEmailId}
-        onSelectEmail={handleSelectEmail}
-        onViewEmail={handleViewEmail}
-        onUseEmailAsInput={setEmailAsInput}
-        isProcessingEmailInput={isProcessingEmailInput}
-        isFetchingEmails={isFetchingEmailContent}
-        autoSyncEnabled={autoSyncEnabled}
-        onToggleAutoSync={setAutoSyncEnabled}
-        autoSyncAgentIds={selectedAutoSyncAgentIds}
-        onAddAutoSyncAgent={handleAddAutoSyncAgent}
-        onRemoveAutoSyncAgent={handleRemoveAutoSyncAgent}
-        autoSyncRoutingRules={autoSyncRoutingRules}
-        onAddAutoSyncRoutingRule={handleAddAutoSyncRoutingRule}
-        onRemoveAutoSyncRoutingRule={handleRemoveAutoSyncRoutingRule}
-        selectedAgentId={selectedAutoSyncAgentIds[0]}
-        onProcessEmailToAgent={processEmailToAgent}
-        processingEmailId={processingEmailId}
-        successEmailId={successEmailId}
-        onCollapsedChange={setSidebarCollapsed}
-        onOpenSettings={() => setShowCoworkSettings(true)}
+    <>
+      <WorkspaceLayout
+        sidebar={
+          <Sidebar
+            connected={connected}
+            onNewSession={handleStartSessionClickWithEnv}
+            lettaEnvOpen={lettaEnvOpen}
+            onLettaEnvOpenChange={setLettaEnvOpen}
+            onDeleteSession={handleDeleteSession}
+            onConnectEmail={connectEmail}
+            onDisconnectEmail={disconnectEmail}
+            isEmailConnected={isMailConnected}
+            refetchEmails={refetchEmails}
+            emails={emails}
+            selectedEmailId={selectedEmailId}
+            onSelectEmail={handleSelectEmail}
+            onViewEmail={handleViewEmail}
+            onUseEmailAsInput={setEmailAsInput}
+            isProcessingEmailInput={isProcessingEmailInput}
+            isFetchingEmails={isFetchingEmailContent}
+            autoSyncEnabled={autoSyncEnabled}
+            onToggleAutoSync={setAutoSyncEnabled}
+            autoSyncAgentIds={selectedAutoSyncAgentIds}
+            onAddAutoSyncAgent={handleAddAutoSyncAgent}
+            onRemoveAutoSyncAgent={handleRemoveAutoSyncAgent}
+            autoSyncRoutingRules={autoSyncRoutingRules}
+            onAddAutoSyncRoutingRule={handleAddAutoSyncRoutingRule}
+            onRemoveAutoSyncRoutingRule={handleRemoveAutoSyncRoutingRule}
+            selectedAgentId={selectedAutoSyncAgentIds[0]}
+            onProcessEmailToAgent={processEmailToAgent}
+            processingEmailId={processingEmailId}
+            successEmailId={successEmailId}
+            onOpenSettings={() => setShowCoworkSettings(true)}
+          />
+        }
+        chat={
+          <ChatWorkspace
+            title={activeSession?.title}
+            agentName={activeSession?.agentName}
+            activeSessionId={activeSessionId}
+            visibleMessages={visibleMessages}
+            hasNewMessages={hasNewMessages}
+            shouldAutoScroll={shouldAutoScroll}
+            agentStatus={agentStatus}
+            partialMessage={partialMessage}
+            showPartialMessage={showPartialMessage}
+            isHistoryLoading={Boolean(activeSession?.isLoadingHistory)}
+            reasoningSteps={reasoningSteps}
+            onScroll={handleScroll}
+            onScrollToBottom={scrollToBottom}
+            onSendMessage={handleSendMessage}
+            sendEvent={sendEvent}
+            scrollContainerRef={scrollContainerRef}
+            messagesEndRef={messagesEndRef}
+          />
+        }
+        activity={
+          <ActivityPanel
+            status={agentStatus}
+            ephemeral={ephemeralState}
+            permissionRequests={permissionRequests}
+            coworkSettings={coworkSettings}
+            isEmailConnected={isMailConnected}
+            onPermissionResult={handlePermissionResult}
+          />
+        }
       />
-      <ChatMainPanel
-        title={activeSession?.title}
-        agentName={activeSession?.agentName}
-        activeSessionId={activeSessionId}
-        isRunning={isRunning}
-        permissionRequests={permissionRequests}
-        visibleMessages={visibleMessages}
-        hasMoreHistory={hasMoreHistory}
-        totalMessages={totalMessages}
-        isLoadingHistory={isLoadingHistory}
-        partialMessage={partialMessage}
-        showPartialMessage={showPartialMessage}
-        hasNewMessages={hasNewMessages}
-        shouldAutoScroll={shouldAutoScroll}
-        onPermissionResult={handlePermissionResult}
-        onScroll={handleScroll}
-        onScrollToBottom={scrollToBottom}
-        onSendMessage={handleSendMessage}
-        sendEvent={sendEvent}
-        scrollContainerRef={scrollContainerRef}
-        topSentinelRef={topSentinelRef}
-        messagesEndRef={messagesEndRef}
-        sidebarCollapsed={sidebarCollapsed}
-      />
+
+      {pendingStart ? (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-ink-900/20 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-3 rounded-2xl border border-ink-900/10 bg-surface px-6 py-5 shadow-elevated">
+            <svg className="h-6 w-6 animate-spin text-[var(--color-accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <circle className="opacity-20" cx="12" cy="12" r="10" />
+              <path d="M4 12a8 8 0 018-8" />
+            </svg>
+            <div className="text-sm font-medium text-ink-800">Starting session…</div>
+            <p className="text-xs text-muted text-center max-w-xs">Hang tight while we spin up your agent and connect the workspace.</p>
+          </div>
+        </div>
+      ) : null}
+
       {showStartModal && (
         <StartSessionModal
           cwd={cwd}
@@ -421,7 +426,9 @@ function App() {
         />
       )}
 
-      {globalError && <GlobalErrorToast message={globalError} onClose={() => setGlobalError(null)} />}
+      {globalError && (
+        <GlobalErrorToast message={globalError} onClose={() => setGlobalError(null)} />
+      )}
       <CoworkSettingsDialog
         open={showCoworkSettings}
         onOpenChange={setShowCoworkSettings}
@@ -434,7 +441,7 @@ function App() {
         loading={isEmailDetailsLoading}
         error={emailDetailsError}
       />
-    </div>
+    </>
   );
 }
 

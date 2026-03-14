@@ -2,59 +2,71 @@
 @import "highlight.js/styles/github.css";
 
 @theme {
-  --color-brand: #0606ac;
-  --color-brand-content: #fafafa;
-  --color-brand-hover: #4a4a8c;
-  --color-brand-light: #f5f5ff;
-  --color-brand-light-content: #0606ac;
+  --color-brand: #5b7cfa;
+  --color-brand-content: #ffffff;
+  --color-brand-hover: #4c6ef5;
+  --color-brand-light: #eef2ff;
+  --color-brand-light-content: #3143a4;
   
   /* Surface colors */
   --color-surface: #ffffff;
-  --color-surface-secondary: #fafafa;
-  --color-surface-tertiary: #f5f5f5;
-  --color-surface-hover: #fafafa;
+  --color-surface-secondary: #f8fafc;
+  --color-surface-tertiary: #eef2ff;
+  --color-surface-hover: #f1f5ff;
   
   /* Text colors */
-  --color-ink-900: #141414;
-  --color-ink-800: #474747;
-  --color-ink-700: #474747;
-  --color-ink-600: #737373;
-  --color-ink-500: #8c8c8c;
-  --color-ink-400: #a6a6a6;
+  --color-ink-900: #111827;
+  --color-ink-800: #1f2937;
+  --color-ink-700: #374151;
+  --color-ink-600: #4b5563;
+  --color-ink-500: #6b7280;
+  --color-ink-400: #9ca3af;
   
   /* Muted colors */
-  --color-muted: #9ca3af;
-  --color-muted-light: #a6a6a6;
+  --color-muted: #94a3b8;
+  --color-muted-light: #a5b4cc;
   
   /* Accent colors */
-  --color-accent: #0606ac;
-  --color-accent-hover: #4a4a8c;
-  --color-accent-light: #f5f5ff;
-  --color-accent-subtle: #ebebf5;
+  --color-accent: #5b7cfa;
+  --color-accent-hover: #4c6ef5;
+  --color-accent-light: #eef2ff;
+  --color-accent-subtle: #e5ecff;
   
   /* Status colors */
-  --color-error: #c41952;
-  --color-error-light: #fdf2f5;
-  --color-success: #16a34a;
-  --color-success-light: #f0fdf4;
-  --color-info: #0606ac;
-  --color-info-light: #f5f5ff;
-  --color-warning: #b87800;
-  --color-warning-light: #fffbeb;
+  --color-error: #ef4444;
+  --color-error-light: #fee2e2;
+  --color-success: #22c55e;
+  --color-success-light: #dcfce7;
+  --color-info: #6366f1;
+  --color-info-light: #eef2ff;
+  --color-warning: #f59e0b;
+  --color-warning-light: #fef3c7;
+  --color-status-thinking: #6366f1;
+  --color-status-running: #f59e0b;
+  --color-status-completed: #22c55e;
+  --color-status-error: #ef4444;
   
   /* Background colors */
   --color-bg-000: #ffffff;
-  --color-bg-100: #fafafa;
-  --color-bg-200: #f5f5f5;
-  --color-bg-300: #e8e8e8;
-  --color-bg-400: #d9d9d9;
+  --color-bg-100: #f8fafc;
+  --color-bg-200: #eef2ff;
+  --color-bg-300: #e6e8ec;
+  --color-bg-400: #d8dce5;
   
   /* Border */
-  --color-border: #e8e8e8;
-  --color-border-hover: #c7c7e8;
+  --color-border: #e6e8ec;
+  --color-border-hover: #cbd5f5;
   
-  /* Sidebar - neutral gray */
-  --color-sidebar: #f5f5f5;
+  /* Sidebar - neutral blue gray */
+  --color-sidebar: #f9fafb;
+  --color-sidebar-hover: #f1f5ff;
+  --color-sidebar-active: #e9efff;
+  
+  /* Utility backgrounds */
+  --color-tool-bg: #f5f7ff;
+  --color-tool-border: #e2e8ff;
+  --color-attachment-bg: #f3f6ff;
+  --color-attachment-border: #dce3ff;
   
   /* Shadows */
   --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.05);
@@ -75,7 +87,7 @@ body,
 
 body {
   font-family: "Onest", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  background-color: var(--color-surface);
+  background-color: var(--color-bg-100);
   color: var(--color-ink-900);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

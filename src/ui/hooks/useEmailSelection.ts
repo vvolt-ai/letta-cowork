@@ -54,8 +54,11 @@ export function useEmailSelection({
     setEmailDetails(null);
 
     try {
-      const details = await fetchEmailById(email.folderId, email.messageId, email.accountId);
-      setEmailDetails(details);
+      const details = await fetchEmailById(email.folderId, email.messageId, email.accountId) as {
+        emailContent: any,
+        attachments: any
+      };
+      setEmailDetails(details.emailContent);
     } catch (err) {
       console.error("failed to fetch email details", err);
       setEmailDetailsError("Failed to load email details.");

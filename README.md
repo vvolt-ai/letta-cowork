@@ -1,6 +1,6 @@
 <div align="center">
 
-# Letta Cowork
+# Vera Cowork
 
 [![Platform](https://img.shields.io/badge/platform-%20macOS%20%7C%20Linux-lightgrey.svg)](https://github.com/letta-ai/letta-cowork/releases)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -12,9 +12,9 @@ A desktop application for running Letta Code agents with a visual interface.
 
 </div>
 
-## What is Letta Cowork?
+## What is Vera Cowork?
 
-Letta Cowork is a fork of [Claude-Cowork](https://github.com/DevAgentForge/Claude-Cowork) that replaces the Claude SDK with the [`@letta-ai/letta-code-sdk`](https://www.npmjs.com/package/@letta-ai/letta-code-sdk). It provides a native desktop GUI for interacting with [Letta Code](https://github.com/letta-ai/letta-code) agents.
+Vera Cowork is a fork of [Claude-Cowork](https://github.com/DevAgentForge/Claude-Cowork) that replaces the Claude SDK with the [`@letta-ai/letta-code-sdk`](https://www.npmjs.com/package/@letta-ai/letta-code-sdk). It provides a native desktop GUI for interacting with [Letta Code](https://github.com/letta-ai/letta-code) agents.
 
 ### Why Letta Code SDK?
 
@@ -251,7 +251,7 @@ bun run rebuild
 
 ## Architecture
 
-Letta Cowork uses [`@letta-ai/letta-code-sdk`](https://www.npmjs.com/package/@letta-ai/letta-code-sdk) to run agents.
+Vera Cowork uses [`@letta-ai/letta-code-sdk`](https://www.npmjs.com/package/@letta-ai/letta-code-sdk) to run agents.
 
 ### How It Works
 

@@ -146,8 +146,8 @@ export function CoworkSettingsDialog({ open, onOpenChange }: CoworkSettingsDialo
               />
               
               <SettingToggle
-                label="Letta Environment"
-                description="Show Letta environment settings"
+                label="Vera Environment"
+                description="Show Vera environment settings"
                 enabled={settings.showLettaEnv}
                 onToggle={() => handleToggle('showLettaEnv')}
               />

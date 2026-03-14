@@ -50,7 +50,7 @@ import type { ClientEvent } from "./types.js";
 import { checkAlreadyConnected, connectEmail, disconnectEmail, fetchEmailById, fetchEmailDetails, fetchEmails, fetchFolders, downloadEmailAttachment, fetchAccounts, updateMessages, searchEmails, uploadEmailAttachmentToAgent } from "./emails/fetchEmails.js";
 import { expressServer } from "./emails/express.js";
 import { downloadSkillsFromGitHub, GLOBAL_SKILLS_DIR2 } from "./skillDownloader.js";
-import { listLettaAgents } from "./lettaAgents.js";
+import { getLettaAgent, listLettaAgents, listLettaModels } from "./lettaAgents.js";
 import {
     getBridgesConfig,
     getWhatsAppBridgeStatus,
@@ -227,6 +227,24 @@ app.on("ready", () => {
             return await listLettaAgents();
         } catch (error) {
             console.error("Failed to list agents:", error);
+            throw error;
+        }
+    });
+
+    ipcMain.handle("list-letta-models", async () => {
+        try {
+            return await listLettaModels();
+        } catch (error) {
+            console.error("Failed to list models:", error);
+            throw error;
+        }
+    });
+
+    ipcMain.handle("get-letta-agent", async (_, agentId: string) => {
+        try {
+            return await getLettaAgent(agentId);
+        } catch (error) {
+            console.error("Failed to get agent:", error);
             throw error;
         }
     });
