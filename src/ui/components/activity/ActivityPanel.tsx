@@ -10,30 +10,6 @@ interface ActivityPanelProps {
   onPermissionResult?: (toolUseId: string, result: CanUseToolResponse) => void;
 }
 
-function ContextPanel() {
-  return (
-    <section className="space-y-2">
-      <h3 className="text-[12px] font-semibold uppercase tracking-[0.25em] text-muted">Context</h3>
-      <div className="h-px bg-[var(--color-border)]" />
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3 text-xs text-muted">
-        Session context will appear here as the agent gathers information.
-      </div>
-    </section>
-  );
-}
-
-function ArtifactsPanel() {
-  return (
-    <section className="space-y-2">
-      <h3 className="text-[12px] font-semibold uppercase tracking-[0.25em] text-muted">Artifacts</h3>
-      <div className="h-px bg-[var(--color-border)]" />
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3 text-xs text-muted">
-        Generated files will appear here once available.
-      </div>
-    </section>
-  );
-}
-
 function PermissionsPanel({
   permissionRequests,
   onPermissionResult,
@@ -92,8 +68,6 @@ export function ActivityPanel({
 }: ActivityPanelProps) {
   return (
     <aside className="flex h-full w-full flex-col gap-6 overflow-y-auto px-5 py-6">
-      <ContextPanel />
-      <ArtifactsPanel />
       <PermissionsPanel permissionRequests={permissionRequests} onPermissionResult={onPermissionResult} />
     </aside>
   );

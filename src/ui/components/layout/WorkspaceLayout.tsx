@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 interface WorkspaceLayoutProps {
   sidebar: ReactNode;
   chat: ReactNode;
-  activity: ReactNode;
+  activity?: ReactNode | null;
 }
 
 export function WorkspaceLayout({ sidebar, chat, activity }: WorkspaceLayoutProps) {
@@ -15,9 +15,11 @@ export function WorkspaceLayout({ sidebar, chat, activity }: WorkspaceLayoutProp
       <main className="flex min-w-0 flex-1 flex-col">
         {chat}
       </main>
-      <aside className="hidden shrink-0 border-l border-[var(--color-border)] bg-[var(--color-surface)] lg:flex lg:w-[280px] xl:w-[300px]">
-        {activity}
-      </aside>
+      {activity ? (
+        <aside className="hidden shrink-0 border-l border-[var(--color-border)] bg-[var(--color-surface)] lg:flex lg:w-[280px] xl:w-[300px]">
+          {activity}
+        </aside>
+      ) : null}
     </div>
   );
 }

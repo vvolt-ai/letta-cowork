@@ -670,11 +670,41 @@ export const useAppStore = create<AppState>((set, get) => ({
               break;
             }
             case "tool_call": {
+              const toolCall = message as StreamMessage;
+              const toolCallId = (toolCall as any).toolCallId ?? (toolCall as any).id ?? (toolCall as any).uuid;
+              const existingIndex = typeof toolCallId !== "undefined"
+                ? messages.findIndex(
+                    (msg) =>
+                      msg.type === "tool_call" &&
+                      ((msg as any).toolCallId ?? (msg as any).id ?? (msg as any).uuid) === toolCallId,
+                  )
+                : -1;
+              if (existingIndex >= 0) {
+                messages = messages.map((msg, idx) => (idx === existingIndex ? toolCall : msg));
+              } else {
+                messages = [...messages, toolCall];
+              }
+
               ephemeral = upsertToolExecution(currentEphemeral, message);
               status = "running_tool";
               break;
             }
             case "tool_result": {
+              const toolResult = message as StreamMessage;
+              const toolCallId = (toolResult as any).toolCallId ?? (toolResult as any).id ?? (toolResult as any).uuid;
+              const existingIndex = typeof toolCallId !== "undefined"
+                ? messages.findIndex(
+                    (msg) =>
+                      msg.type === "tool_result" &&
+                      ((msg as any).toolCallId ?? (msg as any).id ?? (msg as any).uuid) === toolCallId,
+                  )
+                : -1;
+              if (existingIndex >= 0) {
+                messages = messages.map((msg, idx) => (idx === existingIndex ? toolResult : msg));
+              } else {
+                messages = [...messages, toolResult];
+              }
+
               ephemeral = upsertToolExecution(currentEphemeral, message);
               const hasRunning = ephemeral.tools.some((tool) => tool.status === "running");
               status = message.isError ? "error" : hasRunning ? "running_tool" : "generating";

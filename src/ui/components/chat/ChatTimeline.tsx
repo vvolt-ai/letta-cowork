@@ -6,7 +6,7 @@ import { truncateInput } from "../../utils/chat";
 import { UserMessage } from "./UserMessage";
 import { AssistantMessage } from "./AssistantMessage";
 import { ReasoningBlock } from "./ReasoningBlock";
-import { ToolCallBlock, ToolResultBlock } from "./ToolBlocks";
+import { ToolExecutionBlock } from "./ToolBlocks";
 
 interface ChatTimelineProps {
   messages: IndexedMessage[];
@@ -21,8 +21,15 @@ export type TimelineEntry =
   | { kind: "user"; id: string; message: StreamMessage }
   | { kind: "assistant"; id: string; message?: SDKAssistantMessage; text?: string; streaming?: boolean }
   | { kind: "reasoning"; id: string; steps: string[] }
-  | { kind: "tool_call"; id: string; name: string; input?: string | null }
-  | { kind: "tool_result"; id: string; name: string; output?: string | null; logs?: string[]; isError?: boolean };
+  | {
+      kind: "tool";
+      id: string;
+      name: string;
+      input?: string | null;
+      output?: string | null;
+      logs?: string[];
+      status: "running" | "succeeded" | "failed";
+    };
 
 function normalizeReasoning(content: unknown): string[] {
   if (!content) return [];
@@ -33,36 +40,174 @@ function normalizeReasoning(content: unknown): string[] {
     .filter((line) => line.length > 0);
 }
 
-function extractToolOutput(message: SDKToolResultMessage & { [key: string]: unknown }): {
-  output?: string | null;
-  logs?: string[];
-} {
-  const rawOutput = message.output ?? message.result ?? message.content ?? null;
-  let output: string | null = null;
+function isMeaningfulToolString(text: string): boolean {
+  if (!text) return false;
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  if (trimmed === "?" || trimmed === "??") return false;
+  if (/^[\s"'`]*[\]\[\{\}()]+[\s"'`]*$/.test(trimmed)) return false;
+  const stripped = trimmed.replace(/["'`]/g, "");
+  if (!stripped) return false;
+  const meaningless = new Set(["{}", "[]", "{", "}", "[", "]", "()"]);
+  if (meaningless.has(stripped)) return false;
+  return true;
+}
 
-  if (typeof rawOutput === "string") {
-    output = rawOutput;
-  } else if (rawOutput) {
-    try {
-      output = JSON.stringify(rawOutput, null, 2);
-    } catch {
-      output = String(rawOutput);
+function stringifyObjectValue(value: Record<string, unknown>): string | undefined {
+  const keys = Object.keys(value);
+  if (keys.length === 0) return undefined;
+
+  // Special-case common structures that only contain a raw placeholder
+  if (keys.length === 1 && keys[0] === "raw") {
+    const rawValue = value.raw;
+    if (typeof rawValue === "string" && isMeaningfulToolString(rawValue)) {
+      return rawValue.trim();
+    }
+    return undefined;
+  }
+
+  const pieces: string[] = [];
+  for (const key of keys) {
+    const candidateValue = value[key];
+    const formatted = formatToolText(candidateValue);
+    if (formatted) {
+      pieces.push(`${key}: ${formatted}`);
     }
   }
 
-  const logs = Array.isArray(message.logs)
-    ? message.logs.map((log) => (typeof log === "string" ? log : JSON.stringify(log)))
-    : [];
+  if (pieces.length === 0) {
+    try {
+      const serialized = JSON.stringify(value, null, 2);
+      const trimmedSerialized = serialized.trim();
+      return isMeaningfulToolString(trimmedSerialized) ? trimmedSerialized : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  return pieces.join("\n");
+}
+
+function formatToolText(value: unknown): string | undefined {
+  if (value == null) return undefined;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return isMeaningfulToolString(trimmed) ? trimmed : undefined;
+  }
+  if (typeof value === "object") {
+    return stringifyObjectValue(value as Record<string, unknown>);
+  }
+  const stringified = String(value ?? "").trim();
+  return isMeaningfulToolString(stringified) ? stringified : undefined;
+}
+
+function collectLogEntries(source: unknown, label?: string): string[] {
+  if (source == null) return [];
+  const items = Array.isArray(source) ? source : [source];
+  return items
+    .map((item) => {
+      const formatted = formatToolText(item);
+      const fallback =
+        formatted ??
+        (typeof item === "string" && isMeaningfulToolString(item.trim()) ? item.trim() : undefined);
+      if (!fallback || fallback.length === 0) return undefined;
+      return label ? `${label}: ${fallback}` : fallback;
+    })
+    .filter((entry): entry is string => Boolean(entry));
+}
+
+function resolveToolName(rawName: unknown, fallback?: string): string {
+  const candidates = [
+    typeof rawName === "string" ? rawName : undefined,
+    fallback,
+    "Tool",
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string") {
+      const trimmed = candidate.trim();
+      if (isMeaningfulToolString(trimmed)) {
+        return trimmed;
+      }
+    }
+  }
+  return "Tool";
+}
+
+function extractToolOutput(message: SDKToolResultMessage & { [key: string]: unknown }): {
+  output?: string;
+  logs?: string[];
+} {
+  const rawOutput = (message as any).tool_return ?? message.content ?? message.output ?? message.result ?? null;
+  const output = formatToolText(rawOutput);
+
+  const logs = [
+    ...collectLogEntries((message as any).stdout, "stdout"),
+    ...collectLogEntries((message as any).stderr, "stderr"),
+    ...collectLogEntries(message.logs),
+  ];
 
   return { output, logs };
 }
 
 export function ChatTimeline({ messages, activeSessionId, agentName, partialMessage, showPartialMessage, reasoningSteps = [] }: ChatTimelineProps) {
   const timeline = useMemo(() => {
-    const entries: TimelineEntry[] = [];
+    const entries: Array<TimelineEntry | null> = [];
     const reasoningIndex = new Map<string, number>();
+    let latestToolIndex: number | null = null;
+    let latestToolId: string | null = null;
 
-    messages.forEach((item, index) => {
+    const removeToolEntry = () => {
+      if (latestToolIndex !== null) {
+        entries[latestToolIndex] = null;
+      }
+      latestToolIndex = null;
+      latestToolId = null;
+    };
+
+    const pushToolEntry = (entry: TimelineEntry) => {
+      removeToolEntry();
+      latestToolIndex = entries.length;
+      latestToolId = entry.id;
+      entries.push(entry);
+    };
+
+    const upsertToolEntry = (entry: TimelineEntry) => {
+      if (latestToolIndex !== null && latestToolId === entry.id) {
+        const existing = entries[latestToolIndex];
+        if (existing?.kind === "tool") {
+          const existingOutput = existing.output ?? "";
+          const incomingOutput = entry.output ?? "";
+          const mergedOutput = incomingOutput
+            ? existingOutput
+              ? existingOutput.includes(incomingOutput)
+                ? existingOutput
+                : `${existingOutput}
+${incomingOutput}`
+              : incomingOutput
+            : existingOutput || undefined;
+
+          const existingLogs = existing.logs ?? [];
+          const incomingLogs = entry.logs ?? [];
+          const mergedLogs = incomingLogs.length > 0
+            ? Array.from(new Set([...existingLogs, ...incomingLogs]))
+            : existingLogs;
+
+          entries[latestToolIndex] = {
+            ...existing,
+            ...entry,
+            input: existing.input ?? entry.input,
+            logs: mergedLogs.length > 0 ? mergedLogs : undefined,
+            output: mergedOutput,
+            status: entry.status,
+          };
+          latestToolId = entry.id;
+          return;
+        }
+      }
+      pushToolEntry(entry);
+    };
+
+    messages.forEach((item) => {
       const message = item.message;
       const baseId = (message as any).uuid || (message as any).id || `${activeSessionId ?? "session"}-msg-${item.originalIndex}`;
 
@@ -72,6 +217,7 @@ export function ChatTimeline({ messages, activeSessionId, agentName, partialMess
           break;
         }
         case "assistant": {
+          removeToolEntry();
           entries.push({ kind: "assistant", id: baseId, message: message as SDKAssistantMessage });
           break;
         }
@@ -93,31 +239,53 @@ export function ChatTimeline({ messages, activeSessionId, agentName, partialMess
         case "tool_call": {
           const rawMessage = message as any;
           const toolId = rawMessage.toolCallId ?? baseId;
-          const name = rawMessage.toolName ?? "Tool";
-          const input = truncateInput(rawMessage.toolInput ?? rawMessage.input ?? rawMessage.arguments ?? "");
+          const name = resolveToolName(rawMessage.toolName ?? rawMessage.name ?? rawMessage.displayName, "Tool");
           if (name === "tool_return_message" || name === "approval_response_message" || name === "approval_request_message") {
             break;
           }
-          entries.push({ kind: "tool_call", id: toolId, name, input });
+          const rawInput = rawMessage.toolInput ?? rawMessage.input ?? rawMessage.arguments ?? rawMessage.params ?? undefined;
+          const formattedInput = formatToolText(rawInput);
+          const truncatedInput = typeof rawInput === "string" ? truncateInput(rawInput) : undefined;
+          const displayInput = formattedInput ?? (truncatedInput && isMeaningfulToolString(truncatedInput) ? truncatedInput : undefined);
+          const entry: TimelineEntry = {
+            kind: "tool",
+            id: toolId,
+            name,
+            input: displayInput,
+            status: "running",
+          };
+          pushToolEntry(entry);
           break;
         }
         case "tool_result": {
           const rawMessage = message as SDKToolResultMessage & { [key: string]: unknown };
           const toolId = (rawMessage as any).toolCallId ?? baseId;
-          const name = (rawMessage as any).toolName ?? "Tool";
+          const name = resolveToolName(
+            (rawMessage as any).toolName ?? (rawMessage as any).name ?? (rawMessage as any).displayName,
+            "Tool"
+          );
           if (name === "tool_return_message" || name === "approval_response_message" || name === "approval_request_message") {
             break;
           }
           const { output, logs } = extractToolOutput(rawMessage);
-          const inputFallback = truncateInput((rawMessage as any).toolInput ?? (rawMessage as any).input ?? "");
-          entries.push({
-            kind: "tool_result",
-            id: `${toolId}-result-${index}`,
+          const rawToolInput = (rawMessage as any).toolInput ?? (rawMessage as any).input;
+          const formattedToolInput = formatToolText(rawToolInput);
+          const truncatedToolInput = typeof rawToolInput === "string" ? truncateInput(rawToolInput) : undefined;
+          const displayInput = formattedToolInput ?? (truncatedToolInput && isMeaningfulToolString(truncatedToolInput) ? truncatedToolInput : undefined);
+          const entry: TimelineEntry = {
+            kind: "tool",
+            id: toolId,
             name,
-            output: output ?? inputFallback,
+            input: displayInput,
+            output,
             logs,
-            isError: Boolean(rawMessage.isError),
-          });
+            status: rawMessage.isError ? "failed" : "succeeded",
+          };
+          upsertToolEntry(entry);
+          break;
+        }
+        case "result": {
+          removeToolEntry();
           break;
         }
         default: {
@@ -141,7 +309,7 @@ export function ChatTimeline({ messages, activeSessionId, agentName, partialMess
       }
     }
 
-    return entries;
+    return entries.filter((entry): entry is TimelineEntry => entry !== null);
   }, [messages, activeSessionId, reasoningSteps]);
 
   return (
@@ -167,16 +335,15 @@ export function ChatTimeline({ messages, activeSessionId, agentName, partialMess
               );
             case "reasoning":
               return <ReasoningBlock key={entry.id} steps={entry.steps} />;
-            case "tool_call":
-              return <ToolCallBlock key={entry.id} name={entry.name} input={entry.input} />;
-            case "tool_result":
+            case "tool":
               return (
-                <ToolResultBlock
+                <ToolExecutionBlock
                   key={entry.id}
                   name={entry.name}
+                  status={entry.status}
+                  input={entry.input}
                   output={entry.output}
                   logs={entry.logs}
-                  isError={entry.isError}
                 />
               );
             default:

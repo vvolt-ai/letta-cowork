@@ -8,8 +8,11 @@ const isUserPrompt = (message: StreamMessage): message is ConversationStreamMess
 const isAssistantMessage = (message: StreamMessage): message is SDKAssistantMessage & { createdAt?: number } =>
   message.type === "assistant";
 
+const isToolMessage = (message: StreamMessage): message is ConversationStreamMessage & { toolCallId?: string } =>
+  message.type === "tool_call" || message.type === "tool_result";
+
 export function filterConversationMessages(messages: ConversationStreamMessage[]): ConversationStreamMessage[] {
-  return messages.filter((message) => isUserPrompt(message) || isAssistantMessage(message));
+  return messages.filter((message) => isUserPrompt(message) || isAssistantMessage(message) || isToolMessage(message));
 }
 
 export function takeLastConversationMessages(messages: ConversationStreamMessage[], limit: number): ConversationStreamMessage[] {
@@ -21,6 +24,15 @@ export function takeLastConversationMessages(messages: ConversationStreamMessage
 export function getConversationMessageId(message: ConversationStreamMessage): string | undefined {
   if (isUserPrompt(message)) return message.id;
   if (isAssistantMessage(message)) return message.uuid;
+  if (isToolMessage(message)) {
+    const toolCallId = (message as any).toolCallId ?? (message as any).uuid ?? (message as any).id;
+    if (!toolCallId) return undefined;
+    const suffix = message.type === "tool_call" ? "::call" : "::result";
+    return `${toolCallId}${suffix}`;
+  }
+  if (message.type === "reasoning" && (message as any).uuid) {
+    return `${(message as any).uuid}::reasoning`;
+  }
   return undefined;
 }
 

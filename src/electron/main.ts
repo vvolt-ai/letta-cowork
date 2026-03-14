@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, globalShortcut, Menu, shell } from "electron"
+import { app, BrowserWindow, ipcMain, dialog, globalShortcut, Menu, shell, nativeImage } from "electron"
 import { execSync } from "child_process";
 import path, { join } from "path";
 import { ipcMainHandle, isDev, DEV_PORT } from "./util.js";
@@ -116,6 +116,15 @@ app.on("ready", () => {
     process.on("SIGINT", handleSignal);
     process.on("SIGHUP", handleSignal);
 
+    const iconPath = getIconPath();
+    const appIcon = nativeImage.createFromPath(iconPath);
+
+    if (appIcon.isEmpty()) {
+        console.warn(`App icon not found at ${iconPath}`);
+    } else if (process.platform === "darwin" && app.dock) {
+        app.dock.setIcon(appIcon);
+    }
+
     // Create main window
     mainWindow = new BrowserWindow({
         width: 1200,
@@ -126,7 +135,7 @@ app.on("ready", () => {
             preload: getPreloadPath(),
             backgroundThrottling: false,
         },
-        icon: getIconPath(),
+        icon: appIcon.isEmpty() ? undefined : appIcon,
         titleBarStyle: "hiddenInset",
         backgroundColor: "#FAF9F6",
         trafficLightPosition: { x: 15, y: 18 }

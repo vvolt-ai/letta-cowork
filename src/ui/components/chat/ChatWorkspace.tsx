@@ -23,6 +23,8 @@ interface ChatWorkspaceProps {
   sendEvent: (event: ClientEvent) => void;
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
+  activityOpen: boolean;
+  onToggleActivity: () => void;
 }
 
 export function ChatWorkspace({
@@ -43,13 +45,21 @@ export function ChatWorkspace({
   sendEvent,
   scrollContainerRef,
   messagesEndRef,
+  activityOpen,
+  onToggleActivity,
 }: ChatWorkspaceProps) {
   const resolvedTitle = title || "Untitled conversation";
   const resolvedAgentName = agentName || "Vera";
 
   return (
     <section className="relative flex h-full flex-1 flex-col">
-      <ConversationHeader title={resolvedTitle} agentName={resolvedAgentName} status={agentStatus} />
+      <ConversationHeader
+        title={resolvedTitle}
+        agentName={resolvedAgentName}
+        status={agentStatus}
+        activityOpen={activityOpen}
+        onToggleActivity={onToggleActivity}
+      />
 
       <div
         ref={scrollContainerRef}

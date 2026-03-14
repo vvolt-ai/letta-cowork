@@ -41,6 +41,7 @@ function App() {
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [hasNewMessages, setHasNewMessages] = useState(false);
   const [lettaEnvOpen, setLettaEnvOpen] = useState(false);
+  const [isActivityOpen, setIsActivityOpen] = useState(true);
   const [autoSyncEnabled, setAutoSyncEnabled] = useState<boolean>(() => {
     return localStorage.getItem(AUTO_SYNC_ENABLED_KEY) === "true";
   });
@@ -284,6 +285,10 @@ function App() {
     }
   }, [activeSession, activeSessionId, fetchSessionHistory, shouldAutoScroll]);
 
+  const handleToggleActivityPanel = useCallback(() => {
+    setIsActivityOpen((prev) => !prev);
+  }, []);
+
   // Reset scroll behavior on session switch
   useEffect(() => {
     setShouldAutoScroll(true);
@@ -387,17 +392,21 @@ function App() {
             sendEvent={sendEvent}
             scrollContainerRef={scrollContainerRef}
             messagesEndRef={messagesEndRef}
+            activityOpen={isActivityOpen}
+            onToggleActivity={handleToggleActivityPanel}
           />
         }
         activity={
-          <ActivityPanel
-            status={agentStatus}
-            ephemeral={ephemeralState}
-            permissionRequests={permissionRequests}
-            coworkSettings={coworkSettings}
-            isEmailConnected={isMailConnected}
-            onPermissionResult={handlePermissionResult}
-          />
+          isActivityOpen ? (
+            <ActivityPanel
+              status={agentStatus}
+              ephemeral={ephemeralState}
+              permissionRequests={permissionRequests}
+              coworkSettings={coworkSettings}
+              isEmailConnected={isMailConnected}
+              onPermissionResult={handlePermissionResult}
+            />
+          ) : null
         }
       />
 
