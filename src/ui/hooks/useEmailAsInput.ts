@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import type { ZohoEmail } from "../types";
+import type { ZohoEmail, UploadedEmailAttachment } from "../types";
 import { useAppStore } from "../store/useAppStore";
 
 interface EmailWithAttachments {
@@ -16,10 +16,8 @@ interface EmailWithAttachments {
     [key: string]: unknown;
   };
   attachments: {
-    files: string[];
-    markdownFiles: string[];
-    path: string;
-    lettaAttachment?: unknown;
+    files: UploadedEmailAttachment[];
+    uploadErrors: { file: string; error: string }[];
   } | null;
 }
 
@@ -48,6 +46,27 @@ function escapeMd(text: string): string {
  */
 function toCodeBlock(content: string, language: string = "text"): string {
   return `\`\`\`${language}\n${content}\n\`\`\``;
+}
+
+function formatBytes(size: number): string {
+  if (!Number.isFinite(size)) return "";
+  if (size < 1024) return `${size} B`;
+  const units = ["KB", "MB", "GB"];
+  let value = size / 1024;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
+function attachmentLine(attachment: UploadedEmailAttachment): string {
+  const sizeLabel = formatBytes(attachment.size);
+  const details = [attachment.mimeType, sizeLabel]
+    .filter(Boolean)
+    .join(" · ");
+  return `- [${escapeMd(attachment.fileName)}](${attachment.url})${details ? ` (${details})` : ""}`;
 }
 
 /**
@@ -84,8 +103,8 @@ export function useEmailAsInput() {
       let emailContent = "";
       let attachmentsInfo = {
         hasAttachments: false,
-        files: [] as string[],
-        markdownFiles: [] as string[],
+        files: [] as UploadedEmailAttachment[],
+        uploadErrors: [] as { file: string; error: string }[],
       };
 
       // Ensure we have required fields
@@ -112,23 +131,13 @@ export function useEmailAsInput() {
         }
 
         if (result?.attachments) {
+          const uploads = result.attachments.files ?? [];
+
           attachmentsInfo = {
-            hasAttachments: result.attachments.files.length > 0,
-            files: result.attachments.files,
-            markdownFiles: result.attachments.markdownFiles,
+            hasAttachments: uploads.length > 0,
+            files: uploads,
+            uploadErrors: result.attachments.uploadErrors ?? [],
           };
-          
-          // Store the download path for reference
-          const downloadPath = result.attachments.path;
-          
-          // Add absolute paths to markdown files if path is available
-          if (downloadPath && result.attachments.markdownFiles.length > 0) {
-            // Update markdown files to include absolute path
-            attachmentsInfo.markdownFiles = result.attachments.markdownFiles.map(mdFile => {
-              const fileName = mdFile.split(/[/\\]/).pop() || mdFile;
-              return `${downloadPath}/${fileName}`;
-            });
-          }
         }
       } catch (error) {
         console.error("Failed to fetch email details:", error);
@@ -163,26 +172,20 @@ export function useEmailAsInput() {
         emailPrompt.push("");
         emailPrompt.push("## Attachments");
         
-        // List original files
+        // List uploaded files
         if (attachmentsInfo.files.length > 0) {
-          emailPrompt.push("### Original Files");
+          emailPrompt.push("### Files");
           for (const file of attachmentsInfo.files) {
-            const fileName = file.split(/[/\\]/).pop() || file;
-            emailPrompt.push(`- ${escapeMd(fileName)}`);
+            emailPrompt.push(attachmentLine(file));
           }
         }
-        
-        // List converted markdown files with absolute path
-        if (attachmentsInfo.markdownFiles.length > 0) {
+
+        if (attachmentsInfo.uploadErrors.length > 0) {
           emailPrompt.push("");
-          emailPrompt.push("### Converted Documents (Markdown)");
-          emailPrompt.push("**Absolute File Paths:**");
-          for (const mdFile of attachmentsInfo.markdownFiles) {
-            const fileName = mdFile.split(/[/\\]/).pop() || mdFile;
-            emailPrompt.push(`- \`${escapeMd(mdFile)}\` (${escapeMd(fileName)})`);
+          emailPrompt.push("### Attachment Upload Warnings");
+          for (const warning of attachmentsInfo.uploadErrors) {
+            emailPrompt.push(`- ${escapeMd(warning.file)}: ${escapeMd(warning.error)}`);
           }
-          emailPrompt.push("");
-          emailPrompt.push("_Note: PDF attachments have been converted to markdown format for better agent understanding._");
         }
       }
 

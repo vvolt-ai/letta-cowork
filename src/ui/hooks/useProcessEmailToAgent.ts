@@ -1,13 +1,11 @@
 import { useCallback, useState } from "react";
-import type { ZohoEmail } from "../types";
+import type { ZohoEmail, UploadedEmailAttachment, ChatAttachment } from "../types";
 
 interface EmailWithAttachments {
   emailContent: Record<string, unknown>;
   attachments: {
-    files: string[];
-    markdownFiles: string[];
-    path: string;
-    lettaAttachment?: unknown;
+    files: UploadedEmailAttachment[];
+    uploadErrors: { file: string; error: string }[];
   } | null;
 }
 
@@ -25,6 +23,37 @@ const toCodeBlock = (content: string, language = ""): string => {
   const fence = "```";
   return `${fence}${language}\n${content}\n${fence}`;
 };
+
+const formatBytes = (size: number): string => {
+  if (!Number.isFinite(size)) return "";
+  if (size < 1024) return `${size} B`;
+  const units = ["KB", "MB", "GB"];
+  let value = size / 1024;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+};
+
+const attachmentLine = (attachment: UploadedEmailAttachment): string => {
+  const sizeLabel = formatBytes(attachment.size);
+  const parts = [attachment.mimeType, sizeLabel]
+    .filter(Boolean)
+    .join(" · ");
+  return `- [${escapeMd(attachment.fileName)}](${attachment.url})${parts ? ` (${parts})` : ""}`;
+};
+
+const toChatAttachment = (attachment: UploadedEmailAttachment): ChatAttachment => ({
+  id: attachment.fileId,
+  name: attachment.fileName,
+  mimeType: attachment.mimeType,
+  size: attachment.size,
+  url: attachment.url,
+  kind: attachment.kind,
+  previewUrl: attachment.kind === "image" ? attachment.url : undefined,
+});
 
 const extractEmailContent = (details: unknown): string => {
   if (!details || typeof details !== "object") return "";
@@ -73,32 +102,19 @@ const buildEmailMarkdownPrompt = (email: ZohoEmail, agentId: string, emailConten
   ].join("\n\n");
 };
 
-const buildAttachmentsSection = (hasAttachment: boolean, attachmentFileNames: string[], markdownFileNames: string[] = []): string => {
+const buildAttachmentsSection = (
+  hasAttachment: boolean,
+  attachments: UploadedEmailAttachment[]
+): string => {
   if (!hasAttachment) return "No attachments reported for this email.";
-  
-  const sections: string[] = [];
-  
-  // Original files
-  if (attachmentFileNames.length > 0) {
-    sections.push("### Original Files");
-    sections.push(...attachmentFileNames.map((name) => `- \`${name}\``));
-  }
-  
-  // Markdown converted files
-  if (markdownFileNames.length > 0) {
-    sections.push("");
-    sections.push("### Converted Documents (Markdown)");
-    sections.push("**Absolute File Paths:**");
-    sections.push(...markdownFileNames.map((name) => `- \`${escapeMd(name)}\``));
-    sections.push("");
-    sections.push("_Note: PDF attachments have been converted to markdown format for better agent understanding._");
-  }
-  
-  if (sections.length === 0) {
-    return "Attachments exist and were uploaded, but file names could not be resolved. Inspect the latest uploaded files.";
+  if (attachments.length === 0) {
+    return "Attachments exist and were uploaded, but file metadata could not be resolved. Inspect the linked files.";
   }
 
-  return sections.join("\n");
+  return [
+    "### Files",
+    ...attachments.map((attachment) => attachmentLine(attachment)),
+  ].join("\n");
 };
 
 /**
@@ -124,36 +140,28 @@ export function useProcessEmailToAgent() {
       }
 
       const hasAttachment = String(email.hasAttachment ?? "0") === "1";
-      let attachmentFileNames: string[] = [];
-      let markdownFileNames: string[] = [];
+      let uploadedAttachments: UploadedEmailAttachment[] = [];
+      let uploadErrors: { file: string; error: string }[] = [];
       let emailContent = "";
 
       try {
-        // Use fetchEmailById to get full content AND download attachments
+        // Use fetchEmailById to get full content AND upload attachments
         const emailWithAttachments = await window.electron.fetchEmailById(
           accountId,
           folderId,
           messageId
         ) as EmailWithAttachments;
         
-        // Extract email content
         if (emailWithAttachments?.emailContent) {
           emailContent = extractEmailContent(emailWithAttachments.emailContent);
         }
         
-        // Extract attachment info including markdown files
         if (emailWithAttachments?.attachments) {
-          attachmentFileNames = emailWithAttachments.attachments.files;
-          
-          // Add absolute paths to markdown files
-          const downloadPath = emailWithAttachments.attachments.path;
-          if (downloadPath && emailWithAttachments.attachments.markdownFiles.length > 0) {
-            markdownFileNames = emailWithAttachments.attachments.markdownFiles.map(mdFile => {
-              const fileName = mdFile.split(/[/\\]/).pop() || mdFile;
-              return `${downloadPath}/${fileName}`;
-            });
-          } else {
-            markdownFileNames = emailWithAttachments.attachments.markdownFiles;
+          uploadedAttachments = emailWithAttachments.attachments.files ?? [];
+          uploadErrors = emailWithAttachments.attachments.uploadErrors ?? [];
+          if (uploadedAttachments.length > 0) {
+            // mark that this email effectively has attachments even if metadata disagrees
+            email.hasAttachment = "1" as any;
           }
         }
       } catch (detailError) {
@@ -163,17 +171,32 @@ export function useProcessEmailToAgent() {
         );
       }
 
-      const prompt = [
-        buildEmailMarkdownPrompt(email, agentId, emailContent, hasAttachment),
+      const effectiveHasAttachment = hasAttachment || uploadedAttachments.length > 0;
+      const promptSections = [
+        buildEmailMarkdownPrompt(email, agentId, emailContent, effectiveHasAttachment),
         "## Attachment Files",
-        buildAttachmentsSection(hasAttachment, attachmentFileNames, markdownFileNames),
-      ].join("\n\n");
+        buildAttachmentsSection(effectiveHasAttachment, uploadedAttachments),
+      ];
+
+      if (uploadErrors.length > 0) {
+        promptSections.push(
+          "## Attachment Upload Warnings",
+          uploadErrors
+            .map((error) => `- ${escapeMd(error.file)}: ${escapeMd(error.error)}`)
+            .join("\n")
+        );
+      }
+
+      const prompt = promptSections.join("\n\n");
+
+      const chatAttachments: ChatAttachment[] = uploadedAttachments.map(toChatAttachment);
 
       window.electron.sendClientEvent({
         type: "session.start",
         payload: {
           title: `Email: ${email.subject || email.messageId}`,
           prompt,
+          attachments: chatAttachments,
           cwd: "",
           agentId,
         },

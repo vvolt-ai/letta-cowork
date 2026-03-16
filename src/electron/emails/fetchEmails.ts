@@ -1,11 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { app, shell } from "electron";
 import path from "path";
-import fs from 'fs';
+import fs from "fs";
 import { BASE_URL, clearEmailCredentials, getAccessToken, getAccountId, getInboxFolderId, getRefreshToken, saveAccountId, saveInboxFolderId } from "./helper.js";
 import { serverApiRequest, zohoApiRequest } from "./zohoApi.js";
-import { attachFilesToAgentFolder } from "../lettaFilesystem.js";
-import { isPdfFile, convertMultiplePdfsToMarkdown } from "./pdfConverter.js";
+import { uploadFilePathToManager, type FileManagerUploadResult } from "./fileManager.js";
 import type {
   AttachmentInfoResponse,
   AccountsResponse,
@@ -13,6 +12,7 @@ import type {
   SearchEmailParams,
   StoreEmailPayload,
   UpdateMessageRequest,
+  UploadedEmailAttachment,
 } from "./types.js";
 
 
@@ -120,18 +120,20 @@ export const fetchEmails = async (
 export interface EmailWithAttachments {
   /** The raw email content from Zoho */
   emailContent: unknown;
-  /** Downloaded attachment information */
+  /** Uploaded attachment information */
   attachments: {
-    /** Original file paths */
-    files: string[];
-    /** Converted markdown file paths (for PDFs) */
-    markdownFiles: string[];
-    /** Path to the download directory */
-    path: string;
-    /** Letta attachment result */
-    lettaAttachment?: unknown;
+    files: UploadedEmailAttachment[];
+    uploadErrors: { file: string; error: string }[];
   } | null;
 }
+
+type DownloadAttachmentResult = {
+  status: string;
+  files?: string[];
+  path?: string;
+  uploadedFiles?: UploadedEmailAttachment[];
+  uploadErrors?: { file: string; error: string }[];
+};
 
 export const fetchEmailDetails = async (messageId: string, accountId?: string, folderId?: string) => {
   // resolve accountId from parameter or keytar
@@ -189,13 +191,15 @@ export const fetchEmailById = async (messageId: string, accountId?: string, fold
   if (hasAttachments) {
     try {
       // Download attachments - this will also convert PDFs to markdown
-      const attachmentResult = await downloadEmailAttachment(resolvedFolderId, messageId, resolvedAccountId);
+      const attachmentResult = await downloadEmailAttachment(
+        resolvedFolderId,
+        messageId,
+        resolvedAccountId
+      ) as DownloadAttachmentResult;
       
       attachmentsResult = {
-        files: attachmentResult.files || [],
-        markdownFiles: attachmentResult.markdownFiles || [],
-        path: attachmentResult.path || "",
-        lettaAttachment: (attachmentResult as { lettaAttachment?: unknown }).lettaAttachment,
+        files: attachmentResult.uploadedFiles ?? [],
+        uploadErrors: attachmentResult.uploadErrors ?? [],
       };
     } catch (attachError) {
       console.error("Failed to download attachments:", attachError);
@@ -276,6 +280,11 @@ export const downloadEmailAttachment = async (folderId?: string, messageId?: str
     fs.mkdirSync(downloadDir, { recursive: true });
   }
 
+  const downloadedFiles: string[] = [];
+  const downloadedFilePaths: string[] = [];
+  const uploadedFiles: UploadedEmailAttachment[] = [];
+  const uploadErrors: { file: string; error: string }[] = [];
+
   try {
     // STEP 1: Fetch attachment metadata using common Zoho API helper
     const infoUrl = `/accounts/${resolvedAccountId}/folders/${resolvedFolderId}/messages/${messageId}/attachmentinfo`;
@@ -283,14 +292,19 @@ export const downloadEmailAttachment = async (folderId?: string, messageId?: str
 
     console.log("Attachment Info:", infoData); // Debug log
     if (!infoData.data || infoData.data.attachments.length === 0) {
-      return { status: 'success', message: 'No attachments found.' };
+      return {
+        status: "success" as const,
+        files: downloadedFiles,
+        path: downloadDir,
+        uploadedFiles,
+        uploadErrors,
+        message: "No attachments found.",
+      };
     }
 
     // STEP 2: Download each attachment using direct fetch + Streams
     // (can't use zohoApiRequest here because we need the binary body stream)
     const accessToken = await getAccessToken();
-    const downloadedFiles: string[] = [];
-    const downloadedFilePaths: string[] = [];
 
     for (const attach of infoData.data.attachments) {
       const downloadUrl = `https://mail.zoho.com/api/accounts/${resolvedAccountId}/folders/${resolvedFolderId}/messages/${messageId}/attachments/${attach.attachmentId}`;
@@ -317,29 +331,28 @@ export const downloadEmailAttachment = async (folderId?: string, messageId?: str
       downloadedFilePaths.push(filePath);
     }
 
-    // STEP 3: Convert PDF attachments to markdown
-    const pdfFiles = downloadedFilePaths.filter(filePath => isPdfFile(filePath));
-    let markdownFiles: string[] = [];
-
-    if (pdfFiles.length > 0) {
-      console.log(`Found ${pdfFiles.length} PDF file(s) to convert to markdown`);
+    for (const filePath of downloadedFilePaths) {
       try {
-        const conversionResults = await convertMultiplePdfsToMarkdown(pdfFiles, {
-          doTableStructure: true,
-          tableMode: "accurate",
-          doOcr: true,
+        const uploadResult = await uploadFilePathToManager(filePath);
+        const kind: UploadedEmailAttachment["kind"] = uploadResult.mimeType.toLowerCase().startsWith("image/") ? "image" : "file";
+        uploadedFiles.push({
+          ...uploadResult,
+          kind,
         });
-
-        markdownFiles = conversionResults.map(result => result.markdownPath);
-        console.log(`Successfully converted ${markdownFiles.length} PDF(s) to markdown`);
-      } catch (convertError) {
-        console.error("Error converting PDFs to markdown:", convertError);
-        // Continue with original files even if conversion fails
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error("[downloadEmailAttachment] failed to upload attachment", { filePath, error: message });
+        uploadErrors.push({ file: path.basename(filePath), error: message });
       }
     }
 
-
-    return { status: 'success', files: downloadedFiles, markdownFiles, path: downloadDir };
+    return {
+      status: "success" as const,
+      files: downloadedFiles,
+      path: downloadDir,
+      uploadedFiles,
+      uploadErrors,
+    };
   } catch (error) {
     console.error("Zoho Download Error:", error);
     throw error;

@@ -31,6 +31,8 @@ export type TimelineEntry =
       status: "running" | "succeeded" | "failed";
     };
 
+type ToolTimelineEntry = Extract<TimelineEntry, { kind: "tool" }>;
+
 function normalizeReasoning(content: unknown): string[] {
   if (!content) return [];
   const asString = typeof content === "string" ? content : String(content ?? "");
@@ -164,18 +166,19 @@ export function ChatTimeline({ messages, activeSessionId, agentName, partialMess
       latestToolId = null;
     };
 
-    const pushToolEntry = (entry: TimelineEntry) => {
+    const pushToolEntry = (entry: ToolTimelineEntry) => {
       removeToolEntry();
       latestToolIndex = entries.length;
       latestToolId = entry.id;
       entries.push(entry);
     };
 
-    const upsertToolEntry = (entry: TimelineEntry) => {
+    const upsertToolEntry = (entry: ToolTimelineEntry) => {
       if (latestToolIndex !== null && latestToolId === entry.id) {
         const existing = entries[latestToolIndex];
-        if (existing?.kind === "tool") {
-          const existingOutput = existing.output ?? "";
+        if (existing && existing.kind === "tool") {
+          const toolEntry = existing as Extract<TimelineEntry, { kind: "tool" }>;
+          const existingOutput = toolEntry.output ?? "";
           const incomingOutput = entry.output ?? "";
           const mergedOutput = incomingOutput
             ? existingOutput
@@ -186,16 +189,16 @@ ${incomingOutput}`
               : incomingOutput
             : existingOutput || undefined;
 
-          const existingLogs = existing.logs ?? [];
+          const existingLogs = toolEntry.logs ?? [];
           const incomingLogs = entry.logs ?? [];
           const mergedLogs = incomingLogs.length > 0
             ? Array.from(new Set([...existingLogs, ...incomingLogs]))
             : existingLogs;
 
           entries[latestToolIndex] = {
-            ...existing,
+            ...toolEntry,
             ...entry,
-            input: existing.input ?? entry.input,
+            input: toolEntry.input ?? entry.input,
             logs: mergedLogs.length > 0 ? mergedLogs : undefined,
             output: mergedOutput,
             status: entry.status,
@@ -247,7 +250,7 @@ ${incomingOutput}`
           const formattedInput = formatToolText(rawInput);
           const truncatedInput = typeof rawInput === "string" ? truncateInput(rawInput) : undefined;
           const displayInput = formattedInput ?? (truncatedInput && isMeaningfulToolString(truncatedInput) ? truncatedInput : undefined);
-          const entry: TimelineEntry = {
+          const entry: ToolTimelineEntry = {
             kind: "tool",
             id: toolId,
             name,
@@ -272,7 +275,7 @@ ${incomingOutput}`
           const formattedToolInput = formatToolText(rawToolInput);
           const truncatedToolInput = typeof rawToolInput === "string" ? truncateInput(rawToolInput) : undefined;
           const displayInput = formattedToolInput ?? (truncatedToolInput && isMeaningfulToolString(truncatedToolInput) ? truncatedToolInput : undefined);
-          const entry: TimelineEntry = {
+          const entry: ToolTimelineEntry = {
             kind: "tool",
             id: toolId,
             name,

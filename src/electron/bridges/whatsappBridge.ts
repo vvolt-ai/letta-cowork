@@ -3,7 +3,8 @@ import { dirname, extname, join } from "path";
 import { LettaResponder } from "./lettaResponder.js";
 import type { WhatsAppBridgeConfig } from "./channelConfig.js";
 import QRCode from "qrcode";
-import { attachFilesToAgentFolder } from "../lettaFilesystem.js";
+import { uploadLocalFilesToManager } from "./attachmentUploads.js";
+import type { UploadOutcome } from "./attachmentUploads.js";
 
 type WhatsAppStatusState = "stopped" | "starting" | "qr" | "connected" | "reconnecting" | "error";
 
@@ -163,7 +164,6 @@ const getNumericSender = (message: AnyWAMessage): string => {
 
 const isGroupMessage = (jid: string): boolean => jid.endsWith("@g.us");
 const isStatusBroadcast = (jid: string): boolean => jid === "status@broadcast";
-const UNSUPPORTED_LETTA_IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
 
 const getMentionedJids = (message: AnyWAMessage): string[] => {
   const payload = unwrapMessagePayload(message.message || {});
@@ -604,23 +604,27 @@ export class WhatsAppBridge {
       }
 
       try {
-        let attachmentNote = "";
+        const attachmentOutcomes: UploadOutcome[] = [];
+
         if (hasImageMessage(message.message)) {
-          attachmentNote = await this.handleImageAttachment(message, sender, messageId);
-        } else if (hasDocumentMessage(message.message)) {
-          attachmentNote = await this.handleDocumentAttachment(message, sender, messageId);
+          attachmentOutcomes.push(await this.handleImageAttachment(message, messageId));
         }
 
-        const composedText = attachmentNote
-          ? `${text}\n\n[WhatsApp attachment context]\n${attachmentNote}`
-          : text;
+        if (hasDocumentMessage(message.message)) {
+          attachmentOutcomes.push(await this.handleDocumentAttachment(message, messageId));
+        }
+
+        const combinedAttachments = attachmentOutcomes.flatMap((outcome) => outcome.attachments);
+        const combinedWarnings = attachmentOutcomes.flatMap((outcome) => outcome.warnings);
 
         this.log("calling Letta responder", { messageId, sender });
         const reply = await this.lettaResponder.respond({
           channel: "whatsapp",
           senderId: sender || remoteJid,
-          text: composedText,
+          text,
           agentId: this.config.defaultAgentId,
+          attachments: combinedAttachments,
+          warnings: combinedWarnings,
         });
         this.log("Letta reply generated", {
           messageId,
@@ -677,14 +681,17 @@ export class WhatsAppBridge {
 
   private async handleImageAttachment(
     message: AnyWAMessage,
-    sender: string,
     messageId: string
-  ): Promise<string> {
+  ): Promise<UploadOutcome> {
     if (!this.socket || !this.baileysModule?.downloadMediaMessage) {
       this.log("image attachment skipped: media downloader unavailable", { messageId });
-      return "Image was received, but media download utility is unavailable.";
+      return {
+        attachments: [],
+        warnings: ["Image was received, but media download utility is unavailable."],
+      };
     }
 
+    let localFilePath: string | null = null;
     try {
       this.log("downloading image media", { messageId });
       const mediaBufferUnknown = await this.baileysModule.downloadMediaMessage(
@@ -708,112 +715,40 @@ export class WhatsAppBridge {
       const ext = this.getImageExtensionFromMessage(message);
       const tempDir = join(process.cwd(), "data", "whatsapp-media");
       mkdirSync(tempDir, { recursive: true });
-      const localFilePath = join(tempDir, `wa_${Date.now()}_${messageId}${ext}`);
+      localFilePath = join(tempDir, `wa_${Date.now()}_${messageId}${ext}`);
       writeFileSync(localFilePath, mediaBuffer);
       this.log("image media downloaded", { messageId, localFilePath, size: mediaBuffer.length });
 
-      const targetAgentId = (this.config?.defaultAgentId || process.env.LETTA_AGENT_ID || "").trim();
-      if (!targetAgentId) {
-        return `Image downloaded to ${localFilePath}, but no default agent ID is configured to attach it.`;
+      const outcome = await uploadLocalFilesToManager(
+        [
+          {
+            path: localFilePath,
+            kind: "image",
+          },
+        ],
+        { contextLabel: `WhatsApp image ${messageId}` }
+      );
+
+      if (outcome.attachments.length === 0 && outcome.warnings.length === 0) {
+        outcome.warnings.push(
+          `Image processed for message ${messageId}, but no attachment metadata was generated.`
+        );
       }
 
-      console.log("checking if direct upload is likely supported for this image type", { messageId, ext });
-      
-      const directUploadLikelyUnsupported = UNSUPPORTED_LETTA_IMAGE_EXTENSIONS.has(ext);
-      if (directUploadLikelyUnsupported) {
-        this.log("skipping direct image upload due to Letta files API type restrictions", {
-          messageId,
-          ext,
-          localFilePath,
-        });
-      }
-
-      let upload:
-        | Awaited<ReturnType<typeof attachFilesToAgentFolder>>
-        | null = null;
-      if (!directUploadLikelyUnsupported) {
-        upload = await attachFilesToAgentFolder({
-          agentId: targetAgentId,
-          filePaths: [localFilePath],
-          folderNamePrefix: `whatsapp_${sender || "unknown"}_${messageId}`,
-        });
-
-        if (upload.status === "attached") {
-          this.log("image attached to Letta folder", {
-            messageId,
-            folderId: upload.folderId,
-            folderName: upload.folderName,
-            uploadedFiles: upload.uploadedFiles,
-          });
-          return [
-            `Image was uploaded and attached to agent ${targetAgentId}.`,
-            `Folder: ${upload.folderName} (${upload.folderId})`,
-            `Files: ${upload.uploadedFiles.join(", ") || "none"}`,
-            upload.skippedFiles.length > 0 ? `Skipped: ${upload.skippedFiles.join(", ")}` : "",
-            upload.failedFiles.length > 0
-              ? `Failed: ${upload.failedFiles.map((item) => `${item.file}: ${item.error}`).join(" | ")}`
-              : "",
-          ]
-            .filter(Boolean)
-            .join("\n");
-        }
-
-        this.log("image upload skipped", { messageId, reason: upload.reason });
-        const isUnsupportedType =
-          upload.reason.includes("Unsupported file type") || upload.reason.includes("415");
-
-        if (!isUnsupportedType) {
-          return `Image received but upload was skipped: ${upload.reason}`;
-        }
-      }
-
-      const sidecarPath = join(tempDir, `wa_${Date.now()}_${messageId}.md`);
-      const sidecarContent = [
-        "# WhatsApp Image Attachment",
-        `- Message ID: ${messageId}`,
-        `- Sender: ${sender || "unknown"}`,
-        `- Local image path: ${localFilePath}`,
-        `- File extension: ${ext}`,
-        `- File size bytes: ${mediaBuffer.length}`,
-        "",
-        "The files API rejected direct image upload. Use local tools on this path to inspect/describe the image.",
-      ].join("\n");
-      writeFileSync(sidecarPath, sidecarContent, "utf8");
-
-      const sidecarUpload = await attachFilesToAgentFolder({
-        agentId: targetAgentId,
-        filePaths: [sidecarPath],
-        folderNamePrefix: `whatsapp_image_note_${sender || "unknown"}_${messageId}`,
-      });
-
-      if (sidecarUpload.status === "attached") {
-        this.log("sidecar note attached for unsupported image type", {
-          messageId,
-          sidecarPath,
-          folderId: sidecarUpload.folderId,
-          folderName: sidecarUpload.folderName,
-        });
-        return [
-          "Image received. Direct image upload is unsupported by current Letta files API.",
-          `A markdown note with image location was attached to agent ${targetAgentId}.`,
-          `Sidecar file: ${sidecarPath}`,
-          `Local image path for analysis: ${localFilePath}`,
-          `Folder: ${sidecarUpload.folderName} (${sidecarUpload.folderId})`,
-        ].join("\n");
-      }
-
-      return [
-        "Image received, but both direct upload and sidecar note upload failed.",
-        `Direct upload error: ${upload?.reason || "Skipped (known unsupported image type for this Letta files API)."}`,
-        `Sidecar upload error: ${sidecarUpload.reason}`,
-        `Local image path: ${localFilePath}`,
-      ].join("\n");
+      return outcome;
     } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
       this.log("image attachment failed", {
         messageId,
-        error: error instanceof Error ? error.message : String(error),
+        error: reason,
       });
-      return `Image received but processing failed: ${error instanceof Error ? error.message : String(error)}`;
+      const warning = localFilePath
+        ? `Image processing failed for message ${messageId}: ${reason}. Local file may remain at ${localFilePath}.`
+        : `Image processing failed for message ${messageId}: ${reason}.`;
+      return {
+        attachments: [],
+        warnings: [warning],
+      };
     }
   }
 
@@ -834,12 +769,14 @@ export class WhatsAppBridge {
 
   private async handleDocumentAttachment(
     message: AnyWAMessage,
-    sender: string,
     messageId: string
-  ): Promise<string> {
+  ): Promise<UploadOutcome> {
     if (!this.socket || !this.baileysModule?.downloadMediaMessage) {
       this.log("document attachment skipped: media downloader unavailable", { messageId });
-      return "Document was received, but media download utility is unavailable.";
+      return {
+        attachments: [],
+        warnings: ["Document was received, but media download utility is unavailable."],
+      };
     }
 
     const messagePayload = message.message || {};
@@ -847,6 +784,7 @@ export class WhatsAppBridge {
     const fileName = getDocumentFileName(messagePayload);
     const ext = "." + (fileName.split(".").pop() || "bin");
 
+    let localFilePath: string | null = null;
     try {
       this.log("downloading document media", { messageId, fileName, mimeType });
       const mediaBufferUnknown = await this.baileysModule.downloadMediaMessage(
@@ -869,86 +807,41 @@ export class WhatsAppBridge {
 
       const tempDir = join(process.cwd(), "data", "whatsapp-media");
       mkdirSync(tempDir, { recursive: true });
-      const localFilePath = join(tempDir, `wa_${Date.now()}_${messageId}${ext}`);
+      localFilePath = join(tempDir, `wa_${Date.now()}_${messageId}${ext}`);
       writeFileSync(localFilePath, mediaBuffer);
       this.log("document media downloaded", { messageId, localFilePath, size: mediaBuffer.length });
 
-      const targetAgentId = (this.config?.defaultAgentId || process.env.LETTA_AGENT_ID || "").trim();
-      if (!targetAgentId) {
-        return `Document (${fileName}) downloaded to ${localFilePath}, but no default agent ID is configured.`;
+      const outcome = await uploadLocalFilesToManager(
+        [
+          {
+            path: localFilePath,
+            kind: "file",
+            overrideMimeType: mimeType,
+          },
+        ],
+        { contextLabel: `WhatsApp document ${messageId}` }
+      );
+
+      if (outcome.attachments.length === 0 && outcome.warnings.length === 0) {
+        outcome.warnings.push(
+          `Document processed for message ${messageId}, but no attachment metadata was generated.`
+        );
       }
 
-      // Upload the document to Letta
-      const upload = await attachFilesToAgentFolder({
-        agentId: targetAgentId,
-        filePaths: [localFilePath],
-        folderNamePrefix: `whatsapp_${sender || "unknown"}_${messageId}`,
-      });
-
-      if (upload.status === "attached") {
-        this.log("document attached to Letta folder", {
-          messageId,
-          folderId: upload.folderId,
-          folderName: upload.folderName,
-          uploadedFiles: upload.uploadedFiles,
-        });
-        return [
-          `Document was uploaded and attached to agent ${targetAgentId}.`,
-          `File: ${fileName}`,
-          `MIME type: ${mimeType}`,
-          `Size: ${mediaBuffer.length} bytes`,
-          `Folder: ${upload.folderName} (${upload.folderId})`,
-          `Files: ${upload.uploadedFiles.join(", ") || "none"}`,
-          upload.skippedFiles.length > 0 ? `Skipped: ${upload.skippedFiles.join(", ")}` : "",
-          upload.failedFiles.length > 0
-            ? `Failed: ${upload.failedFiles.map((item) => `${item.file}: ${item.error}`).join(" | ")}`
-            : "",
-        ]
-          .filter(Boolean)
-          .join("\n");
-      }
-
-      // If upload failed, create a sidecar note
-      const sidecarPath = join(tempDir, `wa_${Date.now()}_${messageId}.md`);
-      const sidecarContent = [
-        "# WhatsApp Document Attachment",
-        `- Message ID: ${messageId}`,
-        `- Sender: ${sender || "unknown"}`,
-        `- File name: ${fileName}`,
-        `- MIME type: ${mimeType}`,
-        `- Local file path: ${localFilePath}`,
-        `- File size bytes: ${mediaBuffer.length}`,
-        "",
-        "Document upload to Letta failed. Use local tools on the path above to inspect/describe the document.",
-      ].join("\n");
-      writeFileSync(sidecarPath, sidecarContent, "utf8");
-
-      const sidecarUpload = await attachFilesToAgentFolder({
-        agentId: targetAgentId,
-        filePaths: [sidecarPath],
-        folderNamePrefix: `whatsapp_doc_note_${sender || "unknown"}_${messageId}`,
-      });
-
-      if (sidecarUpload.status === "attached") {
-        return [
-          `Document received (${fileName}, ${mimeType}).`,
-          "Document upload failed, but a note with file location was attached.",
-          `Sidecar note: ${sidecarPath}`,
-          `Local file path: ${localFilePath}`,
-          `Folder: ${sidecarUpload.folderName} (${sidecarUpload.folderId})`,
-        ].join("\n");
-      }
-
-      return [
-        `Document received (${fileName}, ${mimeType}), but both direct upload and sidecar note upload failed.`,
-        `Local file path: ${localFilePath}`,
-      ].join("\n");
+      return outcome;
     } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
       this.log("document attachment failed", {
         messageId,
-        error: error instanceof Error ? error.message : String(error),
+        error: reason,
       });
-      return `Document received but processing failed: ${error instanceof Error ? error.message : String(error)}`;
+      const warning = localFilePath
+        ? `Document processing failed for message ${messageId}: ${reason}. Local file may remain at ${localFilePath}.`
+        : `Document processing failed for message ${messageId}: ${reason}.`;
+      return {
+        attachments: [],
+        warnings: [warning],
+      };
     }
   }
 }

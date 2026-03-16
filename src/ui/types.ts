@@ -28,6 +28,15 @@ export interface ChatAttachment {
   previewUrl?: string;
 }
 
+export interface UploadedEmailAttachment {
+  fileId: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+  url: string;
+  kind: ChatAttachmentKind;
+}
+
 export type UserPromptMessage = {
   type: "user_prompt";
   prompt: string;

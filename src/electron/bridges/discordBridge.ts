@@ -3,6 +3,8 @@ import { join } from "path";
 import { Client, GatewayIntentBits, Message, TextBasedChannel } from "discord.js";
 import { LettaResponder, LettaInboundMessage } from "./lettaResponder.js";
 import type { DiscordBridgeConfig } from "./channelConfig.js";
+import { uploadLocalFilesToManager } from "./attachmentUploads.js";
+import type { UploadDescriptor } from "./attachmentUploads.js";
 
 type DiscordStatusState = "stopped" | "starting" | "running" | "error";
 
@@ -347,19 +349,52 @@ export class DiscordBridge {
     const content = message.content;
 
     // Get attachments if any
-    const attachments: string[] = [];
+    const uploadDescriptors: UploadDescriptor[] = [];
+    const attachmentWarnings: string[] = [];
     if (message.attachments.size > 0) {
       try {
         for (const attachment of message.attachments.values()) {
           const filePath = await this.downloadAttachment(attachment.url, attachment.name);
           if (filePath) {
-            attachments.push(filePath);
+            uploadDescriptors.push({
+              path: filePath,
+              kind: attachment.contentType?.startsWith("image/") ? "image" : "file",
+              overrideMimeType: attachment.contentType ?? undefined,
+            });
+          } else {
+            attachmentWarnings.push(
+              `Failed to download attachment "${attachment.name ?? attachment.id}" from Discord.`
+            );
           }
         }
       } catch (error) {
         console.error("[Discord] Error downloading attachments:", error);
+        attachmentWarnings.push("Encountered an error while downloading one or more Discord attachments.");
       }
     }
+
+    console.debug("[Discord] uploading attachments", {
+      messageId: message.id,
+      descriptorCount: uploadDescriptors.length,
+    });
+
+    const uploadOutcome = uploadDescriptors.length > 0
+      ? await uploadLocalFilesToManager(uploadDescriptors, { contextLabel: `Discord message ${message.id}` })
+      : { attachments: [], warnings: [] };
+
+    console.debug("[Discord] upload outcome", {
+      messageId: message.id,
+      attachments: uploadOutcome.attachments.map((item) => ({
+        fileName: item.fileName,
+        fileId: item.fileId,
+        mimeType: item.mimeType,
+        kind: item.kind,
+        url: item.url,
+      })),
+      warnings: uploadOutcome.warnings,
+    });
+
+    const combinedWarnings = [...attachmentWarnings, ...uploadOutcome.warnings];
 
     // Send to Letta
     const inboundMessage: LettaInboundMessage = {
@@ -367,6 +402,8 @@ export class DiscordBridge {
       senderId: sender,
       text: content,
       agentId: this.config.defaultAgentId || undefined,
+      attachments: uploadOutcome.attachments,
+      warnings: combinedWarnings,
     };
 
     const response = await this.lettaResponder.respond(inboundMessage);

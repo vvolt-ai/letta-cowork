@@ -1,4 +1,5 @@
 import { createSession, resumeSession, type Session as LettaSession, type SDKMessage } from "@letta-ai/letta-code-sdk";
+import type { UploadedBridgeAttachment } from "./attachmentUploads.js";
 
 type ChannelName = "whatsapp" | "telegram" | "slack" | "discord";
 
@@ -7,6 +8,8 @@ export type LettaInboundMessage = {
   senderId: string;
   text: string;
   agentId?: string;
+  attachments?: UploadedBridgeAttachment[];
+  warnings?: string[];
 };
 
 type StreamedText = {
@@ -39,6 +42,28 @@ const mergeAssistantChunks = (chunks: string[]): string => {
     }
   }
   return out.trim();
+};
+
+const formatBytes = (size: number): string => {
+  if (!Number.isFinite(size)) return "";
+  if (size < 1024) return `${size} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let value = size / 1024;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  const precision = value >= 10 || unitIndex === 0 ? 0 : 1;
+  return `${value.toFixed(precision)} ${units[unitIndex]}`;
+};
+
+const formatAttachmentLine = (attachment: UploadedBridgeAttachment): string => {
+  const sizeLabel = formatBytes(attachment.size);
+  const details = [attachment.mimeType, sizeLabel]
+    .filter(Boolean)
+    .join(" · ");
+  return `- [${attachment.fileName}](${attachment.url})${details ? ` (${details})` : ""}`;
 };
 
 export class LettaResponder {
@@ -84,12 +109,30 @@ export class LettaResponder {
     const session = this.createOrResumeSession(input.agentId);
     this.activeSession = session;
 
-    const normalizedPrompt = [
+    const promptSections: string[] = [
       `Channel: ${input.channel}`,
       `Sender: ${input.senderId}`,
       "User message:",
-      input.text.trim(),
-    ].join("\n");
+      input.text.trim() || "(no text provided)",
+    ];
+
+    if (input.attachments && input.attachments.length > 0) {
+      promptSections.push(
+        "",
+        "Attachments:",
+        ...input.attachments.map((attachment) => formatAttachmentLine(attachment))
+      );
+    }
+
+    if (input.warnings && input.warnings.length > 0) {
+      promptSections.push(
+        "",
+        "Attachment upload warnings:",
+        ...input.warnings.map((warning) => `- ${warning}`)
+      );
+    }
+
+    const normalizedPrompt = promptSections.join("\n");
 
     await session.send(normalizedPrompt);
 

@@ -6,6 +6,15 @@ export interface ZohoAttachment {
   attachmentSize: number;
 }
 
+export interface UploadedEmailAttachment {
+  fileId: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+  url: string;
+  kind: "image" | "file";
+}
+
 export interface AttachmentInfoResponse {
   data: {
     attachments: ZohoAttachment[];

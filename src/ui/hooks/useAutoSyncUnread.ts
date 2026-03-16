@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from "react";
-import type { ClientEvent, ZohoEmail } from "../types";
+import type { ClientEvent, ZohoEmail, UploadedEmailAttachment, ChatAttachment } from "../types";
 
 const PROCESSED_EMAILS_KEY_PREFIX = "auto_sync_processed_unread";
 type AutoSyncRoutingRule = {
@@ -21,6 +21,37 @@ const toCodeBlock = (content: string, language = ""): string => {
   const fence = "```";
   return `${fence}${language}\n${content}\n${fence}`;
 };
+
+const formatBytes = (size: number): string => {
+  if (!Number.isFinite(size)) return "";
+  if (size < 1024) return `${size} B`;
+  const units = ["KB", "MB", "GB"];
+  let value = size / 1024;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+};
+
+const attachmentLine = (attachment: UploadedEmailAttachment): string => {
+  const sizeLabel = formatBytes(attachment.size);
+  const descriptor = [attachment.mimeType, sizeLabel]
+    .filter(Boolean)
+    .join(" · ");
+  return `- [${escapeMd(attachment.fileName)}](${attachment.url})${descriptor ? ` (${descriptor})` : ""}`;
+};
+
+const toChatAttachment = (attachment: UploadedEmailAttachment): ChatAttachment => ({
+  id: attachment.fileId,
+  name: attachment.fileName,
+  mimeType: attachment.mimeType,
+  size: attachment.size,
+  url: attachment.url,
+  kind: attachment.kind,
+  previewUrl: attachment.kind === "image" ? attachment.url : undefined,
+});
 
 const extractEmailContent = (details: unknown): string => {
   if (!details || typeof details !== "object") return "";
@@ -79,38 +110,24 @@ const buildEmailMarkdownPrompt = (email: ZohoEmail, agentId: string, emailConten
 interface EmailWithAttachments {
   emailContent: Record<string, unknown>;
   attachments: {
-    files: string[];
-    markdownFiles: string[];
-    path: string;
-    lettaAttachment?: unknown;
+    files: UploadedEmailAttachment[];
+    uploadErrors: { file: string; error: string }[];
   } | null;
 }
 
-const buildAttachmentsSection = (hasAttachment: boolean, attachmentFileNames: string[], markdownFileNames: string[] = []): string => {
+const buildAttachmentsSection = (
+  hasAttachment: boolean,
+  attachments: UploadedEmailAttachment[]
+): string => {
   if (!hasAttachment) return "No attachments reported for this email.";
-  
-  const sections: string[] = [];
-  
-  // Original files
-  if (attachmentFileNames.length > 0) {
-    sections.push("### Original Files");
-    sections.push(...attachmentFileNames.map((name) => `- \`${name}\``));
-  }
-  
-  // Markdown converted files
-  if (markdownFileNames.length > 0) {
-    sections.push("");
-    sections.push("### Converted Documents (Markdown)");
-    sections.push(...markdownFileNames.map((name) => `- \`${name}\` (ready for agent processing)`));
-    sections.push("");
-    sections.push("_Note: PDF attachments have been converted to markdown format for better agent understanding._");
-  }
-  
-  if (sections.length === 0) {
-    return "Attachments exist and were uploaded, but file names could not be resolved. Inspect the latest uploaded files.";
+  if (attachments.length === 0) {
+    return "Attachments exist and were uploaded, but file metadata could not be resolved. Inspect the linked files.";
   }
 
-  return sections.join("\n");
+  return [
+    "### Files",
+    ...attachments.map((attachment) => attachmentLine(attachment)),
+  ].join("\n");
 };
 
 /**
@@ -168,10 +185,6 @@ export function useAutoSyncUnread(
     localStorage.setItem(getProcessedKey(), JSON.stringify(Array.from(ids)));
   }, [getProcessedKey]);
 
-  const uploadToAgent = useCallback(async (email: ZohoEmail, agentId: string): Promise<unknown> => {
-    return await window.electron.uploadEmailAttachmentToAgent(folderId, String(email.messageId), accountId, agentId);
-  }, [accountId, folderId]);
-
   const performSync = useCallback(async () => {
     const selectedAgents = selectedAgentsRef.current;
     const rules = routingRulesRef.current;
@@ -222,11 +235,11 @@ export function useAutoSyncUnread(
         for (const agentId of targetAgents) {
           try {
             const hasAttachment = String(email.hasAttachment ?? "0") === "1";
-            let attachmentFileNames: string[] = [];
-            let markdownFileNames: string[] = [];
+            let uploadedAttachments: UploadedEmailAttachment[] = [];
+            let uploadErrors: { file: string; error: string }[] = [];
             let emailContent = "";
             
-            // Use fetchEmailById to get full content AND download attachments
+            // Use fetchEmailById to get full content AND upload attachments
             try {
               const emailWithAttachments = await window.electron.fetchEmailById(
                 accountId,
@@ -234,24 +247,15 @@ export function useAutoSyncUnread(
                 String(email.messageId)
               ) as EmailWithAttachments;
               
-              // Extract email content
               if (emailWithAttachments?.emailContent) {
                 emailContent = extractEmailContent(emailWithAttachments.emailContent);
               }
               
-              // Extract attachment info including markdown files
               if (emailWithAttachments?.attachments) {
-                attachmentFileNames = emailWithAttachments.attachments.files;
-                
-                // Add absolute paths to markdown files
-                const downloadPath = emailWithAttachments.attachments.path;
-                if (downloadPath && emailWithAttachments.attachments.markdownFiles.length > 0) {
-                  markdownFileNames = emailWithAttachments.attachments.markdownFiles.map(mdFile => {
-                    const fileName = mdFile.split(/[/\\]/).pop() || mdFile;
-                    return `${downloadPath}/${fileName}`;
-                  });
-                } else {
-                  markdownFileNames = emailWithAttachments.attachments.markdownFiles;
+                uploadedAttachments = emailWithAttachments.attachments.files ?? [];
+                uploadErrors = emailWithAttachments.attachments.uploadErrors ?? [];
+                if (uploadedAttachments.length > 0) {
+                  email.hasAttachment = "1" as any;
                 }
               }
             } catch (detailError) {
@@ -261,17 +265,31 @@ export function useAutoSyncUnread(
               );
             }
 
-            const prompt = [
-              buildEmailMarkdownPrompt(email, agentId, emailContent, hasAttachment),
+            const effectiveHasAttachment = hasAttachment || uploadedAttachments.length > 0;
+            const promptSections = [
+              buildEmailMarkdownPrompt(email, agentId, emailContent, effectiveHasAttachment),
               "## Attachment Files",
-              buildAttachmentsSection(hasAttachment, attachmentFileNames, markdownFileNames),
-            ].join("\n\n");
+              buildAttachmentsSection(effectiveHasAttachment, uploadedAttachments),
+            ];
+
+            if (uploadErrors.length > 0) {
+              promptSections.push(
+                "## Attachment Upload Warnings",
+                uploadErrors
+                  .map((error) => `- ${escapeMd(error.file)}: ${escapeMd(error.error)}`)
+                  .join("\n")
+              );
+            }
+
+            const prompt = promptSections.join("\n\n");
+            const chatAttachments: ChatAttachment[] = uploadedAttachments.map(toChatAttachment);
 
             sendEvent({
               type: "session.start",
               payload: {
                 title: `Auto Email: ${email.subject || email.messageId}`,
                 prompt,
+                attachments: chatAttachments,
                 cwd: "",
                 agentId,
               },
@@ -302,7 +320,7 @@ export function useAutoSyncUnread(
     } finally {
       syncInProgressRef.current = false;
     }
-  }, [accountId, folderId, loadProcessedIds, persistProcessedIds, sendEvent, uploadToAgent]);
+  }, [accountId, folderId, loadProcessedIds, persistProcessedIds, sendEvent]);
 
   useEffect(() => {
     if (!isEnabled || !accountId || !folderId || (selectedAgentIds.length === 0 && routingRules.length === 0)) {

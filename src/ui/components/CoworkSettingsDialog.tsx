@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import { useCoworkSettings } from "../hooks/useCoworkSettings";
 
 interface CoworkSettings {
   showWhatsApp: boolean;
@@ -15,26 +16,25 @@ interface CoworkSettingsDialogProps {
 }
 
 export function CoworkSettingsDialog({ open, onOpenChange }: CoworkSettingsDialogProps) {
-  const [settings, setSettings] = useState<CoworkSettings>({
-    showWhatsApp: false,
-    showTelegram: false,
-    showSlack: false,
-    showDiscord: false,
-    showEmailAutomation: false,
-    showLettaEnv: false,
-  });
+  const { coworkSettings: coworkSettingsStore, updateCoworkSettings } = useCoworkSettings();
+  const [settings, setSettings] = useState<CoworkSettings>(coworkSettingsStore);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (open) {
-      loadSettings();
-    }
+    if (!open) return;
+    setLoading(true);
+    loadSettings();
   }, [open]);
+
+  useEffect(() => {
+    setSettings(coworkSettingsStore);
+  }, [coworkSettingsStore]);
 
   const loadSettings = async () => {
     try {
       const storedSettings = await window.electron.getCoworkSettings();
       setSettings(storedSettings);
+      updateCoworkSettings(storedSettings);
     } catch (error) {
       console.error("Failed to load settings:", error);
     } finally {
@@ -43,14 +43,18 @@ export function CoworkSettingsDialog({ open, onOpenChange }: CoworkSettingsDialo
   };
 
   const handleToggle = async (key: keyof CoworkSettings) => {
-    const newSettings = { ...settings, [key]: !settings[key] };
-    setSettings(newSettings);
+    const previousValue = settings[key];
+    const nextValue = !previousValue;
+
+    setSettings((prev) => ({ ...prev, [key]: nextValue }));
+    updateCoworkSettings({ [key]: nextValue } as Partial<CoworkSettings>);
+
     try {
-      await window.electron.updateCoworkSettings({ [key]: !settings[key] });
+      await window.electron.updateCoworkSettings({ [key]: nextValue });
     } catch (error) {
       console.error("Failed to update settings:", error);
-      // Revert on error
-      setSettings(settings);
+      setSettings((prev) => ({ ...prev, [key]: previousValue }));
+      updateCoworkSettings({ [key]: previousValue } as Partial<CoworkSettings>);
     }
   };
 
@@ -58,6 +62,7 @@ export function CoworkSettingsDialog({ open, onOpenChange }: CoworkSettingsDialo
     try {
       const defaultSettings = await window.electron.resetCoworkSettings();
       setSettings(defaultSettings);
+      updateCoworkSettings(defaultSettings);
     } catch (error) {
       console.error("Failed to reset settings:", error);
     }

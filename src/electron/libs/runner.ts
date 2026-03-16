@@ -202,6 +202,8 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
         canUseTool,
         systemInfoReminder: false,
         model: model,
+        memfs: true,
+        memfsStartup: 'background' as any
       };
 
       // Create or resume session
