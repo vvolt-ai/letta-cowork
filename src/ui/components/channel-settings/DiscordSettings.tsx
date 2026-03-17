@@ -5,6 +5,7 @@ interface DiscordConfig {
   autoStart: boolean;
   defaultAgentId: string;
   respondToGroups: boolean;
+  respondOnlyWhenMentioned: boolean;
   allowedUsers: string[];
   typingIndicator: boolean;
   groups: Record<string, { mode: "open" | "listen" | "mention-only" | "disabled"; allowedUsers?: string[] }>;
@@ -95,6 +96,15 @@ export function DiscordSettings({
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange("respondToGroups", e.target.checked)}
         />
         Respond in server channels
+      </label>
+
+      <label className="flex items-center gap-2 text-xs text-ink-700">
+        <input
+          type="checkbox"
+          checked={config.respondOnlyWhenMentioned}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange("respondOnlyWhenMentioned", e.target.checked)}
+        />
+        Only respond when mentioned in server channels
       </label>
 
       <label className="flex items-center gap-2 text-xs text-ink-700">

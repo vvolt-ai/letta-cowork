@@ -31,6 +31,7 @@ export type DiscordBridgeConfig = {
   botToken: string;
   dmPolicy: "pairing" | "allowlist" | "open";
   respondToGroups: boolean;
+  respondOnlyWhenMentioned: boolean;
   allowedUsers: string[];
   defaultAgentId: string;
   typingIndicator: boolean;
@@ -93,6 +94,7 @@ const defaultDiscordChannel = (): DiscordBridgeConfig => ({
   botToken: "",
   dmPolicy: "pairing",
   respondToGroups: true,
+  respondOnlyWhenMentioned: false,
   allowedUsers: [],
   defaultAgentId: process.env.LETTA_AGENT_ID?.trim() || "",
   typingIndicator: true,
@@ -185,6 +187,10 @@ const normalizeDiscordChannel = (
       ? raw.dmPolicy 
       : fallback.dmPolicy,
     respondToGroups: raw.respondToGroups !== undefined ? Boolean(raw.respondToGroups) : fallback.respondToGroups,
+    respondOnlyWhenMentioned:
+      raw.respondOnlyWhenMentioned !== undefined
+        ? Boolean(raw.respondOnlyWhenMentioned)
+        : fallback.respondOnlyWhenMentioned,
     allowedUsers: normalizeAllowedUsers(raw?.allowedUsers),
     defaultAgentId: String(raw.defaultAgentId ?? fallback.defaultAgentId),
     typingIndicator: raw.typingIndicator !== undefined ? Boolean(raw.typingIndicator) : fallback.typingIndicator,

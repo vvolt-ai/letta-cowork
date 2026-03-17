@@ -6,6 +6,7 @@ export interface DiscordConfig {
   botToken: string;
   dmPolicy: "pairing" | "allowlist" | "open";
   respondToGroups: boolean;
+  respondOnlyWhenMentioned: boolean;
   allowedUsers: string[];
   defaultAgentId: string;
   typingIndicator: boolean;
@@ -28,6 +29,7 @@ export const defaultDiscordConfig = (): DiscordConfig => ({
   botToken: "",
   dmPolicy: "pairing",
   respondToGroups: true,
+  respondOnlyWhenMentioned: false,
   allowedUsers: [],
   defaultAgentId: "",
   typingIndicator: true,

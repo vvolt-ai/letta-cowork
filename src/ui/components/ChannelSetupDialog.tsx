@@ -223,6 +223,7 @@ export function ChannelSetupDialog({ open, onOpenChange, initialChannel, enabled
         botToken: discordConfig.botToken.trim(),
         dmPolicy: discordConfig.dmPolicy,
         respondToGroups: discordConfig.respondToGroups,
+        respondOnlyWhenMentioned: discordConfig.respondOnlyWhenMentioned,
         allowedUsers: discordConfig.allowedUsers.map((u: string) => u.trim()).filter(Boolean),
         groups: discordConfig.groups,
       },

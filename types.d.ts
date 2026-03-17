@@ -85,6 +85,7 @@ type DiscordBridgeConfig = {
     botToken: string;
     dmPolicy: "pairing" | "allowlist" | "open";
     respondToGroups: boolean;
+    respondOnlyWhenMentioned: boolean;
     allowedUsers: string[];
     defaultAgentId: string;
     typingIndicator: boolean;

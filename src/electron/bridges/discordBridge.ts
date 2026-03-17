@@ -67,6 +67,10 @@ export class DiscordBridge {
   }
 
   async start(config: DiscordBridgeConfig): Promise<DiscordBridgeStatus> {
+    if (!config.botToken?.trim()) {
+      throw new Error("Discord bot token is missing. Provide a token in channel settings before starting the bridge.");
+    }
+
     if (this.client) {
       await this.stop();
     }
@@ -95,6 +99,8 @@ export class DiscordBridge {
 
       // Login with bot token
       await this.client.login(config.botToken);
+      // Ensure REST client keeps the active token (workaround for occasional missing-token errors)
+      this.client.rest.setToken(config.botToken);
 
       return this.status;
     } catch (error) {
@@ -176,6 +182,10 @@ export class DiscordBridge {
     // Check if message is from allowed users
     if (this.config.allowedUsers.length > 0) {
       if (!this.config.allowedUsers.includes(message.author.id)) {
+        console.debug("[Discord] ignoring message from non-allowlisted user", {
+          userId: message.author.id,
+          username: message.author.username,
+        });
         return;
       }
     }
@@ -201,10 +211,13 @@ export class DiscordBridge {
     const userId = message.author.id;
     const username = message.author.username;
 
+    console.debug("[Discord] received DM", { userId, username, dmPolicy });
+
     switch (dmPolicy) {
       case "allowlist":
         // Check if user is in allowlist
         if (this.config.allowedUsers.length > 0 && !this.config.allowedUsers.includes(userId)) {
+          console.debug("[Discord] DM blocked by allowlist", { userId, username });
           await message.reply("You are not authorized to use this bot.");
           return;
         }
@@ -221,6 +234,7 @@ export class DiscordBridge {
         }
 
         if (!isPaired) {
+          console.debug("[Discord] DM requires pairing", { userId, username });
           // Generate pairing code
           const code = this.generatePairingCode();
           this.pairingCodes.set(code.toUpperCase(), {
@@ -245,6 +259,8 @@ export class DiscordBridge {
         // Allow all users
         break;
     }
+
+    console.debug("[Discord] processing DM", { userId, username, dmPolicy });
 
     // Process the message
     await this.processMessage(message, `discord_dm_${userId}`);
@@ -276,7 +292,11 @@ export class DiscordBridge {
 
     // Check if bot is mentioned
     const botId = this.client?.user?.id;
-    const isMentioned = botId && content.includes(`<@${botId}>`);
+    const isMentioned = Boolean(botId && content.includes(`<@${botId}>`));
+
+    if (this.config.respondOnlyWhenMentioned && !isMentioned) {
+      return;
+    }
 
     // Determine if we should respond
     let shouldRespond = false;
