@@ -14,6 +14,7 @@ import { ActivityPanel } from "./components/activity/ActivityPanel";
 import { GlobalErrorToast } from "./components/GlobalErrorToast";
 import { EmailDetailsDialog } from "./components/EmailDetailsDialog";
 import { CoworkSettingsDialog } from "./components/CoworkSettingsDialog";
+import { ChangeEnv } from "./components/ChangeEnv";
 import { useSessionController } from "./hooks/useSessionController";
 import { useCoworkSettings } from "./hooks/useCoworkSettings";
 import { useAutoSyncUnread } from "./hooks/useAutoSyncUnread";
@@ -438,6 +439,7 @@ function App() {
       {globalError && (
         <GlobalErrorToast message={globalError} onClose={() => setGlobalError(null)} />
       )}
+      <ChangeEnv open={lettaEnvOpen} onOpenChange={setLettaEnvOpen} className="hidden" />
       <CoworkSettingsDialog
         open={showCoworkSettings}
         onOpenChange={setShowCoworkSettings}
