@@ -1,3 +1,4 @@
+import { useCallback, useRef } from "react";
 import type { ZohoEmail } from "../types";
 
 interface SidebarEmailListProps {
@@ -13,7 +14,13 @@ interface SidebarEmailListProps {
   onProcessEmailToAgent?: (email: ZohoEmail, agentId: string) => void;
   processingEmailId?: string | null;
   successEmailId?: string | null;
+  // Pagination props
+  hasMore?: boolean;
+  isLoadingMore?: boolean;
+  onLoadMore?: () => void;
 }
+
+const SCROLL_THRESHOLD = 50;
 
 const isUnreadEmail = (email: ZohoEmail) => {
   const status = String(email.status ?? "").toLowerCase();
@@ -39,7 +46,24 @@ export function SidebarEmailList({
   onProcessEmailToAgent,
   processingEmailId,
   successEmailId,
+  hasMore = false,
+  isLoadingMore = false,
+  onLoadMore,
 }: SidebarEmailListProps) {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const handleScroll = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (!container || !onLoadMore || isLoadingMore || !hasMore) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const isNearBottom = scrollTop + clientHeight >= scrollHeight - SCROLL_THRESHOLD;
+
+    if (isNearBottom) {
+      onLoadMore();
+    }
+  }, [onLoadMore, isLoadingMore, hasMore]);
+
   const formatDate = (timestamp: string) => {
     const ms = Number(timestamp);
     if (!Number.isFinite(ms)) return "";
@@ -65,7 +89,11 @@ export function SidebarEmailList({
       ) : (
         <div className="min-h-0 flex-1 overflow-hidden">
           <div className="flex h-full flex-col">
-            <div className="flex-1 overflow-y-auto pr-1">
+            <div
+              ref={scrollContainerRef}
+              className="flex-1 overflow-y-auto pr-1"
+              onScroll={handleScroll}
+            >
               {emails.length === 0 ? (
                 <div className="px-4 py-6 text-center text-xs text-muted">No emails found.</div>
               ) : (
@@ -178,6 +206,22 @@ export function SidebarEmailList({
                       </div>
                     );
                   })}
+                </div>
+              )}
+              {/* Loading more indicator */}
+              {isLoadingMore && (
+                <div className="flex items-center justify-center py-3">
+                  <svg className="h-4 w-4 animate-spin text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <circle className="opacity-20" cx="12" cy="12" r="10" />
+                    <path d="M4 12a8 8 0 018-8" />
+                  </svg>
+                  <span className="ml-2 text-xs text-muted">Loading more...</span>
+                </div>
+              )}
+              {/* End of list indicator */}
+              {!hasMore && emails.length > 0 && !isLoadingMore && (
+                <div className="py-3 text-center text-xs text-muted">
+                  No more emails
                 </div>
               )}
             </div>

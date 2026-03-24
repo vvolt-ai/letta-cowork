@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import {
   WhatsAppSettings,
@@ -38,11 +38,12 @@ interface ChannelSetupDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialChannel: ChannelType;
-  enabledChannels: ChannelType[];
+  availableChannels: ChannelType[];
 }
 
-export function ChannelSetupDialog({ open, onOpenChange, initialChannel, enabledChannels }: ChannelSetupDialogProps) {
+export function ChannelSetupDialog({ open, onOpenChange, initialChannel, availableChannels }: ChannelSetupDialogProps) {
   const [activeChannel, setActiveChannel] = useState<ChannelType>(initialChannel);
+  const hasInitialized = useRef(false);
   const [configs, setConfigs] = useState<ChannelConfigMap>(() => createDefaultMap());
   const [whatsappConfig, setWhatsAppConfig] = useState<WhatsAppConfig>(() => defaultWhatsAppConfig());
   const [whatsappStatus, setWhatsAppStatus] = useState<WhatsAppBridgeStatus | null>(null);
@@ -122,20 +123,29 @@ export function ChannelSetupDialog({ open, onOpenChange, initialChannel, enabled
     void loadBridgeConfig();
   }, [loadBridgeConfig, open]);
 
+  // Initialize active channel only when dialog opens for the first time or when initialChannel changes while closed
   useEffect(() => {
-    if (!open) return;
-    if (enabledChannels.length === 0) return;
-    const preferred = enabledChannels.includes(initialChannel) ? initialChannel : enabledChannels[0];
-    setActiveChannel(preferred);
-  }, [enabledChannels, initialChannel, open]);
-
-  useEffect(() => {
-    if (!open) return;
-    if (enabledChannels.length === 0) return;
-    if (!enabledChannels.includes(activeChannel)) {
-      setActiveChannel(enabledChannels[0]);
+    if (!open) {
+      hasInitialized.current = false;
+      return;
     }
-  }, [activeChannel, enabledChannels, open]);
+    if (hasInitialized.current) return;
+    if (availableChannels.length === 0) return;
+
+    const preferred = availableChannels.includes(initialChannel) ? initialChannel : availableChannels[0];
+    setActiveChannel(preferred);
+    hasInitialized.current = true;
+  }, [availableChannels, initialChannel, open]);
+
+  // If active channel becomes invalid (removed from available), reset to first available
+  useEffect(() => {
+    if (!open) return;
+    if (availableChannels.length === 0) return;
+    if (!availableChannels.includes(activeChannel)) {
+      setActiveChannel(availableChannels[0]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableChannels, open]);
 
   useEffect(() => {
     if (!open || activeChannel !== "whatsapp") return;
@@ -182,7 +192,7 @@ export function ChannelSetupDialog({ open, onOpenChange, initialChannel, enabled
     return () => clearInterval(intervalId);
   }, [activeChannel, open]);
 
-  const hasEnabledChannels = enabledChannels.length > 0;
+  const hasAvailableChannels = availableChannels.length > 0;
 
   const currentConfig = useMemo(() => configs[activeChannel], [activeChannel, configs]);
 
@@ -266,7 +276,7 @@ export function ChannelSetupDialog({ open, onOpenChange, initialChannel, enabled
     }
   };
 
-  if (!hasEnabledChannels) {
+  if (!hasAvailableChannels) {
     return (
       <Dialog.Root open={open} onOpenChange={onOpenChange}>
         <Dialog.Portal>
@@ -283,7 +293,7 @@ export function ChannelSetupDialog({ open, onOpenChange, initialChannel, enabled
               </Dialog.Close>
             </div>
             <div className="mt-6 rounded-xl border border-ink-900/10 bg-white/80 p-4 text-sm text-ink-700">
-              Enable a channel in Cowork Settings to configure integrations.
+              No channels available. Enable channels in Cowork Settings to configure integrations.
             </div>
           </Dialog.Content>
         </Dialog.Portal>
@@ -308,7 +318,7 @@ export function ChannelSetupDialog({ open, onOpenChange, initialChannel, enabled
           </div>
 
           <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {enabledChannels.map((channel) => (
+            {availableChannels.map((channel) => (
               <button
                 key={channel}
                 className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${

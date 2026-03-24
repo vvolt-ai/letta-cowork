@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { FolderResponse, ZohoEmailResponse, EmailListParams } from "../types";
 
 const DEFAULT_FOLDER_ID = "2467477000000008014";
+const EMAIL_PAGE_SIZE = 100;
 
 /**
  * Helper hook to interact with Zoho Mail via the Electron APIs.
@@ -10,6 +11,8 @@ const DEFAULT_FOLDER_ID = "2467477000000008014";
  * invoked automatically when the hook mounts).  The first account returned by
  * the API is selected and its `accountId` is stored; subsequent fetches for
  * folders/emails will throw if no account has been resolved yet.
+ *
+ * Supports lazy pagination - fetch emails in pages of 100 on demand.
  */
 export function useZohoEmail() {
   const [accountId, setAccountId] = useState<string>("");
@@ -19,6 +22,11 @@ export function useZohoEmail() {
   const [isMailConnected, setIsMailConnected] = useState(false);
   const [folderId, setFolderId] = useState("");
   const [isFetchingEmailContent, setIsFetchingEmailContent] = useState(false);
+
+  // Pagination state for lazy loading
+  const [nextEmailStart, setNextEmailStart] = useState(0);
+  const [hasMoreEmails, setHasMoreEmails] = useState(true);
+  const [isLoadingMoreEmails, setIsLoadingMoreEmails] = useState(false);
 
   const fetchAccounts = useCallback(async () => {
     const resp = await window.electron.fetchAccounts();
@@ -47,18 +55,14 @@ export function useZohoEmail() {
         throw new Error("Zoho accountId is required; call fetchAccounts first");
       }
 
-      // paginate through results until no more data
-      const limit = params.limit ?? 100;
-      
-      // Retrieve last known start position from localStorage
-      const storageKey = `zoho_email_last_start_${accountId}_${folderId}`;
-      const lastStart = localStorage.getItem(storageKey);
-      let start = params.start ?? (lastStart ? parseInt(lastStart, 10) : 0);
-      
-      const combined: ZohoEmailResponse = { status: { code: 0, description: "" }, data: [] };
-      let keepGoing = true;
+      setIsFetchingEmailContent(true);
+      setHasMoreEmails(true);
+      setNextEmailStart(0);
 
-      while (keepGoing) {
+      const limit = params.limit ?? EMAIL_PAGE_SIZE;
+      const start = params.start ?? 0;
+
+      try {
         const resp: ZohoEmailResponse = await window.electron.fetchEmails(accountId, {
           folderId,
           ...params,
@@ -69,26 +73,66 @@ export function useZohoEmail() {
         if (resp?.data && resp.data.length > 0) {
           // attach accountId
           resp.data = resp.data.map(e => ({ ...e, accountId }));
-          combined.data.push(...resp.data);
-          combined.status = resp.status;
-          setEmails(combined);
-
-          // Update localStorage with current position
-          localStorage.setItem(storageKey, String(start + resp.data.length));
-
-          if (resp.data.length < limit) {
-            keepGoing = false;
-          } else {
-            start += resp.data.length;
-          }
+          setEmails(resp);
+          setNextEmailStart(start + resp.data.length);
+          setHasMoreEmails(resp.data.length >= limit);
         } else {
-          keepGoing = false;
+          setEmails({ status: { code: 0, description: "" }, data: [] });
+          setHasMoreEmails(false);
         }
-      }
 
-      return combined;
+        return resp;
+      } finally {
+        setIsFetchingEmailContent(false);
+      }
     },
     [accountId]
+  );
+
+  // Fetch the next page of emails (lazy loading)
+  const fetchMoreEmails = useCallback(
+    async (folderId: string) => {
+      if (!accountId) {
+        throw new Error("Zoho accountId is required; call fetchAccounts first");
+      }
+      if (isLoadingMoreEmails || !hasMoreEmails) {
+        return null;
+      }
+
+      setIsLoadingMoreEmails(true);
+
+      try {
+        const resp: ZohoEmailResponse = await window.electron.fetchEmails(accountId, {
+          folderId,
+          start: nextEmailStart,
+          limit: EMAIL_PAGE_SIZE,
+        });
+
+        if (resp?.data && resp.data.length > 0) {
+          // attach accountId
+          resp.data = resp.data.map(e => ({ ...e, accountId }));
+
+          // Append to existing emails
+          setEmails((prev) => {
+            if (!prev) return resp;
+            return {
+              status: resp.status,
+              data: [...prev.data, ...resp.data],
+            };
+          });
+
+          setNextEmailStart((prev) => prev + resp.data.length);
+          setHasMoreEmails(resp.data.length >= EMAIL_PAGE_SIZE);
+        } else {
+          setHasMoreEmails(false);
+        }
+
+        return resp;
+      } finally {
+        setIsLoadingMoreEmails(false);
+      }
+    },
+    [accountId, nextEmailStart, hasMoreEmails, isLoadingMoreEmails]
   );
 
   // automatically seed account info on mount
@@ -120,12 +164,13 @@ export function useZohoEmail() {
 
   // Reset pagination for a specific folder
   const resetEmailsPosition = useCallback(
-    (folderId: string) => {
-      const storageKey = `zoho_email_last_start_${accountId}_${folderId}`;
-      localStorage.removeItem(storageKey);
+    (_folderId: string) => {
       setEmails(null);
+      setNextEmailStart(0);
+      setHasMoreEmails(true);
+      setIsLoadingMoreEmails(false);
     },
-    [accountId]
+    []
   );
 
   // Search emails using Zoho search API
@@ -260,6 +305,7 @@ export function useZohoEmail() {
     fetchAccounts,
     fetchFolders,
     fetchEmails,
+    fetchMoreEmails,
     fetchEmailById,
     markMessagesAsRead,
     resetEmailsPosition,
@@ -270,5 +316,8 @@ export function useZohoEmail() {
     refreshEmailsForFolder,
     connectEmail,
     disconnectEmail,
+    // Pagination state
+    hasMoreEmails,
+    isLoadingMoreEmails,
   };
 }

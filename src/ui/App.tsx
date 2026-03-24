@@ -25,6 +25,7 @@ const SESSION_CHANGE_SCROLL_DELAY_MS = 100;
 const AUTO_SYNC_ENABLED_KEY = "auto_sync_unread_enabled";
 const AUTO_SYNC_AGENT_IDS_KEY = "auto_sync_selected_agent_ids";
 const AUTO_SYNC_ROUTING_RULES_KEY = "auto_sync_routing_rules";
+const AUTO_SYNC_SINCE_DATE_KEY = "auto_sync_since_date";
 
 type AutoSyncRoutingRule = {
   fromPattern: string;
@@ -42,7 +43,7 @@ function App() {
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [hasNewMessages, setHasNewMessages] = useState(false);
   const [lettaEnvOpen, setLettaEnvOpen] = useState(false);
-  const [isActivityOpen, setIsActivityOpen] = useState(true);
+  const [isActivityOpen, setIsActivityOpen] = useState(false);
   const [autoSyncEnabled, setAutoSyncEnabled] = useState<boolean>(() => {
     return localStorage.getItem(AUTO_SYNC_ENABLED_KEY) === "true";
   });
@@ -75,6 +76,9 @@ function App() {
       return [];
     }
   });
+  const [autoSyncSinceDate, setAutoSyncSinceDate] = useState<string>(() => {
+    return localStorage.getItem(AUTO_SYNC_SINCE_DATE_KEY) ?? "";
+  });
   const handleServerEvent = useAppStore((s) => s.handleServerEvent);
   const fetchSessionHistory = useAppStore((s) => s.fetchSessionHistory);
   const { coworkSettings, showCoworkSettings, setShowCoworkSettings, updateCoworkSettings } = useCoworkSettings();
@@ -92,6 +96,9 @@ function App() {
     refreshEmailsForFolder,
     connectEmail,
     disconnectEmail,
+    fetchMoreEmails,
+    hasMoreEmails,
+    isLoadingMoreEmails,
   } = useZohoEmail();
   const { processEmailToAgent, processingEmailId, successEmailId } = useProcessEmailToAgent();
   const { setEmailAsInput, isLoading: isProcessingEmailInput } = useEmailAsInput();
@@ -112,6 +119,13 @@ function App() {
   });
   const emails = zohoEmailsResponse?.data ?? [];
   const selectedAutoSyncAgentIds = useMemo(() => autoSyncAgentIds, [autoSyncAgentIds]);
+
+  // Handler for loading more emails
+  const handleLoadMoreEmails = useCallback(() => {
+    if (folderId && hasMoreEmails && !isLoadingMoreEmails) {
+      fetchMoreEmails(folderId);
+    }
+  }, [folderId, hasMoreEmails, isLoadingMoreEmails, fetchMoreEmails]);
 
   const handleAddAutoSyncAgent = useCallback((agentId: string) => {
     const trimmed = agentId.trim();
@@ -234,6 +248,10 @@ function App() {
     localStorage.setItem(AUTO_SYNC_ROUTING_RULES_KEY, JSON.stringify(autoSyncRoutingRules));
   }, [autoSyncRoutingRules]);
 
+  useEffect(() => {
+    localStorage.setItem(AUTO_SYNC_SINCE_DATE_KEY, autoSyncSinceDate);
+  }, [autoSyncSinceDate]);
+
   // Load cowork settings on mount
   useEffect(() => {
     const loadSettings = async () => {
@@ -254,7 +272,8 @@ function App() {
     selectedAutoSyncAgentIds,
     autoSyncRoutingRules,
     autoSyncEnabled,
-    1
+    1,
+    autoSyncSinceDate
   );
 
   const handleScroll = useCallback(() => {
@@ -367,11 +386,16 @@ function App() {
             autoSyncRoutingRules={autoSyncRoutingRules}
             onAddAutoSyncRoutingRule={handleAddAutoSyncRoutingRule}
             onRemoveAutoSyncRoutingRule={handleRemoveAutoSyncRoutingRule}
+            autoSyncSinceDate={autoSyncSinceDate}
+            onSetAutoSyncSinceDate={setAutoSyncSinceDate}
             selectedAgentId={selectedAutoSyncAgentIds[0]}
             onProcessEmailToAgent={processEmailToAgent}
             processingEmailId={processingEmailId}
             successEmailId={successEmailId}
             onOpenSettings={() => setShowCoworkSettings(true)}
+            hasMoreEmails={hasMoreEmails}
+            isLoadingMoreEmails={isLoadingMoreEmails}
+            onLoadMoreEmails={handleLoadMoreEmails}
           />
         }
         chat={

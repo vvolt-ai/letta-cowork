@@ -150,11 +150,13 @@ export function useAutoSyncUnread(
   selectedAgentIds: string[],
   routingRules: AutoSyncRoutingRule[],
   isEnabled: boolean = true,
-  intervalMinutes: number = 5
+  intervalMinutes: number = 5,
+  sinceDate: string = ""
 ) {
   const syncInProgressRef = useRef(false);
   const selectedAgentsRef = useRef<string[]>(selectedAgentIds);
   const routingRulesRef = useRef<AutoSyncRoutingRule[]>(routingRules);
+  const sinceDateRef = useRef<string>(sinceDate);
 
   useEffect(() => {
     selectedAgentsRef.current = selectedAgentIds;
@@ -163,6 +165,10 @@ export function useAutoSyncUnread(
   useEffect(() => {
     routingRulesRef.current = routingRules;
   }, [routingRules]);
+
+  useEffect(() => {
+    sinceDateRef.current = sinceDate;
+  }, [sinceDate]);
 
   const getProcessedKey = useCallback(
     () => `${PROCESSED_EMAILS_KEY_PREFIX}_${accountId}_${folderId}`,
@@ -210,9 +216,19 @@ export function useAutoSyncUnread(
       }
 
       const processedIds = loadProcessedIds();
-      const unreadEmails = resp.data;(resp.data as ZohoEmail[]).filter(
-        (email) => !processedIds.has(String(email.messageId))
-      );
+      const sinceMs = sinceDateRef.current
+        ? new Date(sinceDateRef.current).getTime()
+        : 0;
+
+      const unreadEmails = (resp.data as ZohoEmail[]).filter((email) => {
+        if (processedIds.has(String(email.messageId))) return false;
+        if (sinceMs > 0) {
+          // receivedTime is a Unix timestamp in milliseconds as a string
+          const emailMs = Number(email.receivedTime);
+          if (!Number.isNaN(emailMs) && emailMs < sinceMs) return false;
+        }
+        return true;
+      });
 
       if (unreadEmails.length === 0) {
         console.log("[useAutoSyncUnread] No new unread emails to process.");

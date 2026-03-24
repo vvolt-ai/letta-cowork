@@ -39,11 +39,17 @@ interface SidebarProps {
   autoSyncRoutingRules: { fromPattern: string; agentId: string }[];
   onAddAutoSyncRoutingRule: (fromPattern: string, agentId: string) => void;
   onRemoveAutoSyncRoutingRule: (index: number) => void;
+  autoSyncSinceDate: string;
+  onSetAutoSyncSinceDate: (date: string) => void;
   selectedAgentId?: string;
   onProcessEmailToAgent?: (email: ZohoEmail, agentId: string) => void;
   processingEmailId?: string | null;
   successEmailId?: string | null;
   onOpenSettings?: () => void;
+  // Pagination props
+  hasMoreEmails?: boolean;
+  isLoadingMoreEmails?: boolean;
+  onLoadMoreEmails?: () => void;
 }
 
 export function Sidebar({
@@ -70,11 +76,16 @@ export function Sidebar({
   autoSyncRoutingRules,
   onAddAutoSyncRoutingRule,
   onRemoveAutoSyncRoutingRule,
+  autoSyncSinceDate,
+  onSetAutoSyncSinceDate,
   selectedAgentId,
   onProcessEmailToAgent,
   processingEmailId,
   successEmailId,
   onOpenSettings,
+  hasMoreEmails,
+  isLoadingMoreEmails,
+  onLoadMoreEmails,
 }: SidebarProps) {
   const sessions = useAppStore((state) => state.sessions);
   const activeSessionId = useAppStore((state) => state.activeSessionId);
@@ -157,6 +168,11 @@ export function Sidebar({
     return (firstEnabled?.id as ChannelType) ?? "whatsapp";
   }, [channelItems]);
 
+  // Memoize availableChannels to prevent unnecessary re-renders in ChannelSetupDialog
+  const availableChannels = useMemo<ChannelType[]>(() => {
+    return channelItems.map((channel) => channel.id as ChannelType);
+  }, [channelItems]);
+
   const openChannelSetup = (channel: ChannelType) => {
     setSetupChannel(channel);
     setChannelSetupOpen(true);
@@ -215,6 +231,9 @@ export function Sidebar({
         onProcessEmailToAgent={onProcessEmailToAgent}
         processingEmailId={processingEmailId}
         successEmailId={successEmailId}
+        hasMore={hasMoreEmails}
+        isLoadingMore={isLoadingMoreEmails}
+        onLoadMore={onLoadMoreEmails}
       />
     </div>
   ) : (
@@ -322,9 +341,7 @@ export function Sidebar({
         open={channelSetupOpen}
         onOpenChange={setChannelSetupOpen}
         initialChannel={setupChannel}
-        enabledChannels={channelItems
-          .filter((channel) => channel.enabled)
-          .map((channel) => channel.id as ChannelType)}
+        availableChannels={availableChannels}
       />
 
       <ResumeSessionDialog
@@ -346,6 +363,8 @@ export function Sidebar({
         autoSyncRoutingRules={autoSyncRoutingRules}
         onAddAutoSyncRoutingRule={onAddAutoSyncRoutingRule}
         onRemoveAutoSyncRoutingRule={onRemoveAutoSyncRoutingRule}
+        autoSyncSinceDate={autoSyncSinceDate}
+        onSetAutoSyncSinceDate={onSetAutoSyncSinceDate}
       />
 
       <SkillDownloadDialog

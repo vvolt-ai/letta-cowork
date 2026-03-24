@@ -11,6 +11,8 @@ interface NewMailPipelineSettingProps {
   autoSyncRoutingRules: { fromPattern: string; agentId: string }[];
   onAddAutoSyncRoutingRule: (fromPattern: string, agentId: string) => void;
   onRemoveAutoSyncRoutingRule: (index: number) => void;
+  autoSyncSinceDate: string;
+  onSetAutoSyncSinceDate: (date: string) => void;
 }
 
 export function NewMailPipelineSetting({
@@ -22,6 +24,8 @@ export function NewMailPipelineSetting({
   autoSyncRoutingRules,
   onAddAutoSyncRoutingRule,
   onRemoveAutoSyncRoutingRule,
+  autoSyncSinceDate,
+  onSetAutoSyncSinceDate,
 }: NewMailPipelineSettingProps) {
   const [newAgentId, setNewAgentId] = useState("");
   const [newRuleFromPattern, setNewRuleFromPattern] = useState("");
@@ -93,6 +97,29 @@ export function NewMailPipelineSetting({
               </div>
             )}
           </div>
+          <div className="mt-4 border-t border-ink-900/10 pt-3">
+            <div className="text-xs font-semibold text-ink-700">Sync Emails Since</div>
+            <p className="mt-0.5 text-[11px] text-muted">
+              Only emails received on or after this date will be processed. Leave blank to sync all unread emails.
+            </p>
+            <div className="mt-2 flex items-center gap-2">
+              <input
+                type="date"
+                className="flex-1 rounded-lg border border-ink-900/10 bg-white px-2.5 py-2 text-xs text-ink-800 focus:outline-none focus:ring-1 focus:ring-accent/30"
+                value={autoSyncSinceDate}
+                onChange={(e) => onSetAutoSyncSinceDate(e.target.value)}
+              />
+              {autoSyncSinceDate && (
+                <button
+                  className="rounded-lg border border-ink-900/10 bg-surface px-2.5 py-2 text-[11px] font-medium text-ink-700 hover:bg-surface-tertiary"
+                  onClick={() => onSetAutoSyncSinceDate("")}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+
           <div className="mt-4 border-t border-ink-900/10 pt-3">
             <div className="text-xs font-semibold text-ink-700">From Address Routing</div>
             <div className="mt-2 grid grid-cols-1 gap-2">
