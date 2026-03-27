@@ -1,6 +1,6 @@
 import type { StreamMessage, SDKAssistantMessage } from "../types";
 
-export type ConversationStreamMessage = StreamMessage & { createdAt?: number; id?: string; uuid?: string };
+export type ConversationStreamMessage = StreamMessage & { createdAt?: number; historyOrder?: number; id?: string; uuid?: string };
 
 const isUserPrompt = (message: StreamMessage): message is ConversationStreamMessage & { type: "user_prompt" } =>
   message.type === "user_prompt";
@@ -43,7 +43,25 @@ export function mergeConversationHistory(
   const merged: ConversationStreamMessage[] = [];
   const seen = new Set<string>();
 
-  const sorted = [...existing, ...incoming].sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
+  const sorted = [...existing, ...incoming].sort((a, b) => {
+    const aCreatedAt = typeof a.createdAt === "number" && Number.isFinite(a.createdAt) ? a.createdAt : undefined;
+    const bCreatedAt = typeof b.createdAt === "number" && Number.isFinite(b.createdAt) ? b.createdAt : undefined;
+
+    if (aCreatedAt !== undefined && bCreatedAt !== undefined && aCreatedAt !== bCreatedAt) {
+      return aCreatedAt - bCreatedAt;
+    }
+
+    if (aCreatedAt !== undefined && bCreatedAt === undefined) return -1;
+    if (aCreatedAt === undefined && bCreatedAt !== undefined) return 1;
+
+    const aHistoryOrder = typeof a.historyOrder === "number" ? a.historyOrder : 0;
+    const bHistoryOrder = typeof b.historyOrder === "number" ? b.historyOrder : 0;
+    if (aHistoryOrder !== bHistoryOrder) {
+      return aHistoryOrder - bHistoryOrder;
+    }
+
+    return 0;
+  });
 
   for (const message of sorted) {
     const id = getConversationMessageId(message);

@@ -1,9 +1,24 @@
 import { app, BrowserWindow, ipcMain, dialog, globalShortcut, Menu, shell, nativeImage } from "electron"
 import { execSync } from "child_process";
+import fs from "fs/promises";
+import { homedir } from "os";
 import path, { join } from "path";
 import { ipcMainHandle, isDev, DEV_PORT } from "./util.js";
 import { getLettaEnvConfig, initializeLettaEnv, type LettaEnvConfig, updateLettaEnvConfig } from "./envManager.js";
-import { getCoworkSettings, updateCoworkSettings, resetCoworkSettings, type CoworkSettings } from "./settings.js";
+import {
+    getCoworkSettings,
+    updateCoworkSettings,
+    resetCoworkSettings,
+    getAutoSyncUnreadConfig,
+    updateAutoSyncUnreadConfig,
+    resetAutoSyncUnreadConfig,
+    getProcessedUnreadEmailIds,
+    setProcessedUnreadEmailIds,
+    clearProcessedUnreadEmailIds,
+    getProcessedUnreadEmailDebugInfo,
+    type AutoSyncUnreadConfig,
+    type CoworkSettings,
+} from "./settings.js";
 
 initializeLettaEnv();
 
@@ -32,6 +47,58 @@ if (isDevelopment) {
 
 
 console.log("cliPath", localCli)
+
+async function listAgentMemoryFiles() {
+    const resolvedAgentId = getCurrentAgentId() || process.env.LETTA_AGENT_ID;
+    const memoryDir = process.env.MEMORY_DIR
+        || (resolvedAgentId ? path.join(homedir(), ".letta", "agents", resolvedAgentId, "memory") : "");
+
+    if (!memoryDir) {
+        throw new Error("Unable to resolve agent memory directory: no MEMORY_DIR and no active agent ID.");
+    }
+
+    try {
+        await fs.access(memoryDir);
+    } catch {
+        throw new Error(`Agent memory directory is not accessible: ${memoryDir}${resolvedAgentId ? ` (agent: ${resolvedAgentId})` : ""}`);
+    }
+
+    const results: Array<{ path: string; description?: string; preview: string; category: "system" | "reference" | "other" }> = [];
+
+    const walk = async (currentDir: string) => {
+        const entries = await fs.readdir(currentDir, { withFileTypes: true });
+        for (const entry of entries) {
+            if (entry.name.startsWith(".")) continue;
+            const absolutePath = path.join(currentDir, entry.name);
+            if (entry.isDirectory()) {
+                await walk(absolutePath);
+                continue;
+            }
+            if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+
+            const relativePath = path.relative(memoryDir, absolutePath).replace(/\\/g, "/");
+            const content = await fs.readFile(absolutePath, "utf8");
+            const descriptionMatch = content.match(/^---[\s\S]*?^description:\s*(.+)$[\s\S]*?^---/m);
+            const body = content.replace(/^---[\s\S]*?---\s*/m, "").trim();
+            const preview = body.slice(0, 280);
+            const category = relativePath.startsWith("system/")
+                ? "system"
+                : relativePath.startsWith("reference/")
+                    ? "reference"
+                    : "other";
+
+            results.push({
+                path: relativePath,
+                description: descriptionMatch?.[1]?.trim(),
+                preview,
+                category,
+            });
+        }
+    };
+
+    await walk(memoryDir);
+    return results.sort((a, b) => a.path.localeCompare(b.path));
+}
 
 // Find letta CLI
 try {
@@ -258,6 +325,15 @@ app.on("ready", () => {
         }
     });
 
+    ipcMain.handle("list-agent-memory-files", async () => {
+        try {
+            return await listAgentMemoryFiles();
+        } catch (error) {
+            console.error("Failed to list agent memory files:", error);
+            throw error;
+        }
+    });
+
     ipcMain.handle("update-letta-env", async (_, values: LettaEnvConfig) => {
         try {
             updateLettaEnvConfig(values);
@@ -343,7 +419,33 @@ app.on("ready", () => {
         return resetCoworkSettings();
     });
 
-    
+    ipcMain.handle("get-auto-sync-unread-config", (): AutoSyncUnreadConfig => {
+        return getAutoSyncUnreadConfig();
+    });
+
+    ipcMain.handle("update-auto-sync-unread-config", (_, updates: Partial<AutoSyncUnreadConfig>): AutoSyncUnreadConfig => {
+        return updateAutoSyncUnreadConfig(updates);
+    });
+
+    ipcMain.handle("reset-auto-sync-unread-config", (): AutoSyncUnreadConfig => {
+        return resetAutoSyncUnreadConfig();
+    });
+
+    ipcMain.handle("get-processed-unread-email-ids", (_, accountId: string, folderId: string): string[] => {
+        return getProcessedUnreadEmailIds(accountId, folderId);
+    });
+
+    ipcMain.handle("set-processed-unread-email-ids", (_, accountId: string, folderId: string, ids: string[]): string[] => {
+        return setProcessedUnreadEmailIds(accountId, folderId, ids);
+    });
+
+    ipcMain.handle("clear-processed-unread-email-ids", (_, accountId: string, folderId: string): void => {
+        clearProcessedUnreadEmailIds(accountId, folderId);
+    });
+
+    ipcMain.handle("get-processed-unread-email-debug-info", (_, accountId: string, folderId: string, limit?: number) => {
+        return getProcessedUnreadEmailDebugInfo(accountId, folderId, limit);
+    });
 
     // Handle directory selection
     ipcMainHandle("select-directory", async () => {

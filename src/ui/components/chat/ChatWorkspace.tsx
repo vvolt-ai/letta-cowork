@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { ClientEvent } from "../../types";
 import type { AgentDisplayStatus, ReasoningStep } from "../../store/useAppStore";
 import type { IndexedMessage } from "../../hooks/useMessageWindow";
@@ -16,18 +17,21 @@ interface ChatWorkspaceProps {
   partialMessage: string;
   showPartialMessage: boolean;
   isHistoryLoading: boolean;
+  hasMoreHistory: boolean;
   reasoningSteps: ReasoningStep[];
   onScroll: () => void;
   onScrollToBottom: () => void;
   onSendMessage: () => void;
+  onLoadMoreHistory: () => void;
   sendEvent: (event: ClientEvent) => void;
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
   activityOpen: boolean;
   onToggleActivity: () => void;
+  onOpenMemory?: () => void;
 }
 
-export function ChatWorkspace({
+export const ChatWorkspace = memo(function ChatWorkspace({
   title,
   agentName,
   activeSessionId,
@@ -38,18 +42,31 @@ export function ChatWorkspace({
   partialMessage,
   showPartialMessage,
   isHistoryLoading,
+  hasMoreHistory,
   reasoningSteps,
   onScroll,
   onScrollToBottom,
   onSendMessage,
+  onLoadMoreHistory,
   sendEvent,
   scrollContainerRef,
   messagesEndRef,
   activityOpen,
   onToggleActivity,
+  onOpenMemory,
 }: ChatWorkspaceProps) {
   const resolvedTitle = title || "Untitled conversation";
   const resolvedAgentName = agentName || "Vera";
+
+  const statusCopy = {
+    idle: "Ready for your next prompt",
+    thinking: `${resolvedAgentName} is thinking`,
+    running_tool: `${resolvedAgentName} is running a tool`,
+    waiting_approval: `${resolvedAgentName} is waiting for approval`,
+    generating: `${resolvedAgentName} is writing a response`,
+    completed: "Last response completed",
+    error: "Something went wrong in the last run",
+  }[agentStatus];
 
   return (
     <section className="relative flex h-full flex-1 flex-col">
@@ -66,7 +83,47 @@ export function ChatWorkspace({
         onScroll={onScroll}
         className="flex-1 overflow-y-auto bg-[var(--color-bg-100)]"
       >
-        <div className="px-6 py-8">
+        <div className="mx-auto w-full max-w-5xl px-6 py-6">
+          <div className="mb-5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]/95 px-4 py-3 text-sm shadow-sm backdrop-blur-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">Status</div>
+                <div className="mt-1 font-medium text-ink-800">{statusCopy}</div>
+              </div>
+              <div className="flex items-center gap-2">
+                {onOpenMemory ? (
+                  <button
+                    type="button"
+                    onClick={onOpenMemory}
+                    className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-secondary)] px-3 py-1.5 text-[11px] font-medium text-ink-700 transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                  >
+                    Memory
+                  </button>
+                ) : null}
+                <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                  agentStatus === "error"
+                    ? "bg-[var(--color-status-error)]/10 text-[var(--color-status-error)]"
+                    : agentStatus === "completed"
+                      ? "bg-[var(--color-status-completed)]/10 text-[var(--color-status-completed)]"
+                      : "bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
+                }`}>
+                  {agentStatus.replace("_", " ")}
+                </span>
+              </div>
+            </div>
+          </div>
+          {activeSessionId && (hasMoreHistory || (isHistoryLoading && visibleMessages.length > 0)) ? (
+            <div className="mb-4 flex justify-center">
+              <button
+                onClick={onLoadMoreHistory}
+                disabled={isHistoryLoading}
+                className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-xs font-medium text-ink-700 transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isHistoryLoading ? "Loading earlier messages…" : "Load more messages"}
+              </button>
+            </div>
+          ) : null}
+
           {isHistoryLoading && visibleMessages.length === 0 ? (
             <div className="flex min-h-[220px] items-center justify-center">
               <div className="flex flex-col items-center gap-3 text-center">
@@ -99,6 +156,7 @@ export function ChatWorkspace({
           sendEvent={sendEvent}
           onSendMessage={onSendMessage}
           disabled={agentStatus === "waiting_approval"}
+          onOpenMemory={onOpenMemory}
         />
       </div>
 
@@ -126,4 +184,4 @@ export function ChatWorkspace({
       )}
     </section>
   );
-}
+});

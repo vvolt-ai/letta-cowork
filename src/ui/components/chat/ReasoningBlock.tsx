@@ -1,8 +1,10 @@
+import { memo } from "react";
+
 interface ReasoningBlockProps {
   steps: string[];
 }
 
-export function ReasoningBlock({ steps }: ReasoningBlockProps) {
+export const ReasoningBlock = memo(function ReasoningBlock({ steps }: ReasoningBlockProps) {
   if (steps.length === 0) return null;
 
   return (
@@ -18,4 +20,4 @@ export function ReasoningBlock({ steps }: ReasoningBlockProps) {
       </ul>
     </section>
   );
-}
+});

@@ -216,6 +216,18 @@ function clearEphemeral(_ephemeral: EphemeralState, status: AgentDisplayStatus =
   };
 }
 
+function withMessageTimestamp<T extends StreamMessage>(message: T, fallback: number = Date.now()): T {
+  const existingCreatedAt = (message as { createdAt?: number }).createdAt;
+  if (typeof existingCreatedAt === "number" && Number.isFinite(existingCreatedAt)) {
+    return message;
+  }
+
+  return {
+    ...message,
+    createdAt: fallback,
+  } as T;
+}
+
 export type SessionView = {
   id: string;
   title: string;
@@ -230,6 +242,8 @@ export type SessionView = {
   updatedAt?: number;
   hydrated: boolean;
   hasMoreHistory?: boolean;
+  totalFetchedCount?: number;
+  totalDisplayableCount?: number;
   oldestMessageId?: string | null;
   isLoadingHistory?: boolean;
   ephemeral: EphemeralState;
@@ -324,7 +338,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setIPCSendEvent: (sendEvent) => set({ ipcSendEvent: sendEvent }),
 
-  fetchSessionHistory: (sessionId, limit = 200, before) => {
+  fetchSessionHistory: (sessionId, limit = 50, before) => {
     const state = get();
     const session = state.sessions[sessionId];
     if (!session || session.isLoadingHistory) return;
@@ -532,6 +546,8 @@ export const useAppStore = create<AppState>((set, get) => ({
           hasMore,
           nextBefore,
           requestedBefore,
+          totalFetchedCount,
+          totalDisplayableCount,
           error: historyError,
         } = event.payload as any;
 
@@ -555,6 +571,8 @@ export const useAppStore = create<AppState>((set, get) => ({
                 messages: mergedMessages,
                 hydrated: true,
                 hasMoreHistory: hasMore,
+                totalFetchedCount,
+                totalDisplayableCount,
                 oldestMessageId: oldestMessageId ?? null,
                 isLoadingHistory: false,
                 ephemeral: clearEphemeral(
@@ -605,7 +623,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         if (rootState.pendingStart) {
           if (status === "running") {
             get().setActiveSessionId(sessionId);
-            set({ pendingStart: false, showStartModal: false, prompt: "" });
+            set({ pendingStart: false, showStartModal: false, prompt: "", globalError: null });
           } else {
             set({
               pendingStart: false,
@@ -643,34 +661,27 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       case "stream.message": {
         const { sessionId, message } = event.payload;
+        if (message.type === "stream_event") {
+          // Partial token deltas are rendered by local UI state in useMessageWindow.
+          // Skipping the global store update prevents full sessions tree churn per token.
+          break;
+        }
         set((state) => {
           const existing = state.sessions[sessionId] ?? createSession(sessionId);
           const currentEphemeral = existing.ephemeral ?? initialEphemeralState();
           let messages = existing.messages;
           let ephemeral = currentEphemeral;
           let status: AgentDisplayStatus = currentEphemeral.status;
+          const eventTimestamp = Date.now();
 
           switch (message.type) {
-            case "stream_event": {
-              // handled separately for partial content, keep UI responsive
-              return {
-                sessions: {
-                  ...state.sessions,
-                  [sessionId]: {
-                    ...existing,
-                    messages,
-                    ephemeral,
-                  },
-                },
-              };
-            }
             case "reasoning": {
               ephemeral = updateReasoning(currentEphemeral, message);
               status = "thinking";
               break;
             }
             case "tool_call": {
-              const toolCall = message as StreamMessage;
+              const toolCall = withMessageTimestamp(message as StreamMessage, eventTimestamp);
               const toolCallId = (toolCall as any).toolCallId ?? (toolCall as any).id ?? (toolCall as any).uuid;
               const existingIndex = typeof toolCallId !== "undefined"
                 ? messages.findIndex(
@@ -690,7 +701,7 @@ export const useAppStore = create<AppState>((set, get) => ({
               break;
             }
             case "tool_result": {
-              const toolResult = message as StreamMessage;
+              const toolResult = withMessageTimestamp(message as StreamMessage, eventTimestamp);
               const toolCallId = (toolResult as any).toolCallId ?? (toolResult as any).id ?? (toolResult as any).uuid;
               const existingIndex = typeof toolCallId !== "undefined"
                 ? messages.findIndex(
@@ -742,10 +753,10 @@ export const useAppStore = create<AppState>((set, get) => ({
                   const existingIndex = messages.findIndex(
                     (m) => m.type === "assistant" && "uuid" in m && "uuid" in draft && m.uuid === draft.uuid
                   );
-                  const finalMessage: StreamMessage = {
+                  const finalMessage: StreamMessage = withMessageTimestamp({
                     ...draft,
                     content: draft.content ?? "",
-                  } as StreamMessage;
+                  } as StreamMessage, eventTimestamp);
                   messages = existingIndex >= 0
                     ? messages.map((msg, idx) => (idx === existingIndex ? finalMessage : msg))
                     : [...messages, finalMessage];
@@ -796,7 +807,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           const existing = state.sessions[sessionId] ?? createSession(sessionId);
           const newMessages = [
             ...existing.messages,
-            { type: "user_prompt" as const, prompt, attachments, content },
+            withMessageTimestamp({ type: "user_prompt" as const, prompt, attachments, content }, Date.now()),
           ];
           const nextEphemeral = clearEphemeral(existing.ephemeral ?? initialEphemeralState(), "thinking");
           return {

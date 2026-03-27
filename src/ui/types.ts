@@ -80,6 +80,8 @@ export type ServerEvent =
         hasMore?: boolean;
         nextBefore?: string;
         requestedBefore?: string;
+        totalFetchedCount?: number;
+        totalDisplayableCount?: number;
         error?: string;
       };
     }

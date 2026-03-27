@@ -1,12 +1,16 @@
 {
 	"name": "vera-cowork",
+	"author": {
+		"name": "Bhavesh Prajapati",
+		"email": "your-email@example.com"
+	},
 	"private": true,
-	"version": "0.3.0",
+	"version": "0.4.0",
 	"type": "module",
 	"main": "dist-electron/main.js",
 	"scripts": {
 		"letta": "which letta",
-		"rebuild": "npx electron-rebuild -f -w better-sqlite3",
+		"rebuild": "npx electron-rebuild -f -w keytar",
 		"dev": "concurrently -k --kill-others-on-fail \"bun run dev:react\" \"bun run dev:electron\"",
 		"dev:react": "vite",
 		"dev:electron": "bun run transpile:electron && cross-env NODE_ENV=development electron .",
@@ -16,8 +20,8 @@
 		"transpile:electron": "tsc --project src/electron/tsconfig.json",
 		"dist:mac-arm64": "bun run transpile:electron && bun run build && electron-builder --mac --arm64",
 		"dist:mac-x64": "bun run transpile:electron && bun run build && electron-builder --mac --x64",
-		"dist:win": "bun run transpile:electron && bun run build && electron-builder --win --x64",
-		"dist:linux": "bun run transpile:electron && bun run build && electron-builder --linux --x64"
+		"dist:win": "bun run transpile:electron && bun run build && electron-builder -mwl",
+		"dist:linux": "bun run transpile:electron && bun run build && electron-builder --linux deb tar.xz"
 	},
 	"dependencies": {
 		"@letta-ai/letta-code-sdk": "^0.1.14",
@@ -26,7 +30,6 @@
 		"@slack/bolt": "^4.6.0",
 		"@tailwindcss/vite": "^4.2.2",
 		"@whiskeysockets/baileys": "^7.0.0-rc.9",
-		"better-sqlite3": "^12.8.0",
 		"discord.js": "^14.25.1",
 		"dotenv": "^17.3.1",
 		"electron-store": "^11.0.2",
@@ -50,7 +53,6 @@
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
-		"@types/better-sqlite3": "^7.6.13",
 		"@types/express": "^5.0.6",
 		"@types/os-utils": "^0.0.4",
 		"@types/qrcode": "^1.5.6",

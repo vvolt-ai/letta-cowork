@@ -68,6 +68,8 @@ electron.contextBridge.exposeInMainWorld("electron", {
         electron.ipcRenderer.invoke("list-letta-models"),
     getLettaAgent: (agentId: string) =>
         electron.ipcRenderer.invoke("get-letta-agent", agentId),
+    listAgentMemoryFiles: () =>
+        electron.ipcRenderer.invoke("list-agent-memory-files"),
     updateLettaEnv: (values: { LETTA_API_KEY: string; LETTA_BASE_URL: string; LETTA_AGENT_ID: string }) =>
         electron.ipcRenderer.invoke("update-letta-env", values),
     isAdmin: () =>
@@ -110,6 +112,20 @@ electron.contextBridge.exposeInMainWorld("electron", {
         electron.ipcRenderer.invoke("update-cowork-settings", updates),
     resetCoworkSettings: () =>
         electron.ipcRenderer.invoke("reset-cowork-settings"),
+    getAutoSyncUnreadConfig: () =>
+        electron.ipcRenderer.invoke("get-auto-sync-unread-config"),
+    updateAutoSyncUnreadConfig: (updates: any) =>
+        electron.ipcRenderer.invoke("update-auto-sync-unread-config", updates),
+    resetAutoSyncUnreadConfig: () =>
+        electron.ipcRenderer.invoke("reset-auto-sync-unread-config"),
+    getProcessedUnreadEmailIds: (accountId: string, folderId: string) =>
+        electron.ipcRenderer.invoke("get-processed-unread-email-ids", accountId, folderId),
+    setProcessedUnreadEmailIds: (accountId: string, folderId: string, ids: string[]) =>
+        electron.ipcRenderer.invoke("set-processed-unread-email-ids", accountId, folderId, ids),
+    clearProcessedUnreadEmailIds: (accountId: string, folderId: string) =>
+        electron.ipcRenderer.invoke("clear-processed-unread-email-ids", accountId, folderId),
+    getProcessedUnreadEmailDebugInfo: (accountId: string, folderId: string, limit?: number) =>
+        electron.ipcRenderer.invoke("get-processed-unread-email-debug-info", accountId, folderId, limit),
 } satisfies Window['electron'])
 
 function ipcInvoke<Key extends keyof EventPayloadMapping>(key: Key, ...args: any[]): Promise<EventPayloadMapping[Key]> {

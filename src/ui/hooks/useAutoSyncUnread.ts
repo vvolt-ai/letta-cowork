@@ -1,7 +1,11 @@
 import { useEffect, useRef, useCallback } from "react";
-import type { ClientEvent, ZohoEmail, UploadedEmailAttachment, ChatAttachment } from "../types";
+import type { ClientEvent, ZohoEmail, UploadedEmailAttachment, ChatAttachment, SessionStatus } from "../types";
+import { useAppStore } from "../store/useAppStore";
 
 const PROCESSED_EMAILS_KEY_PREFIX = "auto_sync_processed_unread";
+const AUTO_SYNC_SESSION_TIMEOUT_MS = 10 * 60 * 1000;
+const AUTO_SYNC_STATUS_POLL_MS = 500;
+
 type AutoSyncRoutingRule = {
   fromPattern: string;
   agentId: string;
@@ -104,9 +108,6 @@ const buildEmailMarkdownPrompt = (email: ZohoEmail, agentId: string, emailConten
   ].join("\n\n");
 };
 
-/**
- * Interface for email with attachments from fetchEmailById
- */
 interface EmailWithAttachments {
   emailContent: Record<string, unknown>;
   attachments: {
@@ -130,18 +131,102 @@ const buildAttachmentsSection = (
   ].join("\n");
 };
 
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => window.setTimeout(resolve, ms));
+
+const sanitizeTitleFragment = (value: unknown): string =>
+  String(value ?? "")
+    .replace(/\s+/g, " ")
+    .replace(/[\r\n]+/g, " ")
+    .trim()
+    .slice(0, 80);
+
+const buildAutoSyncSessionTitle = (email: ZohoEmail, agentId: string): string => {
+  const subject = sanitizeTitleFragment(email.subject || email.summary || "") || "No subject";
+  const messageId = sanitizeTitleFragment(email.messageId);
+  const agentFragment = sanitizeTitleFragment(agentId);
+  return `Auto Email: ${subject} [msg:${messageId}][agent:${agentFragment}][ts:${Date.now()}]`;
+};
+
+const findSessionByTitleAndAgent = (title: string, agentId: string) => {
+  const sessions = useAppStore.getState().sessions;
+  return Object.values(sessions).find(
+    (session) => session.title === title && (session.agentId ?? "") === agentId
+  );
+};
+
+const waitForAutoSyncSessionResult = async (
+  title: string,
+  agentId: string,
+  timeoutMs: number = AUTO_SYNC_SESSION_TIMEOUT_MS
+): Promise<{ success: boolean; sessionId?: string; status?: SessionStatus; reason?: string }> => {
+  const startedAt = Date.now();
+  let sessionId: string | undefined;
+
+  while (Date.now() - startedAt < timeoutMs) {
+    if (!sessionId) {
+      const matchingSession = findSessionByTitleAndAgent(title, agentId);
+      if (matchingSession) {
+        sessionId = matchingSession.id;
+        if (matchingSession.status === "completed") {
+          return { success: true, sessionId, status: matchingSession.status };
+        }
+        if (matchingSession.status === "error") {
+          return {
+            success: false,
+            sessionId,
+            status: matchingSession.status,
+            reason: "Auto-sync session ended with an error before completion.",
+          };
+        }
+      }
+    }
+
+    if (sessionId) {
+      const session = useAppStore.getState().sessions[sessionId];
+      if (!session) {
+        return {
+          success: false,
+          sessionId,
+          reason: "Auto-sync session disappeared before completion.",
+        };
+      }
+      if (session.status === "completed") {
+        return { success: true, sessionId, status: session.status };
+      }
+      if (session.status === "error") {
+        return {
+          success: false,
+          sessionId,
+          status: session.status,
+          reason: "Auto-sync session completed with an error.",
+        };
+      }
+    }
+
+    await sleep(AUTO_SYNC_STATUS_POLL_MS);
+  }
+
+  return {
+    success: false,
+    sessionId,
+    status: sessionId ? useAppStore.getState().sessions[sessionId]?.status : undefined,
+    reason: sessionId
+      ? "Timed out waiting for the auto-sync session to finish successfully."
+      : "Timed out waiting for the auto-sync session to start.",
+  };
+};
+
 /**
- * Hook that runs a background job to fetch unread emails every 5 minutes
- * and automatically mark them as read.
+ * Hook that polls unread Zoho emails on an interval and routes them into Letta sessions.
  *
- * Usage:
- *   useAutoSyncUnread(accountId, folderId, isEnabled);
- *
- * The job:
- * 1. Fetches all unread emails from the specified folder using fetchEmails with status: "unread"
- * 2. Extracts message IDs
- * 3. Marks them all as read via Zoho API
- * 4. Logs results to console
+ * Current behavior:
+ * 1. Fetch unread emails from the selected folder
+ * 2. Skip emails already processed locally or older than the configured since-date
+ * 3. Route each email to matched or selected agents
+ * 4. Fetch full content and upload attachments before dispatch
+ * 5. Start a new Letta session for each email/agent pair
+ * 6. Mark the email as read only after every routed session completes successfully
  */
 export function useAutoSyncUnread(
   sendEvent: (event: ClientEvent) => void,
@@ -151,12 +236,14 @@ export function useAutoSyncUnread(
   routingRules: AutoSyncRoutingRule[],
   isEnabled: boolean = true,
   intervalMinutes: number = 5,
-  sinceDate: string = ""
+  sinceDate: string = "",
+  processingMode: AutoSyncProcessingMode = "unread_only"
 ) {
   const syncInProgressRef = useRef(false);
   const selectedAgentsRef = useRef<string[]>(selectedAgentIds);
   const routingRulesRef = useRef<AutoSyncRoutingRule[]>(routingRules);
   const sinceDateRef = useRef<string>(sinceDate);
+  const processingModeRef = useRef<AutoSyncProcessingMode>(processingMode);
 
   useEffect(() => {
     selectedAgentsRef.current = selectedAgentIds;
@@ -170,12 +257,16 @@ export function useAutoSyncUnread(
     sinceDateRef.current = sinceDate;
   }, [sinceDate]);
 
+  useEffect(() => {
+    processingModeRef.current = processingMode;
+  }, [processingMode]);
+
   const getProcessedKey = useCallback(
     () => `${PROCESSED_EMAILS_KEY_PREFIX}_${accountId}_${folderId}`,
     [accountId, folderId]
   );
 
-  const loadProcessedIds = useCallback((): Set<string> => {
+  const loadLegacyProcessedIds = useCallback((): Set<string> => {
     try {
       const raw = localStorage.getItem(getProcessedKey());
       if (!raw) return new Set<string>();
@@ -187,9 +278,56 @@ export function useAutoSyncUnread(
     }
   }, [getProcessedKey]);
 
-  const persistProcessedIds = useCallback((ids: Set<string>) => {
-    localStorage.setItem(getProcessedKey(), JSON.stringify(Array.from(ids)));
+  const clearLegacyProcessedIds = useCallback(() => {
+    try {
+      localStorage.removeItem(getProcessedKey());
+    } catch {
+      // Ignore migration cleanup issues.
+    }
   }, [getProcessedKey]);
+
+  const persistProcessedIds = useCallback(async (ids: Set<string>) => {
+    const nextIds = Array.from(ids);
+    try {
+      await window.electron.setProcessedUnreadEmailIds(accountId, folderId, nextIds);
+      clearLegacyProcessedIds();
+    } catch (error) {
+      console.warn("[useAutoSyncUnread] Failed to persist processed unread IDs to electron-store:", error);
+      localStorage.setItem(getProcessedKey(), JSON.stringify(nextIds));
+    }
+  }, [accountId, clearLegacyProcessedIds, folderId, getProcessedKey]);
+
+  const loadProcessedIds = useCallback(async (): Promise<Set<string>> => {
+    const legacyIds = loadLegacyProcessedIds();
+
+    try {
+      const storedIds = await window.electron.getProcessedUnreadEmailIds(accountId, folderId);
+      const mergedIds = new Set(
+        storedIds.filter((id) => typeof id === "string" && id.length > 0)
+      );
+
+      let migratedLegacyIds = false;
+      for (const id of legacyIds) {
+        if (!mergedIds.has(id)) {
+          mergedIds.add(id);
+          migratedLegacyIds = true;
+        }
+      }
+
+      if (migratedLegacyIds) {
+        await window.electron.setProcessedUnreadEmailIds(accountId, folderId, Array.from(mergedIds));
+      }
+
+      if (legacyIds.size > 0) {
+        clearLegacyProcessedIds();
+      }
+
+      return mergedIds;
+    } catch (error) {
+      console.warn("[useAutoSyncUnread] Failed to load processed unread IDs from electron-store:", error);
+      return legacyIds;
+    }
+  }, [accountId, clearLegacyProcessedIds, folderId, loadLegacyProcessedIds]);
 
   const performSync = useCallback(async () => {
     const selectedAgents = selectedAgentsRef.current;
@@ -203,10 +341,10 @@ export function useAutoSyncUnread(
     try {
       console.log(`[useAutoSyncUnread] Starting sync for account ${accountId}, folder ${folderId}`);
 
-      // Step 1: Fetch unread emails using standard fetchEmails with status filter
+      const mode = processingModeRef.current;
       const resp = await window.electron.fetchEmails(accountId, {
         folderId,
-        status: "unread",
+        status: mode === "today_all" ? "all" : "unread",
         limit: 100,
       });
 
@@ -215,30 +353,38 @@ export function useAutoSyncUnread(
         return;
       }
 
-      const processedIds = loadProcessedIds();
+      const processedIds = await loadProcessedIds();
       const sinceMs = sinceDateRef.current
         ? new Date(sinceDateRef.current).getTime()
         : 0;
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const todayStartMs = todayStart.getTime();
+      const activeMode = processingModeRef.current;
 
-      const unreadEmails = (resp.data as ZohoEmail[]).filter((email) => {
+      const candidateEmails = (resp.data as ZohoEmail[]).filter((email) => {
         if (processedIds.has(String(email.messageId))) return false;
+
+        const emailMs = Number(email.receivedTime);
+        if (activeMode === "today_all") {
+          if (Number.isNaN(emailMs) || emailMs < todayStartMs) return false;
+        }
+
         if (sinceMs > 0) {
-          // receivedTime is a Unix timestamp in milliseconds as a string
-          const emailMs = Number(email.receivedTime);
           if (!Number.isNaN(emailMs) && emailMs < sinceMs) return false;
         }
         return true;
       });
 
-      if (unreadEmails.length === 0) {
-        console.log("[useAutoSyncUnread] No new unread emails to process.");
+      if (candidateEmails.length === 0) {
+        console.log(`[useAutoSyncUnread] No new emails to process for mode ${activeMode}.`);
         return;
       }
 
-      console.log(`[useAutoSyncUnread] Found ${unreadEmails.length} new unread emails`);
+      console.log(`[useAutoSyncUnread] Found ${candidateEmails.length} emails to process for mode ${activeMode}`);
 
       const processedThisRun: string[] = [];
-      for (const email of unreadEmails) {
+      for (const email of candidateEmails) {
         const senderText = String(email.fromAddress || email.sender || "").toLowerCase();
         const routedAgents = rules
           .filter((rule) => senderText.includes(rule.fromPattern.toLowerCase()))
@@ -254,25 +400,21 @@ export function useAutoSyncUnread(
             let uploadedAttachments: UploadedEmailAttachment[] = [];
             let uploadErrors: { file: string; error: string }[] = [];
             let emailContent = "";
-            
-            // Use fetchEmailById to get full content AND upload attachments
+
             try {
               const emailWithAttachments = await window.electron.fetchEmailById(
                 accountId,
                 email.folderId,
                 String(email.messageId)
               ) as EmailWithAttachments;
-              
+
               if (emailWithAttachments?.emailContent) {
                 emailContent = extractEmailContent(emailWithAttachments.emailContent);
               }
-              
+
               if (emailWithAttachments?.attachments) {
                 uploadedAttachments = emailWithAttachments.attachments.files ?? [];
                 uploadErrors = emailWithAttachments.attachments.uploadErrors ?? [];
-                if (uploadedAttachments.length > 0) {
-                  email.hasAttachment = "1" as any;
-                }
               }
             } catch (detailError) {
               console.warn(
@@ -299,23 +441,34 @@ export function useAutoSyncUnread(
 
             const prompt = promptSections.join("\n\n");
             const chatAttachments: ChatAttachment[] = uploadedAttachments.map(toChatAttachment);
+            const sessionTitle = buildAutoSyncSessionTitle(email, agentId);
 
             sendEvent({
               type: "session.start",
               payload: {
-                title: `Auto Email: ${email.subject || email.messageId}`,
+                title: sessionTitle,
                 prompt,
                 attachments: chatAttachments,
                 cwd: "",
                 agentId,
               },
             });
+
+            const sessionResult = await waitForAutoSyncSessionResult(sessionTitle, agentId);
+            if (!sessionResult.success) {
+              allAgentsSucceeded = false;
+              console.warn(
+                `[useAutoSyncUnread] Session for message ${email.messageId} and agent ${agentId} did not complete successfully: ${sessionResult.reason ?? sessionResult.status ?? "unknown failure"}`
+              );
+              break;
+            }
           } catch (error) {
             allAgentsSucceeded = false;
             console.error(
               `[useAutoSyncUnread] Failed to process message ${email.messageId} for agent ${agentId}:`,
               error
             );
+            break;
           }
         }
 
@@ -328,7 +481,7 @@ export function useAutoSyncUnread(
 
       if (processedThisRun.length > 0) {
         await window.electron.markMessagesAsRead(accountId, processedThisRun);
-        persistProcessedIds(processedIds);
+        await persistProcessedIds(processedIds);
         console.log(`[useAutoSyncUnread] Processed and marked as read: ${processedThisRun.length} emails`);
       }
     } catch (err) {
@@ -338,18 +491,24 @@ export function useAutoSyncUnread(
     }
   }, [accountId, folderId, loadProcessedIds, persistProcessedIds, sendEvent]);
 
+  const runAutoSyncNow = useCallback(async () => {
+    await performSync();
+  }, [performSync]);
+
   useEffect(() => {
     if (!isEnabled || !accountId || !folderId || (selectedAgentIds.length === 0 && routingRules.length === 0)) {
       return;
     }
 
-    // Perform initial sync immediately
     performSync();
 
-    // Set up interval for subsequent syncs
     const intervalMs = intervalMinutes * 60 * 1000;
     const intervalId = setInterval(performSync, intervalMs);
 
     return () => clearInterval(intervalId);
   }, [accountId, folderId, isEnabled, intervalMinutes, performSync, selectedAgentIds.length, routingRules.length]);
+
+  return {
+    runAutoSyncNow,
+  };
 }

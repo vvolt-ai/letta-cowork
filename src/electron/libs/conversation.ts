@@ -115,10 +115,45 @@ export interface LettaMessage {
   message_type?: string;
   type?: string;
   created_at?: number;
+  date?: string;
+  timestamp?: string | number;
   content?: LettaMessageContent[] | string | null | unknown;
 }
 
-export type ConversationStreamMessage = StreamMessage & { createdAt?: number; id?: string; uuid?: string };
+export type ConversationStreamMessage = StreamMessage & { createdAt?: number; historyOrder?: number; id?: string; uuid?: string };
+
+function resolveHistoryTimestamp(msg: LettaMessage, metadata: Record<string, unknown>): number | undefined {
+  if (typeof msg.created_at === "number" && Number.isFinite(msg.created_at)) {
+    return msg.created_at;
+  }
+
+  const candidates: unknown[] = [
+    msg.date,
+    msg.timestamp,
+    metadata.date,
+    metadata.timestamp,
+    metadata.created_at,
+    metadata.createdAt,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "number" && Number.isFinite(candidate)) {
+      return candidate;
+    }
+    if (typeof candidate === "string") {
+      const numeric = Number(candidate);
+      if (Number.isFinite(numeric) && numeric > 0) {
+        return numeric;
+      }
+      const parsed = Date.parse(candidate);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+  }
+
+  return undefined;
+}
 
 export interface NormalisedHistoryBatch {
   messages: ConversationStreamMessage[];
@@ -130,9 +165,11 @@ export interface NormalisedHistoryBatch {
 export function filterConversationMessages(rawMessages: LettaMessage[]): ConversationStreamMessage[] {
   const result: ConversationStreamMessage[] = [];
 
-  for (const msg of rawMessages) {
+  for (const [rawIndex, msg] of rawMessages.entries()) {
     const type = msg.message_type || msg.type;
     const metadata = (msg as any).metadata ?? {};
+    const historyOrder = rawIndex;
+    const createdAt = resolveHistoryTimestamp(msg, metadata);
 
     if (type === "user_message") {
       const content = msg.content;
@@ -175,7 +212,8 @@ export function filterConversationMessages(rawMessages: LettaMessage[]): Convers
         prompt: promptText,
         attachments: attachments.length ? attachments : undefined,
         id,
-        createdAt: msg.created_at ?? Date.now(),
+        createdAt,
+        historyOrder,
       } as ConversationStreamMessage;
       result.push(userMessage);
       continue;
@@ -187,7 +225,8 @@ export function filterConversationMessages(rawMessages: LettaMessage[]): Convers
         type: "assistant",
         content: textContent,
         uuid: msg.id || msg.message_id || randomUUID(),
-        createdAt: msg.created_at ?? Date.now(),
+        createdAt,
+        historyOrder,
       } as ConversationStreamMessage;
       result.push(assistantMessage);
       continue;
@@ -222,7 +261,8 @@ export function filterConversationMessages(rawMessages: LettaMessage[]): Convers
         toolName,
         toolInput: toolInputText,
         uuid: toolCallId,
-        createdAt: msg.created_at ?? Date.now(),
+        createdAt,
+        historyOrder,
       } as unknown as ConversationStreamMessage;
       result.push(toolCallMessage);
       continue;
@@ -260,7 +300,8 @@ export function filterConversationMessages(rawMessages: LettaMessage[]): Convers
         logs,
         isError,
         uuid: msg.id || msg.message_id || randomUUID(),
-        createdAt: msg.created_at ?? Date.now(),
+        createdAt,
+        historyOrder,
       } as unknown as ConversationStreamMessage;
       result.push(toolResultMessage);
       continue;
@@ -273,7 +314,8 @@ export function filterConversationMessages(rawMessages: LettaMessage[]): Convers
           type: "reasoning",
           content: reasoningText,
           uuid: msg.id || msg.message_id || randomUUID(),
-          createdAt: msg.created_at ?? Date.now(),
+          createdAt,
+          historyOrder,
         } as unknown as ConversationStreamMessage;
         result.push(reasoningMessage);
       }
@@ -287,7 +329,8 @@ export function filterConversationMessages(rawMessages: LettaMessage[]): Convers
           type: "assistant",
           content: textContent,
           uuid: msg.id || msg.message_id || randomUUID(),
-          createdAt: msg.created_at ?? Date.now(),
+          createdAt,
+          historyOrder,
         } as ConversationStreamMessage;
         result.push(systemMessage);
       }
@@ -307,7 +350,8 @@ export function filterConversationMessages(rawMessages: LettaMessage[]): Convers
         type: "assistant",
         content: fallbackText,
         uuid: msg.id || msg.message_id || randomUUID(),
-        createdAt: msg.created_at ?? Date.now(),
+        createdAt,
+        historyOrder,
       } as ConversationStreamMessage;
       result.push(fallbackMessage);
     }
@@ -325,7 +369,21 @@ export function takeLastConversationMessages(messages: StreamMessage[], limit: n
 
 export function normaliseHistoryBatch(rawMessages: LettaMessage[], limit: number): NormalisedHistoryBatch {
   const filtered = filterConversationMessages(rawMessages);
-  const ordered = filtered.sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
+  const ordered = filtered.sort((a, b) => {
+    const aCreatedAt = typeof a.createdAt === "number" && Number.isFinite(a.createdAt) ? a.createdAt : undefined;
+    const bCreatedAt = typeof b.createdAt === "number" && Number.isFinite(b.createdAt) ? b.createdAt : undefined;
+
+    if (aCreatedAt !== undefined && bCreatedAt !== undefined && aCreatedAt !== bCreatedAt) {
+      return aCreatedAt - bCreatedAt;
+    }
+
+    if (aCreatedAt !== undefined && bCreatedAt === undefined) return -1;
+    if (aCreatedAt === undefined && bCreatedAt !== undefined) return 1;
+
+    const aHistoryOrder = typeof a.historyOrder === "number" ? a.historyOrder : 0;
+    const bHistoryOrder = typeof b.historyOrder === "number" ? b.historyOrder : 0;
+    return aHistoryOrder - bHistoryOrder;
+  });
   const limited = ordered.slice(-limit);
   const hasMore = ordered.length > limited.length;
   const messagesChronological = limited;

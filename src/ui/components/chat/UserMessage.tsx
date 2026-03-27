@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { UserPromptMessage } from "../../types";
 
 const formatBytes = (bytes: number): string => {
@@ -12,7 +13,7 @@ const formatBytes = (bytes: number): string => {
   return `${value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 };
 
-export function UserMessage({ message }: { message: UserPromptMessage }) {
+export const UserMessage = memo(function UserMessage({ message }: { message: UserPromptMessage }) {
   const attachments = message.attachments ?? [];
 
   return (
@@ -21,7 +22,7 @@ export function UserMessage({ message }: { message: UserPromptMessage }) {
         You
       </div>
       {message.prompt ? (
-        <p className="whitespace-pre-wrap leading-relaxed">{message.prompt}</p>
+        <p className="whitespace-pre-wrap text-[15px] leading-8">{message.prompt}</p>
       ) : null}
       {attachments.length > 0 ? (
         <div className="mt-3 flex flex-wrap gap-2">
@@ -66,4 +67,4 @@ export function UserMessage({ message }: { message: UserPromptMessage }) {
       ) : null}
     </article>
   );
-}
+});

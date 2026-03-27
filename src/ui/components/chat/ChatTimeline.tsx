@@ -68,26 +68,21 @@ function stringifyObjectValue(value: Record<string, unknown>): string | undefine
     return undefined;
   }
 
-  const pieces: string[] = [];
-  for (const key of keys) {
-    const candidateValue = value[key];
-    const formatted = formatToolText(candidateValue);
-    if (formatted) {
-      pieces.push(`${key}: ${formatted}`);
+  try {
+    const serialized = JSON.stringify(value, null, 2);
+    const trimmedSerialized = serialized.trim();
+    return isMeaningfulToolString(trimmedSerialized) ? trimmedSerialized : undefined;
+  } catch {
+    const pieces: string[] = [];
+    for (const key of keys) {
+      const candidateValue = value[key];
+      const formatted = formatToolText(candidateValue);
+      if (formatted) {
+        pieces.push(`${key}: ${formatted}`);
+      }
     }
+    return pieces.length > 0 ? pieces.join("\n") : undefined;
   }
-
-  if (pieces.length === 0) {
-    try {
-      const serialized = JSON.stringify(value, null, 2);
-      const trimmedSerialized = serialized.trim();
-      return isMeaningfulToolString(trimmedSerialized) ? trimmedSerialized : undefined;
-    } catch {
-      return undefined;
-    }
-  }
-
-  return pieces.join("\n");
 }
 
 function formatToolText(value: unknown): string | undefined {
@@ -116,6 +111,12 @@ function collectLogEntries(source: unknown, label?: string): string[] {
       return label ? `${label}: ${fallback}` : fallback;
     })
     .filter((entry): entry is string => Boolean(entry));
+}
+
+function isGenericToolName(name: string | undefined | null): boolean {
+  if (!name) return true;
+  const normalized = name.trim().toLowerCase();
+  return normalized.length === 0 || normalized === "tool";
 }
 
 function resolveToolName(rawName: unknown, fallback?: string): string {
@@ -198,6 +199,7 @@ ${incomingOutput}`
           entries[latestToolIndex] = {
             ...toolEntry,
             ...entry,
+            name: isGenericToolName(entry.name) ? toolEntry.name : entry.name,
             input: toolEntry.input ?? entry.input,
             logs: mergedLogs.length > 0 ? mergedLogs : undefined,
             output: mergedOutput,
@@ -246,7 +248,7 @@ ${incomingOutput}`
           if (name === "tool_return_message" || name === "approval_response_message" || name === "approval_request_message") {
             break;
           }
-          const rawInput = rawMessage.toolInput ?? rawMessage.input ?? rawMessage.arguments ?? rawMessage.params ?? undefined;
+          const rawInput = rawMessage.rawArguments ?? rawMessage.toolInput ?? rawMessage.input ?? rawMessage.arguments ?? rawMessage.params ?? undefined;
           const formattedInput = formatToolText(rawInput);
           const truncatedInput = typeof rawInput === "string" ? truncateInput(rawInput) : undefined;
           const displayInput = formattedInput ?? (truncatedInput && isMeaningfulToolString(truncatedInput) ? truncatedInput : undefined);
@@ -316,7 +318,7 @@ ${incomingOutput}`
   }, [messages, activeSessionId, reasoningSteps]);
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
       {timeline.length === 0 ? (
         <div className="py-16 text-center text-sm text-muted">
           Start a conversation to see reasoning, tool activity, and results here.

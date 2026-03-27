@@ -153,7 +153,7 @@ export async function handleClientEvent(event: ClientEvent) {
 
   if (event.type === "session.history") {
     const conversationId = event.payload.sessionId;
-    const limit = event.payload.limit || 20;
+    const limit = event.payload.limit || 50;
     const requestedBefore = event.payload.before || undefined;
     const status = getSession(conversationId)?.status || "idle";
     
@@ -172,12 +172,13 @@ export async function handleClientEvent(event: ClientEvent) {
     }
     
     try {
-      // Fetch the entire conversation history so the renderer can paginate locally.
       const response = await lettaClient.conversations.messages.list(conversationId);
       const items = (Array.isArray(response.items) ? response.items : []) as unknown as LettaMessage[];
 
       const normalised = normaliseHistoryBatch(items, items.length || limit);
       const messages = normalised.messages.filter((msg) => (msg as any)?.type !== "reasoning");
+      const totalFetchedCount = items.length;
+      const totalDisplayableCount = messages.length;
       const hasMore = false;
       const nextBefore = undefined;
 
@@ -186,6 +187,8 @@ export async function handleClientEvent(event: ClientEvent) {
         requestedBefore,
         returned: messages.length,
         filteredTotal: normalised.allFiltered.length,
+        totalFetchedCount,
+        totalDisplayableCount,
         hasMore,
         nextBefore,
       });
@@ -199,6 +202,8 @@ export async function handleClientEvent(event: ClientEvent) {
           hasMore,
           nextBefore,
           requestedBefore,
+          totalFetchedCount,
+          totalDisplayableCount,
         },
       });
     } catch (error) {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChatAttachment, ClientEvent, MessageContentItem } from "../types";
 import { useAppStore } from "../store/useAppStore";
 import { uploadFileToManager, type UploadedFile } from "../services/fileUploads";
@@ -16,10 +16,48 @@ interface ModelOption {
   provider_type: string;
 }
 
+interface SlashCommandSuggestion {
+  command: string;
+  description: string;
+  insertText?: string;
+  status: "supported" | "info";
+}
+
+const SLASH_COMMAND_SUGGESTIONS: SlashCommandSuggestion[] = [
+  { command: "/doctor", description: "Audit and refine your memory structure", insertText: "/doctor ", status: "info" },
+  { command: "/remember", description: "Remember something from the conversation", insertText: "/remember ", status: "supported" },
+  { command: "/skill", description: "Enter skill creation mode", insertText: "/skill ", status: "info" },
+  { command: "/memory", description: "View your agent’s memory blocks", insertText: "/memory", status: "supported" },
+  { command: "/search", description: "Search messages (defaults to the current agent)", insertText: "/search ", status: "supported" },
+  { command: "/new", description: "Start a new conversation, optionally with a name", insertText: "/new ", status: "supported" },
+  { command: "/clear", description: "Clear in-context messages", insertText: "/clear", status: "supported" },
+  { command: "/compact", description: "Summarize conversation history (compaction)", insertText: "/compact ", status: "info" },
+  { command: "/pin", description: "Pin current agent globally (-l for local only)", insertText: "/pin ", status: "info" },
+  { command: "/unpin", description: "Unpin current agent (-l for local only)", insertText: "/unpin ", status: "info" },
+  { command: "/description", description: "Update the current agent’s description", insertText: "/description ", status: "supported" },
+  { command: "/export", description: "Export AgentFile (.af)", insertText: "/export ", status: "info" },
+  { command: "/toolset", description: "Switch toolset (default/codex/gemini)", insertText: "/toolset ", status: "info" },
+  { command: "/server", description: "Start local server listener mode", insertText: "/server ", status: "info" },
+  { command: "/mcp", description: "Manage MCP servers", insertText: "/mcp ", status: "info" },
+  { command: "/secret", description: "Manage secrets (set, list, unset)", insertText: "/secret ", status: "info" },
+  { command: "/skills", description: "Browse available skills by source", insertText: "/skills", status: "info" },
+  { command: "/statusline", description: "Configure CLI footer status lines", insertText: "/statusline ", status: "info" },
+  { command: "/sleeptime", description: "Configure reflection trigger settings", insertText: "/sleeptime ", status: "info" },
+  { command: "/recompile", description: "Recompile the current agent and conversation", insertText: "/recompile", status: "info" },
+  { command: "/context", description: "Show context window usage", insertText: "/context", status: "supported" },
+  { command: "/usage", description: "Show session usage statistics and balance", insertText: "/usage", status: "supported" },
+  { command: "/feedback", description: "Send feedback to the Letta team", insertText: "/feedback ", status: "supported" },
+  { command: "/connect chatgpt", description: "Connect ChatGPT Pro/Plus", insertText: "/connect chatgpt", status: "info" },
+  { command: "/disconnect chatgpt", description: "Disconnect ChatGPT Pro/Plus", insertText: "/disconnect chatgpt", status: "info" },
+  { command: "/bg", description: "Show background shell processes", insertText: "/bg", status: "supported" },
+  { command: "/exit", description: "Exit this session to support with our chat", insertText: "/exit", status: "info" },
+];
+
 interface PromptInputProps {
   sendEvent: (event: ClientEvent) => void;
   onSendMessage?: () => void;
   disabled?: boolean;
+  onOpenMemory?: () => void;
 }
 
 export interface SendMessageOptions {
@@ -153,19 +191,19 @@ const validateFile = (file: File): string | null => {
   return null;
 };
 
-export function usePromptActions(sendEvent: (event: ClientEvent) => void) {
+export function usePromptActions(sendEvent: (event: ClientEvent) => void, onOpenMemory?: () => void) {
   const prompt = useAppStore((state) => state.prompt);
   const cwd = useAppStore((state) => state.cwd);
   const pendingStart = useAppStore((state) => state.pendingStart);
   const activeSessionId = useAppStore((state) => state.activeSessionId);
-  const sessions = useAppStore((state) => state.sessions);
+  const activeSession = useAppStore((state) => (activeSessionId ? state.sessions[activeSessionId] : undefined));
   const selectedModel = useAppStore((state) => state.selectedModel);
   const setPrompt = useAppStore((state) => state.setPrompt);
   const setPendingStart = useAppStore((state) => state.setPendingStart);
   const setGlobalError = useAppStore((state) => state.setGlobalError);
+  const setActiveSessionId = useAppStore((state) => state.setActiveSessionId);
   const startTimeoutRef = useRef<number | null>(null);
 
-  const activeSession = activeSessionId ? sessions[activeSessionId] : undefined;
   const isRunning = activeSession?.status === "running";
 
   const handleSend = useCallback(async (options?: SendMessageOptions) => {
@@ -220,6 +258,71 @@ export function usePromptActions(sendEvent: (event: ClientEvent) => void) {
     sendEvent({ type: "session.stop", payload: { sessionId: activeSessionId } });
   }, [activeSessionId, sendEvent]);
 
+  const handleSlashCommand = useCallback(async (rawPrompt: string): Promise<boolean> => {
+    const trimmed = rawPrompt.trim();
+    if (!trimmed.startsWith("/")) return false;
+
+    const [rawCommand, ...argParts] = trimmed.split(/\s+/);
+    const normalized = rawCommand.toLowerCase();
+    const args = argParts.join(" ").trim();
+
+    switch (normalized) {
+      case "/new":
+      case "/clear": {
+        setActiveSessionId(null, false);
+        setPrompt(args);
+        setGlobalError(normalized === "/clear" ? "Started a fresh conversation context." : "Opened a new conversation.");
+        return true;
+      }
+      case "/memory": {
+        onOpenMemory?.();
+        return true;
+      }
+      case "/search": {
+        setGlobalError(args
+          ? `Message search UI is not wired yet in Vera Cowork. Requested search: ${args}`
+          : "Message search UI is not wired yet in Vera Cowork.");
+        return true;
+      }
+      case "/remember": {
+        if (!args) {
+          setGlobalError("Usage: /remember <text>");
+          return true;
+        }
+        await handleSend({ text: `Please remember this for future conversations:\n\n${args}` });
+        return true;
+      }
+      case "/description": {
+        if (!args) {
+          setGlobalError("Usage: /description <text>");
+          return true;
+        }
+        await handleSend({ text: `Please update the current agent description to:\n\n${args}` });
+        return true;
+      }
+      case "/context": {
+        await handleSend({ text: "Show the current context window usage and explain how full it is." });
+        return true;
+      }
+      case "/usage": {
+        await handleSend({ text: "Show current usage statistics and balance information if available." });
+        return true;
+      }
+      case "/feedback": {
+        await handleSend({ text: `Please help me prepare feedback for the Letta team about this issue or idea:\n\n${args || "<add feedback details here>"}` });
+        return true;
+      }
+      case "/bg": {
+        await handleSend({ text: "Show any background shell or agent processes that are currently running, if available." });
+        return true;
+      }
+      default: {
+        setGlobalError(`Command ${normalized} is not yet supported directly in Vera Cowork.`);
+        return true;
+      }
+    }
+  }, [handleSend, onOpenMemory, setActiveSessionId, setGlobalError, setPrompt]);
+
   const handleStartFromModal = useCallback(() => {
     if (!cwd.trim()) {
       setGlobalError("Working Directory is required to start a session.");
@@ -238,8 +341,14 @@ export function usePromptActions(sendEvent: (event: ClientEvent) => void) {
     }
 
     startTimeoutRef.current = window.setTimeout(() => {
-      setPendingStart(false);
-      setGlobalError("Failed to start session. Please try again.");
+      const state = useAppStore.getState();
+      const hasRunningSession = Object.values(state.sessions).some((session) => session.status === "running");
+
+      if (state.pendingStart && !state.activeSessionId && !hasRunningSession) {
+        state.setPendingStart(false);
+        state.setGlobalError("Failed to start session. Please try again.");
+      }
+
       startTimeoutRef.current = null;
     }, 15000);
 
@@ -251,16 +360,16 @@ export function usePromptActions(sendEvent: (event: ClientEvent) => void) {
     };
   }, [pendingStart, setGlobalError, setPendingStart]);
 
-  return { prompt, setPrompt, isRunning, handleSend, handleStop, handleStartFromModal };
+  return { prompt, setPrompt, isRunning, handleSend, handleStop, handleSlashCommand, handleStartFromModal };
 }
 
-export function PromptInput({ sendEvent, onSendMessage, disabled = false }: PromptInputProps) {
-  const { prompt, setPrompt, isRunning, handleSend, handleStop } = usePromptActions(sendEvent);
+export const PromptInput = memo(function PromptInput({ sendEvent, onSendMessage, disabled = false, onOpenMemory }: PromptInputProps) {
+  const { prompt, setPrompt, isRunning, handleSend, handleStop, handleSlashCommand } = usePromptActions(sendEvent, onOpenMemory);
   const selectedModel = useAppStore((state) => state.selectedModel);
   const setSelectedModel = useAppStore((state) => state.setSelectedModel);
   const setGlobalError = useAppStore((state) => state.setGlobalError);
   const activeSessionId = useAppStore((state) => state.activeSessionId);
-  const sessions = useAppStore((state) => state.sessions);
+  const activeAgentId = useAppStore((state) => (activeSessionId ? state.sessions[activeSessionId]?.agentId : undefined));
   const promptRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [attachments, setAttachments] = useState<AttachmentDraft[]>([]);
@@ -273,8 +382,8 @@ export function PromptInput({ sendEvent, onSendMessage, disabled = false }: Prom
   const [models, setModels] = useState<ModelOption[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelTouched, setModelTouched] = useState(false);
+  const [selectedSlashIndex, setSelectedSlashIndex] = useState(0);
 
-  const activeAgentId = activeSessionId ? sessions[activeSessionId]?.agentId : undefined;
   const agentIdForModels = activeAgentId ?? defaultAgentId ?? undefined;
 
   const hasSelectedModelOption = selectedModel
@@ -718,6 +827,18 @@ export function PromptInput({ sendEvent, onSendMessage, disabled = false }: Prom
     (prompt.trim().length > 0 || hasReadyAttachments) &&
     !(disabled && !isRunning);
 
+  const slashQuery = useMemo(() => {
+    const trimmed = prompt.trimStart();
+    if (!trimmed.startsWith("/")) return "";
+    const firstLine = trimmed.split(/\r?\n/, 1)[0] ?? "";
+    return firstLine.slice(1).toLowerCase();
+  }, [prompt]);
+
+  const slashSuggestions = useMemo(() => {
+    if (!slashQuery && !prompt.trimStart().startsWith("/")) return [];
+    return SLASH_COMMAND_SUGGESTIONS.filter((item) => item.command.slice(1).toLowerCase().includes(slashQuery)).slice(0, 8);
+  }, [prompt, slashQuery]);
+
   const buildTextWithLinks = useCallback((baseText: string, metas: ChatAttachment[]): string => {
     let text = baseText;
     const nonImages = metas.filter((meta) => meta.kind === "file");
@@ -811,10 +932,16 @@ export function PromptInput({ sendEvent, onSendMessage, disabled = false }: Prom
       }
 
       try {
-        await handleSend({ text: textToSend, content: messageContent, attachments: attachmentMetadata });
+        const handledAsCommand = attachmentMetadata.length === 0
+          ? await handleSlashCommand(textToSend)
+          : false;
+        if (!handledAsCommand) {
+          await handleSend({ text: textToSend, content: messageContent, attachments: attachmentMetadata });
+        }
         console.debug("[PromptInput] message sent", {
           attachmentCount: attachmentMetadata.length,
           hadText: Boolean(textToSend.trim()),
+          handledAsCommand,
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -841,6 +968,7 @@ export function PromptInput({ sendEvent, onSendMessage, disabled = false }: Prom
     cleanupAllAttachments,
     disabled,
     handleSend,
+    handleSlashCommand,
     handleStop,
     isRunning,
     isUploading,
@@ -850,10 +978,50 @@ export function PromptInput({ sendEvent, onSendMessage, disabled = false }: Prom
     setPrompt,
   ]);
 
+  const applySlashSuggestion = useCallback((suggestion: SlashCommandSuggestion) => {
+    setPrompt(suggestion.insertText ?? suggestion.command);
+    setSelectedSlashIndex(0);
+    window.requestAnimationFrame(() => {
+      promptRef.current?.focus();
+      const length = (suggestion.insertText ?? suggestion.command).length;
+      promptRef.current?.setSelectionRange(length, length);
+    });
+  }, [setPrompt]);
+
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (disabled && !isRunning) return;
-      if (event.key !== "Enter" || event.shiftKey) return;
+
+      if (slashSuggestions.length > 0) {
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          setSelectedSlashIndex((current) => (current + 1) % slashSuggestions.length);
+          return;
+        }
+        if (event.key === "ArrowUp") {
+          event.preventDefault();
+          setSelectedSlashIndex((current) => (current - 1 + slashSuggestions.length) % slashSuggestions.length);
+          return;
+        }
+        if (event.key === "Tab") {
+          event.preventDefault();
+          applySlashSuggestion(slashSuggestions[selectedSlashIndex] ?? slashSuggestions[0]);
+          return;
+        }
+      }
+
+      if (event.key !== "Enter") return;
+      if (event.shiftKey || event.altKey) return;
+      if ((event.metaKey || event.ctrlKey) && !isRunning) {
+        event.preventDefault();
+        void handleSubmit();
+        return;
+      }
+      if (slashSuggestions.length > 0) {
+        event.preventDefault();
+        applySlashSuggestion(slashSuggestions[selectedSlashIndex] ?? slashSuggestions[0]);
+        return;
+      }
       event.preventDefault();
       if (isRunning) {
         handleStop();
@@ -861,7 +1029,7 @@ export function PromptInput({ sendEvent, onSendMessage, disabled = false }: Prom
       }
       void handleSubmit();
     },
-    [disabled, handleStop, handleSubmit, isRunning]
+    [applySlashSuggestion, disabled, handleStop, handleSubmit, isRunning, selectedSlashIndex, slashSuggestions]
   );
 
   const handleButtonClick = useCallback(() => {
@@ -880,14 +1048,14 @@ export function PromptInput({ sendEvent, onSendMessage, disabled = false }: Prom
 
   return (
     <section
-      className="sticky bottom-0 left-0 right-0 z-40 bg-[var(--color-surface)] px-4 pb-4 pt-3 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] lg:px-8"
+      className="sticky bottom-0 left-0 right-0 z-40 bg-gradient-to-t from-[var(--color-surface)] via-[var(--color-surface)] to-transparent px-4 pb-5 pt-4 lg:px-8"
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
       <div
-        className={`mx-auto w-full max-w-3xl rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-4 transition ${
+        className={`mx-auto w-full max-w-5xl rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface)]/98 px-5 py-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)] backdrop-blur-sm transition ${
           dragActive ? "border-[var(--color-accent)] bg-[var(--color-accent-light)]/60" : ""
         }`}
       >
@@ -896,7 +1064,13 @@ export function PromptInput({ sendEvent, onSendMessage, disabled = false }: Prom
             {attachments.map((attachment) => (
               <div
                 key={attachment.id}
-                className="group flex items-center gap-2 rounded-full border border-[var(--color-attachment-border)] bg-[var(--color-attachment-bg)] px-3 py-1 text-xs text-ink-700"
+                className={`group flex items-center gap-2 rounded-2xl border px-3 py-1.5 text-xs shadow-sm ${
+                  attachment.status === "error"
+                    ? "border-[var(--color-status-error)]/30 bg-[var(--color-status-error)]/5 text-[var(--color-status-error)]"
+                    : attachment.status === "uploaded"
+                      ? "border-[var(--color-status-completed)]/30 bg-[var(--color-status-completed)]/5 text-ink-700"
+                      : "border-[var(--color-attachment-border)] bg-[var(--color-attachment-bg)] text-ink-700"
+                }`}
               >
                 {attachment.previewUrl ? (
                   <span className="flex h-8 w-8 overflow-hidden rounded-lg border border-[var(--color-attachment-border)] bg-white">
@@ -907,6 +1081,9 @@ export function PromptInput({ sendEvent, onSendMessage, disabled = false }: Prom
                     />
                   </span>
                 ) : null}
+                <span className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
+                  {attachment.kind === "image" ? "Image" : "File"}
+                </span>
                 <span className="font-medium text-ink-800">
                   {attachment.file.name}
                 </span>
@@ -964,11 +1141,52 @@ export function PromptInput({ sendEvent, onSendMessage, disabled = false }: Prom
           </div>
         )}
 
-        <div className="flex items-center gap-2">
+        <div className="mt-3 flex items-center justify-between gap-3 text-[11px] text-muted">
+          <span>
+            {isRunning
+              ? "Press Enter to stop · Shift+Enter or Option+Enter for a new line"
+              : "Enter to send · Cmd/Ctrl+Enter also sends · Shift+Enter or Option+Enter for a new line"}
+          </span>
+          {!attachments.length && !dragActive ? <span>Drag & drop files or paste images</span> : null}
+        </div>
+
+        {slashSuggestions.length > 0 ? (
+          <div className="mt-2 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-secondary)]/70 p-2">
+            <div className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">Commands</div>
+            <div className="space-y-1">
+              {slashSuggestions.map((suggestion, index) => (
+                <button
+                  key={suggestion.command}
+                  type="button"
+                  onClick={() => applySlashSuggestion(suggestion)}
+                  className={`flex w-full items-start justify-between rounded-xl px-3 py-2 text-left transition ${
+                    index === selectedSlashIndex
+                      ? "bg-[var(--color-accent)]/10 text-ink-800"
+                      : "hover:bg-white/80 text-ink-700"
+                  }`}
+                >
+                  <span className="flex items-center gap-2 font-medium">
+                    {suggestion.command}
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${
+                      suggestion.status === "supported"
+                        ? "bg-[var(--color-status-completed)]/10 text-[var(--color-status-completed)]"
+                        : "bg-ink-900/6 text-muted"
+                    }`}>
+                      {suggestion.status === "supported" ? "Live" : "Info"}
+                    </span>
+                  </span>
+                  <span className="ml-3 text-[11px] text-muted">{suggestion.description}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="mt-3 flex items-end gap-3">
           <button
             type="button"
             onClick={triggerFilePicker}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--color-border)] text-ink-600 transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-secondary)] text-ink-600 transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
             disabled={disabled && !isRunning}
             aria-label="Attach files"
           >
@@ -978,7 +1196,7 @@ export function PromptInput({ sendEvent, onSendMessage, disabled = false }: Prom
           </button>
           <textarea
             rows={1}
-            className="flex-1 min-h-[64px] resize-none rounded-2xl border border-[var(--color-border)] bg-transparent px-3 py-3 text-sm leading-5 text-ink-800 placeholder:text-muted focus:border-[var(--color-border)] focus:outline-none focus:ring-0 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex-1 min-h-[68px] resize-none rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface-secondary)]/70 px-4 py-3.5 text-sm leading-6 text-ink-800 placeholder:text-muted focus:border-[var(--color-accent)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/10 disabled:cursor-not-allowed disabled:opacity-60"
             placeholder={disabled ? "Waiting for approval…" : "Ask Vera anything…"}
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
@@ -989,7 +1207,7 @@ export function PromptInput({ sendEvent, onSendMessage, disabled = false }: Prom
             disabled={disabled && !isRunning}
           />
           <button
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition disabled:cursor-not-allowed disabled:opacity-60 ${
+            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 ${
               isRunning ? "bg-[var(--color-status-error)] text-white hover:bg-[var(--color-status-error)]/90" : "bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)]"
             }`}
             onClick={handleButtonClick}
@@ -1025,4 +1243,4 @@ export function PromptInput({ sendEvent, onSendMessage, disabled = false }: Prom
       />
     </section>
   );
-}
+});

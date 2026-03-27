@@ -14,6 +14,7 @@ import { ActivityPanel } from "./components/activity/ActivityPanel";
 import { GlobalErrorToast } from "./components/GlobalErrorToast";
 import { EmailDetailsDialog } from "./components/EmailDetailsDialog";
 import { CoworkSettingsDialog } from "./components/CoworkSettingsDialog";
+import { MemoryDialog } from "./components/MemoryDialog";
 import { ChangeEnv } from "./components/ChangeEnv";
 import { useSessionController } from "./hooks/useSessionController";
 import { useCoworkSettings } from "./hooks/useCoworkSettings";
@@ -23,6 +24,17 @@ import { useProcessEmailToAgent } from "./hooks/useProcessEmailToAgent";
 const SCROLL_THRESHOLD = 50;
 const SESSION_CHANGE_SCROLL_DELAY_MS = 100;
 const AUTO_SYNC_ENABLED_KEY = "auto_sync_unread_enabled";
+const SIDEBAR_WIDTH_STORAGE_KEY = "sidebar_width_px";
+const DEFAULT_SIDEBAR_WIDTH = 280;
+const MIN_SIDEBAR_WIDTH = 220;
+const MAX_SIDEBAR_WIDTH = 420;
+
+const clampSidebarWidth = (value: number) => Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, value));
+
+const isNearBottom = (container: HTMLDivElement) => {
+  const { scrollTop, scrollHeight, clientHeight } = container;
+  return scrollTop + clientHeight >= scrollHeight - SCROLL_THRESHOLD;
+};
 const AUTO_SYNC_AGENT_IDS_KEY = "auto_sync_selected_agent_ids";
 const AUTO_SYNC_ROUTING_RULES_KEY = "auto_sync_routing_rules";
 const AUTO_SYNC_SINCE_DATE_KEY = "auto_sync_since_date";
@@ -32,55 +44,101 @@ type AutoSyncRoutingRule = {
   agentId: string;
 };
 
+const DEFAULT_AUTO_SYNC_CONFIG = {
+  enabled: false,
+  agentIds: [],
+  routingRules: [],
+  sinceDate: "",
+  processingMode: "unread_only",
+} satisfies AutoSyncUnreadConfig;
+
+const hasCustomAutoSyncConfig = (config: AutoSyncUnreadConfig): boolean => {
+  return config.enabled
+    || config.agentIds.length > 0
+    || config.routingRules.length > 0
+    || config.sinceDate.length > 0;
+};
+
+const readLegacyAutoSyncConfig = (): AutoSyncUnreadConfig => {
+  const enabled = localStorage.getItem(AUTO_SYNC_ENABLED_KEY) === "true";
+
+  let agentIds: string[] = [];
+  try {
+    const raw = localStorage.getItem(AUTO_SYNC_AGENT_IDS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as string[];
+      if (Array.isArray(parsed)) {
+        agentIds = parsed.filter((id) => typeof id === "string" && id.trim().length > 0);
+      }
+    }
+  } catch {
+    agentIds = [];
+  }
+
+  let routingRules: AutoSyncRoutingRule[] = [];
+  try {
+    const raw = localStorage.getItem(AUTO_SYNC_ROUTING_RULES_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as AutoSyncRoutingRule[];
+      if (Array.isArray(parsed)) {
+        routingRules = parsed.filter(
+          (rule) =>
+            typeof rule?.fromPattern === "string"
+            && rule.fromPattern.trim().length > 0
+            && typeof rule?.agentId === "string"
+            && rule.agentId.trim().length > 0
+        );
+      }
+    }
+  } catch {
+    routingRules = [];
+  }
+
+  return {
+    enabled,
+    agentIds,
+    routingRules,
+    sinceDate: localStorage.getItem(AUTO_SYNC_SINCE_DATE_KEY) ?? "",
+    processingMode: "unread_only",
+  };
+};
+
+const clearLegacyAutoSyncConfig = () => {
+  localStorage.removeItem(AUTO_SYNC_ENABLED_KEY);
+  localStorage.removeItem(AUTO_SYNC_AGENT_IDS_KEY);
+  localStorage.removeItem(AUTO_SYNC_ROUTING_RULES_KEY);
+  localStorage.removeItem(AUTO_SYNC_SINCE_DATE_KEY);
+};
+
 function App() {
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const prevMessagesLengthRef = useRef(0);
   const pendingHistoryLoadRef = useRef<{ prevScrollHeight: number; prevScrollTop: number } | null>(null);
+  const scrollRafRef = useRef<number | null>(null);
+  const scrollBehaviorRef = useRef<ScrollBehavior>("auto");
 
   // Local UI state
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const [hasNewMessages, setHasNewMessages] = useState(false);
   const [lettaEnvOpen, setLettaEnvOpen] = useState(false);
   const [isActivityOpen, setIsActivityOpen] = useState(false);
-  const [autoSyncEnabled, setAutoSyncEnabled] = useState<boolean>(() => {
-    return localStorage.getItem(AUTO_SYNC_ENABLED_KEY) === "true";
-  });
-  const [autoSyncAgentIds, setAutoSyncAgentIds] = useState<string[]>(() => {
-    try {
-      const raw = localStorage.getItem(AUTO_SYNC_AGENT_IDS_KEY);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw) as string[];
-      return Array.isArray(parsed)
-        ? parsed.filter((id) => typeof id === "string" && id.trim().length > 0)
-        : [];
-    } catch {
-      return [];
+  const [isMemoryOpen, setIsMemoryOpen] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    if (typeof window === "undefined") {
+      return DEFAULT_SIDEBAR_WIDTH;
     }
+    const stored = Number(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY));
+    return Number.isFinite(stored) ? clampSidebarWidth(stored) : DEFAULT_SIDEBAR_WIDTH;
   });
-  const [autoSyncRoutingRules, setAutoSyncRoutingRules] = useState<AutoSyncRoutingRule[]>(() => {
-    try {
-      const raw = localStorage.getItem(AUTO_SYNC_ROUTING_RULES_KEY);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw) as AutoSyncRoutingRule[];
-      if (!Array.isArray(parsed)) return [];
-      return parsed.filter(
-        (rule) =>
-          typeof rule?.fromPattern === "string" &&
-          rule.fromPattern.trim().length > 0 &&
-          typeof rule?.agentId === "string" &&
-          rule.agentId.trim().length > 0
-      );
-    } catch {
-      return [];
-    }
-  });
-  const [autoSyncSinceDate, setAutoSyncSinceDate] = useState<string>(() => {
-    return localStorage.getItem(AUTO_SYNC_SINCE_DATE_KEY) ?? "";
-  });
+  const [autoSyncConfigLoaded, setAutoSyncConfigLoaded] = useState(false);
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState<boolean>(DEFAULT_AUTO_SYNC_CONFIG.enabled);
+  const [autoSyncAgentIds, setAutoSyncAgentIds] = useState<string[]>(DEFAULT_AUTO_SYNC_CONFIG.agentIds);
+  const [autoSyncRoutingRules, setAutoSyncRoutingRules] = useState<AutoSyncRoutingRule[]>(DEFAULT_AUTO_SYNC_CONFIG.routingRules);
+  const [autoSyncSinceDate, setAutoSyncSinceDate] = useState<string>(DEFAULT_AUTO_SYNC_CONFIG.sinceDate);
+  const [autoSyncProcessingMode, setAutoSyncProcessingMode] = useState<AutoSyncProcessingMode>(DEFAULT_AUTO_SYNC_CONFIG.processingMode);
   const handleServerEvent = useAppStore((s) => s.handleServerEvent);
-  const fetchSessionHistory = useAppStore((s) => s.fetchSessionHistory);
   const { coworkSettings, showCoworkSettings, setShowCoworkSettings, updateCoworkSettings } = useCoworkSettings();
 
   // Email APIs
@@ -192,17 +250,58 @@ function App() {
   } = useSessionController({ connected, sendEvent });
   
   // Message window hook - must be called after useSessionController to get activeSessionId
+  const scheduleScrollToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
+    scrollBehaviorRef.current = behavior;
+
+    if (scrollRafRef.current !== null) {
+      window.cancelAnimationFrame(scrollRafRef.current);
+    }
+
+    scrollRafRef.current = window.requestAnimationFrame(() => {
+      scrollRafRef.current = null;
+      const container = scrollContainerRef.current;
+      const currentBehavior = scrollBehaviorRef.current;
+
+      if (container) {
+        try {
+          if (typeof container.scrollTo === "function") {
+            container.scrollTo({
+              top: container.scrollHeight,
+              behavior: currentBehavior,
+            });
+          } else {
+            container.scrollTop = container.scrollHeight;
+          }
+        } catch {
+          container.scrollTop = container.scrollHeight;
+        }
+      }
+
+      const endNode = messagesEndRef.current;
+      if (endNode) {
+        try {
+          endNode.scrollIntoView({ behavior: currentBehavior });
+        } catch {
+          endNode.scrollIntoView();
+        }
+      }
+    });
+  }, []);
+
   const {
     visibleMessages,
+    hasMoreHistory,
     partialMessage,
     showPartialMessage,
     handlePartialMessages,
+    loadMoreHistory,
   } = useMessageWindow(
     messages,
     activeSessionId,
     messagesEndRef,
     shouldAutoScroll,
-    () => setHasNewMessages(true)
+    () => setHasNewMessages(true),
+    scheduleScrollToBottom
   );
 
   // Update the ref with handlePartialMessages after useMessageWindow is called
@@ -237,20 +336,66 @@ function App() {
   }, [isLettaEnvConfigured, setShowStartModal, showStartModal]);
 
   useEffect(() => {
-    localStorage.setItem(AUTO_SYNC_ENABLED_KEY, String(autoSyncEnabled));
-  }, [autoSyncEnabled]);
+    const loadAutoSyncConfig = async () => {
+      try {
+        const storedConfig = await window.electron.getAutoSyncUnreadConfig();
+        const legacyConfig = readLegacyAutoSyncConfig();
+        const nextConfig = hasCustomAutoSyncConfig(storedConfig) || !hasCustomAutoSyncConfig(legacyConfig)
+          ? storedConfig
+          : legacyConfig;
+
+        if (!hasCustomAutoSyncConfig(storedConfig) && hasCustomAutoSyncConfig(legacyConfig)) {
+          await window.electron.updateAutoSyncUnreadConfig(legacyConfig);
+        }
+
+        setAutoSyncEnabled(nextConfig.enabled);
+        setAutoSyncAgentIds(nextConfig.agentIds);
+        setAutoSyncRoutingRules(nextConfig.routingRules);
+        setAutoSyncSinceDate(nextConfig.sinceDate);
+        setAutoSyncProcessingMode(nextConfig.processingMode);
+        clearLegacyAutoSyncConfig();
+      } catch (err) {
+        console.error("Failed to load auto-sync unread config:", err);
+        const legacyConfig = readLegacyAutoSyncConfig();
+        setAutoSyncEnabled(legacyConfig.enabled);
+        setAutoSyncAgentIds(legacyConfig.agentIds);
+        setAutoSyncRoutingRules(legacyConfig.routingRules);
+        setAutoSyncSinceDate(legacyConfig.sinceDate);
+        setAutoSyncProcessingMode(legacyConfig.processingMode);
+      } finally {
+        setAutoSyncConfigLoaded(true);
+      }
+    };
+
+    void loadAutoSyncConfig();
+  }, []);
 
   useEffect(() => {
-    localStorage.setItem(AUTO_SYNC_AGENT_IDS_KEY, JSON.stringify(selectedAutoSyncAgentIds));
-  }, [selectedAutoSyncAgentIds]);
+    if (typeof window === "undefined") {
+      return;
+    }
+    localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidth));
+  }, [sidebarWidth]);
 
   useEffect(() => {
-    localStorage.setItem(AUTO_SYNC_ROUTING_RULES_KEY, JSON.stringify(autoSyncRoutingRules));
-  }, [autoSyncRoutingRules]);
+    if (!autoSyncConfigLoaded) return;
 
-  useEffect(() => {
-    localStorage.setItem(AUTO_SYNC_SINCE_DATE_KEY, autoSyncSinceDate);
-  }, [autoSyncSinceDate]);
+    const persistAutoSyncConfig = async () => {
+      try {
+        await window.electron.updateAutoSyncUnreadConfig({
+          enabled: autoSyncEnabled,
+          agentIds: selectedAutoSyncAgentIds,
+          routingRules: autoSyncRoutingRules,
+          sinceDate: autoSyncSinceDate,
+          processingMode: autoSyncProcessingMode,
+        });
+      } catch (err) {
+        console.error("Failed to persist auto-sync unread config:", err);
+      }
+    };
+
+    void persistAutoSyncConfig();
+  }, [autoSyncConfigLoaded, autoSyncEnabled, autoSyncProcessingMode, autoSyncRoutingRules, autoSyncSinceDate, selectedAutoSyncAgentIds]);
 
   // Load cowork settings on mount
   useEffect(() => {
@@ -265,7 +410,7 @@ function App() {
     loadSettings();
   }, [updateCoworkSettings]);
 
-  useAutoSyncUnread(
+  const { runAutoSyncNow } = useAutoSyncUnread(
     sendEvent,
     accountId,
     folderId,
@@ -273,40 +418,55 @@ function App() {
     autoSyncRoutingRules,
     autoSyncEnabled,
     1,
-    autoSyncSinceDate
+    autoSyncSinceDate,
+    autoSyncProcessingMode
   );
+
+  useEffect(() => {
+    return () => {
+      if (scrollRafRef.current !== null) {
+        window.cancelAnimationFrame(scrollRafRef.current);
+      }
+    };
+  }, []);
 
   const handleScroll = useCallback(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
 
-    const { scrollTop, scrollHeight, clientHeight } = container;
-    const isAtBottom = scrollTop + clientHeight >= scrollHeight - SCROLL_THRESHOLD;
+    const atBottom = isNearBottom(container);
 
-    if (isAtBottom !== shouldAutoScroll) {
-      setShouldAutoScroll(isAtBottom);
-      if (isAtBottom) {
+    if (atBottom !== shouldAutoScroll) {
+      setShouldAutoScroll(atBottom);
+      if (atBottom) {
         setHasNewMessages(false);
       }
     }
+  }, [shouldAutoScroll]);
 
-    const reachedTop = scrollTop <= SCROLL_THRESHOLD;
-    if (
-      reachedTop &&
-      activeSessionId &&
-      activeSession?.hasMoreHistory &&
-      !activeSession?.isLoadingHistory
-    ) {
-      pendingHistoryLoadRef.current = {
-        prevScrollHeight: scrollHeight,
-        prevScrollTop: scrollTop,
-      };
-      fetchSessionHistory(activeSessionId, 200, activeSession.oldestMessageId ?? undefined);
+  const handleLoadMoreHistory = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (!container || !hasMoreHistory) {
+      return;
     }
-  }, [activeSession, activeSessionId, fetchSessionHistory, shouldAutoScroll]);
+
+    pendingHistoryLoadRef.current = {
+      prevScrollHeight: container.scrollHeight,
+      prevScrollTop: container.scrollTop,
+    };
+
+    loadMoreHistory();
+  }, [hasMoreHistory, loadMoreHistory]);
 
   const handleToggleActivityPanel = useCallback(() => {
     setIsActivityOpen((prev) => !prev);
+  }, []);
+
+  const handleSidebarWidthChange = useCallback((nextWidth: number) => {
+    setSidebarWidth((prev) => {
+      const clamped = clampSidebarWidth(nextWidth);
+      return clamped === prev ? prev : clamped;
+    });
   }, []);
 
   // Reset scroll behavior on session switch
@@ -314,10 +474,11 @@ function App() {
     setShouldAutoScroll(true);
     setHasNewMessages(false);
     prevMessagesLengthRef.current = 0;
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+    const timer = window.setTimeout(() => {
+      scheduleScrollToBottom("auto");
     }, SESSION_CHANGE_SCROLL_DELAY_MS);
-  }, [activeSessionId]);
+    return () => window.clearTimeout(timer);
+  }, [activeSessionId, scheduleScrollToBottom]);
 
   useEffect(() => {
     if (!scrollContainerRef.current) {
@@ -333,25 +494,25 @@ function App() {
       container.scrollTop = Math.max(prevScrollTop + heightDelta, 0);
       pendingHistoryLoadRef.current = null;
     } else if (shouldAutoScroll) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      scheduleScrollToBottom("auto");
     } else if (messages.length > prevMessagesLengthRef.current && prevMessagesLengthRef.current > 0) {
       setHasNewMessages(true);
     }
 
     prevMessagesLengthRef.current = messages.length;
-  }, [messages, partialMessage, showPartialMessage, shouldAutoScroll]);
+  }, [messages, scheduleScrollToBottom, shouldAutoScroll]);
 
   const scrollToBottom = useCallback(() => {
     setShouldAutoScroll(true);
     setHasNewMessages(false);
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, []);
+    scheduleScrollToBottom("smooth");
+  }, [scheduleScrollToBottom]);
 
   const handleSendMessage = useCallback(() => {
     setShouldAutoScroll(true);
     setHasNewMessages(false);
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, []);
+    scheduleScrollToBottom("smooth");
+  }, [scheduleScrollToBottom]);
 
   const agentStatus = activeSession?.ephemeral.status ?? "idle";
   const ephemeralState = activeSession?.ephemeral;
@@ -360,6 +521,10 @@ function App() {
   return (
     <>
       <WorkspaceLayout
+        sidebarWidth={sidebarWidth}
+        minSidebarWidth={MIN_SIDEBAR_WIDTH}
+        maxSidebarWidth={MAX_SIDEBAR_WIDTH}
+        onSidebarWidthChange={handleSidebarWidthChange}
         sidebar={
           <Sidebar
             connected={connected}
@@ -388,6 +553,12 @@ function App() {
             onRemoveAutoSyncRoutingRule={handleRemoveAutoSyncRoutingRule}
             autoSyncSinceDate={autoSyncSinceDate}
             onSetAutoSyncSinceDate={setAutoSyncSinceDate}
+            autoSyncProcessingMode={autoSyncProcessingMode}
+            onSetAutoSyncProcessingMode={setAutoSyncProcessingMode}
+            autoSyncAccountId={accountId}
+            autoSyncFolderId={folderId}
+            onRunAutoSyncNow={runAutoSyncNow}
+            onRefreshEmailMailbox={refetchEmails}
             selectedAgentId={selectedAutoSyncAgentIds[0]}
             onProcessEmailToAgent={processEmailToAgent}
             processingEmailId={processingEmailId}
@@ -410,15 +581,18 @@ function App() {
             partialMessage={partialMessage}
             showPartialMessage={showPartialMessage}
             isHistoryLoading={Boolean(activeSession?.isLoadingHistory)}
+            hasMoreHistory={hasMoreHistory || Boolean(activeSession?.totalDisplayableCount && activeSession.totalDisplayableCount > visibleMessages.length)}
             reasoningSteps={reasoningSteps}
             onScroll={handleScroll}
             onScrollToBottom={scrollToBottom}
             onSendMessage={handleSendMessage}
+            onLoadMoreHistory={handleLoadMoreHistory}
             sendEvent={sendEvent}
             scrollContainerRef={scrollContainerRef}
             messagesEndRef={messagesEndRef}
             activityOpen={isActivityOpen}
             onToggleActivity={handleToggleActivityPanel}
+            onOpenMemory={() => setIsMemoryOpen(true)}
           />
         }
         activity={
@@ -468,6 +642,7 @@ function App() {
         open={showCoworkSettings}
         onOpenChange={setShowCoworkSettings}
       />
+      <MemoryDialog open={isMemoryOpen} onOpenChange={setIsMemoryOpen} />
       <EmailDetailsDialog
         open={isEmailDetailsOpen}
         onOpenChange={setIsEmailDetailsOpen}

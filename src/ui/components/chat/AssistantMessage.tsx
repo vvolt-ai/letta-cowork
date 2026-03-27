@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { SDKAssistantMessage, MessageContentItem } from "@letta-ai/letta-code-sdk";
 
 function extractText(content: SDKAssistantMessage["content"]): string {
@@ -20,7 +21,7 @@ interface AssistantMessageProps {
   agentName: string;
 }
 
-export function AssistantMessage({ message, fallbackText = "", isStreaming = false, agentName }: AssistantMessageProps) {
+export const AssistantMessage = memo(function AssistantMessage({ message, fallbackText = "", isStreaming = false, agentName }: AssistantMessageProps) {
   const textContent = (message && extractText(message.content)) || fallbackText;
 
   if (!textContent && !isStreaming) {
@@ -39,10 +40,10 @@ export function AssistantMessage({ message, fallbackText = "", isStreaming = fal
         ) : null}
       </div>
       {textContent ? (
-        <div className="whitespace-pre-wrap leading-relaxed">{textContent}</div>
+        <div className="whitespace-pre-wrap text-[15px] leading-8 text-ink-800">{textContent}</div>
       ) : (
         <div className="text-muted">…</div>
       )}
     </article>
   );
-}
+});

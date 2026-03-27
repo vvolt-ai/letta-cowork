@@ -8,8 +8,8 @@ interface UseSessionControllerArgs {
 }
 
 export function useSessionController({ connected, sendEvent }: UseSessionControllerArgs) {
-  const sessions = useAppStore((s) => s.sessions);
   const activeSessionId = useAppStore((s) => s.activeSessionId);
+  const activeSession = useAppStore((s) => (activeSessionId ? s.sessions[activeSessionId] : undefined));
   const setActiveSessionId = useAppStore((s) => s.setActiveSessionId);
   const setIPCSendEvent = useAppStore((s) => s.setIPCSendEvent);
   const showStartModal = useAppStore((s) => s.showStartModal);
@@ -26,7 +26,6 @@ export function useSessionController({ connected, sendEvent }: UseSessionControl
   const pendingStart = useAppStore((s) => s.pendingStart);
   const setPendingStart = useAppStore((s) => s.setPendingStart);
 
-  const activeSession = activeSessionId ? sessions[activeSessionId] : undefined;
   const messages = activeSession?.messages ?? [];
   const permissionRequests = activeSession?.permissionRequests ?? [];
   const isRunning = activeSession?.status === "running";
@@ -41,13 +40,12 @@ export function useSessionController({ connected, sendEvent }: UseSessionControl
   }, [connected, sendEvent, setIPCSendEvent]);
 
   useEffect(() => {
-    if (!activeSessionId || !connected) return;
-    const session = sessions[activeSessionId];
-    if (session && !session.hydrated && !historyRequested.has(activeSessionId)) {
+    if (!activeSessionId || !connected || !activeSession) return;
+    if (!activeSession.hydrated && !historyRequested.has(activeSessionId)) {
       markHistoryRequested(activeSessionId);
       sendEvent({ type: "session.history", payload: { sessionId: activeSessionId } });
     }
-  }, [activeSessionId, connected, historyRequested, markHistoryRequested, sendEvent, sessions]);
+  }, [activeSession, activeSessionId, connected, historyRequested, markHistoryRequested, sendEvent]);
 
   const handleNewSession = useCallback(() => {
     setActiveSessionId(null);
@@ -118,7 +116,6 @@ export function useSessionController({ connected, sendEvent }: UseSessionControl
   }, [cwd, prompt, sendEvent, setPendingStart]);
 
   return {
-    sessions,
     activeSessionId,
     showStartModal,
     setShowStartModal,

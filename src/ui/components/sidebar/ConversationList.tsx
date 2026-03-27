@@ -1,14 +1,19 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { SessionView } from "../../store/useAppStore";
 
+type ConversationListSession = Pick<SessionView, "id" | "title" | "updatedAt" | "lastPrompt">;
+
 interface ConversationListProps {
-  sessions: SessionView[];
+  sessions: ConversationListSession[];
   activeSessionId: string | null;
   onSelectSession: (sessionId: string) => void;
   onDeleteSession: (sessionId: string) => void;
   onResumeSession?: (sessionId: string) => void;
   onRenameSession: (sessionId: string, title: string) => void;
+  emptyMessage?: string;
+  getSessionTitle?: (session: ConversationListSession) => string;
+  getSessionSubtitle?: (session: ConversationListSession) => string | undefined;
 }
 
 export function ConversationList({
@@ -18,6 +23,9 @@ export function ConversationList({
   onDeleteSession,
   onResumeSession,
   onRenameSession,
+  emptyMessage = "No conversations yet.",
+  getSessionTitle,
+  getSessionSubtitle,
 }: ConversationListProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
@@ -32,16 +40,12 @@ export function ConversationList({
     return () => cancelAnimationFrame(raf);
   }, [editingId]);
 
-  const sortedSessions = useMemo(() => {
-    return [...sessions].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
-  }, [sessions]);
-
   const finishEditing = () => {
     setEditingId(null);
     setDraftTitle("");
   };
 
-  const commitRename = (session: SessionView) => {
+  const commitRename = (session: ConversationListSession) => {
     if (!editingId || editingId !== session.id) return;
     const nextTitle = draftTitle.trim();
     if (nextTitle.length === 0 || nextTitle === session.title) {
@@ -52,19 +56,21 @@ export function ConversationList({
     finishEditing();
   };
 
-  if (sortedSessions.length === 0) {
+  if (sessions.length === 0) {
     return (
       <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-4 text-center text-xs text-muted">
-        No conversations yet.
+        {emptyMessage}
       </div>
     );
   }
 
   return (
     <div className="space-y-1.5">
-      {sortedSessions.map((session) => {
+      {sessions.map((session) => {
         const isActive = activeSessionId === session.id;
         const isEditing = editingId === session.id;
+        const displayTitle = getSessionTitle?.(session) || session.title || "Untitled session";
+        const subtitle = getSessionSubtitle?.(session);
 
         return (
           <div
@@ -104,9 +110,16 @@ export function ConversationList({
                   }}
                 />
               ) : (
-                <span className="block truncate font-medium text-ink-800">
-                  {session.title || "Untitled session"}
-                </span>
+                <div className="min-w-0">
+                  <span className="block truncate font-medium text-ink-800">
+                    {displayTitle}
+                  </span>
+                  {subtitle ? (
+                    <span className="mt-0.5 block truncate text-[11px] text-muted">
+                      {subtitle}
+                    </span>
+                  ) : null}
+                </div>
               )}
             </div>
             <DropdownMenu.Root>

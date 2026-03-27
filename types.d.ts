@@ -26,6 +26,38 @@ type CoworkSettings = {
     showLettaEnv: boolean;
 }
 
+type AutoSyncRoutingRule = {
+    fromPattern: string;
+    agentId: string;
+}
+
+type AutoSyncProcessingMode = "unread_only" | "today_all"
+
+type AutoSyncUnreadConfig = {
+    enabled: boolean;
+    agentIds: string[];
+    routingRules: AutoSyncRoutingRule[];
+    sinceDate: string;
+    processingMode: AutoSyncProcessingMode;
+}
+
+type ProcessedUnreadEmailEntry = {
+    id: string;
+    processedAt: number;
+}
+
+type ProcessedUnreadEmailDebugInfo = {
+    mailboxKey: string;
+    accountId: string;
+    folderId: string;
+    count: number;
+    retentionDays: number;
+    maxEntries: number;
+    oldestProcessedAt?: number;
+    newestProcessedAt?: number;
+    entries: ProcessedUnreadEmailEntry[];
+}
+
 type LettaAgent = {
     id: string;
     name: string;
@@ -211,6 +243,13 @@ type EventPayloadMapping = {
     "get-cowork-settings": CoworkSettings;
     "update-cowork-settings": CoworkSettings;
     "reset-cowork-settings": CoworkSettings;
+    "get-auto-sync-unread-config": AutoSyncUnreadConfig;
+    "update-auto-sync-unread-config": AutoSyncUnreadConfig;
+    "reset-auto-sync-unread-config": AutoSyncUnreadConfig;
+    "get-processed-unread-email-ids": string[];
+    "set-processed-unread-email-ids": string[];
+    "clear-processed-unread-email-ids": void;
+    "get-processed-unread-email-debug-info": ProcessedUnreadEmailDebugInfo;
 }
 
 interface Window {
@@ -242,6 +281,7 @@ interface Window {
         listLettaAgents: () => Promise<LettaAgent[]>;
         listLettaModels: () => Promise<LettaModel[]>;
         getLettaAgent: (agentId: string) => Promise<LettaAgent | null>;
+        listAgentMemoryFiles: () => Promise<Array<{ path: string; description?: string; preview: string; category: "system" | "reference" | "other" }>>;
         updateLettaEnv: (values: LettaEnvConfig) => Promise<{ success: boolean }>;
         isAdmin: () => Promise<boolean>;
         getChannelBridgesConfig: () => Promise<ChannelBridgeConfig>;
@@ -262,5 +302,12 @@ interface Window {
         getCoworkSettings: () => Promise<CoworkSettings>;
         updateCoworkSettings: (updates: Partial<CoworkSettings>) => Promise<CoworkSettings>;
         resetCoworkSettings: () => Promise<CoworkSettings>;
+        getAutoSyncUnreadConfig: () => Promise<AutoSyncUnreadConfig>;
+        updateAutoSyncUnreadConfig: (updates: Partial<AutoSyncUnreadConfig>) => Promise<AutoSyncUnreadConfig>;
+        resetAutoSyncUnreadConfig: () => Promise<AutoSyncUnreadConfig>;
+        getProcessedUnreadEmailIds: (accountId: string, folderId: string) => Promise<string[]>;
+        setProcessedUnreadEmailIds: (accountId: string, folderId: string, ids: string[]) => Promise<string[]>;
+        clearProcessedUnreadEmailIds: (accountId: string, folderId: string) => Promise<void>;
+        getProcessedUnreadEmailDebugInfo: (accountId: string, folderId: string, limit?: number) => Promise<ProcessedUnreadEmailDebugInfo>;
     }
 }
