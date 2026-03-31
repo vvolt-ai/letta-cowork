@@ -8,6 +8,7 @@ import express, { Request, Response } from "express";
 import { BASE_URL, OAUTH_PORT, saveAccessToken, saveRefreshToken, saveAccountId, saveInboxFolderId } from "./helper.js";
 import { downloadEmailAttachment, fetchAccounts, fetchEmails, fetchEmailById, fetchFolders, searchEmails, uploadEmailAttachmentToAgent } from "./fetchEmails.js";
 import { getCurrentAgentId } from "../libs/runner.js";
+import { storeEmailTokensOnServer } from "../apiClient.js";
 
 
 
@@ -39,8 +40,21 @@ export const expressServer = (mainWindow: BrowserWindow) => {
         throw new Error("Invalid token response");
       }
 
+      // Save tokens locally (for backward compatibility)
       saveAccessToken(access_token);
       saveRefreshToken(refresh_token);
+
+      // Save tokens to server
+      try {
+        await storeEmailTokensOnServer({
+          accessToken: access_token,
+          refreshToken: refresh_token,
+          tokenExpiresAt: Date.now() + 3600000, // 1 hour default
+        });
+        console.log("[OAuth] Tokens saved to server");
+      } catch (err) {
+        console.warn("[OAuth] Failed to save tokens to server:", err);
+      }
 
       // Fetch accounts and save the first account's ID
       try {
@@ -58,6 +72,21 @@ export const expressServer = (mainWindow: BrowserWindow) => {
               );
               if (inboxFolder) {
                 await saveInboxFolderId(inboxFolder.folderId);
+                
+                // Update server tokens with account and folder IDs
+                try {
+                  await storeEmailTokensOnServer({
+                    accessToken: access_token,
+                    refreshToken: refresh_token,
+                    tokenExpiresAt: Date.now() + 3600000,
+                    accountId: firstAccount.accountId,
+                    folderId: inboxFolder.folderId,
+                    email: firstAccount.primaryEmailAddress || firstAccount.emailAddress,
+                  });
+                  console.log("[OAuth] Updated server tokens with account/folder IDs");
+                } catch (updateErr) {
+                  console.warn("[OAuth] Failed to update server tokens:", updateErr);
+                }
               }
             }
           } catch (err) {

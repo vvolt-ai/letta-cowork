@@ -1,6 +1,6 @@
 import { BrowserWindow } from "electron";
 import type { ClientEvent, ServerEvent, StreamMessage } from "./types.js";
-import { runLetta, type RunnerHandle, getCurrentAgentId } from "./libs/runner.js";
+import { runLetta, type RunnerHandle, getCurrentAgentId, clearAgentCache } from "./libs/runner.js";
 import type { PendingPermission } from "./libs/runtime-state.js";
 import {
   createRuntimeSession,
@@ -217,12 +217,18 @@ export async function handleClientEvent(event: ClientEvent) {
   }
 
   if (event.type === "session.start") {
-    const { prompt, content, attachments, cwd, agentId, model, title } = event.payload;
+    const { prompt, content, attachments, cwd, agentId, model, title, background, isEmailSession } = event.payload;
+    
+    // Clear agent cache to ensure fresh agent name is fetched
+    clearAgentCache();
+    
     debug("session.start: starting new session", {
       prompt: (prompt ?? "").slice(0, 50),
       cwd,
       contentType: Array.isArray(content) ? "multimodal" : "text",
       attachments: attachments?.length ?? 0,
+      background,
+      isEmailSession,
     });
     const pendingPermissions = new Map<string, PendingPermission>();
     let conversationId: string | null = null;
@@ -294,9 +300,10 @@ export async function handleClientEvent(event: ClientEvent) {
             }
             
             // Emit session.status to unblock UI with resolved title
+            // Include background flag so UI knows not to switch to this session
             emit({
               type: "session.status",
-              payload: { sessionId: conversationId, status: "running", title: sessionTitle, cwd, agentName, agentId: resolvedAgentId },
+              payload: { sessionId: conversationId, status: "running", title: sessionTitle, cwd, agentName, agentId: resolvedAgentId, background, isEmailSession },
             });
             emit({
               type: "stream.user_prompt",

@@ -35,10 +35,10 @@ export const fetchEmails = async (
   accountId?: string,
   params?: EmailListParams
 ) => {
-  // use provided accountId or fetch from keytar
+  // use provided accountId or fetch from electron-store
   const resolvedAccountId = accountId || (await getAccountId());
   if (!resolvedAccountId) {
-    throw new Error("No account ID provided and none found in keytar");
+    throw new Error("No account ID provided and none found in electron-store");
   }
 
   // use provided params or empty object (typed so TS knows possible properties)
@@ -136,16 +136,16 @@ type DownloadAttachmentResult = {
 };
 
 export const fetchEmailDetails = async (messageId: string, accountId?: string, folderId?: string) => {
-  // resolve accountId from parameter or keytar
+  // resolve accountId from parameter or electron-store
   const resolvedAccountId = accountId || (await getAccountId());
   if (!resolvedAccountId) {
-    throw new Error("No account ID provided and none found in keytar");
+    throw new Error("No account ID provided and none found in electron-store");
   }
 
-  // resolve folderId from parameter or keytar (inbox)
+  // resolve folderId from parameter or electron-store (inbox)
   const resolvedFolderId = folderId || (await getInboxFolderId());
   if (!resolvedFolderId) {
-    throw new Error("No folder ID provided and none found in keytar");
+    throw new Error("No folder ID provided and none found in electron-store");
   }
 
   if (!messageId) {
@@ -158,16 +158,16 @@ export const fetchEmailDetails = async (messageId: string, accountId?: string, f
 };
 
 export const fetchEmailById = async (messageId: string, accountId?: string, folderId?: string): Promise<EmailWithAttachments> => {
-  // resolve accountId from parameter or keytar
+  // resolve accountId from parameter or electron-store
   const resolvedAccountId = accountId || (await getAccountId());
   if (!resolvedAccountId) {
-    throw new Error("No account ID provided and none found in keytar");
+    throw new Error("No account ID provided and none found in electron-store");
   }
 
-  // resolve folderId from parameter or keytar (inbox)
+  // resolve folderId from parameter or electron-store (inbox)
   const resolvedFolderId = folderId || (await getInboxFolderId());
   if (!resolvedFolderId) {
-    throw new Error("No folder ID provided and none found in keytar");
+    throw new Error("No folder ID provided and none found in electron-store");
   }
 
   if (!messageId) {
@@ -261,13 +261,13 @@ export const downloadEmailAttachment = async (folderId?: string, messageId?: str
   // resolve accountId
   const resolvedAccountId = accountId || (await getAccountId());
   if (!resolvedAccountId) {
-    throw new Error("No account ID provided and none found in keytar");
+    throw new Error("No account ID provided and none found in electron-store");
   }
 
   // resolve folderId
   const resolvedFolderId = folderId || (await getInboxFolderId());
   if (!resolvedFolderId) {
-    throw new Error("No folder ID provided and none found in keytar");
+    throw new Error("No folder ID provided and none found in electron-store");
   }
 
   if (!messageId) {
@@ -393,7 +393,7 @@ export const updateMessages = async (
   // resolve accountId
   const resolvedAccountId = accountId || (await getAccountId());
   if (!resolvedAccountId) {
-    throw new Error("No account ID provided and none found in keytar");
+    throw new Error("No account ID provided and none found in electron-store");
   }
 
   if (!body) {
@@ -417,7 +417,7 @@ export const searchEmails = async (
   // resolve accountId
   const resolvedAccountId = accountId || (await getAccountId());
   if (!resolvedAccountId) {
-    throw new Error("No account ID provided and none found in keytar");
+    throw new Error("No account ID provided and none found in electron-store");
   }
 
   const resolvedParams: SearchEmailParams = params || { searchKey: "" };

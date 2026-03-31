@@ -15,6 +15,8 @@ interface NewMailPipelineSettingProps {
   onSetAutoSyncSinceDate: (date: string) => void;
   autoSyncProcessingMode: AutoSyncProcessingMode;
   onSetAutoSyncProcessingMode: (mode: AutoSyncProcessingMode) => void;
+  autoSyncMarkAsRead: boolean;
+  onSetAutoSyncMarkAsRead: (enabled: boolean) => void;
   accountId: string;
   folderId: string;
   onRunAutoSyncNow: () => Promise<void>;
@@ -73,6 +75,8 @@ export function NewMailPipelineSetting({
   onSetAutoSyncSinceDate,
   autoSyncProcessingMode,
   onSetAutoSyncProcessingMode,
+  autoSyncMarkAsRead,
+  onSetAutoSyncMarkAsRead,
   accountId,
   folderId,
   onRunAutoSyncNow,
@@ -399,6 +403,34 @@ export function NewMailPipelineSetting({
 
                 <SettingsSection
                   eyebrow="Step 4"
+                  title="Mark emails as read after processing"
+                  description="When enabled, processed emails will be marked as read in your inbox. Disable this if you want to keep emails unread for manual review."
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs text-muted">
+                      {autoSyncMarkAsRead
+                        ? "Emails will be marked as read after successful processing"
+                        : "Emails will remain unread after processing"}
+                    </div>
+                    <button
+                      onClick={() => onSetAutoSyncMarkAsRead(!autoSyncMarkAsRead)}
+                      className={`flex h-5 w-9 items-center rounded-full p-0.5 transition ${
+                        autoSyncMarkAsRead ? "bg-[var(--color-accent)]" : "bg-ink-300"
+                      }`}
+                      aria-pressed={autoSyncMarkAsRead}
+                      aria-label="Toggle mark as read"
+                    >
+                      <span
+                        className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+                          autoSyncMarkAsRead ? "translate-x-4" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </SettingsSection>
+
+                <SettingsSection
+                  eyebrow="Step 5"
                   title="Set a sync boundary"
                   description="Use a start date when you want automation to ignore older email. Leaving this blank allows all eligible messages in the selected mode to be considered."
                 >

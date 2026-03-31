@@ -38,6 +38,7 @@ export type ToolExecution = {
   startedAt: number;
   finishedAt?: number;
   error?: string;
+  output?: string;
   updates: string[];
 };
 
@@ -82,6 +83,34 @@ function formatToolInput(raw: unknown): string | undefined {
   return truncated.length > 0 ? truncated : undefined;
 }
 
+function formatToolOutput(raw: unknown): string | undefined {
+  if (raw == null) return undefined;
+
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  try {
+    const serialized = JSON.stringify(raw, null, 2);
+    return serialized.trim().length > 0 ? serialized : undefined;
+  } catch {
+    const fallback = String(raw ?? "").trim();
+    return fallback.length > 0 ? fallback : undefined;
+  }
+}
+
+function mergeToolOutput(existing?: string, incoming?: string): string | undefined {
+  if (!incoming) return existing;
+  if (!existing) return incoming;
+  return existing.includes(incoming) ? existing : `${existing}\n${incoming}`;
+}
+
+function mergeToolLogs(existing: string[], incoming: string[]): string[] {
+  if (incoming.length === 0) return existing;
+  return Array.from(new Set([...existing, ...incoming]));
+}
+
 function updateReasoning(ephemeral: EphemeralState, message: StreamMessage): EphemeralState {
   if (message.type !== "reasoning" || !("uuid" in message)) {
     return ephemeral;
@@ -120,20 +149,24 @@ function upsertToolExecution(ephemeral: EphemeralState, message: StreamMessage):
   const id = rawMessage.toolCallId ?? ("uuid" in message ? message.uuid : `${Date.now()}`);
   const now = Date.now();
   const formattedInput = formatToolInput(rawMessage.toolInput ?? rawMessage.input ?? rawMessage.arguments);
+  const existingTool = ephemeral.tools.find((tool) => tool.id === id);
 
   if (message.type === "tool_call") {
     const newTool: ToolExecution = {
       id,
-      name: rawMessage.toolName ?? "tool",
-      input: formattedInput,
+      name: rawMessage.toolName ?? existingTool?.name ?? "tool",
+      input: formattedInput ?? existingTool?.input,
       status: "running",
-      startedAt: now,
-      updates: [],
+      startedAt: existingTool?.startedAt ?? now,
+      finishedAt: undefined,
+      error: undefined,
+      output: existingTool?.output,
+      updates: existingTool?.updates ?? [],
     };
 
     return {
       ...ephemeral,
-      tools: [newTool],
+      tools: [...ephemeral.tools.filter((tool) => tool.id !== id), newTool],
       lastUpdated: now,
     };
   }
@@ -142,31 +175,29 @@ function upsertToolExecution(ephemeral: EphemeralState, message: StreamMessage):
     const logs = Array.isArray(rawMessage.logs)
       ? rawMessage.logs.map((log: unknown) => String(log))
       : [];
-    const output = rawMessage.output ?? rawMessage.result ?? null;
+    const outputValue = rawMessage.output ?? rawMessage.result ?? rawMessage.content ?? null;
+    const formattedOutput = formatToolOutput(outputValue);
     let errorText: string | undefined;
 
-    if (message.isError && output) {
-      try {
-        errorText = typeof output === "string" ? output : JSON.stringify(output, null, 2);
-      } catch {
-        errorText = String(output);
-      }
+    if (message.isError) {
+      errorText = formattedOutput;
     }
 
     const updatedTool: ToolExecution = {
       id,
-      name: rawMessage.toolName ?? "tool",
-      input: formattedInput ?? formatToolInput(output),
+      name: rawMessage.toolName ?? existingTool?.name ?? "tool",
+      input: formattedInput ?? existingTool?.input,
       status: message.isError ? "failed" : "completed",
-      startedAt: now,
+      startedAt: existingTool?.startedAt ?? now,
       finishedAt: now,
       error: errorText,
-      updates: logs,
+      output: mergeToolOutput(existingTool?.output, formattedOutput),
+      updates: mergeToolLogs(existingTool?.updates ?? [], logs),
     };
 
     return {
       ...ephemeral,
-      tools: [updatedTool],
+      tools: [...ephemeral.tools.filter((tool) => tool.id !== id), updatedTool],
       lastUpdated: now,
     };
   }
@@ -244,6 +275,7 @@ export type SessionView = {
   hasMoreHistory?: boolean;
   totalFetchedCount?: number;
   totalDisplayableCount?: number;
+  isEmailSession?: boolean;
   oldestMessageId?: string | null;
   isLoadingHistory?: boolean;
   ephemeral: EphemeralState;
@@ -591,7 +623,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       case "session.status": {
-        const { sessionId, status, title, cwd, error, agentName, agentId } = event.payload;
+        const { sessionId, status, title, cwd, error, agentName, agentId, background, isEmailSession } = event.payload;
         set((state) => {
           const existing = state.sessions[sessionId] ?? createSession(sessionId);
           const nextEphemeral = { ...existing.ephemeral };
@@ -613,6 +645,7 @@ export const useAppStore = create<AppState>((set, get) => ({
                 cwd: cwd ?? existing.cwd,
                 agentName: agentName ?? existing.agentName,
                 agentId: agentId ?? existing.agentId,
+                isEmailSession: isEmailSession ?? existing.isEmailSession,
                 updatedAt: Date.now(),
                 ephemeral: nextEphemeral,
               },
@@ -620,7 +653,8 @@ export const useAppStore = create<AppState>((set, get) => ({
           };
         });
 
-        if (rootState.pendingStart) {
+        // Only switch to this session if not a background session and pendingStart is true
+        if (rootState.pendingStart && !background) {
           if (status === "running") {
             get().setActiveSessionId(sessionId);
             set({ pendingStart: false, showStartModal: false, prompt: "", globalError: null });

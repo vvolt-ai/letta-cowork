@@ -1,7 +1,7 @@
 import electron from "electron";
 
 electron.contextBridge.exposeInMainWorld("electron", {
-    subscribeStatistics: (callback) =>
+    subscribeStatistics: (callback: (stats: any) => void) =>
         ipcOn("statistics", stats => {
             callback(stats);
         }),
@@ -31,6 +31,16 @@ electron.contextBridge.exposeInMainWorld("electron", {
 
     // ✅ ADD THIS
     openExternal: (url: string) => electron.ipcRenderer.invoke("open-external", url),
+    
+    // Email Channel Configuration (Server-Side)
+    setEmailChannelId: (channelId: string | null) =>
+        electron.ipcRenderer.invoke("set-email-channel-id", channelId),
+    getEmailChannelId: () =>
+        electron.ipcRenderer.invoke("get-email-channel-id"),
+    triggerEmailSync: () =>
+        electron.ipcRenderer.invoke("trigger-email-sync"),
+    
+    // Email Operations
     fetchEmails: (accountId: string, params?: EmailListParams) =>
         electron.ipcRenderer.invoke("fetch-emails", accountId, params),
     fetchFolders: () =>
@@ -124,9 +134,75 @@ electron.contextBridge.exposeInMainWorld("electron", {
         electron.ipcRenderer.invoke("set-processed-unread-email-ids", accountId, folderId, ids),
     clearProcessedUnreadEmailIds: (accountId: string, folderId: string) =>
         electron.ipcRenderer.invoke("clear-processed-unread-email-ids", accountId, folderId),
+    updateEmailConversationId: (accountId: string, folderId: string, messageId: string, conversationId: string, agentId?: string) =>
+        electron.ipcRenderer.invoke("update-email-conversation-id", accountId, folderId, messageId, conversationId, agentId),
     getProcessedUnreadEmailDebugInfo: (accountId: string, folderId: string, limit?: number) =>
         electron.ipcRenderer.invoke("get-processed-unread-email-debug-info", accountId, folderId, limit),
-} satisfies Window['electron'])
+
+    // ============================================
+    // Vera Cowork API Integration
+    // ============================================
+    
+    // API Configuration
+    apiSetUrl: (url: string) =>
+        electron.ipcRenderer.invoke("api:set-url", url),
+    apiGetUrl: () =>
+        electron.ipcRenderer.invoke("api:get-url"),
+    
+    // Authentication
+    apiIsAuthenticated: () =>
+        electron.ipcRenderer.invoke("api:is-authenticated"),
+    apiGetCurrentUser: () =>
+        electron.ipcRenderer.invoke("api:get-current-user"),
+    apiLogin: (email: string, password: string) =>
+        electron.ipcRenderer.invoke("api:login", { email, password }),
+    apiRegister: (data: { email: string; password: string; name?: string; organizationName?: string }) =>
+        electron.ipcRenderer.invoke("api:register", data),
+    apiLogout: () =>
+        electron.ipcRenderer.invoke("api:logout"),
+    
+    // Channels
+    apiListChannels: () =>
+        electron.ipcRenderer.invoke("api:list-channels"),
+    apiCreateChannel: (data: { provider: string; name: string; externalId?: string; config?: any }) =>
+        electron.ipcRenderer.invoke("api:create-channel", data),
+    apiGetChannel: (channelId: string) =>
+        electron.ipcRenderer.invoke("api:get-channel", channelId),
+    apiDeleteChannel: (channelId: string) =>
+        electron.ipcRenderer.invoke("api:delete-channel", channelId),
+    
+    // Channel Credentials
+    apiGetChannelCredentials: (channelId: string) =>
+        electron.ipcRenderer.invoke("api:get-channel-credentials", channelId),
+    apiSetChannelCredentials: (channelId: string, data: { credentials: Record<string, string>; secureConfig?: any }) =>
+        electron.ipcRenderer.invoke("api:set-channel-credentials", channelId, data),
+    apiDeleteChannelCredentials: (channelId: string) =>
+        electron.ipcRenderer.invoke("api:delete-channel-credentials", channelId),
+    apiUpdateChannelConfig: (channelId: string, config: Record<string, any>) =>
+        electron.ipcRenderer.invoke("api:update-channel-config", channelId, config),
+    
+    // Channel Runtime
+    apiStartChannel: (channelId: string) =>
+        electron.ipcRenderer.invoke("api:start-channel", channelId),
+    apiStopChannel: (channelId: string) =>
+        electron.ipcRenderer.invoke("api:stop-channel", channelId),
+    apiGetChannelStatus: (channelId: string) =>
+        electron.ipcRenderer.invoke("api:get-channel-status", channelId),
+    apiGetAllRuntimeStatus: () =>
+        electron.ipcRenderer.invoke("api:get-all-runtime-status"),
+    
+    // Messages
+    apiGetMessageLogs: (channelId: string, options?: { direction?: string; limit?: number; offset?: number }) =>
+        electron.ipcRenderer.invoke("api:get-message-logs", channelId, options),
+    apiSendMessage: (channelId: string, to: string, content: string) =>
+        electron.ipcRenderer.invoke("api:send-message", channelId, to, content),
+    
+    // Conversation Context
+    apiGetConversationContext: (channelId: string, options?: { limit?: number; since?: string }) =>
+        electron.ipcRenderer.invoke("api:get-conversation-context", channelId, options),
+    apiGetGroupConversationContext: (channelId: string, groupId: string, options?: { limit?: number; since?: string }) =>
+        electron.ipcRenderer.invoke("api:get-group-conversation-context", channelId, groupId, options),
+} as const)
 
 function ipcInvoke<Key extends keyof EventPayloadMapping>(key: Key, ...args: any[]): Promise<EventPayloadMapping[Key]> {
     return electron.ipcRenderer.invoke(key, ...args);

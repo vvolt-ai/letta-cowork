@@ -19,6 +19,7 @@ import {
     type AutoSyncUnreadConfig,
     type CoworkSettings,
 } from "./settings.js";
+import { initializeApiIpcHandlers, setupApiStatusBridge } from "./apiIpcHandlers.js";
 
 initializeLettaEnv();
 
@@ -419,28 +420,134 @@ app.on("ready", () => {
         return resetCoworkSettings();
     });
 
-    ipcMain.handle("get-auto-sync-unread-config", (): AutoSyncUnreadConfig => {
-        return getAutoSyncUnreadConfig();
+    ipcMain.handle("get-auto-sync-unread-config", async (): Promise<AutoSyncUnreadConfig> => {
+        // Try server first, fall back to local if not authenticated
+        try {
+            const { getEmailConfigFromServer } = await import("./apiClient.js");
+            const config = await getEmailConfigFromServer();
+            console.log('[Email Config] Loaded from server:', config);
+            return {
+                enabled: config.enabled,
+                agentIds: config.agentIds,
+                routingRules: config.routingRules,
+                sinceDate: config.sinceDate,
+                processingMode: config.processingMode,
+                markAsReadAfterProcess: config.markAsReadAfterProcess,
+            };
+        } catch (error) {
+            console.warn('[Email Config] Server failed, using local storage:', error);
+            return getAutoSyncUnreadConfig();
+        }
     });
 
-    ipcMain.handle("update-auto-sync-unread-config", (_, updates: Partial<AutoSyncUnreadConfig>): AutoSyncUnreadConfig => {
-        return updateAutoSyncUnreadConfig(updates);
+    ipcMain.handle("update-auto-sync-unread-config", async (_, updates: Partial<AutoSyncUnreadConfig>): Promise<AutoSyncUnreadConfig> => {
+        // Try server first, fall back to local if not authenticated
+        try {
+            const { updateEmailConfigOnServer } = await import("./apiClient.js");
+            const config = await updateEmailConfigOnServer(updates);
+            console.log('[Email Config] Saved to server:', config);
+            return {
+                enabled: config.enabled,
+                agentIds: config.agentIds,
+                routingRules: config.routingRules,
+                sinceDate: config.sinceDate,
+                processingMode: config.processingMode,
+                markAsReadAfterProcess: config.markAsReadAfterProcess,
+            };
+        } catch (error) {
+            console.warn('[Email Config] Server failed, using local storage:', error);
+            return updateAutoSyncUnreadConfig(updates);
+        }
     });
 
-    ipcMain.handle("reset-auto-sync-unread-config", (): AutoSyncUnreadConfig => {
-        return resetAutoSyncUnreadConfig();
+    ipcMain.handle("reset-auto-sync-unread-config", async (): Promise<AutoSyncUnreadConfig> => {
+        // Try server first, fall back to local if not authenticated
+        try {
+            const { updateEmailConfigOnServer } = await import("./apiClient.js");
+            const config = await updateEmailConfigOnServer({
+                enabled: false,
+                agentIds: [],
+                routingRules: [],
+                sinceDate: '',
+                processingMode: 'unread_only',
+                markAsReadAfterProcess: true,
+            });
+            return {
+                enabled: config.enabled,
+                agentIds: config.agentIds,
+                routingRules: config.routingRules,
+                sinceDate: config.sinceDate,
+                processingMode: config.processingMode,
+                markAsReadAfterProcess: config.markAsReadAfterProcess,
+            };
+        } catch {
+            return resetAutoSyncUnreadConfig();
+        }
     });
 
-    ipcMain.handle("get-processed-unread-email-ids", (_, accountId: string, folderId: string): string[] => {
-        return getProcessedUnreadEmailIds(accountId, folderId);
+    ipcMain.handle("get-processed-unread-email-ids", async (_, accountId: string, folderId: string): Promise<string[]> => {
+        // Try server first, fall back to local if not authenticated
+        try {
+            const { getProcessedEmailIdsFromServer, getVeraCoworkApiClient } = await import("./apiClient.js");
+            const api = getVeraCoworkApiClient();
+            if (!api.isAuthenticated()) {
+                console.warn(`[Processed IDs] Not authenticated with API, using local storage`);
+                return getProcessedUnreadEmailIds(accountId, folderId);
+            }
+            const ids = await getProcessedEmailIdsFromServer(accountId, folderId);
+            console.log(`[Processed IDs] Loaded ${ids.length} from server for ${accountId}/${folderId}`);
+            return ids;
+        } catch (error) {
+            console.warn(`[Processed IDs] Server failed, using local storage:`, error);
+            return getProcessedUnreadEmailIds(accountId, folderId);
+        }
     });
 
-    ipcMain.handle("set-processed-unread-email-ids", (_, accountId: string, folderId: string, ids: string[]): string[] => {
-        return setProcessedUnreadEmailIds(accountId, folderId, ids);
+    ipcMain.handle("set-processed-unread-email-ids", async (_, accountId: string, folderId: string, ids: string[]): Promise<string[]> => {
+        // Try server first, fall back to local if not authenticated
+        try {
+            const { setProcessedEmailIdsToServer, getVeraCoworkApiClient } = await import("./apiClient.js");
+            const api = getVeraCoworkApiClient();
+            if (!api.isAuthenticated()) {
+                console.warn(`[Processed IDs] Not authenticated with API, using local storage`);
+                return setProcessedUnreadEmailIds(accountId, folderId, ids);
+            }
+            await setProcessedEmailIdsToServer(accountId, folderId, ids);
+            console.log(`[Processed IDs] Saved ${ids.length} to server for ${accountId}/${folderId}`);
+            return ids;
+        } catch (error) {
+            console.warn(`[Processed IDs] Server failed, using local storage:`, error);
+            return setProcessedUnreadEmailIds(accountId, folderId, ids);
+        }
     });
 
-    ipcMain.handle("clear-processed-unread-email-ids", (_, accountId: string, folderId: string): void => {
-        clearProcessedUnreadEmailIds(accountId, folderId);
+    ipcMain.handle("clear-processed-unread-email-ids", async (_, accountId: string, folderId: string): Promise<void> => {
+        // Try server first, fall back to local if not authenticated
+        try {
+            const { clearProcessedEmailIdsOnServer } = await import("./apiClient.js");
+            await clearProcessedEmailIdsOnServer(accountId, folderId);
+            console.log(`[Processed IDs] Cleared on server for ${accountId}/${folderId}`);
+        } catch (error) {
+            console.warn(`[Processed IDs] Server failed, using local storage:`, error);
+            clearProcessedUnreadEmailIds(accountId, folderId);
+        }
+    });
+
+    ipcMain.handle("update-email-conversation-id", async (_, accountId: string, folderId: string, messageId: string, conversationId: string, agentId?: string): Promise<void> => {
+        console.log(`[Conversation ID] IPC called with:`, { accountId, folderId, messageId, conversationId, agentId });
+        try {
+            const { markEmailAsProcessedOnServer, getVeraCoworkApiClient } = await import("./apiClient.js");
+            const api = getVeraCoworkApiClient();
+            console.log(`[Conversation ID] API authenticated:`, api.isAuthenticated());
+            if (!api.isAuthenticated()) {
+                console.warn(`[Conversation ID] Not authenticated with API`);
+                return;
+            }
+            await markEmailAsProcessedOnServer(accountId, folderId, messageId, conversationId, agentId);
+            console.log(`[Conversation ID] Updated ${messageId} with conversation ${conversationId}`);
+        } catch (error) {
+            console.warn(`[Conversation ID] Failed to update:`, error);
+        }
     });
 
     ipcMain.handle("get-processed-unread-email-debug-info", (_, accountId: string, folderId: string, limit?: number) => {
@@ -462,4 +569,8 @@ app.on("ready", () => {
 
     expressServer(mainWindow)
     void initializeChannelBridges();
+    
+    // Initialize API IPC handlers for vera-cowork-server
+    initializeApiIpcHandlers();
+    setupApiStatusBridge(mainWindow);
 })

@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, useRef, useEffect } from "react";
 import type { ZohoEmail, UploadedEmailAttachment, ChatAttachment } from "../types";
 
 interface EmailWithAttachments {
@@ -124,11 +124,66 @@ const buildAttachmentsSection = (
 export function useProcessEmailToAgent() {
   const [processingEmailId, setProcessingEmailId] = useState<string | null>(null);
   const [successEmailId, setSuccessEmailId] = useState<string | null>(null);
+  const currentEmailRef = useRef<{ accountId: string; folderId: string; messageId: string; agentId: string } | null>(null);
+  
+  // Listen for session.status events to update processed email records with conversation ID
+  useEffect(() => {
+    const unsubscribe = window.electron.onServerEvent(async (event: any) => {
+      console.log(`[useProcessEmailToAgent] Received event:`, event.type, event.payload);
+      
+      if (event.type === "session.status") {
+        console.log(`[useProcessEmailToAgent] session.status payload:`, {
+          isEmailSession: event.payload?.isEmailSession,
+          status: event.payload?.status,
+          sessionId: event.payload?.sessionId,
+          currentEmailRef: currentEmailRef.current,
+        });
+      }
+      
+      if (event.type === "session.status" && event.payload?.isEmailSession && event.payload?.status === "running") {
+        const conversationId = event.payload.sessionId;
+        const agentId = event.payload.agentId;
+        const emailInfo = currentEmailRef.current;
+        
+        console.log(`[useProcessEmailToAgent] Matched! conversationId: ${conversationId}, emailInfo:`, emailInfo);
+        
+        if (emailInfo && conversationId) {
+          console.log(`[useProcessEmailToAgent] Session created: ${conversationId} for email ${emailInfo.messageId}`);
+          
+          // Update processed email record with conversation ID via IPC
+          try {
+            await window.electron.updateEmailConversationId(
+              emailInfo.accountId,
+              emailInfo.folderId,
+              emailInfo.messageId,
+              conversationId,
+              agentId || emailInfo.agentId
+            );
+            console.log(`[useProcessEmailToAgent] Updated conversation ID ${conversationId} for email ${emailInfo.messageId}`);
+          } catch (err) {
+            console.warn(`[useProcessEmailToAgent] Error updating conversation ID:`, err);
+          }
+        } else {
+          console.warn(`[useProcessEmailToAgent] Missing emailInfo or conversationId`, { emailInfo, conversationId });
+        }
+      }
+    });
+    return unsubscribe;
+  }, []);
   
   const processEmailToAgent = useCallback(async (email: ZohoEmail, agentId: string) => {
     const messageId = String(email.messageId);
     setProcessingEmailId(messageId);
     setSuccessEmailId(null);
+    
+    // Store current email info for the event listener
+    currentEmailRef.current = {
+      accountId: email.accountId || '',
+      folderId: email.folderId || '',
+      messageId,
+      agentId,
+    };
+    
     try {
       const accountId = email.accountId;
       const folderId = email.folderId;
@@ -199,8 +254,18 @@ export function useProcessEmailToAgent() {
           attachments: chatAttachments,
           cwd: "",
           agentId,
+          background: true, // Don't switch to this session
+          isEmailSession: true, // Mark as email session (don't show in sidebar)
         },
       });
+
+      // Mark email as processed on server
+      try {
+        await window.electron.setProcessedUnreadEmailIds(accountId, folderId, [messageId]);
+        console.log(`[useProcessEmailToAgent] Marked email ${messageId} as processed`);
+      } catch (processError) {
+        console.warn(`[useProcessEmailToAgent] Failed to mark email as processed:`, processError);
+      }
     } finally {
       setProcessingEmailId(null);
       setSuccessEmailId(messageId);

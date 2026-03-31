@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import type { IndexedMessage } from "../../hooks/useMessageWindow";
 import type { StreamMessage, SDKAssistantMessage, SDKToolResultMessage } from "../../types";
-import type { ReasoningStep } from "../../store/useAppStore";
+import type { ReasoningStep, ToolExecution } from "../../store/useAppStore";
 import { truncateInput } from "../../utils/chat";
 import { UserMessage } from "./UserMessage";
 import { AssistantMessage } from "./AssistantMessage";
@@ -15,6 +15,7 @@ interface ChatTimelineProps {
   partialMessage: string;
   showPartialMessage: boolean;
   reasoningSteps?: ReasoningStep[];
+  toolExecutions?: ToolExecution[];
 }
 
 export type TimelineEntry =
@@ -152,7 +153,40 @@ function extractToolOutput(message: SDKToolResultMessage & { [key: string]: unkn
   return { output, logs };
 }
 
-export function ChatTimeline({ messages, activeSessionId, agentName, partialMessage, showPartialMessage, reasoningSteps = [] }: ChatTimelineProps) {
+function mergeToolEntryLogs(existing?: string[], incoming?: string[]): string[] | undefined {
+  const merged = Array.from(new Set([...(existing ?? []), ...(incoming ?? [])]));
+  return merged.length > 0 ? merged : undefined;
+}
+
+function mergeToolEntryOutput(existing?: string | null, incoming?: string | null): string | undefined {
+  const nextIncoming = incoming?.trim();
+  const nextExisting = existing?.trim();
+  if (!nextIncoming) return nextExisting || undefined;
+  if (!nextExisting) return nextIncoming;
+  return nextExisting.includes(nextIncoming) ? nextExisting : `${nextExisting}\n${nextIncoming}`;
+}
+
+function toolExecutionToTimelineEntry(tool: ToolExecution): ToolTimelineEntry {
+  return {
+    kind: "tool",
+    id: tool.id,
+    name: resolveToolName(tool.name, "Tool"),
+    input: formatToolText(tool.input) ?? (typeof tool.input === "string" ? tool.input : undefined),
+    output: formatToolText(tool.output),
+    logs: tool.updates.length > 0 ? tool.updates : undefined,
+    status: tool.status === "failed" ? "failed" : tool.status === "running" ? "running" : "succeeded",
+  };
+}
+
+export function ChatTimeline({
+  messages,
+  activeSessionId,
+  agentName,
+  partialMessage,
+  showPartialMessage,
+  reasoningSteps = [],
+  toolExecutions = [],
+}: ChatTimelineProps) {
   const timeline = useMemo(() => {
     const entries: Array<TimelineEntry | null> = [];
     const reasoningIndex = new Map<string, number>();
@@ -314,8 +348,28 @@ ${incomingOutput}`
       }
     }
 
+    const latestToolExecution = toolExecutions[toolExecutions.length - 1];
+    if (latestToolExecution) {
+      const ephemeralToolEntry = toolExecutionToTimelineEntry(latestToolExecution);
+      if (latestToolIndex !== null && latestToolId === ephemeralToolEntry.id) {
+        const existing = entries[latestToolIndex];
+        if (existing && existing.kind === "tool") {
+          entries[latestToolIndex] = {
+            ...existing,
+            ...ephemeralToolEntry,
+            name: isGenericToolName(ephemeralToolEntry.name) ? existing.name : ephemeralToolEntry.name,
+            input: ephemeralToolEntry.input ?? existing.input,
+            output: mergeToolEntryOutput(existing.output, ephemeralToolEntry.output),
+            logs: mergeToolEntryLogs(existing.logs, ephemeralToolEntry.logs),
+          };
+        }
+      } else {
+        pushToolEntry(ephemeralToolEntry);
+      }
+    }
+
     return entries.filter((entry): entry is TimelineEntry => entry !== null);
-  }, [messages, activeSessionId, reasoningSteps]);
+  }, [messages, activeSessionId, reasoningSteps, toolExecutions]);
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">

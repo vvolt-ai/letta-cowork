@@ -4,8 +4,7 @@ import { useAppStore, type SessionView } from "../store/useAppStore";
 import { useDownloadSkill } from "../hooks/useDownloadSkill";
 import { SkillDownloadDialog } from "./SkillDownloadDialog";
 import type { ZohoEmail } from "../types";
-import { SidebarEmailList } from "./SidebarEmailList";
-import { ChannelSetupDialog } from "./ChannelSetupDialog";
+import { EmailInboxModal } from "./EmailInboxModal";
 import { NewMailPipelineSetting, ResumeSessionDialog } from "./sidebar/index";
 import {
   getAutoEmailSessionMetadata,
@@ -13,18 +12,22 @@ import {
   isAutoEmailSession,
   sanitizeSessionTitle,
 } from "../utils/session";
-import type { ChannelType } from "./channel-settings";
 import { SidebarSection } from "./sidebar/SidebarSection";
-import { ChannelList } from "./sidebar/ChannelList";
 import { IntegrationList } from "./sidebar/IntegrationList";
 import { ConversationList } from "./sidebar/ConversationList";
 import veraLogo from "../assets/vera-logo.svg";
 
 type EmailConversationDateFilter = "all" | "today" | "yesterday" | "older";
-type SidebarSessionSummary = Pick<SessionView, "id" | "title" | "status" | "updatedAt" | "createdAt" | "lastPrompt">;
+type SidebarSessionSummary = Pick<SessionView, "id" | "title" | "status" | "updatedAt" | "createdAt" | "lastPrompt" | "isEmailSession">;
 
 const selectSidebarSessionTokens = (state: ReturnType<typeof useAppStore.getState>): string[] => {
   return Object.values(state.sessions)
+    .filter((session) => {
+      // Filter out email sessions (marked with isEmailSession or title starts with "Email:")
+      if (session.isEmailSession) return false;
+      if (session.title?.startsWith("Email:")) return false;
+      return true;
+    })
     .map((session) => JSON.stringify({
       id: session.id,
       title: session.title,
@@ -32,6 +35,7 @@ const selectSidebarSessionTokens = (state: ReturnType<typeof useAppStore.getStat
       updatedAt: session.updatedAt,
       createdAt: session.createdAt,
       lastPrompt: session.lastPrompt,
+      isEmailSession: session.isEmailSession,
     } satisfies SidebarSessionSummary))
     .sort((left, right) => {
       const parsedLeft = JSON.parse(left) as SidebarSessionSummary;
@@ -51,9 +55,6 @@ interface SidebarProps {
   isEmailConnected: boolean;
   refetchEmails: () => void;
   emails: ZohoEmail[];
-  selectedEmailId?: string;
-  onSelectEmail: (email: ZohoEmail) => void;
-  onViewEmail: (email: ZohoEmail) => void;
   onUseEmailAsInput: (email: ZohoEmail) => void;
   isProcessingEmailInput?: boolean;
   isFetchingEmails: boolean;
@@ -69,6 +70,8 @@ interface SidebarProps {
   onSetAutoSyncSinceDate: (date: string) => void;
   autoSyncProcessingMode: AutoSyncProcessingMode;
   onSetAutoSyncProcessingMode: (mode: AutoSyncProcessingMode) => void;
+  autoSyncMarkAsRead: boolean;
+  onSetAutoSyncMarkAsRead: (enabled: boolean) => void;
   autoSyncAccountId: string;
   autoSyncFolderId: string;
   onRunAutoSyncNow: () => Promise<void>;
@@ -82,6 +85,9 @@ interface SidebarProps {
   hasMoreEmails?: boolean;
   isLoadingMoreEmails?: boolean;
   onLoadMoreEmails?: () => void;
+  // Auth props
+  userEmail?: string;
+  onLogout?: () => void;
 }
 
 export const Sidebar = memo(function Sidebar({
@@ -94,9 +100,6 @@ export const Sidebar = memo(function Sidebar({
   isEmailConnected,
   refetchEmails,
   emails,
-  selectedEmailId,
-  onSelectEmail,
-  onViewEmail,
   onUseEmailAsInput,
   isProcessingEmailInput,
   isFetchingEmails,
@@ -112,6 +115,8 @@ export const Sidebar = memo(function Sidebar({
   onSetAutoSyncSinceDate,
   autoSyncProcessingMode,
   onSetAutoSyncProcessingMode,
+  autoSyncMarkAsRead,
+  onSetAutoSyncMarkAsRead,
   autoSyncAccountId,
   autoSyncFolderId,
   onRunAutoSyncNow,
@@ -124,6 +129,8 @@ export const Sidebar = memo(function Sidebar({
   hasMoreEmails,
   isLoadingMoreEmails,
   onLoadMoreEmails,
+  userEmail,
+  onLogout,
 }: SidebarProps) {
   const sessionTokens = useAppStore(useShallow(selectSidebarSessionTokens));
   const activeSessionId = useAppStore((state) => state.activeSessionId);
@@ -135,8 +142,6 @@ export const Sidebar = memo(function Sidebar({
   const [resumeSessionId, setResumeSessionId] = useState<string | null>(null);
   const [showEmailView, setShowEmailView] = useState(false);
   const [showAddAgentsModal, setShowAddAgentsModal] = useState(false);
-  const [channelSetupOpen, setChannelSetupOpen] = useState(false);
-  const [setupChannel, setSetupChannel] = useState<ChannelType>("whatsapp");
   const [activeTab, setActiveTab] = useState<"sessions" | "configuration">("sessions");
 
   const {
@@ -157,16 +162,6 @@ export const Sidebar = memo(function Sidebar({
       setActiveTab("sessions");
     }
   }, [isEmailConnected]);
-
-  const channelItems = useMemo(
-    () => [
-      { id: "whatsapp", label: "WhatsApp", enabled: coworkSettings.showWhatsApp },
-      { id: "telegram", label: "Telegram", enabled: coworkSettings.showTelegram },
-      { id: "slack", label: "Slack", enabled: coworkSettings.showSlack },
-      { id: "discord", label: "Discord", enabled: coworkSettings.showDiscord },
-    ],
-    [coworkSettings]
-  );
 
   const normalizedSessionList = useMemo(() => {
     return sessionTokens.map((token) => {
@@ -323,31 +318,11 @@ export const Sidebar = memo(function Sidebar({
     [renameSession, sessionById]
   );
 
-  const defaultChannel = useMemo<ChannelType>(() => {
-    const firstEnabled = channelItems.find((channel) => channel.enabled);
-    return (firstEnabled?.id as ChannelType) ?? "whatsapp";
-  }, [channelItems]);
-
-  // Memoize availableChannels to prevent unnecessary re-renders in ChannelSetupDialog
-  const availableChannels = useMemo<ChannelType[]>(() => {
-    return channelItems.map((channel) => channel.id as ChannelType);
-  }, [channelItems]);
-
-  const openChannelSetup = (channel: ChannelType) => {
-    setSetupChannel(channel);
-    setChannelSetupOpen(true);
-  };
-
   const unreadLabel = isEmailConnected ? `${unreadCount} unread` : "Not connected";
 
   const handleOpenEmailView = useCallback(() => {
     setShowEmailView(true);
     setActiveTab("configuration");
-  }, []);
-
-  const handleCloseEmailView = useCallback(() => {
-    setShowEmailView(false);
-    setActiveTab("sessions");
   }, []);
 
   const tabs: Array<{ id: "sessions" | "configuration"; label: string }> = [
@@ -511,27 +486,8 @@ export const Sidebar = memo(function Sidebar({
     </div>
   );
 
-  const configurationContent = showEmailView && coworkSettings.showEmailAutomation ? (
-    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]">
-      <SidebarEmailList
-        emails={emails}
-        selectedEmailId={selectedEmailId}
-        isFetching={isFetchingEmails}
-        isProcessingEmailInput={isProcessingEmailInput}
-        onSelectEmail={onSelectEmail}
-        onViewEmail={onViewEmail}
-        onUseEmailAsInput={onUseEmailAsInput}
-        onClose={handleCloseEmailView}
-        selectedAgentId={selectedAgentId}
-        onProcessEmailToAgent={onProcessEmailToAgent}
-        processingEmailId={processingEmailId}
-        successEmailId={successEmailId}
-        hasMore={hasMoreEmails}
-        isLoadingMore={isLoadingMoreEmails}
-        onLoadMore={onLoadMoreEmails}
-      />
-    </div>
-  ) : (
+  // Always show the configuration content when email automation is enabled
+  const configurationContent = (
     <div className="flex h-full flex-col space-y-4">
       <SidebarSection title="Environment">
         <div className="space-y-2 text-sm text-ink-700">
@@ -555,21 +511,16 @@ export const Sidebar = memo(function Sidebar({
         </div>
       </SidebarSection>
 
-      <SidebarSection
-        title="Channels"
-        action={
+      <SidebarSection title="Channels">
+        <div className="text-sm text-ink-600">
+          <p>Manage channels in Settings</p>
           <button
-            onClick={() => openChannelSetup(defaultChannel)}
-            className="rounded-md border border-[var(--color-border)] px-2 py-1 text-xs font-medium text-ink-600 transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+            onClick={onOpenSettings}
+            className="mt-2 text-xs font-medium text-[var(--color-accent)] hover:underline"
           >
-            Configure
+            Open Settings →
           </button>
-        }
-      >
-        <ChannelList
-          channels={channelItems}
-          onConfigure={() => openChannelSetup(defaultChannel)}
-        />
+        </div>
       </SidebarSection>
 
       {coworkSettings.showEmailAutomation && (
@@ -632,13 +583,6 @@ export const Sidebar = memo(function Sidebar({
         {activeTab === "sessions" ? sessionsContent : configurationContent}
       </div>
 
-      <ChannelSetupDialog
-        open={channelSetupOpen}
-        onOpenChange={setChannelSetupOpen}
-        initialChannel={setupChannel}
-        availableChannels={availableChannels}
-      />
-
       <ResumeSessionDialog
         open={!!resumeSessionId}
         resumeSessionId={resumeSessionId}
@@ -662,6 +606,8 @@ export const Sidebar = memo(function Sidebar({
         onSetAutoSyncSinceDate={onSetAutoSyncSinceDate}
         autoSyncProcessingMode={autoSyncProcessingMode}
         onSetAutoSyncProcessingMode={onSetAutoSyncProcessingMode}
+        autoSyncMarkAsRead={autoSyncMarkAsRead}
+        onSetAutoSyncMarkAsRead={onSetAutoSyncMarkAsRead}
         accountId={autoSyncAccountId}
         folderId={autoSyncFolderId}
         onRunAutoSyncNow={onRunAutoSyncNow}
@@ -685,6 +631,54 @@ export const Sidebar = memo(function Sidebar({
         skillDownloadSuccess={skillDownloadSuccess}
         onDownload={handleDownloadSkill}
         onReset={resetSkillForm}
+      />
+
+      {/* User Section */}
+      {userEmail && (
+        <div className="mt-auto pt-4 border-t border-[var(--color-border)]">
+          <div className="flex items-center justify-between px-2">
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-full bg-[var(--color-accent)] flex items-center justify-center text-white text-sm font-medium">
+                {userEmail.charAt(0).toUpperCase()}
+              </div>
+              <div className="flex flex-col">
+                <span className="text-xs font-medium text-ink-900 truncate max-w-[150px]">
+                  {userEmail}
+                </span>
+                <span className="text-[10px] text-ink-500">Logged in</span>
+              </div>
+            </div>
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className="text-xs text-ink-500 hover:text-ink-700 hover:bg-ink-900/5 px-2 py-1 rounded transition"
+                title="Logout"
+              >
+                Logout
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Email Inbox Modal */}
+      <EmailInboxModal
+        open={showEmailView}
+        onOpenChange={setShowEmailView}
+        emails={emails}
+        isFetching={isFetchingEmails}
+        onUseEmailAsInput={onUseEmailAsInput}
+        isProcessingEmailInput={isProcessingEmailInput}
+        selectedAgentId={selectedAgentId}
+        onProcessEmailToAgent={onProcessEmailToAgent}
+        processingEmailId={processingEmailId}
+        successEmailId={successEmailId}
+        onRefresh={refetchEmails}
+        hasMore={hasMoreEmails}
+        isLoadingMore={isLoadingMoreEmails}
+        onLoadMore={onLoadMoreEmails}
+        accountId={autoSyncAccountId || undefined}
+        folderId={autoSyncFolderId || undefined}
       />
     </aside>
   );

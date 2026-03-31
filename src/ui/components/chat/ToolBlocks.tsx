@@ -118,7 +118,7 @@ export const ToolExecutionBlock = memo(function ToolExecutionBlock({ name, statu
               <div className="font-semibold uppercase tracking-[0.22em] text-[10px] text-slate-300">Tool output</div>
               <div className="text-[10px] text-slate-400">Auto-scroll {isRunning ? "on" : "off"}</div>
             </div>
-            <pre ref={outputRef} className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-xl bg-black/20 px-3 py-3 font-mono text-[12px] leading-6 text-slate-100">{output || (isRunning ? "Waiting for tool output…" : "No output captured.")}</pre>
+            <pre ref={outputRef} className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-xl bg-black/20 px-3 py-3 font-mono text-[12px] leading-6 text-slate-100">{output || (logs.length > 0 ? logs.join("\n") : isRunning ? "Waiting for tool output…" : "No output captured.")}</pre>
           </div>
         </div>
       </div>

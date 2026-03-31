@@ -237,13 +237,15 @@ export function useAutoSyncUnread(
   isEnabled: boolean = true,
   intervalMinutes: number = 5,
   sinceDate: string = "",
-  processingMode: AutoSyncProcessingMode = "unread_only"
+  processingMode: AutoSyncProcessingMode = "unread_only",
+  markAsReadAfterProcess: boolean = true
 ) {
   const syncInProgressRef = useRef(false);
   const selectedAgentsRef = useRef<string[]>(selectedAgentIds);
   const routingRulesRef = useRef<AutoSyncRoutingRule[]>(routingRules);
   const sinceDateRef = useRef<string>(sinceDate);
   const processingModeRef = useRef<AutoSyncProcessingMode>(processingMode);
+  const markAsReadRef = useRef<boolean>(markAsReadAfterProcess);
 
   useEffect(() => {
     selectedAgentsRef.current = selectedAgentIds;
@@ -260,6 +262,10 @@ export function useAutoSyncUnread(
   useEffect(() => {
     processingModeRef.current = processingMode;
   }, [processingMode]);
+
+  useEffect(() => {
+    markAsReadRef.current = markAsReadAfterProcess;
+  }, [markAsReadAfterProcess]);
 
   const getProcessedKey = useCallback(
     () => `${PROCESSED_EMAILS_KEY_PREFIX}_${accountId}_${folderId}`,
@@ -480,9 +486,14 @@ export function useAutoSyncUnread(
       }
 
       if (processedThisRun.length > 0) {
-        await window.electron.markMessagesAsRead(accountId, processedThisRun);
+        // Only mark as read if the option is enabled
+        if (markAsReadRef.current) {
+          await window.electron.markMessagesAsRead(accountId, processedThisRun);
+          console.log(`[useAutoSyncUnread] Processed and marked as read: ${processedThisRun.length} emails`);
+        } else {
+          console.log(`[useAutoSyncUnread] Processed ${processedThisRun.length} emails (not marked as read)`);
+        }
         await persistProcessedIds(processedIds);
-        console.log(`[useAutoSyncUnread] Processed and marked as read: ${processedThisRun.length} emails`);
       }
     } catch (err) {
       console.error("[useAutoSyncUnread] Sync failed:", err);

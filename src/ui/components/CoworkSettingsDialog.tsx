@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useCoworkSettings } from "../hooks/useCoworkSettings";
+import { ChannelsManager } from "./ChannelsManager";
 
 interface CoworkSettings {
   showWhatsApp: boolean;
@@ -13,12 +14,16 @@ interface CoworkSettings {
 interface CoworkSettingsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onAuthError?: (error: Error) => void;
 }
 
-export function CoworkSettingsDialog({ open, onOpenChange }: CoworkSettingsDialogProps) {
+type TabId = 'channels' | 'features';
+
+export function CoworkSettingsDialog({ open, onOpenChange, onAuthError }: CoworkSettingsDialogProps) {
   const { coworkSettings: coworkSettingsStore, updateCoworkSettings } = useCoworkSettings();
   const [settings, setSettings] = useState<CoworkSettings>(coworkSettingsStore);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<TabId>('channels');
 
   useEffect(() => {
     if (!open) return;
@@ -26,8 +31,15 @@ export function CoworkSettingsDialog({ open, onOpenChange }: CoworkSettingsDialo
     loadSettings();
   }, [open]);
 
+  // Only sync from store when values actually change
   useEffect(() => {
-    setSettings(coworkSettingsStore);
+    // Deep compare to avoid unnecessary updates
+    const isSame = Object.keys(coworkSettingsStore).every(
+      key => settings[key as keyof CoworkSettings] === coworkSettingsStore[key as keyof typeof coworkSettingsStore]
+    );
+    if (!isSame) {
+      setSettings(coworkSettingsStore);
+    }
   }, [coworkSettingsStore]);
 
   const loadSettings = async () => {
@@ -79,9 +91,37 @@ export function CoworkSettingsDialog({ open, onOpenChange }: CoworkSettingsDialo
       />
       
       {/* Dialog */}
-      <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold text-gray-900">Cowork Settings</h2>
+      <div className="relative bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[80vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b">
+          <div className="flex items-center gap-4">
+            <h2 className="text-xl font-semibold text-gray-900">Settings</h2>
+            
+            {/* Tabs */}
+            <div className="flex gap-1 p-1 bg-gray-100 rounded-lg">
+              <button
+                onClick={() => setActiveTab('channels')}
+                className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                  activeTab === 'channels'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Channels
+              </button>
+              <button
+                onClick={() => setActiveTab('features')}
+                className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                  activeTab === 'features'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Features
+              </button>
+            </div>
+          </div>
+          
           <button
             onClick={() => onOpenChange(false)}
             className="text-gray-400 hover:text-gray-600"
@@ -92,83 +132,57 @@ export function CoworkSettingsDialog({ open, onOpenChange }: CoworkSettingsDialo
           </button>
         </div>
 
-        {loading ? (
-          <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <p className="text-sm text-gray-600 mb-4">
-              Enable or disable features. Changes take effect immediately.
-            </p>
+        {/* Content */}
+        <div className="flex-1 overflow-auto">
+          {activeTab === 'channels' ? (
+            <ChannelsManager onAuthError={onAuthError} />
+          ) : (
+            <div className="p-4">
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <p className="text-sm text-gray-600 mb-4">
+                    Enable or disable features. Changes take effect immediately.
+                  </p>
 
-            {/* Channels Section */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">
-                Channels
-              </h3>
-              
-              <SettingToggle
-                label="WhatsApp"
-                description="Enable WhatsApp messaging"
-                enabled={settings.showWhatsApp}
-                onToggle={() => handleToggle('showWhatsApp')}
-              />
-              
-              <SettingToggle
-                label="Telegram"
-                description="Enable Telegram messaging"
-                enabled={settings.showTelegram}
-                onToggle={() => handleToggle('showTelegram')}
-              />
-              
-              <SettingToggle
-                label="Slack"
-                description="Enable Slack integration"
-                enabled={settings.showSlack}
-                onToggle={() => handleToggle('showSlack')}
-              />
-              
-              <SettingToggle
-                label="Discord"
-                description="Enable Discord integration"
-                enabled={settings.showDiscord}
-                onToggle={() => handleToggle('showDiscord')}
-              />
-            </div>
+                  {/* Other Settings */}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">
+                      Features
+                    </h3>
+                    
+                    <SettingToggle
+                      label="Email Automation"
+                      description="Enable email automation for unread emails"
+                      enabled={settings.showEmailAutomation}
+                      onToggle={() => handleToggle('showEmailAutomation')}
+                    />
+                    
+                    <SettingToggle
+                      label="Vera Environment"
+                      description="Show Vera environment settings"
+                      enabled={settings.showLettaEnv}
+                      onToggle={() => handleToggle('showLettaEnv')}
+                    />
+                  </div>
 
-            {/* Other Settings */}
-            <div className="space-y-3 pt-4 border-t">
-              <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">
-                Other
-              </h3>
-              
-              <SettingToggle
-                label="Email Automation"
-                description="Enable email automation for unread emails"
-                enabled={settings.showEmailAutomation}
-                onToggle={() => handleToggle('showEmailAutomation')}
-              />
-              
-              <SettingToggle
-                label="Vera Environment"
-                description="Show Vera environment settings"
-                enabled={settings.showLettaEnv}
-                onToggle={() => handleToggle('showLettaEnv')}
-              />
+                  {/* Reset Button */}
+                  <div className="pt-4 border-t flex justify-end">
+                    <button
+                      onClick={handleReset}
+                      className="text-sm text-gray-500 hover:text-gray-700"
+                    >
+                      Reset to defaults
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-
-            {/* Reset Button */}
-            <div className="pt-4 border-t flex justify-end">
-              <button
-                onClick={handleReset}
-                className="text-sm text-gray-500 hover:text-gray-700"
-              >
-                Reset to defaults
-              </button>
-            </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
@@ -191,7 +205,7 @@ function SettingToggle({ label, description, enabled, onToggle }: SettingToggleP
       <button
         onClick={onToggle}
         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-          enabled ? 'bg-accent' : 'bg-gray-200'
+          enabled ? 'bg-blue-500' : 'bg-gray-200'
         }`}
       >
         <span

@@ -31,18 +31,23 @@ function createLettaClient(): Letta {
 }
 
 export async function listLettaAgents(): Promise<LettaAgent[]> {
+  console.log('[lettaAgents] listLettaAgents called');
   const client = createLettaClient();
   
   try {
+    console.log('[lettaAgents] Fetching agents from Letta API...');
     const response = await client.agents.list({tags: ['user_visible']});
     // Get the data from the paginated response
     const agents = await response;
+    console.log('[lettaAgents] Received', agents.items?.length || 0, 'agents with user_visible tag');
+    
     // Filter agents to only show those with user_visible: true in metadata
     return agents.items
       .map((agent) => {
         const raw: any = agent;
         const models = Array.isArray(raw.models) ? raw.models : undefined;
         const availableModels = Array.isArray(raw.available_models) ? raw.available_models : undefined;
+        console.log(`[lettaAgents] Agent: ${agent.name} (${agent.id})`);
         return {
           id: agent.id,
           name: agent.name,
@@ -57,7 +62,7 @@ export async function listLettaAgents(): Promise<LettaAgent[]> {
         } satisfies LettaAgent;
       });
   } catch (error) {
-    console.error("Failed to list agents:", error);
+    console.error("[lettaAgents] Failed to list agents:", error);
     throw new Error("Failed to fetch agents from Letta");
   }
 }

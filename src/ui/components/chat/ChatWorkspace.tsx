@@ -1,6 +1,6 @@
 import { memo } from "react";
 import type { ClientEvent } from "../../types";
-import type { AgentDisplayStatus, ReasoningStep } from "../../store/useAppStore";
+import type { AgentDisplayStatus, ReasoningStep, ToolExecution } from "../../store/useAppStore";
 import type { IndexedMessage } from "../../hooks/useMessageWindow";
 import { PromptInput } from "../PromptInput";
 import { ConversationHeader } from "./ConversationHeader";
@@ -19,6 +19,7 @@ interface ChatWorkspaceProps {
   isHistoryLoading: boolean;
   hasMoreHistory: boolean;
   reasoningSteps: ReasoningStep[];
+  toolExecutions: ToolExecution[];
   onScroll: () => void;
   onScrollToBottom: () => void;
   onSendMessage: () => void;
@@ -44,6 +45,7 @@ export const ChatWorkspace = memo(function ChatWorkspace({
   isHistoryLoading,
   hasMoreHistory,
   reasoningSteps,
+  toolExecutions,
   onScroll,
   onScrollToBottom,
   onSendMessage,
@@ -145,6 +147,7 @@ export const ChatWorkspace = memo(function ChatWorkspace({
               partialMessage={partialMessage}
               showPartialMessage={showPartialMessage}
               reasoningSteps={reasoningSteps}
+              toolExecutions={toolExecutions}
             />
           )}
           <div ref={messagesEndRef} />

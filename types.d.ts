@@ -39,6 +39,7 @@ type AutoSyncUnreadConfig = {
     routingRules: AutoSyncRoutingRule[];
     sinceDate: string;
     processingMode: AutoSyncProcessingMode;
+    markAsReadAfterProcess: boolean;
 }
 
 type ProcessedUnreadEmailEntry = {

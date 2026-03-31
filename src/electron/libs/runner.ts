@@ -86,6 +86,13 @@ let cachedAgentId: string | null = null;
 // Cache agent name to avoid repeated API calls
 let cachedAgentName: string | undefined = undefined;
 
+// Clear the agent cache (call when starting a new session with a different agent)
+export function clearAgentCache(): void {
+  cachedAgentId = null;
+  cachedAgentName = undefined;
+  debug("agent cache cleared");
+}
+
 // Helper to get agent name from agentId
 async function getAgentName(agentId: string | null | undefined): Promise<string | undefined> {
   // Return cached name if available

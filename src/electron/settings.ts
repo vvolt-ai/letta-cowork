@@ -23,6 +23,7 @@ export interface AutoSyncUnreadConfig {
   routingRules: AutoSyncRoutingRule[];
   sinceDate: string;
   processingMode: AutoSyncProcessingMode;
+  markAsReadAfterProcess: boolean;
 }
 
 // Session metadata stored in electron-store
@@ -54,11 +55,48 @@ export interface ProcessedUnreadEmailDebugInfo {
   entries: ProcessedUnreadEmailEntry[];
 }
 
+// ─── Email credentials (replaces keytar) ─────────────────────────────────────
+
+interface EmailCredentials {
+  email_access_token?: string;
+  email_refresh_token?: string;
+  email_account_id?: string;
+  email_inbox_folder_id?: string;
+}
+
+type EmailCredentialKey = keyof EmailCredentials;
+
+/** XOR + base64 — lightweight at-rest obfuscation (not cryptographic). */
+const OBFUSCATION_KEY = 'vera-cowork-creds-2025';
+
+function obfuscate(value: string): string {
+  const keyBuf = Buffer.from(OBFUSCATION_KEY, 'utf8');
+  const valBuf = Buffer.from(value, 'utf8');
+  const result = Buffer.alloc(valBuf.length);
+  for (let i = 0; i < valBuf.length; i++) {
+    result[i] = valBuf[i] ^ keyBuf[i % keyBuf.length];
+  }
+  return result.toString('base64');
+}
+
+function deobfuscate(value: string): string {
+  const keyBuf = Buffer.from(OBFUSCATION_KEY, 'utf8');
+  const valBuf = Buffer.from(value, 'base64');
+  const result = Buffer.alloc(valBuf.length);
+  for (let i = 0; i < valBuf.length; i++) {
+    result[i] = valBuf[i] ^ keyBuf[i % keyBuf.length];
+  }
+  return result.toString('utf8');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 interface SettingsStoreSchema {
   coworkSettings: CoworkSettings;
   autoSyncUnreadConfig: AutoSyncUnreadConfig;
   sessions: StoredSession[];
   processedUnreadEmails: ProcessedUnreadEmailsStore;
+  emailCredentials: EmailCredentials;
 }
 
 const PROCESSED_UNREAD_RETENTION_DAYS = 30;
@@ -81,6 +119,7 @@ const defaultAutoSyncUnreadConfig: AutoSyncUnreadConfig = {
   routingRules: [],
   sinceDate: '',
   processingMode: 'unread_only',
+  markAsReadAfterProcess: true,
 };
 
 const sanitizeAutoSyncAgentIds = (agentIds: unknown): string[] => {
@@ -125,6 +164,7 @@ const sanitizeAutoSyncUnreadConfig = (config: Partial<AutoSyncUnreadConfig> | un
   routingRules: sanitizeAutoSyncRoutingRules(config?.routingRules),
   sinceDate: sanitizeAutoSyncSinceDate(config?.sinceDate),
   processingMode: sanitizeAutoSyncProcessingMode(config?.processingMode),
+  markAsReadAfterProcess: config?.markAsReadAfterProcess ?? true,
 });
 
 const buildProcessedUnreadMailboxKey = (accountId: string, folderId: string): string =>
@@ -214,6 +254,7 @@ const store = new Store<SettingsStoreSchema>({
     autoSyncUnreadConfig: defaultAutoSyncUnreadConfig,
     sessions: [],
     processedUnreadEmails: {},
+    emailCredentials: {},
   },
 });
 
@@ -341,5 +382,36 @@ export function getProcessedUnreadEmailDebugInfo(
     entries: sampledEntries,
   };
 }
+
+// ─── Email credential helpers (electron-store backed, replaces keytar) ────────
+
+export function getEmailCredential(key: EmailCredentialKey): string | null {
+  const creds = store.get('emailCredentials', {});
+  const val = creds[key];
+  if (!val) return null;
+  try {
+    return deobfuscate(val);
+  } catch {
+    return null;
+  }
+}
+
+export function setEmailCredential(key: EmailCredentialKey, value: string): void {
+  const creds = store.get('emailCredentials', {});
+  store.set('emailCredentials', { ...creds, [key]: obfuscate(value) });
+}
+
+export function deleteEmailCredential(key: EmailCredentialKey): void {
+  const creds = store.get('emailCredentials', {}) as Record<string, string | undefined>;
+  const next = { ...creds };
+  delete next[key];
+  store.set('emailCredentials', next as EmailCredentials);
+}
+
+export function clearAllEmailCredentials(): void {
+  store.set('emailCredentials', {});
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export type { CoworkSettings };

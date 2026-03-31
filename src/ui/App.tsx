@@ -16,10 +16,12 @@ import { EmailDetailsDialog } from "./components/EmailDetailsDialog";
 import { CoworkSettingsDialog } from "./components/CoworkSettingsDialog";
 import { MemoryDialog } from "./components/MemoryDialog";
 import { ChangeEnv } from "./components/ChangeEnv";
+import { LoginScreen } from "./components/LoginScreen";
 import { useSessionController } from "./hooks/useSessionController";
 import { useCoworkSettings } from "./hooks/useCoworkSettings";
 import { useAutoSyncUnread } from "./hooks/useAutoSyncUnread";
 import { useProcessEmailToAgent } from "./hooks/useProcessEmailToAgent";
+import { useAuth } from "./hooks/useAuth";
 
 const SCROLL_THRESHOLD = 50;
 const SESSION_CHANGE_SCROLL_DELAY_MS = 100;
@@ -50,6 +52,7 @@ const DEFAULT_AUTO_SYNC_CONFIG = {
   routingRules: [],
   sinceDate: "",
   processingMode: "unread_only",
+  markAsReadAfterProcess: true,
 } satisfies AutoSyncUnreadConfig;
 
 const hasCustomAutoSyncConfig = (config: AutoSyncUnreadConfig): boolean => {
@@ -100,6 +103,7 @@ const readLegacyAutoSyncConfig = (): AutoSyncUnreadConfig => {
     routingRules,
     sinceDate: localStorage.getItem(AUTO_SYNC_SINCE_DATE_KEY) ?? "",
     processingMode: "unread_only",
+    markAsReadAfterProcess: true,
   };
 };
 
@@ -111,6 +115,9 @@ const clearLegacyAutoSyncConfig = () => {
 };
 
 function App() {
+  // Authentication
+  const { isAuthenticated, isLoading: isAuthLoading, checkAuth, user, logout, handleAuthError } = useAuth();
+
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -138,6 +145,7 @@ function App() {
   const [autoSyncRoutingRules, setAutoSyncRoutingRules] = useState<AutoSyncRoutingRule[]>(DEFAULT_AUTO_SYNC_CONFIG.routingRules);
   const [autoSyncSinceDate, setAutoSyncSinceDate] = useState<string>(DEFAULT_AUTO_SYNC_CONFIG.sinceDate);
   const [autoSyncProcessingMode, setAutoSyncProcessingMode] = useState<AutoSyncProcessingMode>(DEFAULT_AUTO_SYNC_CONFIG.processingMode);
+  const [autoSyncMarkAsRead, setAutoSyncMarkAsRead] = useState<boolean>(DEFAULT_AUTO_SYNC_CONFIG.markAsReadAfterProcess);
   const handleServerEvent = useAppStore((s) => s.handleServerEvent);
   const { coworkSettings, showCoworkSettings, setShowCoworkSettings, updateCoworkSettings } = useCoworkSettings();
 
@@ -161,15 +169,13 @@ function App() {
   const { processEmailToAgent, processingEmailId, successEmailId } = useProcessEmailToAgent();
   const { setEmailAsInput, isLoading: isProcessingEmailInput } = useEmailAsInput();
   const {
-    selectedEmailId,
-    handleSelectEmail,
     isEmailDetailsOpen,
     isEmailDetailsLoading,
     emailDetailsError,
     viewingEmail,
     emailDetails,
     setIsEmailDetailsOpen,
-    handleViewEmail,
+    handleViewEmail: _handleViewEmail,
   } = useEmailSelection({
     fetchEmailById: loadEmailById,
     markMessagesAsRead,
@@ -353,6 +359,7 @@ function App() {
         setAutoSyncRoutingRules(nextConfig.routingRules);
         setAutoSyncSinceDate(nextConfig.sinceDate);
         setAutoSyncProcessingMode(nextConfig.processingMode);
+        setAutoSyncMarkAsRead(nextConfig.markAsReadAfterProcess ?? true);
         clearLegacyAutoSyncConfig();
       } catch (err) {
         console.error("Failed to load auto-sync unread config:", err);
@@ -362,13 +369,14 @@ function App() {
         setAutoSyncRoutingRules(legacyConfig.routingRules);
         setAutoSyncSinceDate(legacyConfig.sinceDate);
         setAutoSyncProcessingMode(legacyConfig.processingMode);
+        setAutoSyncMarkAsRead(legacyConfig.markAsReadAfterProcess ?? true);
       } finally {
         setAutoSyncConfigLoaded(true);
       }
     };
 
     void loadAutoSyncConfig();
-  }, []);
+  }, [isAuthenticated]); // Reload config when authentication state changes
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -388,6 +396,7 @@ function App() {
           routingRules: autoSyncRoutingRules,
           sinceDate: autoSyncSinceDate,
           processingMode: autoSyncProcessingMode,
+          markAsReadAfterProcess: autoSyncMarkAsRead,
         });
       } catch (err) {
         console.error("Failed to persist auto-sync unread config:", err);
@@ -395,7 +404,7 @@ function App() {
     };
 
     void persistAutoSyncConfig();
-  }, [autoSyncConfigLoaded, autoSyncEnabled, autoSyncProcessingMode, autoSyncRoutingRules, autoSyncSinceDate, selectedAutoSyncAgentIds]);
+  }, [autoSyncConfigLoaded, autoSyncEnabled, autoSyncProcessingMode, autoSyncRoutingRules, autoSyncSinceDate, selectedAutoSyncAgentIds, autoSyncMarkAsRead]);
 
   // Load cowork settings on mount
   useEffect(() => {
@@ -419,7 +428,8 @@ function App() {
     autoSyncEnabled,
     1,
     autoSyncSinceDate,
-    autoSyncProcessingMode
+    autoSyncProcessingMode,
+    autoSyncMarkAsRead
   );
 
   useEffect(() => {
@@ -517,6 +527,27 @@ function App() {
   const agentStatus = activeSession?.ephemeral.status ?? "idle";
   const ephemeralState = activeSession?.ephemeral;
   const reasoningSteps = ephemeralState?.reasoning ?? [];
+  const toolExecutions = ephemeralState?.tools ?? [];
+
+  // Show loading while checking auth
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <svg className="h-8 w-8 animate-spin text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle className="opacity-25" cx="12" cy="12" r="10" />
+            <path className="opacity-75" d="M4 12a8 8 0 018-8" />
+          </svg>
+          <p className="text-sm text-slate-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show login screen if not authenticated
+  if (!isAuthenticated) {
+    return <LoginScreen onLoginSuccess={checkAuth} />;
+  }
 
   return (
     <>
@@ -537,9 +568,6 @@ function App() {
             isEmailConnected={isMailConnected}
             refetchEmails={refetchEmails}
             emails={emails}
-            selectedEmailId={selectedEmailId}
-            onSelectEmail={handleSelectEmail}
-            onViewEmail={handleViewEmail}
             onUseEmailAsInput={setEmailAsInput}
             isProcessingEmailInput={isProcessingEmailInput}
             isFetchingEmails={isFetchingEmailContent}
@@ -555,6 +583,8 @@ function App() {
             onSetAutoSyncSinceDate={setAutoSyncSinceDate}
             autoSyncProcessingMode={autoSyncProcessingMode}
             onSetAutoSyncProcessingMode={setAutoSyncProcessingMode}
+            autoSyncMarkAsRead={autoSyncMarkAsRead}
+            onSetAutoSyncMarkAsRead={setAutoSyncMarkAsRead}
             autoSyncAccountId={accountId}
             autoSyncFolderId={folderId}
             onRunAutoSyncNow={runAutoSyncNow}
@@ -567,6 +597,8 @@ function App() {
             hasMoreEmails={hasMoreEmails}
             isLoadingMoreEmails={isLoadingMoreEmails}
             onLoadMoreEmails={handleLoadMoreEmails}
+            userEmail={user?.email}
+            onLogout={logout}
           />
         }
         chat={
@@ -583,6 +615,7 @@ function App() {
             isHistoryLoading={Boolean(activeSession?.isLoadingHistory)}
             hasMoreHistory={hasMoreHistory || Boolean(activeSession?.totalDisplayableCount && activeSession.totalDisplayableCount > visibleMessages.length)}
             reasoningSteps={reasoningSteps}
+            toolExecutions={toolExecutions}
             onScroll={handleScroll}
             onScrollToBottom={scrollToBottom}
             onSendMessage={handleSendMessage}
@@ -641,6 +674,7 @@ function App() {
       <CoworkSettingsDialog
         open={showCoworkSettings}
         onOpenChange={setShowCoworkSettings}
+        onAuthError={handleAuthError}
       />
       <MemoryDialog open={isMemoryOpen} onOpenChange={setIsMemoryOpen} />
       <EmailDetailsDialog
