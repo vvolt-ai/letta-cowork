@@ -3,6 +3,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import type { ZohoEmail } from "../types";
 import { useAppStore } from "../store/useAppStore";
 import { useShallow } from "zustand/react/shallow";
+import { ConversationViewer } from "./ConversationViewer";
 
 interface EmailInboxModalProps {
   open: boolean;
@@ -89,19 +90,13 @@ export function EmailInboxModal({
   const [isFetchingLocalContent, setIsFetchingLocalContent] = useState(false);
   const [processedEmailIds, setProcessedEmailIds] = useState<Set<string>>(new Set());
   const [viewingConversationId, setViewingConversationId] = useState<string | null>(null);
-  const [conversationMessage, setConversationMessage] = useState("");
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const conversationScrollRef = useRef<HTMLDivElement>(null);
   
   // Get session data from store to find email conversations
   const sessions = useAppStore(useShallow((state) => state.sessions));
-  const sendEvent = useAppStore((state) => state.ipcSendEvent);
 
   // Get selected email from local state
   const selectedEmail = emails.find(e => e.messageId === localSelectedId);
-  
-  // Get the conversation being viewed
-  const viewedConversation = viewingConversationId ? sessions[viewingConversationId] : null;
 
   // Load processed email IDs when modal opens
   useEffect(() => {
@@ -153,31 +148,21 @@ export function EmailInboxModal({
     setProcessedEmailIds(prev => new Set(prev).add(String(email.messageId)));
   }, [onProcessEmailToAgent]);
 
-  // Handle view conversation - show in modal instead of closing
+  // Handle view conversation - show in modal
   const handleViewConversation = useCallback((conversationId: string) => {
     setViewingConversationId(conversationId);
-    setConversationMessage("");
   }, []);
 
-  // Handle send message in conversation
-  const handleSendConversationMessage = useCallback(() => {
-    if (!viewingConversationId || !conversationMessage.trim() || !sendEvent) return;
-    
-    sendEvent({
-      type: "session.continue",
-      payload: {
-        sessionId: viewingConversationId,
-        prompt: conversationMessage.trim(),
-      },
-    });
-    
-    setConversationMessage("");
-  }, [viewingConversationId, conversationMessage, sendEvent]);
+  const handleOpenInLetta = useCallback((conversationId: string) => {
+    const session = sessions[conversationId];
+    if (!session?.agentId) return;
+    const lettaUrl = `https://app.letta.com/projects/default-project/agents/${session.agentId}?conversation=${conversationId}`;
+    window.electron.openExternal(lettaUrl);
+  }, [sessions]);
 
   // Handle back from conversation view
   const handleBackFromConversation = useCallback(() => {
     setViewingConversationId(null);
-    setConversationMessage("");
   }, []);
 
   // Handle scroll for infinite loading
@@ -197,8 +182,7 @@ export function EmailInboxModal({
   const handleSelectEmail = useCallback(async (email: ZohoEmail) => {
     // Clear conversation view when selecting a new email
     setViewingConversationId(null);
-    setConversationMessage("");
-    
+
     setLocalSelectedId(email.messageId);
     setLocalEmailDetails(null);
     setLocalEmailDetailsError(null);
@@ -236,7 +220,6 @@ export function EmailInboxModal({
       setLocalEmailDetails(null);
       setLocalEmailDetailsError(null);
       setViewingConversationId(null);
-      setConversationMessage("");
     }
   }, [open]);
 
@@ -403,213 +386,12 @@ export function EmailInboxModal({
             {/* Right Side - Email Preview or Conversation Viewer */}
             <div className="flex-1 flex flex-col bg-white">
               {viewingConversationId ? (
-                /* Conversation Viewer */
-                <>
-                  {/* Conversation Header */}
-                  <div className="px-4 py-3 border-b border-ink-900/10 flex items-center gap-3">
-                    <button
-                      onClick={handleBackFromConversation}
-                      className="rounded-lg p-1.5 text-ink-500 hover:bg-ink-900/10"
-                      title="Back to email"
-                    >
-                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M15 18l-6-6 6-6" />
-                      </svg>
-                    </button>
-                    <div className="flex-1 min-w-0">
-                      <h2 className="text-base font-semibold text-ink-900 truncate">
-                        {viewedConversation?.title || "Conversation"}
-                      </h2>
-                      <div className="text-xs text-muted">
-                        {viewedConversation?.agentName || "Agent"}
-                      </div>
-                    </div>
-                    {/* Status Badge */}
-                    {(() => {
-                      const status = viewedConversation?.ephemeral?.status;
-                      const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
-                        idle: { bg: "bg-gray-100", text: "text-gray-700", label: "Idle" },
-                        thinking: { bg: "bg-yellow-100", text: "text-yellow-700", label: "Thinking..." },
-                        running_tool: { bg: "bg-blue-100", text: "text-blue-700", label: "Running Tool" },
-                        waiting_approval: { bg: "bg-orange-100", text: "text-orange-700", label: "Waiting Approval" },
-                        generating: { bg: "bg-blue-100", text: "text-blue-700", label: "Generating..." },
-                        completed: { bg: "bg-green-100", text: "text-green-700", label: "Completed" },
-                        error: { bg: "bg-red-100", text: "text-red-700", label: "Error" },
-                      };
-                      const config = statusConfig[status || "idle"] || statusConfig.idle;
-                      return (
-                        <span className={`text-xs ${config.bg} ${config.text} px-2 py-1 rounded-full`}>
-                          {config.label}
-                        </span>
-                      );
-                    })()}
-                  </div>
-
-                  {/* Error Banner */}
-                  {viewedConversation?.ephemeral?.errorMessage && (
-                    <div className="px-4 py-2 bg-red-50 border-b border-red-200">
-                      <div className="flex items-center gap-2">
-                        <svg className="h-4 w-4 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <circle cx="12" cy="12" r="10" />
-                          <path d="M12 8v4M12 16h.01" />
-                        </svg>
-                        <span className="text-sm text-red-700 flex-1">
-                          {viewedConversation.ephemeral.errorMessage}
-                        </span>
-                        <button
-                          onClick={() => {
-                            // Retry by sending a continue message
-                            if (sendEvent) {
-                              sendEvent({
-                                type: "session.continue",
-                                payload: {
-                                  sessionId: viewingConversationId,
-                                  prompt: "Please continue.",
-                                },
-                              });
-                            }
-                          }}
-                          className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200"
-                        >
-                          Retry
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Waiting Approval Banner */}
-                  {viewedConversation?.ephemeral?.status === "waiting_approval" && viewedConversation?.permissionRequests?.length > 0 && (
-                    <div className="px-4 py-2 bg-orange-50 border-b border-orange-200">
-                      <div className="flex items-center gap-2">
-                        <svg className="h-4 w-4 text-orange-500 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <circle cx="12" cy="12" r="10" />
-                          <path d="M12 6v6l4 2" />
-                        </svg>
-                        <span className="text-sm text-orange-700 flex-1">
-                          Agent is waiting for approval to use: {viewedConversation.permissionRequests[0].toolName}
-                        </span>
-                        <button
-                          onClick={() => {
-                            // Approve and continue
-                            const request = viewedConversation.permissionRequests[0];
-                            if (request && sendEvent) {
-                              sendEvent({
-                                type: "permission.response",
-                                payload: {
-                                  sessionId: viewingConversationId,
-                                  toolUseId: request.toolUseId,
-                                  result: { allow: true } as any,
-                                },
-                              });
-                            }
-                          }}
-                          className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          onClick={() => {
-                            // Deny
-                            const request = viewedConversation.permissionRequests[0];
-                            if (request && sendEvent) {
-                              sendEvent({
-                                type: "permission.response",
-                                payload: {
-                                  sessionId: viewingConversationId,
-                                  toolUseId: request.toolUseId,
-                                  result: { allow: false } as any,
-                                },
-                              });
-                            }
-                          }}
-                          className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200"
-                        >
-                          Deny
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Processing Indicator */}
-                  {["thinking", "running_tool", "generating"].includes(viewedConversation?.ephemeral?.status || "") && (
-                    <div className="px-4 py-2 bg-blue-50 border-b border-blue-200">
-                      <div className="flex items-center gap-2">
-                        <svg className="h-4 w-4 text-blue-500 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <circle className="opacity-20" cx="12" cy="12" r="10" />
-                          <path d="M4 12a8 8 0 018-8" />
-                        </svg>
-                        <span className="text-sm text-blue-700">
-                          {viewedConversation?.ephemeral?.status === "thinking" && "Agent is thinking..."}
-                          {viewedConversation?.ephemeral?.status === "running_tool" && "Agent is running a tool..."}
-                          {viewedConversation?.ephemeral?.status === "generating" && "Agent is generating response..."}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Conversation Messages */}
-                  <div 
-                    ref={conversationScrollRef}
-                    className="flex-1 overflow-auto p-4 space-y-4"
-                  >
-                    {viewedConversation?.messages?.length ? (
-                      viewedConversation.messages.map((msg: any, idx: number) => (
-                        <div
-                          key={idx}
-                          className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                        >
-                          <div
-                            className={`max-w-[80%] rounded-lg px-3 py-2 ${
-                              msg.role === "user"
-                                ? "bg-accent text-white"
-                                : "bg-ink-100 text-ink-900"
-                            }`}
-                          >
-                            {msg.content ? (
-                              <div className="text-sm whitespace-pre-wrap">
-                                {typeof msg.content === "string" 
-                                  ? msg.content 
-                                  : JSON.stringify(msg.content)}
-                              </div>
-                            ) : (
-                              <div className="text-sm text-muted">No content</div>
-                            )}
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="flex items-center justify-center py-12 text-muted">
-                        <p className="text-sm">No messages yet</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Message Input */}
-                  <div className="px-4 py-3 border-t border-ink-900/10">
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={conversationMessage}
-                        onChange={(e) => setConversationMessage(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey) {
-                            e.preventDefault();
-                            handleSendConversationMessage();
-                          }
-                        }}
-                        placeholder="Type a message..."
-                        className="flex-1 rounded-lg border border-ink-900/10 bg-white px-3 py-2 text-sm text-ink-800 placeholder:text-muted focus:border-accent/40 focus:outline-none"
-                      />
-                      <button
-                        onClick={handleSendConversationMessage}
-                        disabled={!conversationMessage.trim() || ["thinking", "running_tool", "generating"].includes(viewedConversation?.ephemeral?.status || "")}
-                        className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50"
-                      >
-                        Send
-                      </button>
-                    </div>
-                  </div>
-                </>
+                <ConversationViewer
+                  sessionId={viewingConversationId}
+                  onBack={handleBackFromConversation}
+                  showBackButton={true}
+                  showOpenInLetta={true}
+                />
               ) : selectedEmail ? (
                 /* Email Preview */
                 <>
@@ -648,20 +430,30 @@ export function EmailInboxModal({
                         {selectedAgentId && onProcessEmailToAgent && (
                           isEmailProcessed(selectedEmail) ? (
                             <>
-                              <span className="rounded-lg bg-green-100 px-2 py-1 text-xs font-medium text-green-700">
-                                ✓ Processed
-                              </span>
                               {(() => {
                                 const conversationId = findConversationIdForEmail(selectedEmail);
-                                return conversationId ? (
-                                  <button
-                                    onClick={() => handleViewConversation(conversationId)}
-                                    className="rounded-lg bg-accent px-2 py-1 text-xs font-medium text-white hover:bg-accent-hover"
-                                    title="View conversation"
-                                  >
-                                    👁 View Conversation
-                                  </button>
-                                ) : null;
+                                if (!conversationId) return null;
+                                const session = sessions[conversationId];
+                                return (
+                                  <>
+                                    <button
+                                      onClick={() => handleViewConversation(conversationId)}
+                                      className="rounded-lg bg-accent px-2 py-1 text-xs font-medium text-white hover:bg-accent-hover"
+                                      title="View conversation"
+                                    >
+                                      👁 View Conversation
+                                    </button>
+                                    {session?.agentId ? (
+                                      <button
+                                        onClick={() => handleOpenInLetta(conversationId)}
+                                        className="rounded-lg border border-ink-900/10 bg-white px-2 py-1 text-xs font-medium text-ink-700 hover:bg-surface-tertiary"
+                                        title="Open in Letta"
+                                      >
+                                        Open in Letta
+                                      </button>
+                                    ) : null}
+                                  </>
+                                );
                               })()}
                             </>
                           ) : (

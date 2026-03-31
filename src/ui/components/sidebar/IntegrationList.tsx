@@ -86,15 +86,17 @@ export function IntegrationList({
             </div>
             <button
               onClick={() => onToggleAutoSync(!autoSyncEnabled)}
-              className={`mt-1 flex h-5 w-9 items-center rounded-full p-0.5 transition ${
-                autoSyncEnabled ? "bg-[var(--color-accent)]" : "bg-ink-300"
+              className={`mt-1 inline-flex h-6 w-11 items-center rounded-full border p-0.5 transition-all duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/20 ${
+                autoSyncEnabled
+                  ? "border-[var(--color-accent)] bg-[var(--color-accent)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]"
+                  : "border-[var(--color-bg-400)] bg-[var(--color-bg-300)] shadow-[inset_0_1px_2px_rgba(15,23,42,0.08)] hover:border-[var(--color-border-hover)]"
               }`}
               aria-pressed={autoSyncEnabled}
               aria-label="Toggle auto-sync"
             >
               <span
-                className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
-                  autoSyncEnabled ? "translate-x-4" : "translate-x-0"
+                className={`h-5 w-5 rounded-full bg-white shadow-[0_1px_3px_rgba(15,23,42,0.2),0_1px_2px_rgba(15,23,42,0.08)] transition-transform duration-200 ease-out ${
+                  autoSyncEnabled ? "translate-x-5" : "translate-x-0"
                 }`}
               />
             </button>
