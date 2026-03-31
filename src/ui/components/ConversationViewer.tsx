@@ -155,11 +155,7 @@ export const ConversationViewer = memo(function ConversationViewer({
         <PromptInput
           onSendMessage={handleSendMessage}
           disabled={isProcessing}
-          placeholder={
-            isProcessing 
-              ? "Agent is working..." 
-              : "Type a message..."
-          }
+          sendEvent={sendEvent!}
         />
       </div>
     </div>
