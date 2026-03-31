@@ -101,7 +101,7 @@ export class VeraCoworkApiClient {
   private refreshPromise: Promise<AuthTokens | null> | null = null;
 
   constructor(baseUrl?: string) {
-    this.baseUrl = baseUrl || process.env.VERA_COWORK_API_URL || "http://127.0.0.1:3010";
+    this.baseUrl = baseUrl || process.env.VERA_COWORK_API_URL || "https://vera-cowork-server.ngrok.app/";
     this.loadTokens();
   }
 
