@@ -200,7 +200,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
             </label>
             <input
               type="text"
-              defaultValue="https://vera-cowork-server.ngrok.app/"
+              defaultValue="https://vera-cowork-server.ngrok.app"
               onChange={async (e) => {
                 const api = getApi();
                 await api.apiSetUrl(e.target.value);

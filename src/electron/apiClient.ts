@@ -101,7 +101,7 @@ export class VeraCoworkApiClient {
   private refreshPromise: Promise<AuthTokens | null> | null = null;
 
   constructor(baseUrl?: string) {
-    this.baseUrl = baseUrl || process.env.VERA_COWORK_API_URL || "https://vera-cowork-server.ngrok.app/";
+    this.baseUrl = baseUrl || process.env.VERA_COWORK_API_URL || "https://vera-cowork-server.ngrok.app";
     this.loadTokens();
   }
 
@@ -174,7 +174,12 @@ export class VeraCoworkApiClient {
       headers["Authorization"] = `Bearer ${this.tokens.accessToken}`;
     }
 
-    const response = await fetch(`${this.baseUrl}${path}`, {
+    // Properly join URL parts
+    const url = this.baseUrl.endsWith('/') && path.startsWith('/')
+      ? `${this.baseUrl}${path.slice(1)}`
+      : `${this.baseUrl}${path}`;
+
+    const response = await fetch(url, {
       method,
       headers,
       body: body ? JSON.stringify(body) : undefined,
@@ -186,7 +191,7 @@ export class VeraCoworkApiClient {
       if (newTokens) {
         // Retry with new token
         headers["Authorization"] = `Bearer ${newTokens.accessToken}`;
-        const retryResponse = await fetch(`${this.baseUrl}${path}`, {
+        const retryResponse = await fetch(url, {
           method,
           headers,
           body: body ? JSON.stringify(body) : undefined,

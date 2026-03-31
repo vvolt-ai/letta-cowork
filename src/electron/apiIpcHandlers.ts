@@ -44,7 +44,7 @@ export interface ChannelCredentialsData {
 }
 
 // Store current API URL
-let currentApiUrl = process.env.VERA_COWORK_API_URL || "https://vera-cowork-server.ngrok.app/";
+let currentApiUrl = process.env.VERA_COWORK_API_URL || "https://vera-cowork-server.ngrok.app";
 
 /**
  * Initialize API IPC handlers.
