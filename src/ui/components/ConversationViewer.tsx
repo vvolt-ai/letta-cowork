@@ -71,21 +71,21 @@ export const ConversationViewer = memo(function ConversationViewer({
   const errorMessage = session?.ephemeral?.errorMessage;
   
   // Handle send message
-  const handleSendMessage = () => {
-    const prompt = useAppStore.getState().prompt;
-    if (!prompt.trim() || !sendEvent) return;
+  // const handleSendMessage = () => {
+  //   const prompt = useAppStore.getState().prompt;
+  //   if (!prompt.trim() || !sendEvent) return;
     
-    sendEvent({
-      type: "session.continue",
-      payload: {
-        sessionId,
-        prompt: prompt.trim(),
-      },
-    });
+  //   sendEvent({
+  //     type: "session.continue",
+  //     payload: {
+  //       sessionId,
+  //       prompt: prompt.trim(),
+  //     },
+  //   });
     
-    // Clear prompt
-    useAppStore.getState().setPrompt("");
-  };
+  //   // Clear prompt
+  //   useAppStore.getState().setPrompt("");
+  // };
   
   const isProcessing = ["thinking", "running_tool", "generating", "waiting_approval"].includes(agentStatus);
   
