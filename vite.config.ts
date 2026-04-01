@@ -12,6 +12,13 @@ export default defineConfig(({ mode }) => {
 		base: './',
 		build: {
 			outDir: 'dist-react',
+			rollupOptions: {
+				output: {
+					manualChunks: {
+						markdown: ['react-markdown', 'remark-gfm', 'rehype-highlight'],
+					},
+				},
+			},
 		},
 		server: {
 			port, // MUST BE LOWERCASE

@@ -50,15 +50,24 @@ function extractText(value: unknown): string {
       if (typeof block === "string") {
         pieces.push(block);
       } else if (typeof block === "object") {
-        const maybeText = (block as any).text ?? (block as any).reasoning;
+        const record = block as any;
+        const maybeText = record.text ?? record.reasoning ?? record.content ?? record.output ?? record.result;
         if (typeof maybeText === "string") pieces.push(maybeText);
       }
     }
     return pieces.join("\n");
   }
   if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const preferredKeys = ["command", "file_path", "query", "pattern", "url", "description", "text", "reasoning", "content", "output", "result"];
+    for (const key of preferredKeys) {
+      const candidate = record[key];
+      if (typeof candidate === "string" && candidate.trim().length > 0) {
+        return candidate;
+      }
+    }
     try {
-      return JSON.stringify(value);
+      return JSON.stringify(value, null, 2);
     } catch {
       return String(value);
     }
@@ -232,21 +241,28 @@ export function filterConversationMessages(rawMessages: LettaMessage[]): Convers
       continue;
     }
 
-    if (type === "tool_call" || type === "tool_message") {
-      const toolCallId = (msg as any).tool_call_id || metadata.tool_call_id || metadata.call_id || msg.id || msg.message_id || randomUUID();
+    if (type === "tool_call" || type === "tool_message" || type === "tool_call_message") {
+      const nestedToolCall = ((msg as any).tool_call ?? metadata.tool_call ?? {}) as Record<string, unknown>;
+      const toolCallId = (msg as any).tool_call_id || nestedToolCall.tool_call_id || metadata.tool_call_id || metadata.call_id || msg.id || msg.message_id || randomUUID();
       const toolName = firstPresent(
+        nestedToolCall.name as string | undefined,
         (msg as any).tool_name as string | undefined,
         metadata.tool_name as string | undefined,
         metadata.name as string | undefined,
         (msg as any).name as string | undefined,
       ) || "tool";
       const toolInput = firstPresent(
+        nestedToolCall.arguments,
         (msg as any).tool_input,
         (msg as any).input,
         (msg as any).arguments,
+        (msg as any).raw_arguments,
         metadata.tool_input,
         metadata.input,
         metadata.arguments,
+        metadata.raw_arguments,
+        metadata.command,
+        metadata.file_path,
         msg.content
       );
       const toolInputText = toStringOrNull(toolInput) ?? "(no arguments)";
@@ -268,25 +284,30 @@ export function filterConversationMessages(rawMessages: LettaMessage[]): Convers
       continue;
     }
 
-    if (type === "tool_result") {
+    if (type === "tool_result" || type === "tool_return_message") {
       const toolCallId = (msg as any).tool_call_id || metadata.tool_call_id || metadata.call_id || msg.id || msg.message_id || randomUUID();
       const toolName = firstPresent(
-        (msg as any).tool_name as string | undefined,
         metadata.tool_name as string | undefined,
         metadata.name as string | undefined,
+        (msg as any).tool_name as string | undefined,
         (msg as any).name as string | undefined,
       ) || "tool";
       const outputRaw = firstPresent(
+        (msg as any).tool_return,
         (msg as any).output,
         (msg as any).result,
+        (msg as any).content,
+        metadata.tool_return,
         metadata.output,
         metadata.result,
+        metadata.stdout,
+        metadata.stderr,
         msg.content
       );
       const outputText = toStringOrNull(outputRaw);
-      const logsRaw = firstPresent((msg as any).logs, metadata.logs, metadata.tool_logs);
+      const logsRaw = firstPresent((msg as any).logs, (msg as any).stdout, (msg as any).stderr, metadata.logs, metadata.tool_logs, metadata.stdout, metadata.stderr);
       const logs = normaliseLogs(logsRaw);
-      const isError = Boolean((msg as any).status === "failed" || metadata.error || metadata.is_error);
+      const isError = Boolean((msg as any).status === "failed" || (msg as any).status === "error" || metadata.error || metadata.is_error);
 
       if (shouldSkipToolName(toolName)) {
         continue;

@@ -228,6 +228,7 @@ type EventPayloadMapping = {
     "get-letta-agent": LettaAgent | null;
     "list-letta-agents": LettaAgent[];
     "list-letta-models": LettaModel[];
+    "get-run-status": { id: string; agentId?: string; conversationId?: string; status?: "created" | "running" | "completed" | "failed" | "cancelled"; stopReason?: string | null; completedAt?: string | null; createdAt?: string };
     "update-letta-env": { success: boolean };
     "is-admin": boolean;
     "get-channel-bridges-config": ChannelBridgeConfig;
@@ -282,6 +283,9 @@ interface Window {
         listLettaAgents: () => Promise<LettaAgent[]>;
         listLettaModels: () => Promise<LettaModel[]>;
         getLettaAgent: (agentId: string) => Promise<LettaAgent | null>;
+        recoverPendingApprovals: (sessionId: string, agentId?: string) => Promise<Array<{ runId: string; conversationId?: string; toolUseId: string; toolName: string; input: unknown; requestedAt?: number }>>;
+        cancelStuckRun: (runId: string) => Promise<{ success: boolean; runId: string }>;
+        getRunStatus: (runId: string) => Promise<{ id: string; agentId?: string; conversationId?: string; status?: "created" | "running" | "completed" | "failed" | "cancelled"; stopReason?: string | null; completedAt?: string | null; createdAt?: string }>;
         listAgentMemoryFiles: () => Promise<Array<{ path: string; description?: string; preview: string; category: "system" | "reference" | "other" }>>;
         updateLettaEnv: (values: LettaEnvConfig) => Promise<{ success: boolean }>;
         isAdmin: () => Promise<boolean>;

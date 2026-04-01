@@ -48,6 +48,9 @@ interface Window {
     listLettaAgents: () => Promise<any>;
     listLettaModels: () => Promise<any>;
     getLettaAgent: (agentId: string) => Promise<any>;
+    recoverPendingApprovals: (sessionId: string, agentId?: string) => Promise<any[]>;
+    cancelStuckRun: (runId: string) => Promise<any>;
+    getRunStatus: (runId: string) => Promise<any>;
     listAgentMemoryFiles: () => Promise<any>;
     updateLettaEnv: (values: any) => Promise<any>;
     isAdmin: () => Promise<boolean>;

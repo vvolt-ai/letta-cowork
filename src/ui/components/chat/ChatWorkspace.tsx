@@ -1,5 +1,6 @@
-import { memo } from "react";
+import { memo, useMemo, useState } from "react";
 import type { ClientEvent } from "../../types";
+import { useAppStore } from "../../store/useAppStore";
 import type { AgentDisplayStatus, ReasoningStep, ToolExecution } from "../../store/useAppStore";
 import type { IndexedMessage } from "../../hooks/useMessageWindow";
 import { PromptInput } from "../PromptInput";
@@ -16,6 +17,7 @@ interface ChatWorkspaceProps {
   agentStatus: AgentDisplayStatus;
   partialMessage: string;
   showPartialMessage: boolean;
+  partialReasoning: string;
   isHistoryLoading: boolean;
   hasMoreHistory: boolean;
   reasoningSteps: ReasoningStep[];
@@ -42,6 +44,7 @@ export const ChatWorkspace = memo(function ChatWorkspace({
   agentStatus,
   partialMessage,
   showPartialMessage,
+  partialReasoning,
   isHistoryLoading,
   hasMoreHistory,
   reasoningSteps,
@@ -59,6 +62,17 @@ export const ChatWorkspace = memo(function ChatWorkspace({
 }: ChatWorkspaceProps) {
   const resolvedTitle = title || "Untitled conversation";
   const resolvedAgentName = agentName || "Vera";
+  const activeSession = useAppStore((state) => (activeSessionId ? state.sessions[activeSessionId] : undefined));
+  const showReasoningInChat = useAppStore((state) => state.showReasoningInChat);
+  const errorMessage = activeSession?.ephemeral?.errorMessage;
+  const setGlobalError = useAppStore((state) => state.setGlobalError);
+  const [isCancellingRecoveredRun, setIsCancellingRecoveredRun] = useState(false);
+
+  const recoveredRequests = useMemo(
+    () => (activeSession?.permissionRequests ?? []).filter((request) => request.source === "recovered"),
+    [activeSession?.permissionRequests]
+  );
+  const recoveredRunId = recoveredRequests[0]?.runId;
 
   const statusCopy = {
     idle: "Ready for your next prompt",
@@ -93,6 +107,30 @@ export const ChatWorkspace = memo(function ChatWorkspace({
                 <div className="mt-1 font-medium text-ink-800">{statusCopy}</div>
               </div>
               <div className="flex items-center gap-2">
+                {recoveredRunId ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!recoveredRunId || isCancellingRecoveredRun) return;
+                      setIsCancellingRecoveredRun(true);
+                      void window.electron.cancelStuckRun(recoveredRunId)
+                        .then(() => {
+                          setGlobalError("Recovered stuck run cancelled. You can now retry the conversation.");
+                        })
+                        .catch((error) => {
+                          console.error("Failed to cancel recovered stuck run", error);
+                          setGlobalError(`Failed to cancel stuck run: ${String(error)}`);
+                        })
+                        .finally(() => {
+                          setIsCancellingRecoveredRun(false);
+                        });
+                    }}
+                    className="rounded-full border border-orange-300 bg-orange-50 px-3 py-1.5 text-[11px] font-medium text-orange-700 transition hover:border-orange-400 hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-70"
+                    disabled={isCancellingRecoveredRun}
+                  >
+                    {isCancellingRecoveredRun ? "Cancelling stuck run…" : "Cancel stuck run"}
+                  </button>
+                ) : null}
                 {onOpenMemory ? (
                   <button
                     type="button"
@@ -114,6 +152,30 @@ export const ChatWorkspace = memo(function ChatWorkspace({
               </div>
             </div>
           </div>
+          {agentStatus === "error" && errorMessage ? (
+            <div className="mb-4 rounded-2xl border border-[var(--color-status-error)]/30 bg-[var(--color-status-error)]/5 px-4 py-3 text-sm text-[var(--color-status-error)]">
+              <div className="flex items-start gap-2">
+                <svg viewBox="0 0 24 24" className="mt-0.5 h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 8v4M12 16h.01" />
+                </svg>
+                <div>
+                  <div className="font-medium">Agent error</div>
+                  <div className="mt-0.5 text-xs leading-5 opacity-90">{errorMessage}</div>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {recoveredRequests.length > 0 ? (
+            <div className="mb-4 rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+              <div className="font-medium">Recovered pending approval detected</div>
+              <div className="mt-1 text-xs text-orange-700">
+                This conversation has a Letta run that appears to still be waiting for approval after reconnect. You can inspect it in the activity panel or cancel the stuck run.
+              </div>
+            </div>
+          ) : null}
+
           {activeSessionId && (hasMoreHistory || (isHistoryLoading && visibleMessages.length > 0)) ? (
             <div className="mb-4 flex justify-center">
               <button
@@ -146,15 +208,18 @@ export const ChatWorkspace = memo(function ChatWorkspace({
               agentName={resolvedAgentName}
               partialMessage={partialMessage}
               showPartialMessage={showPartialMessage}
+              partialReasoning={partialReasoning}
               reasoningSteps={reasoningSteps}
               toolExecutions={toolExecutions}
+              showReasoning={showReasoningInChat}
+              errorMessage={agentStatus === "error" ? errorMessage : undefined}
             />
           )}
           <div ref={messagesEndRef} />
         </div>
       </div>
 
-      <div className="border-t border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-4">
+      <div className="border-t border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-2">
         <PromptInput
           sendEvent={sendEvent}
           onSendMessage={onSendMessage}

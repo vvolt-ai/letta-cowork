@@ -26,6 +26,11 @@ interface EmailInboxModalProps {
 }
 
 const SCROLL_THRESHOLD = 50;
+const DEFAULT_LIST_WIDTH = 420;
+const MIN_LIST_WIDTH = 320;
+const MAX_LIST_WIDTH = 620;
+
+const clampListWidth = (value: number) => Math.min(MAX_LIST_WIDTH, Math.max(MIN_LIST_WIDTH, value));
 
 const isUnreadEmail = (email: ZohoEmail) => {
   const status = String(email.status ?? "").toLowerCase();
@@ -90,6 +95,8 @@ export function EmailInboxModal({
   const [isFetchingLocalContent, setIsFetchingLocalContent] = useState(false);
   const [processedEmailIds, setProcessedEmailIds] = useState<Set<string>>(new Set());
   const [viewingConversationId, setViewingConversationId] = useState<string | null>(null);
+  const [listWidth, setListWidth] = useState(DEFAULT_LIST_WIDTH);
+  const [isResizingList, setIsResizingList] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   
   // Get session data from store to find email conversations
@@ -212,6 +219,31 @@ export function EmailInboxModal({
     }
   }, [onSearch, searchQuery]);
 
+  const handleResizeStart = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsResizingList(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isResizingList) return;
+
+    const handleMouseMove = (event: MouseEvent) => {
+      setListWidth(clampListWidth(event.clientX));
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingList(false);
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isResizingList]);
+
   // Clear local state when modal closes
   useEffect(() => {
     if (!open) {
@@ -231,7 +263,7 @@ export function EmailInboxModal({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-ink-900/40 backdrop-blur-sm" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 h-[85vh] w-[95vw] max-w-6xl -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-ink-900/10 bg-surface shadow-xl overflow-hidden flex flex-col">
+        <Dialog.Content className="fixed inset-1 z-50 h-[calc(100vh-8px)] w-[calc(100vw-8px)] rounded-lg border border-ink-900/10 bg-surface shadow-xl overflow-hidden flex flex-col">
           {/* Header */}
           <div className="flex items-center justify-between gap-3 border-b border-ink-900/10 px-4 py-3">
             <div className="flex items-center gap-3">
@@ -297,9 +329,9 @@ export function EmailInboxModal({
           )}
 
           {/* Main Content - Split Layout */}
-          <div className="flex flex-1 min-h-0">
+          <div className={`flex flex-1 min-h-0 ${isResizingList ? "select-none cursor-col-resize" : ""}`}>
             {/* Left Side - Email List */}
-            <div className="w-[380px] border-r border-ink-900/10 flex flex-col">
+            <div style={{ width: `${listWidth}px` }} className="shrink-0 border-r border-ink-900/10 flex flex-col">
               <div className="px-3 py-2 border-b border-ink-900/10 text-xs text-muted">
                 {emails.length} email{emails.length !== 1 ? 's' : ''}
                 {selectedEmail && ` • ${selectedEmail.subject?.slice(0, 30)}...`}
@@ -383,20 +415,31 @@ export function EmailInboxModal({
               </div>
             </div>
 
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize email list"
+              onMouseDown={handleResizeStart}
+              className={`group relative w-1 shrink-0 bg-transparent ${isResizingList ? "cursor-col-resize" : "cursor-col-resize hover:bg-accent/10"}`}
+            >
+              <div className={`absolute inset-y-0 left-1/2 w-[3px] -translate-x-1/2 rounded-full transition ${isResizingList ? "bg-accent/60" : "bg-transparent group-hover:bg-accent/40"}`} />
+            </div>
+
             {/* Right Side - Email Preview or Conversation Viewer */}
-            <div className="flex-1 flex flex-col bg-white">
+            <div className="flex-1 flex flex-col bg-white min-w-0">
               {viewingConversationId ? (
                 <ConversationViewer
                   sessionId={viewingConversationId}
                   onBack={handleBackFromConversation}
                   showBackButton={true}
                   showOpenInLetta={true}
+                  fullWidthComposer={true}
                 />
               ) : selectedEmail ? (
                 /* Email Preview */
                 <>
                   {/* Email Header */}
-                  <div className="px-4 py-3 border-b border-ink-900/10">
+                  <div className="px-3 py-2 border-b border-ink-900/10">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <h2 className="text-base font-semibold text-ink-900 truncate">
@@ -478,7 +521,7 @@ export function EmailInboxModal({
                   </div>
 
                   {/* Email Content */}
-                  <div className="flex-1 overflow-auto p-4">
+                  <div className="flex-1 overflow-auto p-3">
                     {isFetchingLocalContent ? (
                       <div className="flex items-center justify-center py-12 text-sm text-muted">
                         Loading email content…

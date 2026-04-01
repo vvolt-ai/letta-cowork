@@ -112,13 +112,13 @@ try {
 }
 import { getPreloadPath, getUIPath, getIconPath } from "./pathResolver.js";
 import { getStaticData, pollResources, stopPolling } from "./test.js";
-import { handleClientEvent, cleanupAllSessions } from "./ipc-handlers.js";
+import { handleClientEvent, cleanupAllSessions, recoverPendingApprovalsForSession, cancelRecoveredRun } from "./ipc-handlers.js";
 import { getCurrentAgentId } from "./libs/runner.js";
 import type { ClientEvent } from "./types.js";
 import { checkAlreadyConnected, connectEmail, disconnectEmail, fetchEmailById, fetchEmailDetails, fetchEmails, fetchFolders, downloadEmailAttachment, fetchAccounts, updateMessages, searchEmails, uploadEmailAttachmentToAgent } from "./emails/fetchEmails.js";
 import { expressServer } from "./emails/express.js";
 import { downloadSkillsFromGitHub, GLOBAL_SKILLS_DIR2 } from "./skillDownloader.js";
-import { getLettaAgent, listLettaAgents, listLettaModels } from "./lettaAgents.js";
+import { getLettaAgent, listLettaAgents, listLettaModels, retrieveAgentRunById } from "./lettaAgents.js";
 import {
     getBridgesConfig,
     getWhatsAppBridgeStatus,
@@ -324,6 +324,18 @@ app.on("ready", () => {
             console.error("Failed to get agent:", error);
             throw error;
         }
+    });
+
+    ipcMain.handle("recover-pending-approvals", async (_, sessionId: string, agentId?: string) => {
+        return await recoverPendingApprovalsForSession(sessionId, agentId);
+    });
+
+    ipcMain.handle("cancel-stuck-run", async (_, runId: string) => {
+        return await cancelRecoveredRun(runId);
+    });
+
+    ipcMain.handle("get-run-status", async (_, runId: string) => {
+        return await retrieveAgentRunById(runId);
     });
 
     ipcMain.handle("list-agent-memory-files", async () => {

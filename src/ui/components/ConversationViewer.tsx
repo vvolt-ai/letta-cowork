@@ -10,6 +10,7 @@ interface ConversationViewerProps {
   onBack?: () => void;
   showBackButton?: boolean;
   showOpenInLetta?: boolean;
+  fullWidthComposer?: boolean;
 }
 
 export const ConversationViewer = memo(function ConversationViewer({
@@ -17,6 +18,7 @@ export const ConversationViewer = memo(function ConversationViewer({
   onBack,
   showBackButton = false,
   showOpenInLetta = true,
+  fullWidthComposer = false,
 }: ConversationViewerProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -88,7 +90,7 @@ export const ConversationViewer = memo(function ConversationViewer({
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-ink-900/10">
+      <div className="flex items-center gap-3 px-3 py-2 border-b border-ink-900/10">
         {showBackButton && onBack && (
           <button
             onClick={onBack}
@@ -151,11 +153,12 @@ export const ConversationViewer = memo(function ConversationViewer({
       </div>
       
       {/* Input */}
-      <div className="border-t border-ink-900/10 p-4">
+      <div className="border-t border-ink-900/10 px-2 py-2">
         <PromptInput
           onSendMessage={handleSendMessage}
           disabled={isProcessing}
           sendEvent={sendEvent!}
+          fullWidth={fullWidthComposer}
         />
       </div>
     </div>

@@ -20,6 +20,25 @@ export interface LettaModel {
   model_type?: string;
 }
 
+export interface ApprovalCandidate {
+  runId: string;
+  conversationId?: string;
+  toolUseId: string;
+  toolName: string;
+  input: unknown;
+  requestedAt?: number;
+}
+
+export interface LettaRunStatus {
+  id: string;
+  agentId?: string;
+  conversationId?: string;
+  status?: "created" | "running" | "completed" | "failed" | "cancelled";
+  stopReason?: string | null;
+  completedAt?: string | null;
+  createdAt?: string;
+}
+
 function createLettaClient(): Letta {
   const baseURL = (process.env.LETTA_BASE_URL || "https://api.letta.com").trim();
   const apiKey = (process.env.LETTA_API_KEY || "").trim();
@@ -114,4 +133,102 @@ export async function listLettaModels(): Promise<LettaModel[]> {
     console.error("Failed to list models:", error);
     throw new Error("Failed to fetch models from Letta");
   }
+}
+
+function normalizeApprovalCandidatesFromRun(run: any): ApprovalCandidate[] {
+  const runId = typeof run?.id === "string" ? run.id : undefined;
+  if (!runId) return [];
+
+  const conversationId = typeof run?.conversation_id === "string"
+    ? run.conversation_id
+    : typeof run?.conversationId === "string"
+      ? run.conversationId
+      : undefined;
+
+  const requestedAtRaw = run?.created_at ?? run?.createdAt ?? run?.updated_at ?? run?.updatedAt;
+  const requestedAt = typeof requestedAtRaw === "number"
+    ? requestedAtRaw
+    : typeof requestedAtRaw === "string"
+      ? Date.parse(requestedAtRaw)
+      : undefined;
+
+  const pending = Array.isArray(run?.pending_approvals)
+    ? run.pending_approvals
+    : Array.isArray(run?.pendingApprovals)
+      ? run.pendingApprovals
+      : [];
+
+  const directCandidates = pending.flatMap((item: any, index: number) => {
+    const toolUseId = item?.tool_use_id ?? item?.toolUseId ?? item?.id ?? `${runId}-approval-${index}`;
+    const toolName = item?.tool_name ?? item?.toolName ?? item?.name ?? "Approval required";
+    const input = item?.input ?? item?.arguments ?? item?.tool_input ?? item?.question ?? item;
+    return [{
+      runId,
+      conversationId,
+      toolUseId,
+      toolName,
+      input,
+      requestedAt,
+    } satisfies ApprovalCandidate];
+  });
+
+  if (directCandidates.length > 0) {
+    return directCandidates;
+  }
+
+  const status = String(run?.status ?? "").toLowerCase();
+  if (status !== "requires_approval") {
+    return [];
+  }
+
+  return [{
+    runId,
+    conversationId,
+    toolUseId: `${runId}-approval`,
+    toolName: "Approval required",
+    input: run?.blocking_reason ?? run?.message ?? run?.detail ?? run,
+    requestedAt,
+  }];
+}
+
+export async function getAgentRunApprovalCandidates(agentId: string, conversationId?: string): Promise<ApprovalCandidate[]> {
+  const client = createLettaClient();
+
+  try {
+    const response = await (client as any).agents.runs.list(agentId);
+    const items = Array.isArray(response?.items) ? response.items : Array.isArray(response) ? response : [];
+    const runs = items.filter((run: any) => {
+      const status = String(run?.status ?? "").toLowerCase();
+      const runConversationId = run?.conversation_id ?? run?.conversationId;
+      const statusMatch = status === "requires_approval" || status === "running";
+      const conversationMatch = conversationId ? runConversationId === conversationId : true;
+      return statusMatch && conversationMatch;
+    });
+
+    return runs.flatMap((run: any) => normalizeApprovalCandidatesFromRun(run));
+  } catch (error) {
+    console.error("Failed to list agent runs for approval recovery:", error);
+    return [];
+  }
+}
+
+export async function retrieveAgentRunById(runId: string): Promise<LettaRunStatus> {
+  const client = createLettaClient();
+  const run = await client.runs.retrieve(runId);
+
+  return {
+    id: run.id,
+    agentId: run.agent_id,
+    conversationId: run.conversation_id ?? undefined,
+    status: run.status,
+    stopReason: run.stop_reason ?? null,
+    completedAt: run.completed_at ?? null,
+    createdAt: run.created_at,
+  } satisfies LettaRunStatus;
+}
+
+export async function cancelAgentRunById(runId: string): Promise<{ success: boolean; runId: string }> {
+  const client = createLettaClient();
+  await (client as any).runs.cancel(runId);
+  return { success: true, runId };
 }

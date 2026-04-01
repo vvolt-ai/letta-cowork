@@ -299,6 +299,7 @@ function App() {
     hasMoreHistory,
     partialMessage,
     showPartialMessage,
+    partialReasoning,
     handlePartialMessages,
     loadMoreHistory,
   } = useMessageWindow(
@@ -612,6 +613,7 @@ function App() {
             agentStatus={agentStatus}
             partialMessage={partialMessage}
             showPartialMessage={showPartialMessage}
+            partialReasoning={partialReasoning}
             isHistoryLoading={Boolean(activeSession?.isLoadingHistory)}
             hasMoreHistory={hasMoreHistory || Boolean(activeSession?.totalDisplayableCount && activeSession.totalDisplayableCount > visibleMessages.length)}
             reasoningSteps={reasoningSteps}

@@ -1,5 +1,6 @@
 import { memo } from "react";
 import type { SDKAssistantMessage, MessageContentItem } from "@letta-ai/letta-code-sdk";
+import MDContent from "../../render/markdown";
 
 function extractText(content: SDKAssistantMessage["content"]): string {
   if (!content) return "";
@@ -29,8 +30,8 @@ export const AssistantMessage = memo(function AssistantMessage({ message, fallba
   }
 
   return (
-    <article className="max-w-2xl rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm text-ink-800 shadow-sm">
-      <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-muted">
+    <article className="max-w-3xl rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-4 text-sm text-ink-800 shadow-sm">
+      <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-muted">
         <span>{agentName}</span>
         {isStreaming ? (
           <span className="relative inline-flex h-2 w-2">
@@ -40,7 +41,9 @@ export const AssistantMessage = memo(function AssistantMessage({ message, fallba
         ) : null}
       </div>
       {textContent ? (
-        <div className="whitespace-pre-wrap text-[15px] leading-8 text-ink-800">{textContent}</div>
+        <div className="text-[15px] leading-7 text-ink-800 [&_p:first-child]:mt-0 [&_pre]:bg-[var(--color-surface-secondary)] [&_pre]:text-ink-800 [&_code]:text-[13px] [&_ul]:pl-2 [&_ol]:pl-2">
+          <MDContent text={textContent} />
+        </div>
       ) : (
         <div className="text-muted">…</div>
       )}

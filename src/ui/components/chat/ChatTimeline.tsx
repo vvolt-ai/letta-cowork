@@ -14,8 +14,11 @@ interface ChatTimelineProps {
   agentName: string;
   partialMessage: string;
   showPartialMessage: boolean;
+  partialReasoning?: string;
   reasoningSteps?: ReasoningStep[];
   toolExecutions?: ToolExecution[];
+  showReasoning?: boolean;
+  errorMessage?: string;
 }
 
 export type TimelineEntry =
@@ -117,7 +120,7 @@ function collectLogEntries(source: unknown, label?: string): string[] {
 function isGenericToolName(name: string | undefined | null): boolean {
   if (!name) return true;
   const normalized = name.trim().toLowerCase();
-  return normalized.length === 0 || normalized === "tool";
+  return normalized.length === 0 || normalized === "tool" || normalized === "?";
 }
 
 function resolveToolName(rawName: unknown, fallback?: string): string {
@@ -161,21 +164,39 @@ function mergeToolEntryLogs(existing?: string[], incoming?: string[]): string[] 
 function mergeToolEntryOutput(existing?: string | null, incoming?: string | null): string | undefined {
   const nextIncoming = incoming?.trim();
   const nextExisting = existing?.trim();
+
   if (!nextIncoming) return nextExisting || undefined;
   if (!nextExisting) return nextIncoming;
-  return nextExisting.includes(nextIncoming) ? nextExisting : `${nextExisting}\n${nextIncoming}`;
+
+  if (nextExisting === nextIncoming) return nextExisting;
+  if (nextExisting.includes(nextIncoming)) return nextExisting;
+  if (nextIncoming.includes(nextExisting)) return nextIncoming;
+
+  return `${nextExisting}\n${nextIncoming}`;
 }
 
 function toolExecutionToTimelineEntry(tool: ToolExecution): ToolTimelineEntry {
+  const resolvedName = resolveToolName(tool.name, "Tool");
+  const derivedOutput = formatToolText(tool.output) ?? (tool.updates.length > 0 ? tool.updates.join("\n") : undefined);
   return {
     kind: "tool",
     id: tool.id,
-    name: resolveToolName(tool.name, "Tool"),
+    name: resolvedName,
     input: formatToolText(tool.input) ?? (typeof tool.input === "string" ? tool.input : undefined),
-    output: formatToolText(tool.output),
+    output: derivedOutput,
     logs: tool.updates.length > 0 ? tool.updates : undefined,
     status: tool.status === "failed" ? "failed" : tool.status === "running" ? "running" : "succeeded",
   };
+}
+
+function buildToolGroupKey(rawMessage: Record<string, unknown>, fallbackId: string): string {
+  const toolCallId = typeof rawMessage.toolCallId === "string" ? rawMessage.toolCallId.trim() : "";
+  if (toolCallId.length > 0) return toolCallId;
+
+  const toolUseId = typeof rawMessage.toolUseId === "string" ? rawMessage.toolUseId.trim() : "";
+  if (toolUseId.length > 0) return toolUseId;
+
+  return fallbackId;
 }
 
 export function ChatTimeline({
@@ -184,66 +205,39 @@ export function ChatTimeline({
   agentName,
   partialMessage,
   showPartialMessage,
+  partialReasoning = "",
   reasoningSteps = [],
   toolExecutions = [],
+  showReasoning = false,
+  errorMessage,
 }: ChatTimelineProps) {
   const timeline = useMemo(() => {
     const entries: Array<TimelineEntry | null> = [];
     const reasoningIndex = new Map<string, number>();
-    let latestToolIndex: number | null = null;
-    let latestToolId: string | null = null;
-
-    const removeToolEntry = () => {
-      if (latestToolIndex !== null) {
-        entries[latestToolIndex] = null;
-      }
-      latestToolIndex = null;
-      latestToolId = null;
-    };
-
-    const pushToolEntry = (entry: ToolTimelineEntry) => {
-      removeToolEntry();
-      latestToolIndex = entries.length;
-      latestToolId = entry.id;
-      entries.push(entry);
-    };
+    const toolIndexById = new Map<string, number>();
 
     const upsertToolEntry = (entry: ToolTimelineEntry) => {
-      if (latestToolIndex !== null && latestToolId === entry.id) {
-        const existing = entries[latestToolIndex];
+      const existingIndex = toolIndexById.get(entry.id);
+      if (existingIndex !== undefined) {
+        const existing = entries[existingIndex];
         if (existing && existing.kind === "tool") {
-          const toolEntry = existing as Extract<TimelineEntry, { kind: "tool" }>;
-          const existingOutput = toolEntry.output ?? "";
-          const incomingOutput = entry.output ?? "";
-          const mergedOutput = incomingOutput
-            ? existingOutput
-              ? existingOutput.includes(incomingOutput)
-                ? existingOutput
-                : `${existingOutput}
-${incomingOutput}`
-              : incomingOutput
-            : existingOutput || undefined;
-
-          const existingLogs = toolEntry.logs ?? [];
-          const incomingLogs = entry.logs ?? [];
-          const mergedLogs = incomingLogs.length > 0
-            ? Array.from(new Set([...existingLogs, ...incomingLogs]))
-            : existingLogs;
-
-          entries[latestToolIndex] = {
-            ...toolEntry,
+          const mergedOutput = mergeToolEntryOutput(existing.output, entry.output);
+          const mergedLogs = mergeToolEntryLogs(existing.logs, entry.logs);
+          entries[existingIndex] = {
+            ...existing,
             ...entry,
-            name: isGenericToolName(entry.name) ? toolEntry.name : entry.name,
-            input: toolEntry.input ?? entry.input,
-            logs: mergedLogs.length > 0 ? mergedLogs : undefined,
+            name: isGenericToolName(entry.name) ? existing.name : entry.name,
+            input: entry.input ?? existing.input,
             output: mergedOutput,
-            status: entry.status,
+            logs: mergedLogs,
           };
-          latestToolId = entry.id;
           return;
         }
       }
-      pushToolEntry(entry);
+
+      const nextIndex = entries.length;
+      entries.push(entry);
+      toolIndexById.set(entry.id, nextIndex);
     };
 
     messages.forEach((item) => {
@@ -256,11 +250,13 @@ ${incomingOutput}`
           break;
         }
         case "assistant": {
-          removeToolEntry();
           entries.push({ kind: "assistant", id: baseId, message: message as SDKAssistantMessage });
           break;
         }
         case "reasoning": {
+          if (!showReasoning) {
+            break;
+          }
           const reasoningId = baseId;
           const steps = normalizeReasoning((message as any).content ?? (message as any).text ?? "");
           if (steps.length === 0) {
@@ -277,12 +273,16 @@ ${incomingOutput}`
         }
         case "tool_call": {
           const rawMessage = message as any;
-          const toolId = rawMessage.toolCallId ?? baseId;
-          const name = resolveToolName(rawMessage.toolName ?? rawMessage.name ?? rawMessage.displayName, "Tool");
+          const toolId = buildToolGroupKey(rawMessage, rawMessage.toolCallId ?? baseId);
+          const rawName = rawMessage.toolName ?? rawMessage.name ?? rawMessage.displayName;
+          const name = resolveToolName(rawName, "Tool");
           if (name === "tool_return_message" || name === "approval_response_message" || name === "approval_request_message") {
             break;
           }
           const rawInput = rawMessage.rawArguments ?? rawMessage.toolInput ?? rawMessage.input ?? rawMessage.arguments ?? rawMessage.params ?? undefined;
+           if (isGenericToolName(typeof rawName === "string" ? rawName : undefined) && !formatToolText(rawInput)) {
+            break;
+          }
           const formattedInput = formatToolText(rawInput);
           const truncatedInput = typeof rawInput === "string" ? truncateInput(rawInput) : undefined;
           const displayInput = formattedInput ?? (truncatedInput && isMeaningfulToolString(truncatedInput) ? truncatedInput : undefined);
@@ -293,12 +293,12 @@ ${incomingOutput}`
             input: displayInput,
             status: "running",
           };
-          pushToolEntry(entry);
+          upsertToolEntry(entry);
           break;
         }
         case "tool_result": {
           const rawMessage = message as SDKToolResultMessage & { [key: string]: unknown };
-          const toolId = (rawMessage as any).toolCallId ?? baseId;
+          const toolId = buildToolGroupKey(rawMessage as Record<string, unknown>, (rawMessage as any).toolCallId ?? baseId);
           const name = resolveToolName(
             (rawMessage as any).toolName ?? (rawMessage as any).name ?? (rawMessage as any).displayName,
             "Tool"
@@ -324,7 +324,6 @@ ${incomingOutput}`
           break;
         }
         case "result": {
-          removeToolEntry();
           break;
         }
         default: {
@@ -333,10 +332,14 @@ ${incomingOutput}`
       }
     });
 
-    if (reasoningSteps.length > 0) {
-      const combinedReasoning = reasoningSteps
-        .map((step) => step.content)
-        .filter((content) => typeof content === "string" && content.trim().length > 0)
+    if (showReasoning) {
+      const combinedReasoning = [
+        ...reasoningSteps
+          .map((step) => step.content)
+          .filter((content) => typeof content === "string" && content.trim().length > 0),
+        partialReasoning.trim(),
+      ]
+        .filter((content) => content.length > 0)
         .join("\n");
       const normalizedSteps = normalizeReasoning(combinedReasoning);
       if (normalizedSteps.length > 0) {
@@ -348,13 +351,13 @@ ${incomingOutput}`
       }
     }
 
-    const latestToolExecution = toolExecutions[toolExecutions.length - 1];
-    if (latestToolExecution) {
-      const ephemeralToolEntry = toolExecutionToTimelineEntry(latestToolExecution);
-      if (latestToolIndex !== null && latestToolId === ephemeralToolEntry.id) {
-        const existing = entries[latestToolIndex];
+    toolExecutions.forEach((toolExecution) => {
+      const ephemeralToolEntry = toolExecutionToTimelineEntry(toolExecution);
+      const existingIndex = entries.findIndex((entry) => entry?.kind === "tool" && entry.id === ephemeralToolEntry.id);
+      if (existingIndex >= 0) {
+        const existing = entries[existingIndex];
         if (existing && existing.kind === "tool") {
-          entries[latestToolIndex] = {
+          entries[existingIndex] = {
             ...existing,
             ...ephemeralToolEntry,
             name: isGenericToolName(ephemeralToolEntry.name) ? existing.name : ephemeralToolEntry.name,
@@ -364,12 +367,12 @@ ${incomingOutput}`
           };
         }
       } else {
-        pushToolEntry(ephemeralToolEntry);
+        entries.push(ephemeralToolEntry);
       }
-    }
+    });
 
     return entries.filter((entry): entry is TimelineEntry => entry !== null);
-  }, [messages, activeSessionId, reasoningSteps, toolExecutions]);
+  }, [messages, activeSessionId, partialReasoning, reasoningSteps, showReasoning, toolExecutions]);
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
@@ -418,6 +421,19 @@ ${incomingOutput}`
           agentName={agentName}
           isStreaming
         />
+      ) : null}
+
+      {errorMessage ? (
+        <div className="flex items-start gap-3 rounded-2xl border border-[var(--color-status-error)]/25 bg-[var(--color-status-error)]/5 px-4 py-3 text-sm">
+          <svg viewBox="0 0 24 24" className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-status-error)]" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 8v4M12 16h.01" />
+          </svg>
+          <div>
+            <div className="font-medium text-[var(--color-status-error)]">Agent error</div>
+            <div className="mt-0.5 text-xs leading-5 text-[var(--color-status-error)]/80">{errorMessage}</div>
+          </div>
+        </div>
       ) : null}
     </div>
   );

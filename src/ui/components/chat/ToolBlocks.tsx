@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 
 interface ToolExecutionBlockProps {
   name: string;
@@ -8,125 +8,134 @@ interface ToolExecutionBlockProps {
   logs?: string[];
 }
 
-const statusCopy: Record<ToolExecutionBlockProps["status"], { label: string; helper: string }> = {
-  running: { label: "Running tool", helper: "Showing live tool input and output as it arrives" },
-  succeeded: { label: "Tool completed", helper: "Showing the captured tool input and output" },
-  failed: { label: "Tool failed", helper: "Showing the captured tool input and error output" },
-};
+function summarizeToolInput(name: string, input?: string | null): string | null {
+  if (!input?.trim()) return null;
+  const trimmed = input.trim();
+
+  if (name === "Edit") {
+    const fileMatch = trimmed.match(/([A-Za-z0-9_./-]+\.[A-Za-z0-9]+)/);
+    return fileMatch ? `Updated (${fileMatch[1]})` : "Updated file contents";
+  }
+
+  if (name === "Read") {
+    const fileMatch = trimmed.match(/([A-Za-z0-9_./-]+\.[A-Za-z0-9]+)/);
+    return fileMatch ? `Read (${fileMatch[1]})` : "Read file contents";
+  }
+
+  if (name === "Write") {
+    const fileMatch = trimmed.match(/([A-Za-z0-9_./-]+\.[A-Za-z0-9]+)/);
+    return fileMatch ? `Wrote (${fileMatch[1]})` : "Wrote file contents";
+  }
+
+  return trimmed.length > 140 ? `${trimmed.slice(0, 137)}…` : trimmed;
+}
 
 export const ToolExecutionBlock = memo(function ToolExecutionBlock({ name, status, input, output, logs = [] }: ToolExecutionBlockProps) {
-  const copy = statusCopy[status];
   const isRunning = status === "running";
   const isError = status === "failed";
+  const [expanded, setExpanded] = useState(isRunning);
   const outputRef = useRef<HTMLPreElement | null>(null);
-  const logsRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!isRunning) return;
+    if (isRunning) {
+      setExpanded(true);
+    }
+  }, [isRunning]);
+
+  useEffect(() => {
+    if (!isRunning || !expanded) return;
     if (outputRef.current) {
       outputRef.current.scrollTop = outputRef.current.scrollHeight;
     }
-    if (logsRef.current) {
-      logsRef.current.scrollTop = logsRef.current.scrollHeight;
-    }
-  }, [isRunning, output, logs]);
+  }, [expanded, isRunning, output, logs]);
 
-  const liveSummary = useMemo(() => {
-    if (isError) return "Needs attention";
-    if (isRunning) return logs.length > 0 || output ? "Live output updating" : "Starting up";
-    return "Finished";
-  }, [isError, isRunning, logs.length, output]);
+  const headerLabel = useMemo(() => {
+    if (isRunning) return `Tool running ${name}`;
+    if (isError) return `Tool failed ${name}`;
+    return `Tool returned ${name}`;
+  }, [isError, isRunning, name]);
+
+  const approvalLabel = useMemo(() => {
+    if (isRunning) return "Approved request to run tool";
+    if (isError) return "Tool execution failed";
+    return "Approved request to run tool";
+  }, [isError, isRunning]);
+
+  const safeInput = useMemo(() => {
+    const trimmed = input?.trim();
+    if (!trimmed || trimmed === "}" || trimmed === "\"}" || trimmed === "{}") return null;
+    return trimmed;
+  }, [input]);
+
+  const summary = useMemo(() => summarizeToolInput(name, safeInput), [name, safeInput]);
+  const transcript = useMemo(() => {
+    if (output?.trim()) return output;
+    if (logs.length > 0) return logs.join("\n");
+    return isRunning ? null : "No output captured.";
+  }, [isRunning, logs, output]);
+
+  const statusToneClass = isError ? "text-red-700" : isRunning ? "text-blue-700" : "text-green-700";
+  const outputContainerClass = isError
+    ? "mt-3 overflow-hidden rounded-xl border border-red-200 bg-red-50"
+    : isRunning
+      ? "mt-3 overflow-hidden rounded-xl border border-blue-200 bg-blue-50"
+      : "mt-3 overflow-hidden rounded-xl border border-green-200 bg-green-50";
+  const outputTextClass = isError
+    ? "max-h-72 overflow-auto whitespace-pre-wrap px-4 py-4 font-mono text-[12px] leading-7 text-red-900"
+    : isRunning
+      ? "max-h-72 overflow-auto whitespace-pre-wrap px-4 py-4 font-mono text-[12px] leading-7 text-blue-900"
+      : "max-h-72 overflow-auto whitespace-pre-wrap px-4 py-4 font-mono text-[12px] leading-7 text-green-900";
 
   return (
-    <section
-      className={`max-w-5xl rounded-[24px] border px-5 py-4 text-sm shadow-[0_10px_24px_rgba(15,23,42,0.06)] ${
-        isError
-          ? "border-[var(--color-error)]/35 bg-[var(--color-error-light)]/80"
-          : "border-[var(--color-tool-border)] bg-[var(--color-tool-bg)]/92"
-      }`}
-    >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-muted">
-            {status === "running" ? (
-              <span
-                className="inline-flex h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-[var(--color-accent)] border-t-transparent"
-                aria-hidden
-              />
-            ) : (
-              <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-[var(--color-accent)]/10 text-[var(--color-accent)]">
+    <section className="max-w-4xl rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-sm">
+      <button
+        type="button"
+        onClick={() => setExpanded((value) => !value)}
+        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
+      >
+        <div className="min-w-0">
+          <div className={`text-[15px] font-semibold ${statusToneClass}`}>{headerLabel}</div>
+        </div>
+        <span className="inline-flex h-8 w-8 items-center justify-center rounded-full text-ink-500 transition hover:bg-[var(--color-surface-secondary)]">
+          <svg viewBox="0 0 24 24" className={`h-4 w-4 transition-transform ${expanded ? "rotate-90" : ""}`} fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="m9 6 6 6-6 6" />
+          </svg>
+        </span>
+      </button>
+
+      {expanded ? (
+        <div className="px-5 pb-5">
+          <div className="rounded-2xl border border-[var(--color-border)] bg-white px-4 py-4">
+            <div className="flex items-start gap-3">
+              <span className={`mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-full ${
+                isError ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
+              }`}>
                 {isError ? (
-                  <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2">
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 ) : (
-                  <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2">
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M5 13l4 4L19 7" />
                   </svg>
                 )}
               </span>
-            )}
-            <span>{copy.label}</span>
-          </div>
-          <div className="mt-2 text-lg font-semibold text-ink-900">{name}</div>
-          <div className="mt-1 text-sm text-muted">{copy.helper}</div>
-        </div>
-
-        <div className={`rounded-full px-3 py-1 text-xs font-semibold ${
-          isError
-            ? "bg-[var(--color-error)]/10 text-[var(--color-error)]"
-            : isRunning
-              ? "bg-[var(--color-warning-light)] text-[var(--color-warning)]"
-              : "bg-[var(--color-success-light)] text-[var(--color-success)]"
-        }`}>
-          {liveSummary}
-        </div>
-      </div>
-
-      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-        <div className="space-y-4">
-          {input ? (
-            <div className="rounded-2xl border border-[var(--color-border)] bg-white/80 px-4 py-3 text-xs text-muted shadow-sm">
-              <div className="flex items-center justify-between gap-2">
-                <div className="font-semibold uppercase tracking-[0.22em] text-[10px] text-ink-500">Tool input</div>
-                <div className="text-[10px] text-muted">Captured arguments</div>
-              </div>
-              <pre className="mt-2 overflow-auto whitespace-pre-wrap rounded-xl bg-[var(--color-surface-secondary)] px-3 py-3 font-mono text-[12px] leading-6 text-ink-800">{input}</pre>
-            </div>
-          ) : null}
-
-          {logs.length > 0 ? (
-            <div className="rounded-2xl border border-[var(--color-border)] bg-white/70 px-4 py-3 text-xs text-muted shadow-sm">
-              <div className="flex items-center justify-between gap-2">
-                <div className="font-semibold uppercase tracking-[0.22em] text-[10px] text-ink-500">Progress log</div>
-                <div className="text-[10px] text-muted">{logs.length} update{logs.length === 1 ? "" : "s"}</div>
-              </div>
-              <div ref={logsRef} className="mt-2 max-h-48 overflow-auto space-y-2">
-                {logs.map((log, index) => (
-                  <div key={index} className="rounded-xl bg-[var(--color-surface-secondary)] px-3 py-2 whitespace-pre-wrap font-mono text-[12px] leading-relaxed text-ink-700">
-                    {log}
+              <div className="min-w-0 flex-1">
+                <div className={`text-[14px] font-medium ${statusToneClass}`}>{approvalLabel}</div>
+                {summary ? <div className="mt-1 text-[14px] text-ink-500">{summary}</div> : null}
+                {safeInput ? (
+                  <div className="mt-3 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-secondary)] px-3 py-2 font-mono text-[12px] text-ink-800">
+                    <div className="overflow-auto whitespace-pre-wrap">{safeInput}</div>
                   </div>
-                ))}
+                ) : null}
+                {transcript ? (
+                  <div className={outputContainerClass}>
+                    <pre ref={outputRef} className={outputTextClass}>{transcript}</pre>
+                  </div>
+                ) : null}
               </div>
             </div>
-          ) : null}
-        </div>
-
-        <div>
-          <div className="rounded-2xl border border-[var(--color-border)] bg-[#0f172a] px-4 py-3 text-xs text-slate-100 shadow-sm">
-            <div className="flex items-center justify-between gap-2">
-              <div className="font-semibold uppercase tracking-[0.22em] text-[10px] text-slate-300">Tool output</div>
-              <div className="text-[10px] text-slate-400">Auto-scroll {isRunning ? "on" : "off"}</div>
-            </div>
-            <pre ref={outputRef} className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-xl bg-black/20 px-3 py-3 font-mono text-[12px] leading-6 text-slate-100">{output || (logs.length > 0 ? logs.join("\n") : isRunning ? "Waiting for tool output…" : "No output captured.")}</pre>
           </div>
-        </div>
-      </div>
-
-      {isRunning ? (
-        <div className="mt-4 flex items-center gap-2 text-xs text-muted">
-          <span className="inline-flex h-2 w-2 rounded-full bg-[var(--color-accent)] animate-pulse" />
-          Watching for more tool updates…
         </div>
       ) : null}
     </section>

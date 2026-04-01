@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import type {
   ServerEvent,
   ClientEvent,
@@ -13,6 +14,11 @@ export type PermissionRequest = {
   toolUseId: string;
   toolName: string;
   input: unknown;
+  source?: "live" | "recovered";
+  runId?: string;
+  conversationId?: string;
+  isStuckRun?: boolean;
+  requestedAt?: number;
 };
 
 export type AgentDisplayStatus =
@@ -65,22 +71,40 @@ function formatToolInput(raw: unknown): string | undefined {
 
   if (typeof raw === "string") {
     const trimmed = raw.trim();
-    return trimmed.length > 0 ? trimmed : undefined;
+    if (!trimmed || trimmed === "}" || trimmed === "\"}" || trimmed === "{}") {
+      return undefined;
+    }
+    return trimmed;
   }
 
   if (typeof raw === "object") {
     const record = raw as Record<string, unknown>;
-    const candidateKeys = ["query", "input", "text", "message", "prompt", "raw", "display"];
-    for (const key of candidateKeys) {
+    const preferredKeys = ["command", "file_path", "query", "pattern", "url", "description", "input", "text", "message", "prompt", "raw", "display"];
+    for (const key of preferredKeys) {
       const value = record[key];
       if (typeof value === "string" && value.trim().length > 0) {
         return value.trim();
       }
     }
+
+    try {
+      const serialized = JSON.stringify(raw, null, 2);
+      const trimmed = serialized.trim();
+      if (!trimmed || trimmed === "}" || trimmed === "\"}" || trimmed === "{}") {
+        return undefined;
+      }
+      return trimmed;
+    } catch {
+      // fall through
+    }
   }
 
   const truncated = truncateInput(raw, 160);
-  return truncated.length > 0 ? truncated : undefined;
+  const trimmed = truncated.trim();
+  if (!trimmed || trimmed === "}" || trimmed === "\"}" || trimmed === "{}") {
+    return undefined;
+  }
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 function formatToolOutput(raw: unknown): string | undefined {
@@ -88,27 +112,183 @@ function formatToolOutput(raw: unknown): string | undefined {
 
   if (typeof raw === "string") {
     const trimmed = raw.trim();
-    return trimmed.length > 0 ? trimmed : undefined;
+    if (!trimmed || trimmed === "}" || trimmed === "\"}" || trimmed === "{}") {
+      return undefined;
+    }
+    return trimmed;
   }
 
   try {
     const serialized = JSON.stringify(raw, null, 2);
-    return serialized.trim().length > 0 ? serialized : undefined;
+    const trimmed = serialized.trim();
+    if (!trimmed || trimmed === "}" || trimmed === "\"}" || trimmed === "{}") {
+      return undefined;
+    }
+    return serialized;
   } catch {
     const fallback = String(raw ?? "").trim();
-    return fallback.length > 0 ? fallback : undefined;
+    if (!fallback || fallback === "}" || fallback === "\"}" || fallback === "{}") {
+      return undefined;
+    }
+    return fallback;
   }
 }
 
 function mergeToolOutput(existing?: string, incoming?: string): string | undefined {
-  if (!incoming) return existing;
-  if (!existing) return incoming;
-  return existing.includes(incoming) ? existing : `${existing}\n${incoming}`;
+  const nextExisting = existing?.trim();
+  const nextIncoming = incoming?.trim();
+
+  if (!nextIncoming) return nextExisting;
+  if (!nextExisting) return nextIncoming;
+
+  if (nextExisting === nextIncoming) return nextExisting;
+  if (nextExisting.includes(nextIncoming)) return nextExisting;
+  if (nextIncoming.includes(nextExisting)) return nextIncoming;
+
+  return `${nextExisting}\n${nextIncoming}`;
 }
 
 function mergeToolLogs(existing: string[], incoming: string[]): string[] {
   if (incoming.length === 0) return existing;
   return Array.from(new Set([...existing, ...incoming]));
+}
+
+function extractToolChunk(input: unknown): string | undefined {
+  if (typeof input === "string") return input;
+  if (input && typeof input === "object" && !Array.isArray(input)) {
+    const record = input as Record<string, unknown>;
+    if (Object.keys(record).length === 1 && typeof record.raw === "string") {
+      return record.raw;
+    }
+  }
+  return undefined;
+}
+
+function mergeToolChunk(existing?: string, incoming?: string): string | undefined {
+  if (!incoming) return existing;
+  if (!existing) return incoming;
+  if (existing === incoming) return existing;
+  if (existing.includes(incoming)) return existing;
+  if (incoming.includes(existing)) return incoming;
+  return `${existing}${incoming}`;
+}
+
+function mergeToolInputValue(existing: unknown, incoming: unknown): unknown {
+  if (isPlaceholderToolInput(incoming)) return existing;
+
+  const existingChunk = extractToolChunk(existing);
+  const incomingChunk = extractToolChunk(incoming);
+  if (existingChunk !== undefined || incomingChunk !== undefined) {
+    const merged = mergeToolChunk(existingChunk, incomingChunk);
+    if (merged === undefined) return existing ?? incoming;
+
+    const prefersRawObject =
+      (existing && typeof existing === "object" && !Array.isArray(existing) && Object.keys(existing as Record<string, unknown>).length === 1 && typeof (existing as Record<string, unknown>).raw === "string") ||
+      (incoming && typeof incoming === "object" && !Array.isArray(incoming) && Object.keys(incoming as Record<string, unknown>).length === 1 && typeof (incoming as Record<string, unknown>).raw === "string");
+
+    return prefersRawObject ? { raw: merged } : merged;
+  }
+
+  return incoming ?? existing;
+}
+
+function mergeToolCallMessage(existingMessage: StreamMessage, incomingMessage: StreamMessage): StreamMessage {
+  const existingRaw = existingMessage as any;
+  const incomingRaw = incomingMessage as any;
+  const merged: any = {
+    ...existingRaw,
+    ...incomingRaw,
+  };
+
+  const resolvedName = isPlaceholderToolName(incomingRaw.toolName ?? incomingRaw.name)
+    ? existingRaw.toolName ?? existingRaw.name ?? incomingRaw.toolName ?? incomingRaw.name
+    : incomingRaw.toolName ?? incomingRaw.name;
+
+  if (typeof resolvedName === "string" && resolvedName.trim().length > 0) {
+    merged.toolName = resolvedName;
+    if ("name" in existingRaw || "name" in incomingRaw) {
+      merged.name = resolvedName;
+    }
+  }
+
+  const mergedRawArguments = mergeToolChunk(
+    extractToolChunk(existingRaw.rawArguments),
+    extractToolChunk(incomingRaw.rawArguments),
+  );
+  if (mergedRawArguments !== undefined) {
+    merged.rawArguments = mergedRawArguments;
+  }
+
+  const mergedInput = mergeToolInputValue(
+    existingRaw.toolInput ?? existingRaw.input ?? existingRaw.arguments,
+    incomingRaw.toolInput ?? incomingRaw.input ?? incomingRaw.arguments,
+  );
+  if (mergedInput !== undefined) {
+    if ("toolInput" in existingRaw || "toolInput" in incomingRaw || (!('input' in existingRaw) && !('arguments' in existingRaw) && !('input' in incomingRaw) && !('arguments' in incomingRaw))) {
+      merged.toolInput = mergedInput;
+    }
+    if ("input" in existingRaw || "input" in incomingRaw) {
+      merged.input = mergedInput;
+    }
+    if ("arguments" in existingRaw || "arguments" in incomingRaw) {
+      merged.arguments = mergedInput;
+    }
+  }
+
+  const existingNested = existingRaw.tool_call && typeof existingRaw.tool_call === "object" ? existingRaw.tool_call : {};
+  const incomingNested = incomingRaw.tool_call && typeof incomingRaw.tool_call === "object" ? incomingRaw.tool_call : {};
+  if (Object.keys(existingNested).length > 0 || Object.keys(incomingNested).length > 0) {
+    merged.tool_call = {
+      ...existingNested,
+      ...incomingNested,
+    };
+
+    const mergedNestedName = isPlaceholderToolName(incomingNested.name)
+      ? existingNested.name ?? resolvedName
+      : incomingNested.name ?? resolvedName;
+    if (typeof mergedNestedName === "string" && mergedNestedName.trim().length > 0) {
+      merged.tool_call.name = mergedNestedName;
+    }
+
+    const mergedNestedArguments = mergeToolInputValue(existingNested.arguments, incomingNested.arguments);
+    if (mergedNestedArguments !== undefined) {
+      merged.tool_call.arguments = mergedNestedArguments;
+    }
+  }
+
+  if (typeof existingRaw.createdAt === "number") {
+    merged.createdAt = existingRaw.createdAt;
+  }
+
+  return merged as StreamMessage;
+}
+
+function isPlaceholderToolName(name: unknown): boolean {
+  return typeof name !== "string" || name.trim().length === 0 || name.trim() === "?";
+}
+
+function isPlaceholderToolInput(input: unknown): boolean {
+  if (input == null) return true;
+  if (typeof input === "string") {
+    const trimmed = input.trim();
+    return trimmed.length === 0 || trimmed === "{}" || trimmed === "\"}" || trimmed === "}";
+  }
+  if (typeof input === "object") {
+    const record = input as Record<string, unknown>;
+    const keys = Object.keys(record);
+    if (keys.length === 0) return true;
+    if (keys.length === 1 && keys[0] === "raw" && typeof record.raw === "string") {
+      const raw = record.raw.trim();
+      return raw.length === 0 || raw === "," || raw === "." || raw === "}" || raw === "\"}";
+    }
+  }
+  return false;
+}
+
+function shouldIgnoreToolCallFragment(rawMessage: any, _formattedInput: string | undefined, existingTool?: ToolExecution): boolean {
+  const placeholderName = isPlaceholderToolName(rawMessage.toolName ?? rawMessage.name);
+  const placeholderInput = isPlaceholderToolInput(rawMessage.toolInput ?? rawMessage.rawArguments ?? rawMessage.input ?? rawMessage.arguments);
+  return placeholderName && placeholderInput && !existingTool;
 }
 
 function updateReasoning(ephemeral: EphemeralState, message: StreamMessage): EphemeralState {
@@ -146,15 +326,26 @@ function upsertToolExecution(ephemeral: EphemeralState, message: StreamMessage):
   }
 
   const rawMessage: any = message;
-  const id = rawMessage.toolCallId ?? ("uuid" in message ? message.uuid : `${Date.now()}`);
+  const nestedToolCall = rawMessage.tool_call ?? {};
+  const id = rawMessage.toolCallId ?? nestedToolCall.tool_call_id ?? rawMessage.toolUseId ?? rawMessage.tool_call_id ?? rawMessage.id ?? ("uuid" in message ? message.uuid : `${Date.now()}`);
   const now = Date.now();
-  const formattedInput = formatToolInput(rawMessage.toolInput ?? rawMessage.input ?? rawMessage.arguments);
+  const rawInput = nestedToolCall.arguments ?? rawMessage.rawArguments ?? rawMessage.toolInput ?? rawMessage.input ?? rawMessage.arguments ?? rawMessage.params;
   const existingTool = ephemeral.tools.find((tool) => tool.id === id);
+  const mergedInput = mergeToolInputValue(existingTool?.input, rawInput);
+  const formattedInput = formatToolInput(mergedInput);
 
   if (message.type === "tool_call") {
+    if (shouldIgnoreToolCallFragment(rawMessage, formattedInput, existingTool)) {
+      return ephemeral;
+    }
+
+    const resolvedName = isPlaceholderToolName(rawMessage.toolName ?? nestedToolCall.name)
+      ? existingTool?.name ?? "tool"
+      : rawMessage.toolName ?? nestedToolCall.name ?? existingTool?.name ?? "tool";
+
     const newTool: ToolExecution = {
       id,
-      name: rawMessage.toolName ?? existingTool?.name ?? "tool",
+      name: resolvedName,
       input: formattedInput ?? existingTool?.input,
       status: "running",
       startedAt: existingTool?.startedAt ?? now,
@@ -172,22 +363,24 @@ function upsertToolExecution(ephemeral: EphemeralState, message: StreamMessage):
   }
 
   if (message.type === "tool_result") {
-    const logs = Array.isArray(rawMessage.logs)
-      ? rawMessage.logs.map((log: unknown) => String(log))
-      : [];
-    const outputValue = rawMessage.output ?? rawMessage.result ?? rawMessage.content ?? null;
+    const logs = [
+      ...(Array.isArray(rawMessage.logs) ? rawMessage.logs.map((log: unknown) => String(log)) : []),
+      ...(Array.isArray(rawMessage.stdout) ? rawMessage.stdout.map((log: unknown) => `stdout: ${String(log)}`) : typeof rawMessage.stdout === "string" ? [`stdout: ${rawMessage.stdout}`] : []),
+      ...(Array.isArray(rawMessage.stderr) ? rawMessage.stderr.map((log: unknown) => `stderr: ${String(log)}`) : typeof rawMessage.stderr === "string" ? [`stderr: ${rawMessage.stderr}`] : []),
+    ];
+    const outputValue = rawMessage.tool_return ?? rawMessage.output ?? rawMessage.result ?? rawMessage.content ?? null;
     const formattedOutput = formatToolOutput(outputValue);
     let errorText: string | undefined;
 
-    if (message.isError) {
+    if (message.isError || rawMessage.status === "error") {
       errorText = formattedOutput;
     }
 
     const updatedTool: ToolExecution = {
       id,
-      name: rawMessage.toolName ?? existingTool?.name ?? "tool",
+      name: rawMessage.toolName ?? nestedToolCall.name ?? existingTool?.name ?? "tool",
       input: formattedInput ?? existingTool?.input,
-      status: message.isError ? "failed" : "completed",
+      status: message.isError || rawMessage.status === "error" ? "failed" : "completed",
       startedAt: existingTool?.startedAt ?? now,
       finishedAt: now,
       error: errorText,
@@ -247,6 +440,71 @@ function clearEphemeral(_ephemeral: EphemeralState, status: AgentDisplayStatus =
   };
 }
 
+function settleCompletedTools(tools: ToolExecution[]): ToolExecution[] {
+  const finishedAt = Date.now();
+  return tools.map((tool) => {
+    if (tool.status !== "running") {
+      return tool;
+    }
+
+    const hasTranscript = Boolean(tool.output?.trim()) || tool.updates.length > 0;
+    return {
+      ...tool,
+      status: "completed",
+      finishedAt,
+      updates: hasTranscript
+        ? tool.updates
+        : [...tool.updates, "Tool finished. Syncing output from conversation history..."],
+    };
+  });
+}
+
+function extractRunId(message: StreamMessage): string | undefined {
+  const raw = message as Record<string, unknown>;
+  const directRunId = raw.runId ?? raw.run_id;
+  if (typeof directRunId === "string" && directRunId.trim().length > 0) {
+    return directRunId;
+  }
+
+  const runIds = raw.runIds;
+  if (Array.isArray(runIds)) {
+    const firstRunId = runIds.find((value): value is string => typeof value === "string" && value.trim().length > 0);
+    if (firstRunId) {
+      return firstRunId;
+    }
+  }
+
+  return undefined;
+}
+
+const TERMINAL_RUN_STATUSES = new Set(["completed", "failed", "cancelled"]);
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    globalThis.setTimeout(resolve, ms);
+  });
+}
+
+async function waitForRunToSettle(runId: string, maxAttempts: number = 8, delayMs: number = 400): Promise<boolean> {
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      const run = await window.electron.getRunStatus(runId);
+      const status = typeof run?.status === "string" ? run.status.toLowerCase() : undefined;
+      if ((status && TERMINAL_RUN_STATUSES.has(status)) || run?.completedAt) {
+        return true;
+      }
+    } catch (error) {
+      console.warn("[useAppStore] Failed to retrieve run status", { runId, attempt, error });
+    }
+
+    if (attempt < maxAttempts - 1) {
+      await delay(delayMs);
+    }
+  }
+
+  return false;
+}
+
 function withMessageTimestamp<T extends StreamMessage>(message: T, fallback: number = Date.now()): T {
   const existingCreatedAt = (message as { createdAt?: number }).createdAt;
   if (typeof existingCreatedAt === "number" && Number.isFinite(existingCreatedAt)) {
@@ -266,6 +524,7 @@ export type SessionView = {
   cwd?: string;
   agentName?: string;
   agentId?: string;
+  latestRunId?: string;
   messages: StreamMessage[];
   permissionRequests: PermissionRequest[];
   lastPrompt?: string;
@@ -290,7 +549,7 @@ export type CoworkSettings = {
   showLettaEnv: boolean;
 };
 
-const SELECTED_MODEL_STORAGE_KEY = "letta:selected-model";
+const APP_PREFERENCES_STORAGE_KEY = "letta:app-preferences";
 
 interface AppState {
   sessions: Record<string, SessionView>;
@@ -305,6 +564,7 @@ interface AppState {
   historyRequested: Set<string>;
   coworkSettings: CoworkSettings;
   selectedModel: string;
+  showReasoningInChat: boolean;
   // IPC function reference
   ipcSendEvent: ((event: ClientEvent) => void) | null;
 
@@ -322,6 +582,7 @@ interface AppState {
   resolvePermissionRequest: (sessionId: string, toolUseId: string) => void;
   setCoworkSettings: (settings: CoworkSettings) => void;
   setSelectedModel: (model: string) => void;
+  setShowReasoningInChat: (show: boolean) => void;
   handleServerEvent: (event: ServerEvent) => void;
 }
 
@@ -339,7 +600,7 @@ function createSession(id: string): SessionView {
   };
 }
 
-export const useAppStore = create<AppState>((set, get) => ({
+export const useAppStore = create<AppState>()(persist((set, get) => ({
   sessions: {},
   activeSessionId: null,
   emailSessionId: null,
@@ -358,14 +619,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     showEmailAutomation: false,
     showLettaEnv: false,
   },
-  selectedModel: (() => {
-    if (typeof window === "undefined") return "";
-    try {
-      return window.localStorage.getItem(SELECTED_MODEL_STORAGE_KEY) ?? "";
-    } catch {
-      return "";
-    }
-  })(),
+  selectedModel: "",
+  showReasoningInChat: true,
   ipcSendEvent: null,
 
   setIPCSendEvent: (sendEvent) => set({ ipcSendEvent: sendEvent }),
@@ -487,17 +742,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setSelectedModel: (model) => {
     set({ selectedModel: model });
-    if (typeof window !== "undefined") {
-      try {
-        if (model) {
-          window.localStorage.setItem(SELECTED_MODEL_STORAGE_KEY, model);
-        } else {
-          window.localStorage.removeItem(SELECTED_MODEL_STORAGE_KEY);
-        }
-      } catch {
-        // ignore storage errors
-      }
-    }
+  },
+
+  setShowReasoningInChat: (show) => {
+    set({ showReasoningInChat: show });
   },
 
   resolvePermissionRequest: (sessionId, toolUseId) => {
@@ -695,6 +943,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       case "stream.message": {
         const { sessionId, message } = event.payload;
+        if (message.type === "tool_call" || message.type === "tool_result") {
+          console.debug("[ui] received tool message", {
+            sessionId,
+            type: message.type,
+            keys: Object.keys((message as unknown as Record<string, unknown>) ?? {}),
+            payload: message,
+          });
+        }
         if (message.type === "stream_event") {
           // Partial token deltas are rendered by local UI state in useMessageWindow.
           // Skipping the global store update prevents full sessions tree churn per token.
@@ -703,6 +959,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         set((state) => {
           const existing = state.sessions[sessionId] ?? createSession(sessionId);
           const currentEphemeral = existing.ephemeral ?? initialEphemeralState();
+          const messageRunId = extractRunId(message);
           let messages = existing.messages;
           let ephemeral = currentEphemeral;
           let status: AgentDisplayStatus = currentEphemeral.status;
@@ -725,7 +982,9 @@ export const useAppStore = create<AppState>((set, get) => ({
                   )
                 : -1;
               if (existingIndex >= 0) {
-                messages = messages.map((msg, idx) => (idx === existingIndex ? toolCall : msg));
+                messages = messages.map((msg, idx) => (
+                  idx === existingIndex ? mergeToolCallMessage(msg, toolCall) : msg
+                ));
               } else {
                 messages = [...messages, toolCall];
               }
@@ -796,7 +1055,10 @@ export const useAppStore = create<AppState>((set, get) => ({
                     : [...messages, finalMessage];
                 }
                 status = "completed";
-                ephemeral = clearEphemeral(currentEphemeral, "completed");
+                ephemeral = {
+                  ...clearEphemeral(currentEphemeral, "completed"),
+                  tools: settleCompletedTools(currentEphemeral.tools),
+                };
               } else {
                 status = "error";
                 ephemeral = clearEphemeral(currentEphemeral, "error", message.error ?? "Assistant failed to respond");
@@ -822,6 +1084,7 @@ export const useAppStore = create<AppState>((set, get) => ({
               ...state.sessions,
               [sessionId]: {
                 ...existing,
+                latestRunId: messageRunId ?? existing.latestRunId,
                 messages,
                 ephemeral: {
                   ...ephemeral,
@@ -832,6 +1095,27 @@ export const useAppStore = create<AppState>((set, get) => ({
             },
           };
         });
+
+        if (message.type === "result" && message.success) {
+          void (async () => {
+            const settledSession = get().sessions[sessionId];
+            const latestRunId = settledSession?.latestRunId;
+
+            if (latestRunId) {
+              await waitForRunToSettle(latestRunId);
+              await delay(150);
+            } else {
+              await delay(250);
+            }
+
+            const latestState = get();
+            const latestSession = latestState.sessions[sessionId];
+            if (!latestSession || latestSession.isLoadingHistory) {
+              return;
+            }
+            latestState.fetchSessionHistory(sessionId, 100);
+          })();
+        }
         break;
       }
 
@@ -851,6 +1135,7 @@ export const useAppStore = create<AppState>((set, get) => ({
                 ...existing,
                 messages: newMessages,
                 lastPrompt: prompt,
+                latestRunId: undefined,
                 ephemeral: nextEphemeral,
               },
             },
@@ -887,4 +1172,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
     }
   }
+}), {
+  name: APP_PREFERENCES_STORAGE_KEY,
+  storage: createJSONStorage(() => localStorage),
+  partialize: (state) => ({
+    selectedModel: state.selectedModel,
+    showReasoningInChat: state.showReasoningInChat,
+  }),
 }));

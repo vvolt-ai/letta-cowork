@@ -27,6 +27,7 @@ export interface MessageWindowState {
   visibleHistoryCount: number;
   partialMessage: string;
   showPartialMessage: boolean;
+  partialReasoning: string;
   handlePartialMessages: (event: ServerEvent) => void;
   loadMoreHistory: () => void;
 }
@@ -41,8 +42,10 @@ export function useMessageWindow(
 ): MessageWindowState {
   const [partialMessage, setPartialMessage] = useState("");
   const [showPartialMessage, setShowPartialMessage] = useState(false);
+  const [partialReasoning, setPartialReasoning] = useState("");
   const [visibleHistoryCount, setVisibleHistoryCount] = useState(INITIAL_VISIBLE_HISTORY_COUNT);
   const partialMessageRef = useRef("");
+  const partialReasoningRef = useRef("");
   const partialResetTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -51,7 +54,9 @@ export function useMessageWindow(
       partialResetTimeoutRef.current = null;
     }
     partialMessageRef.current = "";
+    partialReasoningRef.current = "";
     setPartialMessage("");
+    setPartialReasoning("");
     setShowPartialMessage(false);
     setVisibleHistoryCount(INITIAL_VISIBLE_HISTORY_COUNT);
   }, [sessionId]);
@@ -125,15 +130,27 @@ export function useMessageWindow(
           partialResetTimeoutRef.current = null;
         }
         partialMessageRef.current = "";
-        setPartialMessage(partialMessageRef.current);
+        partialReasoningRef.current = "";
+        setPartialMessage("");
+        setPartialReasoning("");
         setShowPartialMessage(true);
         performAutoScroll("auto");
       }
 
       if (event.type === "content_block_delta" && event.delta) {
-        const text = event.delta.text || event.delta.reasoning || "";
-        partialMessageRef.current += text;
-        setPartialMessage(partialMessageRef.current);
+        const deltaText = event.delta.text || "";
+        const reasoningText = event.delta.reasoning || "";
+
+        if (reasoningText) {
+          partialReasoningRef.current += reasoningText;
+          setPartialReasoning(partialReasoningRef.current);
+        }
+
+        if (deltaText && !reasoningText) {
+          partialMessageRef.current += deltaText;
+          setPartialMessage(partialMessageRef.current);
+        }
+
         if (shouldAutoScroll) {
           performAutoScroll("auto");
         } else if (onNewMessage) {
@@ -148,7 +165,9 @@ export function useMessageWindow(
         }
         partialResetTimeoutRef.current = window.setTimeout(() => {
           partialMessageRef.current = "";
-          setPartialMessage(partialMessageRef.current);
+          partialReasoningRef.current = "";
+          setPartialMessage("");
+          setPartialReasoning("");
           partialResetTimeoutRef.current = null;
         }, PARTIAL_MESSAGE_RESET_DELAY_MS);
       }
@@ -163,6 +182,7 @@ export function useMessageWindow(
     visibleHistoryCount,
     partialMessage,
     showPartialMessage,
+    partialReasoning,
     handlePartialMessages,
     loadMoreHistory,
   };

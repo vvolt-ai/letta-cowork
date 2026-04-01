@@ -17,7 +17,7 @@ import {
   updateStoredSession,
   type StoredSession,
 } from "./settings.js";
-import { getLettaAgent } from "./lettaAgents.js";
+import { getLettaAgent, getAgentRunApprovalCandidates, cancelAgentRunById } from "./lettaAgents.js";
 
 const DEBUG = process.env.DEBUG_IPC === "true";
 
@@ -172,15 +172,20 @@ export async function handleClientEvent(event: ClientEvent) {
     }
     
     try {
-      const response = await lettaClient.conversations.messages.list(conversationId);
-      const items = (Array.isArray(response.items) ? response.items : []) as unknown as LettaMessage[];
+      const response = await lettaClient.conversations.messages.list(conversationId, {
+        limit,
+        ...(requestedBefore ? { before: requestedBefore } : {}),
+      } as any);
+      const items = (Array.isArray((response as any).items) ? (response as any).items : []) as unknown as LettaMessage[];
 
-      const normalised = normaliseHistoryBatch(items, items.length || limit);
+      const normalised = normaliseHistoryBatch(items, limit);
       const messages = normalised.messages.filter((msg) => (msg as any)?.type !== "reasoning");
-      const totalFetchedCount = items.length;
-      const totalDisplayableCount = messages.length;
-      const hasMore = false;
-      const nextBefore = undefined;
+      const totalFetchedCount = typeof (response as any)?.total === "number" ? (response as any).total : items.length;
+      const totalDisplayableCount = normalised.allFiltered.length;
+      const hasMore = typeof (response as any)?.has_more === "boolean"
+        ? (response as any).has_more
+        : normalised.hasMore;
+      const nextBefore = ((response as any)?.next_before as string | undefined) ?? normalised.nextBefore;
 
       debug("session.history: response", {
         conversationId,
@@ -337,6 +342,7 @@ export async function handleClientEvent(event: ClientEvent) {
       content,
       attachments,
       cwd,
+      model,
     } = event.payload;
     const previewPrompt = (prompt ?? "").slice(0, 50);
     debug("session.continue: continuing session", {
@@ -382,6 +388,7 @@ export async function handleClientEvent(event: ClientEvent) {
       const handle = await runLetta({
         prompt,
         content,
+        model,
         session: {
           id: conversationId,
           title: resolvedTitle,
@@ -541,6 +548,44 @@ export async function handleClientEvent(event: ClientEvent) {
     }
     return;
   }
+}
+
+export async function recoverPendingApprovalsForSession(sessionId: string, agentId?: string) {
+  const resolvedAgentId = agentId
+    || getSession(sessionId)?.agentId
+    || getStoredSessions().find((session) => session.id === sessionId)?.agentId;
+
+  if (!resolvedAgentId) {
+    return [];
+  }
+
+  try {
+    const candidates = await getAgentRunApprovalCandidates(resolvedAgentId, sessionId);
+    for (const candidate of candidates) {
+      emit({
+        type: "permission.request",
+        payload: {
+          sessionId,
+          toolUseId: candidate.toolUseId,
+          toolName: candidate.toolName,
+          input: candidate.input,
+          source: "recovered",
+          runId: candidate.runId,
+          conversationId: candidate.conversationId,
+          isStuckRun: true,
+          requestedAt: candidate.requestedAt,
+        },
+      });
+    }
+    return candidates;
+  } catch (error) {
+    console.warn("Failed to recover pending approvals for session", { sessionId, resolvedAgentId, error });
+    return [];
+  }
+}
+
+export async function cancelRecoveredRun(runId: string) {
+  return cancelAgentRunById(runId);
 }
 
 export async function cleanupAllSessions(): Promise<void> {

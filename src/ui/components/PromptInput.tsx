@@ -8,7 +8,7 @@ const DEFAULT_ALLOWED_TOOLS = "Read,Edit,Bash";
 const MAX_ROWS = 12;
 const LINE_HEIGHT = 21;
 const MAX_HEIGHT = MAX_ROWS * LINE_HEIGHT;
-const MIN_HEIGHT = 64;
+const MIN_HEIGHT = 52;
 
 interface ModelOption {
   name: string;
@@ -58,6 +58,7 @@ interface PromptInputProps {
   onSendMessage?: () => void;
   disabled?: boolean;
   onOpenMemory?: () => void;
+  fullWidth?: boolean;
 }
 
 export interface SendMessageOptions {
@@ -247,6 +248,7 @@ export function usePromptActions(sendEvent: (event: ClientEvent) => void, onOpen
           content: options?.content,
           attachments: options?.attachments,
           cwd: activeSession?.cwd,
+          model: selectedModel.trim() || undefined,
         }
       });
       setPrompt("");
@@ -363,10 +365,12 @@ export function usePromptActions(sendEvent: (event: ClientEvent) => void, onOpen
   return { prompt, setPrompt, isRunning, handleSend, handleStop, handleSlashCommand, handleStartFromModal };
 }
 
-export const PromptInput = memo(function PromptInput({ sendEvent, onSendMessage, disabled = false, onOpenMemory }: PromptInputProps) {
+export const PromptInput = memo(function PromptInput({ sendEvent, onSendMessage, disabled = false, onOpenMemory, fullWidth = false }: PromptInputProps) {
   const { prompt, setPrompt, isRunning, handleSend, handleStop, handleSlashCommand } = usePromptActions(sendEvent, onOpenMemory);
   const selectedModel = useAppStore((state) => state.selectedModel);
   const setSelectedModel = useAppStore((state) => state.setSelectedModel);
+  const showReasoningInChat = useAppStore((state) => state.showReasoningInChat);
+  const setShowReasoningInChat = useAppStore((state) => state.setShowReasoningInChat);
   const setGlobalError = useAppStore((state) => state.setGlobalError);
   const activeSessionId = useAppStore((state) => state.activeSessionId);
   const activeAgentId = useAppStore((state) => (activeSessionId ? state.sessions[activeSessionId]?.agentId : undefined));
@@ -1048,19 +1052,19 @@ export const PromptInput = memo(function PromptInput({ sendEvent, onSendMessage,
 
   return (
     <section
-      className="sticky bottom-0 left-0 right-0 z-40 bg-gradient-to-t from-[var(--color-surface)] via-[var(--color-surface)] to-transparent px-4 pb-5 pt-4 lg:px-8"
+      className="sticky bottom-0 left-0 right-0 z-40 bg-gradient-to-t from-[var(--color-surface)] via-[var(--color-surface)] to-transparent px-2 pb-[5px] pt-[5px] lg:px-3"
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
       <div
-        className={`mx-auto w-full max-w-5xl rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface)]/98 px-5 py-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)] backdrop-blur-sm transition ${
+        className={`${fullWidth ? "w-full" : "mx-auto w-full max-w-5xl"} rounded-[22px] border border-[var(--color-border)] bg-[var(--color-surface)]/98 px-3 py-[5px] shadow-[0_12px_28px_rgba(15,23,42,0.07)] backdrop-blur-sm transition ${
           dragActive ? "border-[var(--color-accent)] bg-[var(--color-accent-light)]/60" : ""
         }`}
       >
         {attachments.length > 0 && (
-          <div className="mb-3 flex flex-wrap gap-2">
+          <div className="mb-2 flex flex-wrap gap-1.5">
             {attachments.map((attachment) => (
               <div
                 key={attachment.id}
@@ -1115,43 +1119,53 @@ export const PromptInput = memo(function PromptInput({ sendEvent, onSendMessage,
         )}
 
         {(modelsLoading || models.length > 0) && (
-          <div className="mb-3 flex items-center gap-2 text-xs text-ink-500">
-            <select
-              className="h-6 min-w-[140px] rounded-full border border-[var(--color-border)] bg-transparent px-2 text-[11px] text-ink-600 transition hover:border-[var(--color-accent)] focus:border-[var(--color-border)] focus:outline-none focus:ring-0"
-              value={selectedModel}
-              onChange={(event) => {
-                const value = event.target.value;
-                setModelTouched(true);
-                setSelectedModel(value);
-              }}
-              disabled={modelsLoading}
-              aria-label="Select model"
+          <div className="mb-2 flex items-center justify-between gap-2 text-xs text-ink-500">
+            <div className="flex items-center gap-2 min-w-0">
+              <select
+                className="h-6 min-w-[140px] rounded-full border border-[var(--color-border)] bg-transparent px-2 text-[11px] text-ink-600 transition hover:border-[var(--color-accent)] focus:border-[var(--color-border)] focus:outline-none focus:ring-0"
+                value={selectedModel}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setModelTouched(true);
+                  setSelectedModel(value);
+                }}
+                disabled={modelsLoading}
+                aria-label="Select model"
+              >
+                <option value="">Default (agent model)</option>
+                {hasSelectedModelOption ? (
+                  <option value={selectedModel}>{selectedModel}</option>
+                ) : null}
+                {models.map((model) => (
+                  <option key={model.name} value={model.name}>
+                    {(model.display_name || model.name) + (model.provider_type ? ` · ${model.provider_type}` : "")}
+                  </option>
+                ))}
+              </select>
+              {modelsLoading ? <span className="text-muted">Loading…</span> : null}
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowReasoningInChat(!showReasoningInChat)}
+              className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] transition ${
+                showReasoningInChat
+                  ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
+                  : "border-[var(--color-border)] bg-[var(--color-surface-secondary)] text-ink-600"
+              }`}
+              aria-pressed={showReasoningInChat}
             >
-              <option value="">Default (agent model)</option>
-              {hasSelectedModelOption ? (
-                <option value={selectedModel}>{selectedModel}</option>
-              ) : null}
-              {models.map((model) => (
-                <option key={model.name} value={model.name}>
-                  {(model.display_name || model.name) + (model.provider_type ? ` · ${model.provider_type}` : "")}
-                </option>
-              ))}
-            </select>
-            {modelsLoading ? <span className="text-muted">Loading…</span> : null}
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  showReasoningInChat ? "bg-[var(--color-accent)]" : "bg-ink-400"
+                }`}
+              />
+              Reasoning
+            </button>
           </div>
         )}
 
-        <div className="mt-3 flex items-center justify-between gap-3 text-[11px] text-muted">
-          <span>
-            {isRunning
-              ? "Press Enter to stop · Shift+Enter or Option+Enter for a new line"
-              : "Enter to send · Cmd/Ctrl+Enter also sends · Shift+Enter or Option+Enter for a new line"}
-          </span>
-          {!attachments.length && !dragActive ? <span>Drag & drop files or paste images</span> : null}
-        </div>
-
         {slashSuggestions.length > 0 ? (
-          <div className="mt-2 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-secondary)]/70 p-2">
+          <div className="mt-1.5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-secondary)]/70 p-2">
             <div className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">Commands</div>
             <div className="space-y-1">
               {slashSuggestions.map((suggestion, index) => (
@@ -1182,11 +1196,11 @@ export const PromptInput = memo(function PromptInput({ sendEvent, onSendMessage,
           </div>
         ) : null}
 
-        <div className="mt-3 flex items-end gap-3">
+        <div className="mt-2 flex items-end gap-2">
           <button
             type="button"
             onClick={triggerFilePicker}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-secondary)] text-ink-600 transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[18px] border border-[var(--color-border)] bg-[var(--color-surface-secondary)] text-ink-600 transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
             disabled={disabled && !isRunning}
             aria-label="Attach files"
           >
@@ -1196,7 +1210,7 @@ export const PromptInput = memo(function PromptInput({ sendEvent, onSendMessage,
           </button>
           <textarea
             rows={1}
-            className="flex-1 min-h-[68px] resize-none rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface-secondary)]/70 px-4 py-3.5 text-sm leading-6 text-ink-800 placeholder:text-muted focus:border-[var(--color-accent)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/10 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex-1 min-h-[52px] resize-none rounded-[22px] border border-[var(--color-border)] bg-[var(--color-surface-secondary)]/70 px-3.5 py-2.5 text-sm leading-5 text-ink-800 placeholder:text-muted focus:border-[var(--color-accent)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/10 disabled:cursor-not-allowed disabled:opacity-60"
             placeholder={disabled ? "Waiting for approval…" : "Ask Vera anything…"}
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
@@ -1207,7 +1221,7 @@ export const PromptInput = memo(function PromptInput({ sendEvent, onSendMessage,
             disabled={disabled && !isRunning}
           />
           <button
-            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 ${
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[18px] shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 ${
               isRunning ? "bg-[var(--color-status-error)] text-white hover:bg-[var(--color-status-error)]/90" : "bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)]"
             }`}
             onClick={handleButtonClick}

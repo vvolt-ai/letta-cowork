@@ -23,6 +23,15 @@ export function IntegrationList({
 }: IntegrationListProps) {
   return (
     <div className="space-y-3 text-sm text-ink-700">
+      {isEmailConnected && onManageRules ? (
+        <button
+          onClick={onManageRules}
+          className="w-full rounded-lg border border-[var(--color-border)] bg-white px-3 py-2 text-left text-xs font-medium text-[var(--color-accent)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent-hover)]"
+        >
+          Configure automation
+        </button>
+      ) : null}
+
       <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -47,7 +56,29 @@ export function IntegrationList({
           />
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-2 text-xs">
+        {isEmailConnected ? (
+          <div className="mt-3 flex items-center justify-between gap-2 text-xs">
+            <span className="text-muted">Auto-sync unread email</span>
+            <button
+              onClick={() => onToggleAutoSync(!autoSyncEnabled)}
+              className={`inline-flex h-5 w-9 items-center rounded-full border p-0.5 transition-all duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/20 ${
+                autoSyncEnabled
+                  ? "border-[var(--color-accent)] bg-[var(--color-accent)]"
+                  : "border-[var(--color-bg-400)] bg-[var(--color-bg-300)] hover:border-[var(--color-border-hover)]"
+              }`}
+              aria-pressed={autoSyncEnabled}
+              aria-label="Toggle auto-sync"
+            >
+              <span
+                className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200 ease-out ${
+                  autoSyncEnabled ? "translate-x-4" : "translate-x-0"
+                }`}
+              />
+            </button>
+          </div>
+        ) : null}
+
+        <div className="mt-2 flex flex-wrap gap-2 text-xs">
           {isEmailConnected ? (
             <>
               <button
@@ -74,44 +105,6 @@ export function IntegrationList({
         </div>
       </div>
 
-      {isEmailConnected ? (
-        <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">Automation behavior</div>
-              <div className="mt-1 text-sm font-semibold text-ink-800">Auto-sync unread email</div>
-              <p className="mt-1 text-xs leading-5 text-muted">
-                When enabled, unread email is routed using your fallback agents and any sender-based rules.
-              </p>
-            </div>
-            <button
-              onClick={() => onToggleAutoSync(!autoSyncEnabled)}
-              className={`mt-1 inline-flex h-6 w-11 items-center rounded-full border p-0.5 transition-all duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/20 ${
-                autoSyncEnabled
-                  ? "border-[var(--color-accent)] bg-[var(--color-accent)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]"
-                  : "border-[var(--color-bg-400)] bg-[var(--color-bg-300)] shadow-[inset_0_1px_2px_rgba(15,23,42,0.08)] hover:border-[var(--color-border-hover)]"
-              }`}
-              aria-pressed={autoSyncEnabled}
-              aria-label="Toggle auto-sync"
-            >
-              <span
-                className={`h-5 w-5 rounded-full bg-white shadow-[0_1px_3px_rgba(15,23,42,0.2),0_1px_2px_rgba(15,23,42,0.08)] transition-transform duration-200 ease-out ${
-                  autoSyncEnabled ? "translate-x-5" : "translate-x-0"
-                }`}
-              />
-            </button>
-          </div>
-
-          {onManageRules ? (
-            <button
-              onClick={onManageRules}
-              className="mt-3 w-full rounded-lg border border-[var(--color-border)] bg-white px-3 py-2 text-left text-xs font-medium text-[var(--color-accent)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent-hover)]"
-            >
-              Configure automation
-            </button>
-          ) : null}
-        </div>
-      ) : null}
     </div>
   );
 }

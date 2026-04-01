@@ -86,7 +86,7 @@ export type ServerEvent =
       };
     }
   | { type: "session.deleted"; payload: { sessionId: string } }
-  | { type: "permission.request"; payload: { sessionId: string; toolUseId: string; toolName: string; input: unknown } }
+  | { type: "permission.request"; payload: { sessionId: string; toolUseId: string; toolName: string; input: unknown; source?: "live" | "recovered"; runId?: string; conversationId?: string; isStuckRun?: boolean; requestedAt?: number } }
   | { type: "runner.error"; payload: { sessionId?: string; message: string } }
   | {
       type: "whatsapp-bridge-status";
@@ -105,7 +105,7 @@ export type ServerEvent =
 // Client -> Server events
 export type ClientEvent =
   | { type: "session.start"; payload: { title: string; prompt: string; content?: MessageContentItem[]; attachments?: ChatAttachment[]; cwd?: string; allowedTools?: string; agentId?: string; model?: string } }
-  | { type: "session.continue"; payload: { sessionId: string; prompt: string; content?: MessageContentItem[]; attachments?: ChatAttachment[]; cwd?: string } }
+  | { type: "session.continue"; payload: { sessionId: string; prompt: string; content?: MessageContentItem[]; attachments?: ChatAttachment[]; cwd?: string; model?: string } }
   | { type: "session.stop"; payload: { sessionId: string } }
   | { type: "session.delete"; payload: { sessionId: string } }
   | { type: "session.list" }

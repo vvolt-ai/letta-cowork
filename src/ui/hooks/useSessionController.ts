@@ -47,6 +47,16 @@ export function useSessionController({ connected, sendEvent }: UseSessionControl
     }
   }, [activeSession, activeSessionId, connected, historyRequested, markHistoryRequested, sendEvent]);
 
+  useEffect(() => {
+    if (!activeSessionId || !connected || !activeSession?.agentId) return;
+    if (activeSession.permissionRequests.length > 0) return;
+
+    void window.electron.recoverPendingApprovals(activeSessionId, activeSession.agentId)
+      .catch((error) => {
+        console.warn("Failed to recover pending approvals", { activeSessionId, error });
+      });
+  }, [activeSession?.agentId, activeSession?.permissionRequests.length, activeSessionId, connected]);
+
   const handleNewSession = useCallback(() => {
     setActiveSessionId(null);
     setShowStartModal(true);
@@ -57,10 +67,15 @@ export function useSessionController({ connected, sendEvent }: UseSessionControl
   }, [sendEvent]);
 
   const handlePermissionResult = useCallback((toolUseId: string, result: CanUseToolResponse) => {
-    if (!activeSessionId) return;
+    if (!activeSessionId || !activeSession) return;
+    const request = activeSession.permissionRequests.find((item) => item.toolUseId === toolUseId);
+    if (request?.source === "recovered") {
+      setGlobalError("This approval was recovered from a stuck run. Direct approve/deny is not available yet — cancel the stuck run first.");
+      return;
+    }
     sendEvent({ type: "permission.response", payload: { sessionId: activeSessionId, toolUseId, result } });
     resolvePermissionRequest(activeSessionId, toolUseId);
-  }, [activeSessionId, resolvePermissionRequest, sendEvent]);
+  }, [activeSession, activeSessionId, resolvePermissionRequest, sendEvent, setGlobalError]);
 
   // Check if Letta environment is configured
   const isLettaEnvConfigured = useCallback(async () => {

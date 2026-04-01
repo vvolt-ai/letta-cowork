@@ -17,12 +17,12 @@ export const UserMessage = memo(function UserMessage({ message }: { message: Use
   const attachments = message.attachments ?? [];
 
   return (
-    <article className="ml-auto max-w-2xl rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm text-ink-800 shadow-sm">
-      <div className="mb-2 flex justify-end text-[11px] font-semibold uppercase tracking-[0.3em] text-muted">
+    <article className="ml-auto max-w-3xl rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-4 text-sm text-ink-800 shadow-sm">
+      <div className="mb-3 flex justify-end text-[11px] font-semibold uppercase tracking-[0.3em] text-muted">
         You
       </div>
       {message.prompt ? (
-        <p className="whitespace-pre-wrap text-[15px] leading-8">{message.prompt}</p>
+        <p className="whitespace-pre-wrap text-[15px] leading-7">{message.prompt}</p>
       ) : null}
       {attachments.length > 0 ? (
         <div className="mt-3 flex flex-wrap gap-2">
