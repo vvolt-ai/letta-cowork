@@ -457,6 +457,8 @@ export function useAutoSyncUnread(
                 attachments: chatAttachments,
                 cwd: "",
                 agentId,
+                background: true,
+                isEmailSession: true,
               },
             });
 

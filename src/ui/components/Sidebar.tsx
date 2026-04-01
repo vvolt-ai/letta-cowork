@@ -23,9 +23,10 @@ type SidebarSessionSummary = Pick<SessionView, "id" | "title" | "status" | "upda
 const selectSidebarSessionTokens = (state: ReturnType<typeof useAppStore.getState>): string[] => {
   return Object.values(state.sessions)
     .filter((session) => {
-      // Filter out email sessions (marked with isEmailSession or title starts with "Email:")
+      // Filter out email/background sessions
       if (session.isEmailSession) return false;
       if (session.title?.startsWith("Email:")) return false;
+      if (session.title?.startsWith("Auto Email:")) return false;
       return true;
     })
     .map((session) => JSON.stringify({

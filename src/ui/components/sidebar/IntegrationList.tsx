@@ -23,15 +23,6 @@ export function IntegrationList({
 }: IntegrationListProps) {
   return (
     <div className="space-y-3 text-sm text-ink-700">
-      {isEmailConnected && onManageRules ? (
-        <button
-          onClick={onManageRules}
-          className="w-full rounded-lg border border-[var(--color-border)] bg-white px-3 py-2 text-left text-xs font-medium text-[var(--color-accent)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent-hover)]"
-        >
-          Configure automation
-        </button>
-      ) : null}
-
       <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -93,6 +84,14 @@ export function IntegrationList({
               >
                 Disconnect
               </button>
+              {onManageRules ? (
+                <button
+                  onClick={onManageRules}
+                  className="rounded-md px-2 py-1 text-[var(--color-accent)] transition hover:bg-[var(--color-sidebar-hover)] hover:text-[var(--color-accent-hover)]"
+                >
+                  Configure automation
+                </button>
+              ) : null}
             </>
           ) : (
             <button

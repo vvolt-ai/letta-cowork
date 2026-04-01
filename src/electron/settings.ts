@@ -34,6 +34,7 @@ export interface StoredSession {
   title: string;
   createdAt: number; // Unix timestamp
   updatedAt: number; // Unix timestamp
+  isEmailSession?: boolean; // true for email-routed sessions — hidden from sidebar
 }
 
 export interface ProcessedUnreadEmailEntry {

@@ -58,6 +58,7 @@ export const ConversationViewer = memo(function ConversationViewer({
   }, [shouldAutoScroll, visibleMessages]);
   
   // Get agent status and ephemeral state
+  const showReasoningInChat = useAppStore((state) => state.showReasoningInChat);
   const agentStatus = session?.ephemeral?.status || "idle";
   const partialMessage = session?.ephemeral?.assistantDraft?.content 
     ? (typeof session.ephemeral.assistantDraft.content === "string" 
@@ -67,6 +68,7 @@ export const ConversationViewer = memo(function ConversationViewer({
   const showPartialMessage = agentStatus === "generating" && partialMessage.length > 0;
   const reasoningSteps = session?.ephemeral?.reasoning || [];
   const toolExecutions = session?.ephemeral?.tools || [];
+  const errorMessage = session?.ephemeral?.errorMessage;
   
   // Handle send message
   const handleSendMessage = () => {
@@ -148,6 +150,8 @@ export const ConversationViewer = memo(function ConversationViewer({
           showPartialMessage={showPartialMessage}
           reasoningSteps={reasoningSteps}
           toolExecutions={toolExecutions}
+          showReasoning={showReasoningInChat}
+          errorMessage={agentStatus === "error" ? errorMessage : undefined}
         />
         <div ref={messagesEndRef} />
       </div>
@@ -155,7 +159,7 @@ export const ConversationViewer = memo(function ConversationViewer({
       {/* Input */}
       <div className="border-t border-ink-900/10 px-2 py-2">
         <PromptInput
-          onSendMessage={handleSendMessage}
+          overrideSessionId={sessionId}
           disabled={isProcessing}
           sendEvent={sendEvent!}
           fullWidth={fullWidthComposer}

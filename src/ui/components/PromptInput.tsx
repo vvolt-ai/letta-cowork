@@ -59,6 +59,8 @@ interface PromptInputProps {
   disabled?: boolean;
   onOpenMemory?: () => void;
   fullWidth?: boolean;
+  /** When set, always continue this session instead of using the global activeSessionId */
+  overrideSessionId?: string;
 }
 
 export interface SendMessageOptions {
@@ -192,11 +194,12 @@ const validateFile = (file: File): string | null => {
   return null;
 };
 
-export function usePromptActions(sendEvent: (event: ClientEvent) => void, onOpenMemory?: () => void) {
+export function usePromptActions(sendEvent: (event: ClientEvent) => void, onOpenMemory?: () => void, overrideSessionId?: string) {
   const prompt = useAppStore((state) => state.prompt);
   const cwd = useAppStore((state) => state.cwd);
   const pendingStart = useAppStore((state) => state.pendingStart);
-  const activeSessionId = useAppStore((state) => state.activeSessionId);
+  const globalActiveSessionId = useAppStore((state) => state.activeSessionId);
+  const activeSessionId = overrideSessionId ?? globalActiveSessionId;
   const activeSession = useAppStore((state) => (activeSessionId ? state.sessions[activeSessionId] : undefined));
   const selectedModel = useAppStore((state) => state.selectedModel);
   const setPrompt = useAppStore((state) => state.setPrompt);
@@ -247,13 +250,13 @@ export function usePromptActions(sendEvent: (event: ClientEvent) => void, onOpen
           prompt: text,
           content: options?.content,
           attachments: options?.attachments,
-          cwd: activeSession?.cwd,
+          cwd: overrideSessionId ? undefined : activeSession?.cwd,
           model: selectedModel.trim() || undefined,
         }
       });
       setPrompt("");
     }
-  }, [activeSession, activeSessionId, cwd, prompt, selectedModel, sendEvent, setGlobalError, setPendingStart, setPrompt]);
+  }, [activeSession, activeSessionId, cwd, overrideSessionId, prompt, selectedModel, sendEvent, setGlobalError, setPendingStart, setPrompt]);
 
   const handleStop = useCallback(() => {
     if (!activeSessionId) return;
@@ -365,8 +368,8 @@ export function usePromptActions(sendEvent: (event: ClientEvent) => void, onOpen
   return { prompt, setPrompt, isRunning, handleSend, handleStop, handleSlashCommand, handleStartFromModal };
 }
 
-export const PromptInput = memo(function PromptInput({ sendEvent, onSendMessage, disabled = false, onOpenMemory, fullWidth = false }: PromptInputProps) {
-  const { prompt, setPrompt, isRunning, handleSend, handleStop, handleSlashCommand } = usePromptActions(sendEvent, onOpenMemory);
+export const PromptInput = memo(function PromptInput({ sendEvent, onSendMessage, disabled = false, onOpenMemory, fullWidth = false, overrideSessionId }: PromptInputProps) {
+  const { prompt, setPrompt, isRunning, handleSend, handleStop, handleSlashCommand } = usePromptActions(sendEvent, onOpenMemory, overrideSessionId);
   const selectedModel = useAppStore((state) => state.selectedModel);
   const setSelectedModel = useAppStore((state) => state.setSelectedModel);
   const showReasoningInChat = useAppStore((state) => state.showReasoningInChat);
@@ -898,7 +901,10 @@ export const PromptInput = memo(function PromptInput({ sendEvent, onSendMessage,
 
     setGlobalError(null);
     setIsUploading(true);
-    onSendMessage?.();
+    // Only call onSendMessage when NOT using overrideSessionId — otherwise handleSend below handles it correctly
+    if (!overrideSessionId) {
+      onSendMessage?.();
+    }
 
     try {
       const attachmentMetadata: ChatAttachment[] = readyToSend.map((attachment) => ({

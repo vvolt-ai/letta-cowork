@@ -146,6 +146,7 @@ export async function handleClientEvent(event: ClientEvent) {
       status: getSession(session.id)?.status || "idle",
       createdAt: session.createdAt,
       updatedAt: session.updatedAt,
+      isEmailSession: session.isEmailSession ?? false,
     }));
     emit({ type: "session.list", payload: { sessions } });
     return;
@@ -296,6 +297,7 @@ export async function handleClientEvent(event: ClientEvent) {
               title: sessionTitle,
               createdAt: Date.now(),
               updatedAt: Date.now(),
+              isEmailSession: isEmailSession ?? false,
             });
             
             // Store handle with the correct conversationId and remove pending key
