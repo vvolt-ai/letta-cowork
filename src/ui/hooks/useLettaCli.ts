@@ -88,7 +88,7 @@ export function useLettaCli(): UseLettaCliReturn {
 
   // Subscribe to CLI output events once on mount
   useEffect(() => {
-    const unsubscribe = window.electron.onLettaCliOutput((payload) => {
+    const unsubscribe = window.electron.onLettaCliOutput((payload: { type: string; data?: string; processId: string; exitCode?: number }) => {
       if (payload.processId !== activeProcessId.current) return;
 
       if (payload.type === "end") {
@@ -108,8 +108,8 @@ export function useLettaCli(): UseLettaCliReturn {
         // Split on newlines so each line is its own entry
         const lines = payload.data.split(/\r?\n/);
         const newLines: OutputLine[] = lines
-          .filter((l) => l.length > 0)
-          .map((l) => makeLine(payload.type as OutputLineType, l));
+          .filter((l: string) => l.length > 0)
+          .map((l: string) => makeLine(payload.type as OutputLineType, l));
         if (newLines.length > 0) {
           setOutput((prev) => trimLines([...prev, ...newLines]));
         }

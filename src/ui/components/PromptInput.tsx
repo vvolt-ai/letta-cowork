@@ -276,10 +276,12 @@ export function usePromptActions(sendEvent: (event: ClientEvent) => void, onOpen
       case "/letta": {
         if (!args) {
           setGlobalError("Usage: /letta <command>  e.g. /letta agents list");
+          setPrompt("");
           return true;
         }
         if (!activeSessionId) {
           setGlobalError("Start or select a session before using /letta.");
+          setPrompt("");
           return true;
         }
         const cliArgs = args.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g)?.map((a) => a.replace(/^["']|["']$/g, "")) ?? args.split(/\s+/);
@@ -299,6 +301,7 @@ export function usePromptActions(sendEvent: (event: ClientEvent) => void, onOpen
           setPrompt("");
         } catch (err) {
           setGlobalError(`/letta failed: ${String(err)}`);
+          setPrompt("");
         }
         return true;
       }

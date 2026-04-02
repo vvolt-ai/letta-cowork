@@ -51,6 +51,12 @@ interface Window {
     recoverPendingApprovals: (sessionId: string, agentId?: string) => Promise<any[]>;
     cancelStuckRun: (runId: string) => Promise<any>;
     getRunStatus: (runId: string) => Promise<any>;
+    runLettaCli: (args: string[]) => Promise<{ stdout: string; stderr: string; exitCode: number }>;
+    startLettaCliStream: (args: string[]) => Promise<{ processId: string }>;
+    onLettaCliOutput: (callback: (payload: { type: string; data: string; processId: string }) => void) => () => void;
+    killLettaCli: (processId: string) => Promise<void>;
+    registerLettaCodeTools: (enabled: boolean) => Promise<{ registered: string[]; skipped: string[] }>;
+    attachLettaCodeToolsToAgent: (agentId: string) => Promise<{ attached: string[]; failed: string[] }>;
     listAgentMemoryFiles: () => Promise<any>;
     updateLettaEnv: (values: any) => Promise<any>;
     isAdmin: () => Promise<boolean>;

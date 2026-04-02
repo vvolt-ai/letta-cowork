@@ -588,6 +588,7 @@ interface AppState {
   setSelectedModel: (model: string) => void;
   setShowReasoningInChat: (show: boolean) => void;
   handleServerEvent: (event: ServerEvent) => void;
+  appendCliResult: (sessionId: string, result: CliResultMessage) => void;
 }
 
 function createSession(id: string): SessionView {

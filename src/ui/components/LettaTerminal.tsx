@@ -30,12 +30,9 @@ function Cursor() {
 
 // ── Register Tools panel ─────────────────────────────────────────────────────
 
-interface ToolStatus { name: string; status: string; id?: string; error?: string; }
-
 function RegisterToolsPanel({ onLog, onClose }: { onLog: (line: string) => void; onClose: () => void }) {
   const [agentId, setAgentId] = useState("");
   const [step, setStep] = useState<"idle" | "registering" | "attaching" | "done" | "error">("idle");
-  const [results, setResults] = useState<ToolStatus[]>([]);
 
   const run = useCallback(async () => {
     if (!agentId.trim()) { onLog("⚠  Enter an agent ID first."); return; }
@@ -44,11 +41,8 @@ function RegisterToolsPanel({ onLog, onClose }: { onLog: (line: string) => void;
 
     try {
       const regResults = await window.electron.registerLettaCodeTools(true);
-      setResults(regResults);
-      for (const r of regResults) {
-        if (r.status === "error") onLog(`  ✗ ${r.name}: ${r.error}`);
-        else onLog(`  ✓ ${r.name} (${r.status})`);
-      }
+      for (const name of regResults.registered) onLog(`  ✓ registered ${name}`);
+      for (const name of regResults.skipped) onLog(`  ⊘ skipped ${name}`);
 
       setStep("attaching");
       onLog(`⟳  Attaching tools to agent ${agentId.trim()}…`);

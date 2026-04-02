@@ -1,9 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog, globalShortcut, Menu, shell, nativeImage } from "electron"
 import { execSync, exec, spawn, type ChildProcess } from "child_process";
 import { randomUUID } from "crypto";
-import fs from "fs/promises";
-import { homedir } from "os";
-import path, { join } from "path";
+import path from "path";
 import { ipcMainHandle, isDev, DEV_PORT } from "./util.js";
 import { getLettaEnvConfig, initializeLettaEnv, type LettaEnvConfig, updateLettaEnvConfig } from "./envManager.js";
 import {
@@ -44,45 +42,6 @@ initializeLettaEnv();
 // ── Letta CLI streaming process registry ─────────────────────────────────────
 const lettaCliProcesses = new Map<string, ChildProcess>();
 
-// ── Ensure acquiring-skills is always installed ───────────────────────────────
-async function ensureAcquiringSkillInstalled(): Promise<void> {
-    const globalSkillsDir = path.join(homedir(), ".letta", "skills");
-    const targetDir = path.join(globalSkillsDir, "acquiring-skills");
-    const targetFile = path.join(targetDir, "SKILL.md");
-
-    // Already installed — nothing to do
-    try {
-        await fs.access(targetFile);
-        console.log("[skills] acquiring-skills already installed at", targetDir);
-        return;
-    } catch {
-        // Not found — continue to install
-    }
-
-    // Resolve source from node_modules (works in both dev and packaged builds)
-    const sourceDir = isDevelopment
-        ? path.join(process.cwd(), "node_modules", "@letta-ai", "letta-code", "skills", "acquiring-skills")
-        : path.join(process.resourcesPath, "app.asar.unpacked", "node_modules", "@letta-ai", "letta-code", "skills", "acquiring-skills");
-
-    try {
-        // Ensure target directory exists
-        await fs.mkdir(targetDir, { recursive: true });
-
-        // Copy all files from source to target
-        const entries = await fs.readdir(sourceDir, { withFileTypes: true });
-        for (const entry of entries) {
-            if (entry.isFile()) {
-                const src = path.join(sourceDir, entry.name);
-                const dst = path.join(targetDir, entry.name);
-                await fs.copyFile(src, dst);
-            }
-        }
-        console.log("[skills] acquiring-skills installed at", targetDir);
-    } catch (err) {
-        console.warn("[skills] Failed to install acquiring-skills:", err);
-    }
-}
-
 const isDevelopment = !app.isPackaged;
 let localCli = "";
 if (isDevelopment) {
@@ -107,58 +66,6 @@ if (isDevelopment) {
 
 console.log("cliPath", localCli)
 
-async function listAgentMemoryFiles() {
-    const resolvedAgentId = getCurrentAgentId() || process.env.LETTA_AGENT_ID;
-    const memoryDir = process.env.MEMORY_DIR
-        || (resolvedAgentId ? path.join(homedir(), ".letta", "agents", resolvedAgentId, "memory") : "");
-
-    if (!memoryDir) {
-        throw new Error("Unable to resolve agent memory directory: no MEMORY_DIR and no active agent ID.");
-    }
-
-    try {
-        await fs.access(memoryDir);
-    } catch {
-        throw new Error(`Agent memory directory is not accessible: ${memoryDir}${resolvedAgentId ? ` (agent: ${resolvedAgentId})` : ""}`);
-    }
-
-    const results: Array<{ path: string; description?: string; preview: string; category: "system" | "reference" | "other" }> = [];
-
-    const walk = async (currentDir: string) => {
-        const entries = await fs.readdir(currentDir, { withFileTypes: true });
-        for (const entry of entries) {
-            if (entry.name.startsWith(".")) continue;
-            const absolutePath = path.join(currentDir, entry.name);
-            if (entry.isDirectory()) {
-                await walk(absolutePath);
-                continue;
-            }
-            if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
-
-            const relativePath = path.relative(memoryDir, absolutePath).replace(/\\/g, "/");
-            const content = await fs.readFile(absolutePath, "utf8");
-            const descriptionMatch = content.match(/^---[\s\S]*?^description:\s*(.+)$[\s\S]*?^---/m);
-            const body = content.replace(/^---[\s\S]*?---\s*/m, "").trim();
-            const preview = body.slice(0, 280);
-            const category = relativePath.startsWith("system/")
-                ? "system"
-                : relativePath.startsWith("reference/")
-                    ? "reference"
-                    : "other";
-
-            results.push({
-                path: relativePath,
-                description: descriptionMatch?.[1]?.trim(),
-                preview,
-                category,
-            });
-        }
-    };
-
-    await walk(memoryDir);
-    return results.sort((a, b) => a.path.localeCompare(b.path));
-}
-
 // Find letta CLI
 try {
     if (localCli) {
@@ -176,7 +83,9 @@ import { getCurrentAgentId } from "./libs/runner.js";
 import type { ClientEvent } from "./types.js";
 import { checkAlreadyConnected, connectEmail, disconnectEmail, fetchEmailById, fetchEmailDetails, fetchEmails, fetchFolders, downloadEmailAttachment, fetchAccounts, updateMessages, searchEmails, uploadEmailAttachmentToAgent } from "./emails/fetchEmails.js";
 import { expressServer } from "./emails/express.js";
-import { downloadSkillsFromGitHub, GLOBAL_SKILLS_DIR2 } from "./skillDownloader.js";
+import { downloadSkillsFromGitHub } from "./skillDownloader.js";
+import { installRequiredSkills } from "./services/skillInstaller.js";
+import { listAgentMemoryFiles } from "./services/memoryService.js";
 import { getLettaAgent, listLettaAgents, listLettaModels, retrieveAgentRunById } from "./lettaAgents.js";
 import {
     getBridgesConfig,
@@ -230,8 +139,8 @@ function handleSignal(): void {
 
 // Initialize everything when app is ready
 app.on("ready", () => {
-    // Ensure acquiring-skills is present so the agent can discover all other skills
-    void ensureAcquiringSkillInstalled();
+    // Install required skills on startup
+    void installRequiredSkills();
 
     Menu.setApplicationMenu(null);
     // Setup event handlers
@@ -661,7 +570,8 @@ app.on("ready", () => {
                 resolve({ stdout: "", stderr: "letta CLI not found", exitCode: 1 });
                 return;
             }
-            const cmd = `"${process.execPath}" "${localCli}" ${args.map((a) => JSON.stringify(a)).join(" ")}`;
+            // Use 'node' explicitly instead of process.execPath (which is Electron in packaged apps)
+            const cmd = `node "${localCli}" ${args.map((a) => JSON.stringify(a)).join(" ")}`;
             const cliEnv = { ...process.env, CI: "true", NO_COLOR: "1", FORCE_COLOR: "0", TERM: "dumb", NO_UPDATE_NOTIFIER: "1" };
             exec(cmd, { env: cliEnv, timeout: 30_000 }, (error, stdout, stderr) => {
                 resolve({
@@ -687,7 +597,7 @@ app.on("ready", () => {
             return { processId };
         }
 
-        const child = spawn(process.execPath, [localCli, ...args], {
+        const child = spawn("node", [localCli, ...args], {
             env: {
                 ...process.env,
                 // Force line-buffered, non-interactive, no-color output
