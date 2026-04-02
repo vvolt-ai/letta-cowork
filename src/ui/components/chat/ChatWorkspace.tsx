@@ -22,6 +22,7 @@ interface ChatWorkspaceProps {
   hasMoreHistory: boolean;
   reasoningSteps: ReasoningStep[];
   toolExecutions: ToolExecution[];
+  cliResults: any[];
   onScroll: () => void;
   onScrollToBottom: () => void;
   onSendMessage: () => void;
@@ -49,6 +50,7 @@ export const ChatWorkspace = memo(function ChatWorkspace({
   hasMoreHistory,
   reasoningSteps,
   toolExecutions,
+  cliResults,
   onScroll,
   onScrollToBottom,
   onSendMessage,
@@ -211,6 +213,7 @@ export const ChatWorkspace = memo(function ChatWorkspace({
               partialReasoning={partialReasoning}
               reasoningSteps={reasoningSteps}
               toolExecutions={toolExecutions}
+              cliResults={cliResults}
               showReasoning={showReasoningInChat}
               errorMessage={agentStatus === "error" ? errorMessage : undefined}
             />

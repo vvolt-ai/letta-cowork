@@ -6,6 +6,7 @@ import type {
   SessionStatus,
   StreamMessage,
   SDKAssistantMessage,
+  CliResultMessage,
 } from "../types";
 import { mergeConversationHistory, getConversationMessageId, type ConversationStreamMessage } from "../utils/conversation";
 import { truncateInput } from "../utils/chat";
@@ -52,6 +53,7 @@ export type EphemeralState = {
   assistantDraft?: SDKAssistantMessage;
   reasoning: ReasoningStep[];
   tools: ToolExecution[];
+  cliResults: CliResultMessage[];
   status: AgentDisplayStatus;
   lastUpdated: number;
   errorMessage?: string;
@@ -61,6 +63,7 @@ function initialEphemeralState(): EphemeralState {
   return {
     reasoning: [],
     tools: [],
+    cliResults: [],
     status: "idle",
     lastUpdated: Date.now(),
   };
@@ -433,6 +436,7 @@ function clearEphemeral(_ephemeral: EphemeralState, status: AgentDisplayStatus =
   return {
     reasoning: [],
     tools: [],
+    cliResults: [],
     assistantDraft: undefined,
     status,
     errorMessage,
@@ -746,6 +750,28 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
 
   setShowReasoningInChat: (show) => {
     set({ showReasoningInChat: show });
+  },
+
+
+  appendCliResult: (sessionId, result) => {
+    set((state) => {
+      const existing = state.sessions[sessionId];
+      if (!existing) return state;
+      const ephemeral = existing.ephemeral ?? initialEphemeralState();
+      return {
+        sessions: {
+          ...state.sessions,
+          [sessionId]: {
+            ...existing,
+            ephemeral: {
+              ...ephemeral,
+              cliResults: [...(ephemeral.cliResults ?? []), result],
+              lastUpdated: Date.now(),
+            },
+          },
+        },
+      };
+    });
   },
 
   resolvePermissionRequest: (sessionId, toolUseId) => {

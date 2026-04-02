@@ -314,5 +314,30 @@ interface Window {
         setProcessedUnreadEmailIds: (accountId: string, folderId: string, ids: string[]) => Promise<string[]>;
         clearProcessedUnreadEmailIds: (accountId: string, folderId: string) => Promise<void>;
         getProcessedUnreadEmailDebugInfo: (accountId: string, folderId: string, limit?: number) => Promise<ProcessedUnreadEmailDebugInfo>;
+
+        // ── Letta CLI ────────────────────────────────────────────────────────
+        /** Run a letta CLI command (exec-based). Returns when the process exits. */
+        runLettaCli: (args: string[]) => Promise<{ stdout: string; stderr: string; exitCode: number }>;
+        /** Spawn a letta CLI command (stream-based). Returns processId immediately. */
+        startLettaCliStream: (args: string[]) => Promise<{ processId: string }>;
+        /** Subscribe to streamed stdout/stderr/end events from a running CLI process. */
+        onLettaCliOutput: (
+            callback: (payload: {
+                processId: string;
+                type: "stdout" | "stderr" | "end";
+                data?: string;
+                exitCode?: number;
+            }) => void
+        ) => UnsubscribeFunction;
+        /** Kill a running CLI stream process by its processId. */
+        killLettaCli: (processId: string) => Promise<void>;
+
+        // ── Letta-Code Tools ─────────────────────────────────────────────────
+        /** Register all 6 letta-code tools on the Letta server. Pass overwrite=false to skip existing. */
+        registerLettaCodeTools: (overwrite?: boolean) => Promise<Array<{ name: string; status: "created" | "updated" | "skipped" | "error"; id?: string; error?: string }>>;
+        /** Attach all registered letta-code tools to a specific agent. */
+        attachLettaCodeToolsToAgent: (agentId: string) => Promise<{ attached: string[]; failed: string[] }>;
+        /** List which letta-code tools are already registered on the server. */
+        listLettaCodeTools: () => Promise<Array<{ name: string; id: string; registered: boolean }>>;
     }
 }

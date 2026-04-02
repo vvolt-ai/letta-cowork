@@ -72,7 +72,7 @@ export const expressServer = (mainWindow: BrowserWindow) => {
               );
               if (inboxFolder) {
                 await saveInboxFolderId(inboxFolder.folderId);
-                
+
                 // Update server tokens with account and folder IDs
                 try {
                   await storeEmailTokensOnServer({
@@ -226,7 +226,7 @@ export const expressServer = (mainWindow: BrowserWindow) => {
       res.status(500).send("Token exchange failed");
     }
   });
-  
+
 
   api.get("/agent-capabilities", (req: Request, res: Response) => {
     res.json({

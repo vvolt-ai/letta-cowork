@@ -146,6 +146,46 @@ electron.contextBridge.exposeInMainWorld("electron", {
         electron.ipcRenderer.invoke("get-processed-unread-email-debug-info", accountId, folderId, limit),
 
     // ============================================
+    // Letta CLI Execution
+    // ============================================
+
+    /** Run a letta CLI command and return full output when complete */
+    runLettaCli: (args: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> =>
+        electron.ipcRenderer.invoke("run-letta-cli", args),
+
+    /** Spawn a letta CLI command and return a processId immediately.
+     *  Subscribe to onLettaCliOutput to receive streamed chunks. */
+    startLettaCliStream: (args: string[]): Promise<{ processId: string }> =>
+        electron.ipcRenderer.invoke("start-letta-cli-stream", args),
+
+    /** Subscribe to stdout/stderr/end chunks from a streaming CLI process */
+    onLettaCliOutput: (callback: (payload: { processId: string; type: "stdout" | "stderr" | "end"; data?: string; exitCode?: number }) => void) => {
+        const cb = (_: Electron.IpcRendererEvent, payload: any) => callback(payload);
+        electron.ipcRenderer.on("letta-cli-output", cb);
+        return () => electron.ipcRenderer.off("letta-cli-output", cb);
+    },
+
+    /** Kill a running CLI stream process */
+    killLettaCli: (processId: string): Promise<void> =>
+        electron.ipcRenderer.invoke("kill-letta-cli", processId),
+
+    // ============================================
+    // Letta-Code Tools (register tools as agent capabilities)
+    // ============================================
+
+    /** Register all letta-code tools on the Letta server */
+    registerLettaCodeTools: (overwrite?: boolean): Promise<Array<{ name: string; status: string; id?: string; error?: string }>> =>
+        electron.ipcRenderer.invoke("register-letta-code-tools", overwrite ?? true),
+
+    /** Attach all registered letta-code tools to a specific agent */
+    attachLettaCodeToolsToAgent: (agentId: string): Promise<{ attached: string[]; failed: string[] }> =>
+        electron.ipcRenderer.invoke("attach-letta-code-tools", agentId),
+
+    /** List which letta-code tools are already registered on the server */
+    listLettaCodeTools: (): Promise<Array<{ name: string; id: string; registered: boolean }>> =>
+        electron.ipcRenderer.invoke("list-letta-code-tools"),
+
+    // ============================================
     // Vera Cowork API Integration
     // ============================================
     

@@ -618,6 +618,7 @@ function App() {
             hasMoreHistory={hasMoreHistory || Boolean(activeSession?.totalDisplayableCount && activeSession.totalDisplayableCount > visibleMessages.length)}
             reasoningSteps={reasoningSteps}
             toolExecutions={toolExecutions}
+            cliResults={ephemeralState?.cliResults ?? []}
             onScroll={handleScroll}
             onScrollToBottom={scrollToBottom}
             onSendMessage={handleSendMessage}

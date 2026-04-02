@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, dialog, globalShortcut, Menu, shell, nativeImage } from "electron"
-import { execSync } from "child_process";
+import { execSync, exec, spawn, type ChildProcess } from "child_process";
+import { randomUUID } from "crypto";
 import fs from "fs/promises";
 import { homedir } from "os";
 import path, { join } from "path";
@@ -23,7 +24,64 @@ import { initializeApiIpcHandlers, setupApiStatusBridge } from "./apiIpcHandlers
 
 initializeLettaEnv();
 
+// ── PATH fix: ensure common tool dirs are reachable inside packaged Electron ──
+(function fixPath() {
+    const extra = [
+        "/usr/local/bin",
+        "/usr/bin",
+        "/opt/homebrew/bin",
+        "/opt/homebrew/sbin",
+        "/usr/local/sbin",
+    ];
+    const current = process.env.PATH ?? "";
+    for (const p of extra) {
+        if (!current.split(":").includes(p)) {
+            process.env.PATH = `${current}:${p}`;
+        }
+    }
+})();
 
+// ── Letta CLI streaming process registry ─────────────────────────────────────
+const lettaCliProcesses = new Map<string, ChildProcess>();
+
+// ── Ensure acquiring-skills is always installed ───────────────────────────────
+async function ensureAcquiringSkillInstalled(): Promise<void> {
+    const globalSkillsDir = path.join(homedir(), ".letta", "skills");
+    const targetDir = path.join(globalSkillsDir, "acquiring-skills");
+    const targetFile = path.join(targetDir, "SKILL.md");
+
+    // Already installed — nothing to do
+    try {
+        await fs.access(targetFile);
+        console.log("[skills] acquiring-skills already installed at", targetDir);
+        return;
+    } catch {
+        // Not found — continue to install
+    }
+
+    // Resolve source from node_modules (works in both dev and packaged builds)
+    const sourceDir = isDevelopment
+        ? path.join(process.cwd(), "node_modules", "@letta-ai", "letta-code", "skills", "acquiring-skills")
+        : path.join(process.resourcesPath, "app.asar.unpacked", "node_modules", "@letta-ai", "letta-code", "skills", "acquiring-skills");
+
+    try {
+        // Ensure target directory exists
+        await fs.mkdir(targetDir, { recursive: true });
+
+        // Copy all files from source to target
+        const entries = await fs.readdir(sourceDir, { withFileTypes: true });
+        for (const entry of entries) {
+            if (entry.isFile()) {
+                const src = path.join(sourceDir, entry.name);
+                const dst = path.join(targetDir, entry.name);
+                await fs.copyFile(src, dst);
+            }
+        }
+        console.log("[skills] acquiring-skills installed at", targetDir);
+    } catch (err) {
+        console.warn("[skills] Failed to install acquiring-skills:", err);
+    }
+}
 
 const isDevelopment = !app.isPackaged;
 let localCli = "";
@@ -113,6 +171,7 @@ try {
 import { getPreloadPath, getUIPath, getIconPath } from "./pathResolver.js";
 import { getStaticData, pollResources, stopPolling } from "./test.js";
 import { handleClientEvent, cleanupAllSessions, recoverPendingApprovalsForSession, cancelRecoveredRun } from "./ipc-handlers.js";
+import { registerLettaCodeTools, attachLettaCodeToolsToAgent, listRegisteredLettaCodeTools } from "./lettaCodeTools.js";
 import { getCurrentAgentId } from "./libs/runner.js";
 import type { ClientEvent } from "./types.js";
 import { checkAlreadyConnected, connectEmail, disconnectEmail, fetchEmailById, fetchEmailDetails, fetchEmails, fetchFolders, downloadEmailAttachment, fetchAccounts, updateMessages, searchEmails, uploadEmailAttachmentToAgent } from "./emails/fetchEmails.js";
@@ -171,6 +230,9 @@ function handleSignal(): void {
 
 // Initialize everything when app is ready
 app.on("ready", () => {
+    // Ensure acquiring-skills is present so the agent can discover all other skills
+    void ensureAcquiringSkillInstalled();
+
     Menu.setApplicationMenu(null);
     // Setup event handlers
     app.on("before-quit", cleanup);
@@ -577,6 +639,97 @@ app.on("ready", () => {
         }
 
         return result.filePaths[0];
+    });
+
+    // ── Letta-Code Tools: register / attach / list ───────────────────────────
+    ipcMain.handle("register-letta-code-tools", async (_event, overwrite: boolean = true) => {
+        return await registerLettaCodeTools(overwrite);
+    });
+
+    ipcMain.handle("attach-letta-code-tools", async (_event, agentId: string) => {
+        return await attachLettaCodeToolsToAgent(agentId);
+    });
+
+    ipcMain.handle("list-letta-code-tools", async () => {
+        return await listRegisteredLettaCodeTools();
+    });
+
+    // ── Letta CLI: exec-based (returns full output) ──────────────────────────
+    ipcMain.handle("run-letta-cli", async (_event, args: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> => {
+        return new Promise((resolve) => {
+            if (!localCli) {
+                resolve({ stdout: "", stderr: "letta CLI not found", exitCode: 1 });
+                return;
+            }
+            const cmd = `"${process.execPath}" "${localCli}" ${args.map((a) => JSON.stringify(a)).join(" ")}`;
+            const cliEnv = { ...process.env, CI: "true", NO_COLOR: "1", FORCE_COLOR: "0", TERM: "dumb", NO_UPDATE_NOTIFIER: "1" };
+            exec(cmd, { env: cliEnv, timeout: 30_000 }, (error, stdout, stderr) => {
+                resolve({
+                    stdout: stdout ?? "",
+                    stderr: stderr ?? (error?.message ?? ""),
+                    exitCode: error?.code != null ? Number(error.code) : (error ? 1 : 0),
+                });
+            });
+        });
+    });
+
+    // ── Letta CLI: spawn-based streaming ─────────────────────────────────────
+    ipcMain.handle("start-letta-cli-stream", (_event, args: string[]): { processId: string } => {
+        const processId = randomUUID();
+
+        if (!localCli) {
+            mainWindow?.webContents.send("letta-cli-output", {
+                processId,
+                type: "stderr",
+                data: "letta CLI not found. Check installation.",
+            });
+            mainWindow?.webContents.send("letta-cli-output", { processId, type: "end", exitCode: 1 });
+            return { processId };
+        }
+
+        const child = spawn(process.execPath, [localCli, ...args], {
+            env: {
+                ...process.env,
+                // Force line-buffered, non-interactive, no-color output
+                CI: "true",
+                NO_COLOR: "1",
+                FORCE_COLOR: "0",
+                NO_UPDATE_NOTIFIER: "1",
+                // Disable any TTY-dependent readline/spinner behaviour
+                TERM: "dumb",
+            },
+            windowsHide: true,
+            stdio: ["ignore", "pipe", "pipe"],
+        });
+
+        lettaCliProcesses.set(processId, child);
+
+        const send = (type: string, data?: string, exitCode?: number) => {
+            mainWindow?.webContents.send("letta-cli-output", { processId, type, data, exitCode });
+        };
+
+        child.stdout.on("data", (chunk: Buffer) => send("stdout", chunk.toString()));
+        child.stderr.on("data", (chunk: Buffer) => send("stderr", chunk.toString()));
+        child.on("close", (code) => {
+            lettaCliProcesses.delete(processId);
+            send("end", undefined, code ?? 0);
+        });
+        child.on("error", (err) => {
+            lettaCliProcesses.delete(processId);
+            send("stderr", `Process error: ${err.message}`);
+            send("end", undefined, 1);
+        });
+
+        return { processId };
+    });
+
+    // ── Letta CLI: kill a running stream process ─────────────────────────────
+    ipcMain.handle("kill-letta-cli", (_event, processId: string): void => {
+        const child = lettaCliProcesses.get(processId);
+        if (child) {
+            child.kill("SIGTERM");
+            lettaCliProcesses.delete(processId);
+        }
     });
 
     expressServer(mainWindow)

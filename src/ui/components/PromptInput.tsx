@@ -24,6 +24,7 @@ interface SlashCommandSuggestion {
 }
 
 const SLASH_COMMAND_SUGGESTIONS: SlashCommandSuggestion[] = [
+  { command: "/letta", description: "Run a letta CLI command (e.g. /letta agents list)", insertText: "/letta ", status: "supported" },
   { command: "/doctor", description: "Audit and refine your memory structure", insertText: "/doctor ", status: "info" },
   { command: "/remember", description: "Remember something from the conversation", insertText: "/remember ", status: "supported" },
   { command: "/skill", description: "Enter skill creation mode", insertText: "/skill ", status: "info" },
@@ -272,6 +273,35 @@ export function usePromptActions(sendEvent: (event: ClientEvent) => void, onOpen
     const args = argParts.join(" ").trim();
 
     switch (normalized) {
+      case "/letta": {
+        if (!args) {
+          setGlobalError("Usage: /letta <command>  e.g. /letta agents list");
+          return true;
+        }
+        if (!activeSessionId) {
+          setGlobalError("Start or select a session before using /letta.");
+          return true;
+        }
+        const cliArgs = args.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g)?.map((a) => a.replace(/^["']|["']$/g, "")) ?? args.split(/\s+/);
+        setGlobalError(null);
+        try {
+          const { stdout, stderr, exitCode } = await window.electron.runLettaCli(cliArgs);
+          const rawOutput = (stdout || stderr || "(no output)").trim();
+          const formattedOutput = formatLettaCliOutput(cliArgs, rawOutput);
+          useAppStore.getState().appendCliResult(activeSessionId, {
+            type: "cli_result",
+            id: `cli-${Date.now()}`,
+            command: args,
+            output: formattedOutput || "(no output)",
+            exitCode,
+            createdAt: Date.now(),
+          });
+          setPrompt("");
+        } catch (err) {
+          setGlobalError(`/letta failed: ${String(err)}`);
+        }
+        return true;
+      }
       case "/new":
       case "/clear": {
         setActiveSessionId(null, false);
@@ -1264,3 +1294,61 @@ export const PromptInput = memo(function PromptInput({ sendEvent, onSendMessage,
     </section>
   );
 });
+
+
+function formatLettaCliOutput(cliArgs: string[], rawOutput: string): string {
+  try {
+    const parsed = JSON.parse(rawOutput);
+    const body = Array.isArray(parsed) ? parsed : (parsed?.body ?? parsed?.items ?? parsed);
+
+    if (cliArgs[0] === "agents" && cliArgs[1] === "list" && Array.isArray(body)) {
+      if (body.length === 0) return "No agents found.";
+      return body
+        .map((agent: any) => {
+          const name = agent?.name ?? "Unnamed agent";
+          const id = agent?.id ?? "unknown-id";
+          const model = agent?.model ? ` — ${agent.model}` : "";
+          const description = agent?.description ? `\n  ${String(agent.description).slice(0, 140)}` : "";
+          return `- ${name} — ${id}${model}${description}`;
+        })
+        .join("\n");
+    }
+
+    if (cliArgs[0] === "agents" && Array.isArray(body)) {
+      return JSON.stringify(body, null, 2);
+    }
+
+    if (typeof body === "object") {
+      const cleaned = sanitizeLettaOutput(body);
+      return JSON.stringify(cleaned, null, 2);
+    }
+  } catch {}
+
+  return rawOutput || "(no output)";
+}
+
+function sanitizeLettaOutput(value: any): any {
+  if (Array.isArray(value)) return value.map(sanitizeLettaOutput);
+  if (!value || typeof value !== "object") return value;
+
+  const noisyKeys = new Set([
+    "message_ids",
+    "system",
+    "embedding_config",
+    "llm_config",
+    "model_settings",
+    "compaction_settings",
+    "memory",
+    "blocks",
+    "secrets",
+    "response",
+    "options",
+  ]);
+
+  const result: Record<string, unknown> = {};
+  for (const [key, val] of Object.entries(value)) {
+    if (noisyKeys.has(key)) continue;
+    result[key] = sanitizeLettaOutput(val);
+  }
+  return result;
+}

@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import type { IndexedMessage } from "../../hooks/useMessageWindow";
-import type { StreamMessage, SDKAssistantMessage, SDKToolResultMessage } from "../../types";
+import type { StreamMessage, SDKAssistantMessage, SDKToolResultMessage, CliResultMessage } from "../../types";
 import type { ReasoningStep, ToolExecution } from "../../store/useAppStore";
 import { truncateInput } from "../../utils/chat";
 import { UserMessage } from "./UserMessage";
@@ -17,6 +17,7 @@ interface ChatTimelineProps {
   partialReasoning?: string;
   reasoningSteps?: ReasoningStep[];
   toolExecutions?: ToolExecution[];
+  cliResults?: CliResultMessage[];
   showReasoning?: boolean;
   errorMessage?: string;
 }
@@ -33,7 +34,8 @@ export type TimelineEntry =
       output?: string | null;
       logs?: string[];
       status: "running" | "succeeded" | "failed";
-    };
+    }
+  | { kind: "cli_result"; id: string; command: string; output: string; exitCode: number };
 
 type ToolTimelineEntry = Extract<TimelineEntry, { kind: "tool" }>;
 
@@ -208,6 +210,7 @@ export function ChatTimeline({
   partialReasoning = "",
   reasoningSteps = [],
   toolExecutions = [],
+  cliResults = [],
   showReasoning = false,
   errorMessage,
 }: ChatTimelineProps) {
@@ -371,8 +374,18 @@ export function ChatTimeline({
       }
     });
 
+    cliResults.forEach((result) => {
+      entries.push({
+        kind: "cli_result",
+        id: result.id,
+        command: result.command,
+        output: result.output,
+        exitCode: result.exitCode,
+      });
+    });
+
     return entries.filter((entry): entry is TimelineEntry => entry !== null);
-  }, [messages, activeSessionId, partialReasoning, reasoningSteps, showReasoning, toolExecutions]);
+  }, [messages, activeSessionId, partialReasoning, reasoningSteps, showReasoning, toolExecutions, cliResults]);
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
@@ -407,6 +420,21 @@ export function ChatTimeline({
                   output={entry.output}
                   logs={entry.logs}
                 />
+              );
+            case "cli_result":
+              return (
+                <div key={entry.id} className="mb-4 overflow-hidden rounded-2xl border border-ink-900/10 bg-[#0d1117] shadow-sm">
+                  <div className="flex items-center justify-between border-b border-white/10 px-4 py-2">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300">Local Letta CLI</div>
+                    <div className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${entry.exitCode === 0 ? "bg-emerald-400/15 text-emerald-300" : "bg-red-400/15 text-red-300"}`}>
+                      exit {entry.exitCode}
+                    </div>
+                  </div>
+                  <div className="px-4 py-3">
+                    <div className="mb-2 font-mono text-xs text-emerald-200">$ letta {entry.command}</div>
+                    <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap break-words rounded-xl bg-black/20 p-3 font-mono text-xs leading-5 text-slate-100">{entry.output}</pre>
+                  </div>
+                </div>
               );
             default:
               return null;

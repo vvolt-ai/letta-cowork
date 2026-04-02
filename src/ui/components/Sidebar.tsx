@@ -14,6 +14,8 @@ import {
 } from "../utils/session";
 import { SidebarSection } from "./sidebar/SidebarSection";
 import { IntegrationList } from "./sidebar/IntegrationList";
+import { LettaTerminal } from "./LettaTerminal";
+import * as Dialog from "@radix-ui/react-dialog";
 import { ConversationList } from "./sidebar/ConversationList";
 import veraLogo from "../assets/vera-logo.svg";
 
@@ -143,6 +145,7 @@ export const Sidebar = memo(function Sidebar({
   const [resumeSessionId, setResumeSessionId] = useState<string | null>(null);
   const [showEmailView, setShowEmailView] = useState(false);
   const [showAddAgentsModal, setShowAddAgentsModal] = useState(false);
+  const [showLettaCli, setShowLettaCli] = useState(false);
   const [activeTab, setActiveTab] = useState<"sessions" | "configuration">("sessions");
 
   const {
@@ -509,6 +512,16 @@ export const Sidebar = memo(function Sidebar({
           >
             Download Skill
           </button>
+          <button
+            onClick={() => setShowLettaCli(true)}
+            className="flex h-8 w-full items-center justify-center gap-2 rounded-md border border-[var(--color-border)] px-3 text-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+          >
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="4 17 10 11 4 5" />
+              <line x1="12" y1="19" x2="20" y2="19" />
+            </svg>
+            Letta CLI
+          </button>
         </div>
       </SidebarSection>
 
@@ -633,6 +646,32 @@ export const Sidebar = memo(function Sidebar({
         onDownload={handleDownloadSkill}
         onReset={resetSkillForm}
       />
+
+      {/* Letta CLI Dialog */}
+      <Dialog.Root open={showLettaCli} onOpenChange={setShowLettaCli}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-ink-900/50 backdrop-blur-sm" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-60 w-full max-w-3xl -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-ink-900/10 bg-[#0d1117] shadow-2xl focus:outline-none">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-ink-900/20">
+              <div className="flex items-center gap-2">
+                <svg viewBox="0 0 24 24" className="h-4 w-4 text-[var(--color-accent)]" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="4 17 10 11 4 5" />
+                  <line x1="12" y1="19" x2="20" y2="19" />
+                </svg>
+                <Dialog.Title className="text-sm font-semibold text-ink-100">Letta CLI</Dialog.Title>
+              </div>
+              <Dialog.Close asChild>
+                <button className="rounded-full p-1.5 text-ink-500 hover:bg-ink-900/30 hover:text-ink-300 transition" aria-label="Close">
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M6 6l12 12M18 6l-12 12" />
+                  </svg>
+                </button>
+              </Dialog.Close>
+            </div>
+            <LettaTerminal className="rounded-b-2xl" style={{ height: "520px" }} />
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
 
       {/* User Section */}
       {userEmail && (

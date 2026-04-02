@@ -49,6 +49,15 @@ export type UserPromptMessage = {
 // Import for union type and local use
 import type { SDKMessage, CanUseToolResponse, MessageContentItem } from "@letta-ai/letta-code-sdk";
 
+export type CliResultMessage = {
+  type: "cli_result";
+  id: string;
+  command: string;
+  output: string;
+  exitCode: number;
+  createdAt: number;
+};
+
 export type StreamMessage = SDKMessage | UserPromptMessage;
 
 export type SessionStatus = "idle" | "running" | "completed" | "error";
