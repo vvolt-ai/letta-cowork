@@ -379,6 +379,15 @@ function App() {
     void loadAutoSyncConfig();
   }, [isAuthenticated]); // Reload config when authentication state changes
 
+  // Listen for auth-expired event from main process
+  useEffect(() => {
+    const unsubscribe = window.electron.onAuthExpired(() => {
+      console.log('[App] Auth expired event received, logging out');
+      logout();
+    });
+    return unsubscribe;
+  }, [logout]);
+
   useEffect(() => {
     if (typeof window === "undefined") {
       return;

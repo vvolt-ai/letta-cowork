@@ -99,10 +99,18 @@ export class VeraCoworkApiClient {
   private baseUrl: string;
   private tokens: AuthTokens | null = null;
   private refreshPromise: Promise<AuthTokens | null> | null = null;
+  private _onAuthExpired: (() => void) | null = null;
 
   constructor(baseUrl?: string) {
     this.baseUrl = baseUrl || process.env.VERA_COWORK_API_URL || "https://vera-cowork-server.ngrok.app";
     this.loadTokens();
+  }
+
+  /**
+   * Set callback to be called when authentication expires
+   */
+  set onAuthExpired(callback: (() => void) | null) {
+    this._onAuthExpired = callback;
   }
 
   // ============================================
@@ -186,26 +194,29 @@ export class VeraCoworkApiClient {
     });
 
     // Handle 401 - try to refresh token
-    if (response.status === 401 && this.tokens?.refreshToken) {
-      const newTokens = await this.refreshAccessToken();
-      if (newTokens) {
-        // Retry with new token
-        headers["Authorization"] = `Bearer ${newTokens.accessToken}`;
-        const retryResponse = await fetch(url, {
-          method,
-          headers,
-          body: body ? JSON.stringify(body) : undefined,
-        });
-        if (!retryResponse.ok) {
-          const error = await retryResponse.text();
-          throw new Error(`API error: ${retryResponse.status} - ${error}`);
+    if (response.status === 401) {
+      // Try to refresh if we have a refresh token
+      if (this.tokens?.refreshToken) {
+        const newTokens = await this.refreshAccessToken();
+        if (newTokens) {
+          // Retry with new token
+          headers["Authorization"] = `Bearer ${newTokens.accessToken}`;
+          const retryResponse = await fetch(url, {
+            method,
+            headers,
+            body: body ? JSON.stringify(body) : undefined,
+          });
+          if (!retryResponse.ok) {
+            const error = await retryResponse.text();
+            throw new Error(`API error: ${retryResponse.status} - ${error}`);
+          }
+          return retryResponse.json();
         }
-        return retryResponse.json();
-      } else {
-        // Refresh failed, clear tokens
-        this.clearTokens();
-        throw new Error("Authentication expired. Please login again.");
       }
+      // Refresh failed or no refresh token - clear and notify
+      this.clearTokens();
+      this._onAuthExpired?.();
+      throw new Error("Authentication expired. Please login again.");
     }
 
     if (!response.ok) {
@@ -713,6 +724,13 @@ export function getVeraCoworkApiClient(): VeraCoworkApiClient {
 
 export function setVeraCoworkApiUrl(url: string): void {
   apiClientInstance = new VeraCoworkApiClient(url);
+}
+
+/**
+ * Set callback to be called when authentication expires
+ */
+export function setAuthExpiredCallback(callback: (() => void) | null): void {
+  getVeraCoworkApiClient().onAuthExpired = callback;
 }
 
 // ============================================

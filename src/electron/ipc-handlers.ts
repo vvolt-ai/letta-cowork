@@ -21,6 +21,47 @@ import { getLettaAgent, getAgentRunApprovalCandidates, cancelAgentRunById } from
 
 const DEBUG = process.env.DEBUG_IPC === "true";
 
+/**
+ * Generate a title from the first prompt message
+ */
+function generateTitleFromPrompt(prompt: string): string {
+  if (!prompt?.trim()) return "New conversation";
+
+  // Clean up the prompt
+  const cleaned = prompt.trim();
+
+  // Try to extract a meaningful title
+  // 1. If it's a question, use it as-is (but truncated)
+  // 2. If it's a statement, take the first meaningful part
+
+  // Remove common prefixes
+  const withoutPrefix = cleaned
+    .replace(/^(please|can you|could you|help me|i want|i need|let's|lets)\s*/i, "")
+    .trim();
+
+  // Take first sentence or up to 50 chars
+  const firstSentence = withoutPrefix.split(/[.!?]\s/)[0] || withoutPrefix;
+
+  // Truncate to ~50 chars, trying to break at word boundary
+  let title = firstSentence;
+  if (title.length > 50) {
+    const words = title.split(/\s+/);
+    title = "";
+    for (const word of words) {
+      if ((title + " " + word).trim().length > 50) break;
+      title = (title + " " + word).trim();
+    }
+    if (title.length === 0) {
+      title = firstSentence.slice(0, 47) + "...";
+    }
+  }
+
+  // Capitalize first letter
+  title = title.charAt(0).toUpperCase() + title.slice(1);
+
+  return title || "New conversation";
+}
+
 // Simple logger for IPC handlers
 const log = (msg: string, data?: Record<string, unknown>) => {
   const timestamp = new Date().toISOString();
@@ -288,8 +329,9 @@ export async function handleClientEvent(event: ClientEvent) {
           if (updates.lettaConversationId && !conversationId) {
             conversationId = updates.lettaConversationId;
             debug("session.start: session initialized", { conversationId });
-            
-            const sessionTitle = (title?.trim() ?? "") || conversationId;
+
+            // Generate title from prompt if not provided
+            const sessionTitle = (title?.trim() ?? "") || generateTitleFromPrompt(prompt);
 
             createRuntimeSession(conversationId);
             updateSession(conversationId, { status: "running", title: sessionTitle });

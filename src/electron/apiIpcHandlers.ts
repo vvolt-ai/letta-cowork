@@ -9,6 +9,7 @@ import { ipcMain } from "electron";
 import {
   getVeraCoworkApiClient,
   setVeraCoworkApiUrl,
+  setAuthExpiredCallback,
   type Channel,
   type ChannelRuntimeStatus,
   type AuthTokens,
@@ -330,6 +331,12 @@ export function initializeApiIpcHandlers(): void {
  */
 export function setupApiStatusBridge(mainWindow: Electron.BrowserWindow): void {
   const api = getVeraCoworkApiClient();
+
+  // Set up auth expired callback to redirect to login
+  setAuthExpiredCallback(() => {
+    console.log('[API] Auth expired, sending event to renderer');
+    mainWindow.webContents.send("auth-expired");
+  });
 
   // Poll for status updates
   const pollInterval = setInterval(async () => {

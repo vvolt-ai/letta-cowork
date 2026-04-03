@@ -23,6 +23,10 @@ electron.contextBridge.exposeInMainWorld("electron", {
         electron.ipcRenderer.on("server-event", cb);
         return () => electron.ipcRenderer.off("server-event", cb);
     },
+    onAuthExpired: (callback: () => void) => {
+        electron.ipcRenderer.on("auth-expired", callback);
+        return () => electron.ipcRenderer.off("auth-expired", callback);
+    },
 
     getRecentCwds: (limit?: number) =>
         ipcInvoke("get-recent-cwds", limit),

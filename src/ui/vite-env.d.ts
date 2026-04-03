@@ -14,6 +14,7 @@ interface Window {
     // Client events
     sendClientEvent: (event: any) => void;
     onServerEvent: (callback: (event: any) => void) => () => void;
+    onAuthExpired: (callback: () => void) => () => void;
 
     // Directory
     getRecentCwds: (limit?: number) => Promise<string[]>;
