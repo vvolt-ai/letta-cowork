@@ -1,6 +1,6 @@
 import { BrowserWindow } from "electron";
 import type { ClientEvent, ServerEvent, StreamMessage } from "./types.js";
-import { runLetta, type RunnerHandle, getCurrentAgentId, clearAgentCache } from "./libs/runner.js";
+import { runLetta, type RunnerHandle, getCurrentAgentId, clearAgentCache, abortSessionById, abortAllSessions } from "./libs/runner.js";
 import type { PendingPermission } from "./libs/runtime-state.js";
 import {
   createRuntimeSession,
@@ -55,6 +55,26 @@ function createLettaClient(): Letta | null {
 
 // Track active runner handles
 const runnerHandles = new Map<string, RunnerHandle>();
+
+// Cancel all runners and clear handles (used on error)
+async function cancelAllRunners(): Promise<void> {
+  debug("cancelAllRunners: cancelling all runners", { count: runnerHandles.size });
+
+  // Abort all sessions via runner
+  await abortAllSessions();
+
+  // Clear all handles
+  for (const [key, handle] of runnerHandles) {
+    try {
+      await handle.abort();
+    } catch (err) {
+      debug("cancelAllRunners: error aborting handle", { key, error: String(err) });
+    }
+  }
+  runnerHandles.clear();
+
+  debug("cancelAllRunners: all runners cancelled");
+}
 
 function extractMessageText(content: unknown): string {
   if (!content) return "";
@@ -329,6 +349,8 @@ export async function handleClientEvent(event: ClientEvent) {
     } catch (error) {
       log("session.start: ERROR", { error: String(error) });
       console.error("Failed to start session:", error);
+      // Cancel all runners on error
+      await cancelAllRunners();
       emit({
         type: "runner.error",
         payload: { message: String(error) },
@@ -383,9 +405,22 @@ export async function handleClientEvent(event: ClientEvent) {
       payload: { sessionId: conversationId, prompt, attachments, content },
     });
 
+    // Create placeholder key for this session (used for early abort support)
+    const placeholderKey = `pending-${conversationId}`;
+    
     try {
       debug("session.continue: calling runLetta", { conversationId });
       let actualConversationId = conversationId;
+      
+      // Register placeholder handle immediately
+      // This ensures we can abort even before runLetta completes
+      runnerHandles.set(placeholderKey, {
+        abort: async () => {
+          debug("placeholder abort called, will abort actual handle when available");
+          // This will be replaced by the actual handle's abort
+        },
+        sessionId: conversationId,
+      });
       
       const handle = await runLetta({
         prompt,
@@ -443,9 +478,16 @@ export async function handleClientEvent(event: ClientEvent) {
         },
       });
       debug("session.continue: runLetta returned handle");
+      
+      // Remove placeholder and set actual handle
+      runnerHandles.delete(placeholderKey);
       runnerHandles.set(actualConversationId, handle);
     } catch (error) {
+      // Clean up placeholder on error
+      runnerHandles.delete(placeholderKey);
       log("session.continue: ERROR", { error: String(error) });
+      // Cancel all runners on error
+      await cancelAllRunners();
       updateSession(conversationId, { status: "error" });
       emit({
         type: "session.status",
@@ -463,6 +505,10 @@ export async function handleClientEvent(event: ClientEvent) {
     let handle = runnerHandles.get(conversationId);
     if (!handle) {
       handle = runnerHandles.get("pending");
+    }
+    // Also try placeholder key for session.continue
+    if (!handle) {
+      handle = runnerHandles.get(`pending-${conversationId}`);
     }
     
     // Also try to find by sessionId property (new approach)
@@ -482,6 +528,7 @@ export async function handleClientEvent(event: ClientEvent) {
       await handle.abort();
       runnerHandles.delete(conversationId);
       runnerHandles.delete("pending");
+      runnerHandles.delete(`pending-${conversationId}`);
       // Also delete by sessionId if different
       for (const [key, h] of runnerHandles) {
         if (h.sessionId === conversationId) {
@@ -489,8 +536,17 @@ export async function handleClientEvent(event: ClientEvent) {
         }
       }
     } else {
-      debug("session.stop: no handle found");
+      debug("session.stop: no handle found in runnerHandles, trying direct abort via runner");
+      // Fallback: abort directly via runner's activeSessions map
+      await abortSessionById(conversationId);
     }
+    
+    // Also clear any pending permissions for this session
+    const runtimeSession = getSession(conversationId);
+    if (runtimeSession?.pendingPermissions) {
+      runtimeSession.pendingPermissions.clear();
+    }
+    
     updateSession(conversationId, { status: "idle" });
     emit({
       type: "session.status",

@@ -606,6 +606,7 @@ function App() {
           <ChatWorkspace
             title={activeSession?.title}
             agentName={activeSession?.agentName}
+            agentId={activeSession?.agentId}
             activeSessionId={activeSessionId}
             visibleMessages={visibleMessages}
             hasNewMessages={hasNewMessages}

@@ -195,7 +195,8 @@ export async function getAgentRunApprovalCandidates(agentId: string, conversatio
   const client = createLettaClient();
 
   try {
-    const response = await (client as any).agents.runs.list(agentId);
+    // Use client.runs.list() with agentId filter instead of client.agents.runs.list()
+    const response = await (client as any).runs.list({ agent_id: agentId });
     const items = Array.isArray(response?.items) ? response.items : Array.isArray(response) ? response : [];
     const runs = items.filter((run: any) => {
       const status = String(run?.status ?? "").toLowerCase();

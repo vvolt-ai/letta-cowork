@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import type { IndexedMessage } from "../../hooks/useMessageWindow";
 import type { StreamMessage, SDKAssistantMessage, SDKToolResultMessage, CliResultMessage } from "../../types";
-import type { ReasoningStep, ToolExecution } from "../../store/useAppStore";
+import type { ReasoningStep, ToolExecution, AgentDisplayStatus } from "../../store/useAppStore";
 import { truncateInput } from "../../utils/chat";
 import { UserMessage } from "./UserMessage";
 import { AssistantMessage } from "./AssistantMessage";
@@ -12,6 +12,7 @@ interface ChatTimelineProps {
   messages: IndexedMessage[];
   activeSessionId: string | null;
   agentName: string;
+  agentStatus?: AgentDisplayStatus;
   partialMessage: string;
   showPartialMessage: boolean;
   partialReasoning?: string;
@@ -205,6 +206,7 @@ export function ChatTimeline({
   messages,
   activeSessionId,
   agentName,
+  agentStatus = "idle",
   partialMessage,
   showPartialMessage,
   partialReasoning = "",
@@ -449,6 +451,22 @@ export function ChatTimeline({
           agentName={agentName}
           isStreaming
         />
+      ) : null}
+
+      {/* Show loading indicator when agent is processing but no partial message yet */}
+      {!showPartialMessage && ["thinking", "running_tool", "generating"].includes(agentStatus) ? (
+        <div className="flex items-center gap-3 px-1 py-2 text-sm text-muted">
+          <span className="inline-flex h-4 w-4 items-center justify-center">
+            <svg className="h-4 w-4 animate-spin text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83" />
+            </svg>
+          </span>
+          <span className="text-ink-600">
+            {agentStatus === "thinking" && `${agentName} is thinking...`}
+            {agentStatus === "running_tool" && `${agentName} is running tools...`}
+            {agentStatus === "generating" && `${agentName} is responding...`}
+          </span>
+        </div>
       ) : null}
 
       {errorMessage ? (

@@ -90,13 +90,13 @@ export const ConversationViewer = memo(function ConversationViewer({
   const isProcessing = ["thinking", "running_tool", "generating", "waiting_approval"].includes(agentStatus);
   
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-white">
       {/* Header */}
-      <div className="flex items-center gap-3 px-3 py-2 border-b border-ink-900/10">
+      <div className="flex items-center gap-3 px-3 py-2 border-b border-[var(--color-border)] bg-white">
         {showBackButton && onBack && (
           <button
             onClick={onBack}
-            className="rounded-lg p-1.5 text-ink-500 hover:bg-ink-900/10"
+            className="rounded-lg p-1.5 text-ink-500 hover:bg-gray-100"
             title="Back"
           >
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -112,10 +112,10 @@ export const ConversationViewer = memo(function ConversationViewer({
             {session?.agentName || "Agent"}
           </div>
         </div>
-        
+
         {/* Status Badge */}
         <StatusBadge status={agentStatus} />
-        
+
         {/* Open in Letta Button */}
         {showOpenInLetta && session?.agentId && (
           <button
@@ -135,17 +135,18 @@ export const ConversationViewer = memo(function ConversationViewer({
           </button>
         )}
       </div>
-      
+
       {/* Messages */}
       <div
         ref={scrollContainerRef}
-        className="flex-1 overflow-auto"
+        className="flex-1 overflow-auto bg-white"
         onScroll={handleScroll}
       >
         <ChatTimeline
           messages={visibleMessages}
           activeSessionId={sessionId}
           agentName={session?.agentName || "Agent"}
+          agentStatus={agentStatus}
           partialMessage={partialMessage}
           showPartialMessage={showPartialMessage}
           reasoningSteps={reasoningSteps}
@@ -155,9 +156,9 @@ export const ConversationViewer = memo(function ConversationViewer({
         />
         <div ref={messagesEndRef} />
       </div>
-      
+
       {/* Input */}
-      <div className="border-t border-ink-900/10 px-2 py-2">
+      <div className="border-t border-[var(--color-border)] bg-white px-2 py-2">
         <PromptInput
           overrideSessionId={sessionId}
           disabled={isProcessing}

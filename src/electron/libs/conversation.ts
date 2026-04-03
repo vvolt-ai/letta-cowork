@@ -344,17 +344,8 @@ export function filterConversationMessages(rawMessages: LettaMessage[]): Convers
     }
 
     if (type === "system_message") {
-      const textContent = extractText(msg.content ?? metadata);
-      if (textContent.trim().length > 0) {
-        const systemMessage: ConversationStreamMessage = {
-          type: "assistant",
-          content: textContent,
-          uuid: msg.id || msg.message_id || randomUUID(),
-          createdAt,
-          historyOrder,
-        } as ConversationStreamMessage;
-        result.push(systemMessage);
-      }
+      // Skip system messages - they contain internal system prompt and memory info
+      // that is not relevant to the user
       continue;
     }
 

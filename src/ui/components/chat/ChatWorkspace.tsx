@@ -10,6 +10,7 @@ import { ChatTimeline } from "./ChatTimeline";
 interface ChatWorkspaceProps {
   title?: string;
   agentName?: string;
+  agentId?: string;
   activeSessionId: string | null;
   visibleMessages: IndexedMessage[];
   hasNewMessages: boolean;
@@ -38,6 +39,7 @@ interface ChatWorkspaceProps {
 export const ChatWorkspace = memo(function ChatWorkspace({
   title,
   agentName,
+  agentId,
   activeSessionId,
   visibleMessages,
   hasNewMessages,
@@ -91,6 +93,8 @@ export const ChatWorkspace = memo(function ChatWorkspace({
       <ConversationHeader
         title={resolvedTitle}
         agentName={resolvedAgentName}
+        agentId={agentId}
+        sessionId={activeSessionId ?? undefined}
         status={agentStatus}
         activityOpen={activityOpen}
         onToggleActivity={onToggleActivity}
@@ -99,10 +103,10 @@ export const ChatWorkspace = memo(function ChatWorkspace({
       <div
         ref={scrollContainerRef}
         onScroll={onScroll}
-        className="flex-1 overflow-y-auto bg-[var(--color-bg-100)]"
+        className="flex-1 overflow-y-auto bg-white"
       >
         <div className="mx-auto w-full max-w-5xl px-6 py-6">
-          <div className="mb-5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]/95 px-4 py-3 text-sm shadow-sm backdrop-blur-sm">
+          <div className="mb-5 rounded-2xl border border-[var(--color-border)] bg-gray-50 px-4 py-3 text-sm">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">Status</div>
@@ -137,7 +141,7 @@ export const ChatWorkspace = memo(function ChatWorkspace({
                   <button
                     type="button"
                     onClick={onOpenMemory}
-                    className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-secondary)] px-3 py-1.5 text-[11px] font-medium text-ink-700 transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                    className="rounded-full border border-[var(--color-border)] bg-gray-100 px-3 py-1.5 text-[11px] font-medium text-ink-700 transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
                   >
                     Memory
                   </button>
@@ -183,7 +187,7 @@ export const ChatWorkspace = memo(function ChatWorkspace({
               <button
                 onClick={onLoadMoreHistory}
                 disabled={isHistoryLoading}
-                className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-xs font-medium text-ink-700 transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-full border border-[var(--color-border)] bg-white px-4 py-2 text-xs font-medium text-ink-700 transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isHistoryLoading ? "Loading earlier messages…" : "Load more messages"}
               </button>
@@ -208,6 +212,7 @@ export const ChatWorkspace = memo(function ChatWorkspace({
               messages={visibleMessages}
               activeSessionId={activeSessionId}
               agentName={resolvedAgentName}
+              agentStatus={agentStatus}
               partialMessage={partialMessage}
               showPartialMessage={showPartialMessage}
               partialReasoning={partialReasoning}
@@ -222,7 +227,7 @@ export const ChatWorkspace = memo(function ChatWorkspace({
         </div>
       </div>
 
-      <div className="border-t border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-2">
+      <div className="border-t border-[var(--color-border)] bg-white px-2 py-2">
         <PromptInput
           sendEvent={sendEvent}
           onSendMessage={onSendMessage}
@@ -238,7 +243,7 @@ export const ChatWorkspace = memo(function ChatWorkspace({
           className={`pointer-events-auto absolute right-6 z-40 flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium shadow-sm transition lg:right-12 ${
             hasNewMessages
               ? "border border-[var(--color-accent)] bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)]"
-              : "border border-[var(--color-border)] bg-[var(--color-surface)] text-ink-700 hover:bg-[var(--color-surface-tertiary)]"
+              : "border border-[var(--color-border)] bg-white text-ink-700 hover:bg-gray-50"
           }`}
         >
           <svg

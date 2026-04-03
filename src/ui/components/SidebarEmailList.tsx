@@ -75,7 +75,7 @@ export function SidebarEmailList({
       <div className="flex items-center justify-between">
         <div className="text-sm font-semibold text-ink-800">Inbox</div>
         <button
-          className="rounded-lg border border-ink-900/10 bg-surface px-2 py-1 text-xs font-medium text-ink-700 hover:bg-surface-tertiary"
+          className="rounded-lg border border-[var(--color-border)] bg-surface px-2 py-1 text-xs font-medium text-ink-700 hover:bg-surface-tertiary"
           onClick={onClose}
         >
           Close
@@ -130,7 +130,7 @@ export function SidebarEmailList({
                               {formatDate(email.receivedTime)}
                             </span>
                             <button
-                              className="rounded-md border border-ink-900/10 bg-surface p-1 text-ink-600 hover:bg-surface-tertiary"
+                              className="rounded-md border border-[var(--color-border)] bg-surface p-1 text-ink-600 hover:bg-surface-tertiary"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 onViewEmail(email);
@@ -144,7 +144,7 @@ export function SidebarEmailList({
                               </svg>
                             </button>
                             <button
-                              className="rounded-md border border-ink-900/10 bg-surface p-1 text-ink-600 hover:bg-surface-tertiary disabled:opacity-50"
+                              className="rounded-md border border-[var(--color-border)] bg-surface p-1 text-ink-600 hover:bg-surface-tertiary disabled:opacity-50"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 onUseEmailAsInput(email);
@@ -166,7 +166,7 @@ export function SidebarEmailList({
                             </button>
                             {selectedAgentId && onProcessEmailToAgent && (
                               <button
-                                className="rounded-md border border-ink-900/10 bg-surface p-1 text-ink-600 hover:bg-surface-tertiary disabled:opacity-50"
+                                className="rounded-md border border-[var(--color-border)] bg-surface p-1 text-ink-600 hover:bg-surface-tertiary disabled:opacity-50"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   onProcessEmailToAgent(email, selectedAgentId);

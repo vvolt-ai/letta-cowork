@@ -263,9 +263,9 @@ export function EmailInboxModal({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-ink-900/40 backdrop-blur-sm" />
-        <Dialog.Content className="fixed inset-1 z-50 h-[calc(100vh-8px)] w-[calc(100vw-8px)] rounded-lg border border-ink-900/10 bg-surface shadow-xl overflow-hidden flex flex-col">
+        <Dialog.Content className="fixed inset-1 z-50 h-[calc(100vh-8px)] w-[calc(100vw-8px)] rounded-lg border border-[var(--color-border)] bg-white shadow-xl overflow-hidden flex flex-col">
           {/* Header */}
-          <div className="flex items-center justify-between gap-3 border-b border-ink-900/10 px-4 py-3">
+          <div className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] px-4 py-3">
             <div className="flex items-center gap-3">
               <Dialog.Title className="text-lg font-semibold text-ink-900">
                 📧 Inbox
@@ -273,7 +273,7 @@ export function EmailInboxModal({
               {onRefresh && (
                 <button
                   onClick={onRefresh}
-                  className="rounded-lg border border-ink-900/10 bg-white px-2 py-1 text-xs font-medium text-ink-700 hover:bg-surface-tertiary"
+                  className="rounded-lg border border-[var(--color-border)] bg-white px-2 py-1 text-xs font-medium text-ink-700 hover:bg-gray-50"
                   title="Refresh emails"
                 >
                   ↻ Refresh
@@ -291,7 +291,7 @@ export function EmailInboxModal({
 
           {/* Search Bar */}
           {onSearch && (
-            <form onSubmit={handleSearch} className="px-4 py-2 border-b border-ink-900/10">
+            <form onSubmit={handleSearch} className="px-4 py-2 border-b border-[var(--color-border)]">
               <div className="flex gap-2">
                 <div className="relative flex-1">
                   <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -303,7 +303,7 @@ export function EmailInboxModal({
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search emails by subject, sender, or content..."
-                    className="w-full rounded-lg border border-ink-900/10 bg-white py-2 pl-10 pr-4 text-sm text-ink-800 placeholder:text-muted focus:border-accent/40 focus:outline-none"
+                    className="w-full rounded-lg border border-[var(--color-border)] bg-white py-2 pl-10 pr-4 text-sm text-ink-800 placeholder:text-muted focus:border-accent/40 focus:outline-none"
                   />
                 </div>
                 <button
@@ -319,7 +319,7 @@ export function EmailInboxModal({
                       setSearchQuery("");
                       onSearch("");
                     }}
-                    className="rounded-lg border border-ink-900/10 bg-white px-3 py-2 text-sm text-ink-700 hover:bg-surface-tertiary"
+                    className="rounded-lg border border-[var(--color-border)] bg-white px-3 py-2 text-sm text-ink-700 hover:bg-gray-50"
                   >
                     Clear
                   </button>
@@ -331,8 +331,8 @@ export function EmailInboxModal({
           {/* Main Content - Split Layout */}
           <div className={`flex flex-1 min-h-0 ${isResizingList ? "select-none cursor-col-resize" : ""}`}>
             {/* Left Side - Email List */}
-            <div style={{ width: `${listWidth}px` }} className="shrink-0 border-r border-ink-900/10 flex flex-col">
-              <div className="px-3 py-2 border-b border-ink-900/10 text-xs text-muted">
+            <div style={{ width: `${listWidth}px` }} className="shrink-0 border-r border-[var(--color-border)] flex flex-col">
+              <div className="px-3 py-2 border-b border-[var(--color-border)] text-xs text-muted">
                 {emails.length} email{emails.length !== 1 ? 's' : ''}
                 {selectedEmail && ` • ${selectedEmail.subject?.slice(0, 30)}...`}
               </div>
@@ -439,7 +439,7 @@ export function EmailInboxModal({
                 /* Email Preview */
                 <>
                   {/* Email Header */}
-                  <div className="px-3 py-2 border-b border-ink-900/10">
+                  <div className="px-3 py-2 border-b border-[var(--color-border)]">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <h2 className="text-base font-semibold text-ink-900 truncate">
@@ -465,7 +465,7 @@ export function EmailInboxModal({
                         <button
                           onClick={() => onUseEmailAsInput(selectedEmail)}
                           disabled={isProcessingEmailInput}
-                          className="rounded-lg border border-ink-900/10 bg-white px-2 py-1 text-xs font-medium text-ink-700 hover:bg-surface-tertiary disabled:opacity-50"
+                          className="rounded-lg border border-[var(--color-border)] bg-white px-2 py-1 text-xs font-medium text-ink-700 hover:bg-gray-50 disabled:opacity-50"
                           title="Use email as chat input"
                         >
                           💬 Use in Chat
@@ -489,7 +489,7 @@ export function EmailInboxModal({
                                     {session?.agentId ? (
                                       <button
                                         onClick={() => handleOpenInLetta(conversationId)}
-                                        className="rounded-lg border border-ink-900/10 bg-white px-2 py-1 text-xs font-medium text-ink-700 hover:bg-surface-tertiary"
+                                        className="rounded-lg border border-[var(--color-border)] bg-white px-2 py-1 text-xs font-medium text-ink-700 hover:bg-gray-50"
                                         title="Open in Letta"
                                       >
                                         Open in Letta
@@ -533,7 +533,7 @@ export function EmailInboxModal({
                     ) : html ? (
                       <iframe
                         title="Email content"
-                        className="w-full h-full min-h-[400px] rounded-lg border border-ink-900/10"
+                        className="w-full h-full min-h-[400px] rounded-lg border border-[var(--color-border)]"
                         sandbox=""
                         srcDoc={content}
                       />

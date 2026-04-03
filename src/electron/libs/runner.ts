@@ -55,7 +55,16 @@ export type RunnerHandle = {
 };
 
 const DEFAULT_CWD = process.cwd();
-const DEBUG = true; // Enable debug logging for stop issue debugging
+const DEBUG = process.env.LETTA_DEBUG === "true" || process.env.NODE_ENV === "development";
+
+// Simple timing helper
+const timing = {
+  start: Date.now(),
+  mark: (label: string) => {
+    const elapsed = Date.now() - timing.start;
+    console.log(`[timing] ${elapsed}ms: ${label}`);
+  }
+};
 
 // Simple logger for runner
 const log = (msg: string, data?: Record<string, unknown>) => {
@@ -69,9 +78,9 @@ const log = (msg: string, data?: Record<string, unknown>) => {
 
 // Debug-only logging (verbose)
 const debug = (msg: string, data?: Record<string, unknown>) => {
-  console.log(`[${new Date().toISOString()}] [runner] ${msg}`, data);
-  if (!DEBUG) return;
-  log(msg, data);
+  if (DEBUG) {
+    log(msg, data);
+  }
 };
 
 // Store active Letta sessions for abort handling
@@ -83,30 +92,33 @@ let currentAbortController: AbortController | null = null;
 // Store agentId for reuse across conversations
 let cachedAgentId: string | null = null;
 
-// Cache agent name to avoid repeated API calls
-let cachedAgentName: string | undefined = undefined;
+// Cache agent names by agentId to support multiple agents
+const agentNameCache = new Map<string, string>();
 
 // Clear the agent cache (call when starting a new session with a different agent)
 export function clearAgentCache(): void {
   cachedAgentId = null;
-  cachedAgentName = undefined;
-  debug("agent cache cleared");
+  // Don't clear the name cache - it's keyed by agentId so it's safe to keep
+  debug("agent cache cleared (name cache preserved with " + agentNameCache.size + " entries)");
 }
 
-// Helper to get agent name from agentId
+// Helper to get agent name from agentId (uses cache keyed by agentId)
 async function getAgentName(agentId: string | null | undefined): Promise<string | undefined> {
-  // Return cached name if available
-  if (cachedAgentName && cachedAgentId === agentId) {
-    return cachedAgentName;
-  }
-  
   if (!agentId) return undefined;
-  
+
+  // Return cached name if available for this specific agentId
+  const cachedName = agentNameCache.get(agentId);
+  if (cachedName) {
+    debug("getAgentName: using cached name", { agentId, cachedName });
+    return cachedName;
+  }
+
+  debug("getAgentName: fetching from API", { agentId });
   try {
     const agent = await getLettaAgent(agentId);
     if (agent) {
-      cachedAgentId = agentId;
-      cachedAgentName = agent.name;
+      agentNameCache.set(agentId, agent.name);
+      debug("getAgentName: fetched and cached", { agentId, agentName: agent.name });
       return agent.name;
     }
   } catch (err) {
@@ -131,6 +143,50 @@ export async function abortAllSessions(): Promise<void> {
     }
   }
   activeSessions.clear();
+}
+
+// Abort a specific session by conversationId
+export async function abortSessionById(conversationId: string): Promise<boolean> {
+  console.log("[runner] abortSessionById called:", conversationId, "active sessions:", activeSessions.size);
+  
+  // Try to find the session by exact match
+  let sessionToAbort = activeSessions.get(conversationId);
+  
+  // If not found, try to find by prefix match (e.g., "pending-" prefix)
+  if (!sessionToAbort) {
+    for (const [key, session] of activeSessions) {
+      if (key === conversationId || key.includes(conversationId) || conversationId.includes(key)) {
+        sessionToAbort = session;
+        console.log("[runner] found session by partial match:", key);
+        break;
+      }
+    }
+  }
+  
+  if (sessionToAbort) {
+    try {
+      console.log("[runner] aborting session:", conversationId);
+      await sessionToAbort.abort();
+      activeSessions.delete(conversationId);
+      console.log("[runner] session aborted successfully:", conversationId);
+      return true;
+    } catch (err) {
+      console.log("[runner] error aborting session:", err);
+      // Still remove from map
+      activeSessions.delete(conversationId);
+      return false;
+    }
+  }
+  
+  // Also try to abort via current abort controller
+  if (currentAbortController && !currentAbortController.signal.aborted) {
+    console.log("[runner] no session found, aborting via currentAbortController");
+    currentAbortController.abort();
+    return true;
+  }
+  
+  console.log("[runner] no session found to abort for:", conversationId);
+  return false;
 }
 
 export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
@@ -261,7 +317,8 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
 
       // CRITICAL: Store session for abort handling BEFORE send() is called
       // This ensures we can abort even if user clicks stop immediately after starting
-      sessionKey = lettaSession.conversationId || `temp-${Date.now()}`;
+      // Use resumeConversationId if available (for continued sessions), otherwise use conversationId or temp key
+      sessionKey = resumeConversationId || lettaSession.conversationId || `temp-${Date.now()}`;
       activeSessions.set(sessionKey, lettaSession);
       activeLettaSession = lettaSession;
       lettaSessionRef = lettaSession;
@@ -269,12 +326,18 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
 
       // Send the prompt (triggers init internally)
       debug("calling send()");
+      const sendStartTime = Date.now();
       const payload = Array.isArray(content) && content.length > 0 ? content : prompt;
       await lettaSession.send(payload);
+      const sendDuration = Date.now() - sendStartTime;
       debug("send() completed", {
         conversationId: lettaSession.conversationId,
         agentId: lettaSession.agentId,
+        sendDurationMs: sendDuration,
       });
+      if (sendDuration > 5000) {
+        console.log(`[runner] WARNING: send() took ${sendDuration}ms - this is slow!`);
+      }
 
       // Now initialized - update sessionId and cache agentId
       if (lettaSession.conversationId) {
@@ -291,17 +354,18 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
         debug("cached agentId for future conversations", { agentId: cachedAgentId });
       }
 
-      // Get agent name for display
-      let agentName: string | undefined = undefined;
+      // Get agent name for display (uses cache if available)
+      let agentName: string | undefined = 'Unknown Agent';
       try {
-        agentName = await getAgentName(lettaSession.agentId || cachedAgentId || targetAgentId || undefined);
+        getAgentName(lettaSession.agentId || cachedAgentId || targetAgentId || undefined).then(name => {
+          agentName = name || agentName;
+        });
       } catch (e) {
         console.log("[runner] Failed to get agent name:", e);
       }
-      debug("got agent name for display", { agentName });
 
       // Stream messages
-      debug("starting stream");
+      debug("starting stream", { conversationId: currentSessionId });
       let messageCount = 0;
       
       // Check abort signal before starting stream
@@ -412,7 +476,7 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
         });
         return;
       }
-      
+
       // Log detailed error info for debugging
       const errorDetails = {
         error: String(error),
@@ -423,10 +487,21 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
         apiKeyMasked: process.env.LETTA_API_KEY ? process.env.LETTA_API_KEY.substring(0, 10) + "..." : "not set",
       };
       log("ERROR in runLetta", errorDetails);
-      
+
+      // Cancel all active sessions on error
+      debug("cancelling all active sessions due to error");
+      for (const [key, session] of activeSessions) {
+        try {
+          await session.abort();
+          activeSessions.delete(key);
+        } catch (err) {
+          debug("error aborting session", { key, error: String(err) });
+        }
+      }
+
       // Send detailed error to UI
       const errorMessage = `Failed to start session: ${String(error)}\n\nAgent ID: ${errorDetails.agentId}\nBase URL: ${errorDetails.baseURL}\nAPI Key: ${errorDetails.apiKeyMasked}`;
-      
+
       onEvent({
         type: "session.status",
         payload: { sessionId: currentSessionId, status: "error", title: currentSessionId, error: errorMessage }

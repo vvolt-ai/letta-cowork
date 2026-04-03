@@ -209,7 +209,14 @@ export function usePromptActions(sendEvent: (event: ClientEvent) => void, onOpen
   const setActiveSessionId = useAppStore((state) => state.setActiveSessionId);
   const startTimeoutRef = useRef<number | null>(null);
 
-  const isRunning = activeSession?.status === "running";
+  // Check if the agent is actively processing (should show stop button)
+  // This checks both session status and ephemeral agent status
+  const agentStatus = activeSession?.ephemeral?.status;
+  const isRunning = activeSession?.status === "running" ||
+    agentStatus === "thinking" ||
+    agentStatus === "running_tool" ||
+    agentStatus === "generating" ||
+    agentStatus === "waiting_approval";
 
   const handleSend = useCallback(async (options?: SendMessageOptions) => {
     const text = options?.text ?? prompt;
