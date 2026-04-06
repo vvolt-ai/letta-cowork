@@ -8,7 +8,7 @@ import express, { Request, Response } from "express";
 import { BASE_URL, OAUTH_PORT, saveAccessToken, saveRefreshToken, saveAccountId, saveInboxFolderId } from "./helper.js";
 import { downloadEmailAttachment, fetchAccounts, fetchEmails, fetchEmailById, fetchFolders, searchEmails, uploadEmailAttachmentToAgent } from "./fetchEmails.js";
 import { getCurrentAgentId } from "../libs/runner.js";
-import { storeEmailTokensOnServer } from "../apiClient.js";
+import { storeEmailTokensOnServer, getVeraCoworkApiClient, getProcessedEmailDetailsFromServer, getProcessedEmailByMessageId } from "../apiClient.js";
 
 
 
@@ -227,6 +227,163 @@ export const expressServer = (mainWindow: BrowserWindow) => {
     }
   });
 
+  // ============================================
+  // Vera Cowork Server API Endpoints
+  // ============================================
+
+  api.get("/processedEmails", async (req: Request, res: Response) => {
+    try {
+      const { accountId, folderId, messageId } = req.query;
+
+      if (!accountId || !folderId) {
+        return res.status(400).send("Missing accountId or folderId");
+      }
+
+      // If messageId is provided, get single record
+      if (messageId) {
+        const record = await getProcessedEmailByMessageId(
+          accountId as string,
+          folderId as string,
+          messageId as string
+        );
+        if (!record) {
+          return res.status(404).send("Processed email not found");
+        }
+        return res.json(record);
+      }
+
+      // Otherwise get all records
+      const records = await getProcessedEmailDetailsFromServer(
+        accountId as string,
+        folderId as string
+      );
+      res.json({ records });
+    } catch (error) {
+      console.error("Failed to fetch processed emails:", error);
+      res.status(500).send("Failed to fetch processed emails");
+    }
+  });
+
+  // ============================================
+  // Letta API Endpoints
+  // ============================================
+
+  api.get("/letta/conversation/:conversationId", async (req: Request, res: Response) => {
+    try {
+      const { conversationId } = req.params;
+      const { agentId, limit = 50 } = req.query;
+
+      if (!conversationId) {
+        return res.status(400).send("Missing conversationId");
+      }
+
+      const LETTA_API_KEY = process.env.LETTA_API_KEY;
+      if (!LETTA_API_KEY) {
+        return res.status(500).send("Letta API key not configured");
+      }
+
+      // If agentId is provided, fetch via agent messages endpoint
+      if (agentId) {
+        const response = await fetch(
+          `https://api.letta.com/v1/agents/${agentId}/messages?conversation_id=${conversationId}&limit=${limit}&order=asc`,
+          {
+            headers: {
+              "Authorization": `Bearer ${LETTA_API_KEY}`,
+            },
+          }
+        );
+        if (!response.ok) {
+          return res.status(response.status).send("Failed to fetch conversation from Letta");
+        }
+        const data = await response.json();
+        return res.json(data);
+      }
+
+      // Otherwise try to fetch conversation directly
+      const response = await fetch(
+        `https://api.letta.com/v1/conversations/${conversationId}`,
+        {
+          headers: {
+            "Authorization": `Bearer ${LETTA_API_KEY}`,
+          },
+        }
+      );
+      if (!response.ok) {
+        return res.status(response.status).send("Failed to fetch conversation from Letta");
+      }
+      const data = await response.json();
+      res.json(data);
+    } catch (error) {
+      console.error("Failed to fetch conversation from Letta:", error);
+      res.status(500).send("Failed to fetch conversation from Letta");
+    }
+  });
+
+  api.get("/letta/conversation/:conversationId/messages", async (req: Request, res: Response) => {
+    try {
+      const { conversationId } = req.params;
+      const { agentId, limit = 50, order = "asc" } = req.query;
+
+      if (!conversationId || !agentId) {
+        return res.status(400).send("Missing conversationId or agentId");
+      }
+
+      const LETTA_API_KEY = process.env.LETTA_API_KEY;
+      if (!LETTA_API_KEY) {
+        return res.status(500).send("Letta API key not configured");
+      }
+
+      const response = await fetch(
+        `https://api.letta.com/v1/agents/${agentId}/messages?conversation_id=${conversationId}&limit=${limit}&order=${order}`,
+        {
+          headers: {
+            "Authorization": `Bearer ${LETTA_API_KEY}`,
+          },
+        }
+      );
+      if (!response.ok) {
+        return res.status(response.status).send("Failed to fetch messages from Letta");
+      }
+      const data = await response.json();
+      res.json(data);
+    } catch (error) {
+      console.error("Failed to fetch messages from Letta:", error);
+      res.status(500).send("Failed to fetch messages from Letta");
+    }
+  });
+
+  api.get("/letta/agent/:agentId", async (req: Request, res: Response) => {
+    try {
+      const { agentId } = req.params;
+
+      if (!agentId) {
+        return res.status(400).send("Missing agentId");
+      }
+
+      const LETTA_API_KEY = process.env.LETTA_API_KEY;
+      if (!LETTA_API_KEY) {
+        return res.status(500).send("Letta API key not configured");
+      }
+
+      const response = await fetch(
+        `https://api.letta.com/v1/agents/${agentId}`,
+        {
+          headers: {
+            "Authorization": `Bearer ${LETTA_API_KEY}`,
+          },
+        }
+      );
+      if (!response.ok) {
+        return res.status(response.status).send("Failed to fetch agent from Letta");
+      }
+      const data = await response.json();
+      res.json(data);
+    } catch (error) {
+      console.error("Failed to fetch agent from Letta:", error);
+      res.status(500).send("Failed to fetch agent from Letta");
+    }
+  });
+
 
   api.get("/agent-capabilities", (req: Request, res: Response) => {
     res.json({
@@ -439,6 +596,59 @@ export const expressServer = (mainWindow: BrowserWindow) => {
             "GET /searchEmails?accountId=123&searchKey=sender:john@example.com::has:attachment",
             "GET /searchEmails?searchKey=subject:Invoice",
             "GET /searchEmails?searchKey=sender:john@example.com::has:attachment"
+          ]
+        },
+        {
+          name: "processedEmails",
+          method: "GET",
+          path: "/processedEmails",
+          description: "Get processed email records from Vera Cowork server. Returns conversationId and agentId for processed emails.",
+          queryParams: [
+            { name: "accountId", type: "string", required: true },
+            { name: "folderId", type: "string", required: true },
+            { name: "messageId", type: "string", required: false, description: "Get single record by messageId" }
+          ],
+          examples: [
+            "GET /processedEmails?accountId=123&folderId=456",
+            "GET /processedEmails?accountId=123&folderId=456&messageId=789"
+          ]
+        },
+        {
+          name: "lettaConversation",
+          method: "GET",
+          path: "/letta/conversation/:conversationId",
+          description: "Get conversation details from Letta API.",
+          queryParams: [
+            { name: "agentId", type: "string", required: false, description: "Agent ID to fetch messages from" },
+            { name: "limit", type: "number", required: false, description: "Max messages to return (default: 50)" }
+          ],
+          examples: [
+            "GET /letta/conversation/conv-abc123",
+            "GET /letta/conversation/conv-abc123?agentId=agent-xyz&limit=100"
+          ]
+        },
+        {
+          name: "lettaConversationMessages",
+          method: "GET",
+          path: "/letta/conversation/:conversationId/messages",
+          description: "Get messages from a Letta conversation.",
+          queryParams: [
+            { name: "agentId", type: "string", required: true },
+            { name: "limit", type: "number", required: false, description: "Max messages to return (default: 50)" },
+            { name: "order", type: "string", required: false, description: "asc or desc (default: asc)" }
+          ],
+          examples: [
+            "GET /letta/conversation/conv-abc123/messages?agentId=agent-xyz",
+            "GET /letta/conversation/conv-abc123/messages?agentId=agent-xyz&limit=100&order=desc"
+          ]
+        },
+        {
+          name: "lettaAgent",
+          method: "GET",
+          path: "/letta/agent/:agentId",
+          description: "Get agent details from Letta API.",
+          examples: [
+            "GET /letta/agent/agent-xyz123"
           ]
         }
       ]

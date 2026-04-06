@@ -139,6 +139,25 @@ code, pre, textarea.mono, input.mono {
   animation: shimmer 1.4s linear infinite;
 }
 
+/* Cursor pointer for all clickable elements */
+button,
+a,
+[role="button"],
+input[type="submit"],
+input[type="reset"],
+input[type="button"],
+.label,
+.select,
+[onclick],
+.cursor-pointer {
+  cursor: pointer;
+}
+
+/* Prevent text selection on buttons */
+button {
+  user-select: none;
+}
+
 /* Dark mode overrides using CSS custom properties */
 @media (prefers-color-scheme: dark) {
   :root {

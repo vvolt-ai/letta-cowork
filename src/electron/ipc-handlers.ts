@@ -325,6 +325,7 @@ export async function handleClientEvent(event: ClientEvent) {
         },
         onSessionUpdate: async (updates) => {
           // Called when session is initialized with conversationId
+          console.log("[session.start] onSessionUpdate called", { updates, isEmailSession, conversationId });
           debug("session.start: onSessionUpdate called", { updates });
           if (updates.lettaConversationId && !conversationId) {
             conversationId = updates.lettaConversationId;
@@ -370,7 +371,9 @@ export async function handleClientEvent(event: ClientEvent) {
             
             // Emit session.status to unblock UI with resolved title
             // Include background flag so UI knows not to switch to this session
+            console.log("[session.start] Emitting session.status", { conversationId, isEmailSession, status: "running" });
             emit({
+
               type: "session.status",
               payload: { sessionId: conversationId, status: "running", title: sessionTitle, cwd, agentName, agentId: resolvedAgentId, background, isEmailSession },
             });
@@ -620,6 +623,14 @@ export async function handleClientEvent(event: ClientEvent) {
     removeStoredSession(conversationId);
     
     emit({ type: "session.deleted", payload: { sessionId: conversationId } });
+    return;
+  }
+
+  if (event.type === "session.cancelPending") {
+    // Cancel all pending runners (runs that haven't been assigned to a session yet)
+    debug("session.cancelPending: cancelling all pending runners");
+    await cancelAllRunners();
+    emit({ type: "session.pendingCancelled", payload: {} });
     return;
   }
 

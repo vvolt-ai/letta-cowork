@@ -16,6 +16,7 @@ interface EmailInboxModalProps {
   onProcessEmailToAgent?: (email: ZohoEmail, agentId: string) => void;
   processingEmailId?: string | null;
   successEmailId?: string | null;
+  newlyCreatedConversations?: Map<string, { conversationId: string; agentId?: string }>;
   onRefresh?: () => void;
   onSearch?: (query: string) => void;
   hasMore?: boolean;
@@ -80,6 +81,7 @@ export function EmailInboxModal({
   onProcessEmailToAgent,
   processingEmailId,
   successEmailId,
+  newlyCreatedConversations,
   onRefresh,
   onSearch,
   hasMore = false,
@@ -93,66 +95,118 @@ export function EmailInboxModal({
   const [localEmailDetails, setLocalEmailDetails] = useState<unknown>(null);
   const [localEmailDetailsError, setLocalEmailDetailsError] = useState<string | null>(null);
   const [isFetchingLocalContent, setIsFetchingLocalContent] = useState(false);
-  const [processedEmailIds, setProcessedEmailIds] = useState<Set<string>>(new Set());
+  const [processedEmailsFromServer, setProcessedEmailsFromServer] = useState<Map<string, { conversationId: string; agentId?: string }>>(new Map());
   const [viewingConversationId, setViewingConversationId] = useState<string | null>(null);
   const [listWidth, setListWidth] = useState(DEFAULT_LIST_WIDTH);
   const [isResizingList, setIsResizingList] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  
+
   // Get session data from store to find email conversations
   const sessions = useAppStore(useShallow((state) => state.sessions));
 
   // Get selected email from local state
   const selectedEmail = emails.find(e => e.messageId === localSelectedId);
 
-  // Load processed email IDs when modal opens
+  // Load processed emails from server when modal opens
   useEffect(() => {
     if (open && accountId && folderId) {
-      window.electron.getProcessedUnreadEmailIds(accountId, folderId)
-        .then((ids) => {
-          setProcessedEmailIds(new Set(ids));
-          console.log(`[EmailInboxModal] Loaded ${ids.length} processed email IDs`);
+      // Load from server (has conversationId and agentId)
+      window.electron.getProcessedEmailDetailsFromServer(accountId, folderId)
+        .then((records) => {
+          console.log(`[EmailInboxModal] Loaded ${records.length} processed emails from server:`, records);
+          const map = new Map<string, { conversationId: string; agentId?: string }>();
+          let noConversationCount = 0;
+          for (const record of records) {
+            if (record.conversationId) {
+              map.set(record.messageId, {
+                conversationId: record.conversationId,
+                agentId: record.agentId ?? undefined,
+              });
+            } else {
+              noConversationCount++;
+              console.log(`[EmailInboxModal] Email ${record.messageId} processed but no conversationId - can reprocess`);
+            }
+          }
+          setProcessedEmailsFromServer(map);
+          console.log(`[EmailInboxModal] ${map.size} emails have conversationId, ${noConversationCount} can be reprocessed`);
         })
         .catch((err) => {
-          console.warn(`[EmailInboxModal] Failed to load processed IDs:`, err);
+          console.warn(`[EmailInboxModal] Failed to load from server:`, err);
         });
     }
   }, [open, accountId, folderId]);
 
-  // Clear processed IDs when modal closes
+  // Clear processed emails when modal closes
   useEffect(() => {
     if (!open) {
-      setProcessedEmailIds(new Set());
+      setProcessedEmailsFromServer(new Map());
     }
   }, [open]);
 
-  // Check if an email is already processed
-  const isEmailProcessed = useCallback((email: ZohoEmail) => {
-    return processedEmailIds.has(String(email.messageId));
-  }, [processedEmailIds]);
+  // Update local state when new conversations are created
+  useEffect(() => {
+    console.log(`[EmailInboxModal] Effect running, newlyCreatedConversations:`, newlyCreatedConversations);
+    if (newlyCreatedConversations && newlyCreatedConversations.size > 0) {
+      console.log(`[EmailInboxModal] Received ${newlyCreatedConversations.size} newly created conversations`);
+      setProcessedEmailsFromServer(prev => {
+        const newMap = new Map(prev);
+        newlyCreatedConversations.forEach((value, messageId) => {
+          if (value.conversationId) {
+            newMap.set(messageId, value);
+            console.log(`[EmailInboxModal] Updated email ${messageId} with conversationId ${value.conversationId}`);
+          }
+        });
+        console.log(`[EmailInboxModal] After update, map size: ${newMap.size}`);
+        return newMap;
+      });
+    }
+  }, [newlyCreatedConversations]);
 
-  // Find conversation ID for a processed email by looking at sessions
+  // Check if an email is already processed (must have valid conversationId)
+  const isEmailProcessed = useCallback((email: ZohoEmail) => {
+    const messageId = String(email.messageId);
+    const serverData = processedEmailsFromServer.get(messageId);
+    const isProcessed = !!(serverData?.conversationId);
+    console.log(`[EmailInboxModal] isEmailProcessed(${messageId}): ${isProcessed}, serverData:`, serverData);
+    return isProcessed;
+  }, [processedEmailsFromServer]);
+
+  // Find conversation ID for a processed email (from server data)
   const findConversationIdForEmail = useCallback((email: ZohoEmail): string | null => {
-    const emailSubject = email.subject || String(email.messageId);
-    // Look for sessions with title matching "Email: {subject}" or containing the email subject
+    const messageId = String(email.messageId);
+
+    // Check server data (has conversationId)
+    const serverData = processedEmailsFromServer.get(messageId);
+    if (serverData?.conversationId) {
+      return serverData.conversationId;
+    }
+
+    // Fallback: check local sessions by title matching
+    const emailSubject = email.subject || messageId;
     for (const session of Object.values(sessions)) {
-      // Check if it's an email session or if the title starts with "Email:"
       const isEmailRelatedSession = session.isEmailSession || session.title?.startsWith("Email:");
       if (isEmailRelatedSession && session.title?.includes(emailSubject)) {
         return session.id;
       }
     }
     return null;
-  }, [sessions]);
+  }, [sessions, processedEmailsFromServer]);
 
   // Handle process email to agent - update local state after success
   const handleProcessEmailToAgent = useCallback(async (email: ZohoEmail, agentId: string) => {
     if (!onProcessEmailToAgent) return;
-    
+
     await onProcessEmailToAgent(email, agentId);
-    
+
     // Update local state to mark as processed immediately
-    setProcessedEmailIds(prev => new Set(prev).add(String(email.messageId)));
+    const messageId = String(email.messageId);
+    setProcessedEmailsFromServer(prev => {
+      const newMap = new Map(prev);
+      // Note: conversationId will be set by the server later
+      // For now just mark as processed without conversationId
+      newMap.set(messageId, { conversationId: '', agentId });
+      return newMap;
+    });
   }, [onProcessEmailToAgent]);
 
   // Handle view conversation - show in modal
@@ -160,10 +214,12 @@ export function EmailInboxModal({
     setViewingConversationId(conversationId);
   }, []);
 
-  const handleOpenInLetta = useCallback((conversationId: string) => {
+  const handleOpenInLetta = useCallback((conversationId: string, agentId?: string) => {
+    // Use provided agentId or get from session
     const session = sessions[conversationId];
-    if (!session?.agentId) return;
-    const lettaUrl = `https://app.letta.com/projects/default-project/agents/${session.agentId}?conversation=${conversationId}`;
+    const effectiveAgentId = agentId || session?.agentId;
+    if (!effectiveAgentId) return;
+    const lettaUrl = `https://app.letta.com/projects/default-project/agents/${effectiveAgentId}?conversation=${conversationId}`;
     window.electron.openExternal(lettaUrl);
   }, [sessions]);
 
@@ -474,9 +530,15 @@ export function EmailInboxModal({
                           isEmailProcessed(selectedEmail) ? (
                             <>
                               {(() => {
+                                const messageId = String(selectedEmail.messageId);
                                 const conversationId = findConversationIdForEmail(selectedEmail);
                                 if (!conversationId) return null;
+
+                                // Get agentId from server data or session
+                                const serverData = processedEmailsFromServer.get(messageId);
                                 const session = sessions[conversationId];
+                                const agentId = serverData?.agentId || session?.agentId;
+
                                 return (
                                   <>
                                     <button
@@ -486,9 +548,9 @@ export function EmailInboxModal({
                                     >
                                       👁 View Conversation
                                     </button>
-                                    {session?.agentId ? (
+                                    {agentId ? (
                                       <button
-                                        onClick={() => handleOpenInLetta(conversationId)}
+                                        onClick={() => handleOpenInLetta(conversationId, agentId)}
                                         className="rounded-lg border border-[var(--color-border)] bg-white px-2 py-1 text-xs font-medium text-ink-700 hover:bg-gray-50"
                                         title="Open in Letta"
                                       >
@@ -503,13 +565,19 @@ export function EmailInboxModal({
                             <button
                               onClick={() => handleProcessEmailToAgent(selectedEmail, selectedAgentId)}
                               disabled={!!processingEmailId}
-                              className="rounded-lg bg-accent px-2 py-1 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+                              className="rounded-lg bg-accent px-2 py-1 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50 min-w-[100px]"
                               title="Process email to agent"
                             >
                               {String(successEmailId) === String(selectedEmail.messageId) ? (
                                 "✓ Sent!"
                               ) : String(processingEmailId) === String(selectedEmail.messageId) ? (
-                                "Processing..."
+                                <span className="flex items-center gap-1">
+                                  <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                                  </svg>
+                                  Processing...
+                                </span>
                               ) : (
                                 "→ Send to Agent"
                               )}
@@ -519,6 +587,28 @@ export function EmailInboxModal({
                       </div>
                     </div>
                   </div>
+
+                  {/* Processing Status */}
+                  {String(processingEmailId) === String(selectedEmail.messageId) && (
+                      <div className="mt-2 rounded-lg bg-blue-50 border border-blue-200 p-3 text-xs text-blue-700">
+                        <div className="flex items-center gap-2">
+                          <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                          </svg>
+                          <div className="flex flex-col gap-1">
+                            <span className="font-medium">Processing email...</span>
+                            <div className="flex items-center gap-1 text-blue-500">
+                              <span>Fetching content</span>
+                              <span>→</span>
+                              <span>Creating conversation</span>
+                              <span>→</span>
+                              <span>Sending to agent</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                   {/* Email Content */}
                   <div className="flex-1 overflow-auto p-3">

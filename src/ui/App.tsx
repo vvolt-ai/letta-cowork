@@ -166,7 +166,30 @@ function App() {
     hasMoreEmails,
     isLoadingMoreEmails,
   } = useZohoEmail();
-  const { processEmailToAgent, processingEmailId, successEmailId } = useProcessEmailToAgent();
+
+  // State to track newly created conversations for email modal
+  const [newlyCreatedConversations, setNewlyCreatedConversations] = useState<Map<string, { conversationId: string; agentId?: string }>>(new Map());
+
+  // Debug: log when state changes
+  useEffect(() => {
+    console.log(`[App] newlyCreatedConversations updated, size: ${newlyCreatedConversations.size}`);
+    newlyCreatedConversations.forEach((value, key) => {
+      console.log(`[App]   - ${key}: ${value.conversationId}`);
+    });
+  }, [newlyCreatedConversations]);
+
+  const { processEmailToAgent, processingEmailId, successEmailId } = useProcessEmailToAgent(
+    useCallback((messageId: string, conversationId: string, agentId?: string) => {
+      console.log(`[App] Conversation created callback for email ${messageId}: ${conversationId}`);
+      setNewlyCreatedConversations(prev => {
+        const newMap = new Map(prev);
+        newMap.set(messageId, { conversationId, agentId });
+        console.log(`[App] Updated newlyCreatedConversations, new size: ${newMap.size}`);
+        return newMap;
+      });
+    }, [])
+  );
+
   const { setEmailAsInput, isLoading: isProcessingEmailInput } = useEmailAsInput();
   const {
     isEmailDetailsOpen,
@@ -603,6 +626,7 @@ function App() {
             onProcessEmailToAgent={processEmailToAgent}
             processingEmailId={processingEmailId}
             successEmailId={successEmailId}
+            newlyCreatedConversations={newlyCreatedConversations}
             onOpenSettings={() => setShowCoworkSettings(true)}
             hasMoreEmails={hasMoreEmails}
             isLoadingMoreEmails={isLoadingMoreEmails}

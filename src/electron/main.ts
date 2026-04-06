@@ -537,6 +537,12 @@ app.on("ready", () => {
         return getProcessedUnreadEmailDebugInfo(accountId, folderId, limit);
     });
 
+    // Get processed email details from server (with conversationId and agentId)
+    ipcMain.handle("get-processed-email-details-from-server", async (_, accountId: string, folderId: string) => {
+        const { getProcessedEmailDetailsFromServer } = await import("./apiClient.js");
+        return getProcessedEmailDetailsFromServer(accountId, folderId);
+    });
+
     // Handle directory selection
     ipcMainHandle("select-directory", async () => {
         const result = await dialog.showOpenDialog(mainWindow!, {

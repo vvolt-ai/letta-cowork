@@ -83,6 +83,7 @@ interface SidebarProps {
   onProcessEmailToAgent?: (email: ZohoEmail, agentId: string) => void;
   processingEmailId?: string | null;
   successEmailId?: string | null;
+  newlyCreatedConversations?: Map<string, { conversationId: string; agentId?: string }>;
   onOpenSettings?: () => void;
   // Pagination props
   hasMoreEmails?: boolean;
@@ -128,6 +129,7 @@ export const Sidebar = memo(function Sidebar({
   onProcessEmailToAgent,
   processingEmailId,
   successEmailId,
+  newlyCreatedConversations,
   onOpenSettings,
   hasMoreEmails,
   isLoadingMoreEmails,
@@ -713,6 +715,7 @@ export const Sidebar = memo(function Sidebar({
         onProcessEmailToAgent={onProcessEmailToAgent}
         processingEmailId={processingEmailId}
         successEmailId={successEmailId}
+        newlyCreatedConversations={newlyCreatedConversations}
         onRefresh={refetchEmails}
         hasMore={hasMoreEmails}
         isLoadingMore={isLoadingMoreEmails}

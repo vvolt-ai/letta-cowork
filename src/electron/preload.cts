@@ -148,6 +148,8 @@ electron.contextBridge.exposeInMainWorld("electron", {
         electron.ipcRenderer.invoke("update-email-conversation-id", accountId, folderId, messageId, conversationId, agentId),
     getProcessedUnreadEmailDebugInfo: (accountId: string, folderId: string, limit?: number) =>
         electron.ipcRenderer.invoke("get-processed-unread-email-debug-info", accountId, folderId, limit),
+    getProcessedEmailDetailsFromServer: (accountId: string, folderId: string) =>
+        electron.ipcRenderer.invoke("get-processed-email-details-from-server", accountId, folderId),
 
     // ============================================
     // Letta CLI Execution

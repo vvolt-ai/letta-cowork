@@ -121,16 +121,22 @@ const buildAttachmentsSection = (
  * Hook to process an email and send it to an agent session
  * Similar to auto-sync but triggered manually
  */
-export function useProcessEmailToAgent() {
+export function useProcessEmailToAgent(onConversationCreated?: (messageId: string, conversationId: string, agentId?: string) => void) {
   const [processingEmailId, setProcessingEmailId] = useState<string | null>(null);
   const [successEmailId, setSuccessEmailId] = useState<string | null>(null);
   const currentEmailRef = useRef<{ accountId: string; folderId: string; messageId: string; agentId: string } | null>(null);
-  
+  const onConversationCreatedRef = useRef(onConversationCreated);
+
+  // Keep callback ref updated
+  useEffect(() => {
+    onConversationCreatedRef.current = onConversationCreated;
+  }, [onConversationCreated]);
+
   // Listen for session.status events to update processed email records with conversation ID
   useEffect(() => {
     const unsubscribe = window.electron.onServerEvent(async (event: any) => {
       console.log(`[useProcessEmailToAgent] Received event:`, event.type, event.payload);
-      
+
       if (event.type === "session.status") {
         console.log(`[useProcessEmailToAgent] session.status payload:`, {
           isEmailSession: event.payload?.isEmailSession,
@@ -139,17 +145,17 @@ export function useProcessEmailToAgent() {
           currentEmailRef: currentEmailRef.current,
         });
       }
-      
+
       if (event.type === "session.status" && event.payload?.isEmailSession && event.payload?.status === "running") {
         const conversationId = event.payload.sessionId;
         const agentId = event.payload.agentId;
         const emailInfo = currentEmailRef.current;
-        
+
         console.log(`[useProcessEmailToAgent] Matched! conversationId: ${conversationId}, emailInfo:`, emailInfo);
-        
+
         if (emailInfo && conversationId) {
           console.log(`[useProcessEmailToAgent] Session created: ${conversationId} for email ${emailInfo.messageId}`);
-          
+
           // Update processed email record with conversation ID via IPC
           try {
             await window.electron.updateEmailConversationId(
@@ -160,6 +166,11 @@ export function useProcessEmailToAgent() {
               agentId || emailInfo.agentId
             );
             console.log(`[useProcessEmailToAgent] Updated conversation ID ${conversationId} for email ${emailInfo.messageId}`);
+
+            // Notify callback that conversation was created
+            if (onConversationCreatedRef.current) {
+              onConversationCreatedRef.current(emailInfo.messageId, conversationId, agentId || emailInfo.agentId);
+            }
           } catch (err) {
             console.warn(`[useProcessEmailToAgent] Error updating conversation ID:`, err);
           }

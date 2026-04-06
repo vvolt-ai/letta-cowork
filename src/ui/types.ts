@@ -117,6 +117,7 @@ export type ClientEvent =
   | { type: "session.continue"; payload: { sessionId: string; prompt: string; content?: MessageContentItem[]; attachments?: ChatAttachment[]; cwd?: string; model?: string } }
   | { type: "session.stop"; payload: { sessionId: string } }
   | { type: "session.delete"; payload: { sessionId: string } }
+  | { type: "session.cancelPending"; payload: {} }
   | { type: "session.list" }
   | { type: "session.history"; payload: { sessionId: string; limit?: number; before?: string } }
   | { type: "session.rename"; payload: { sessionId: string; title: string } }

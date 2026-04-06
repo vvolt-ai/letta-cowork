@@ -668,6 +668,33 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
   setGlobalError: (globalError) => set({ globalError }),
   setShowStartModal: (showStartModal) => set({ showStartModal }),
   setActiveSessionId: (id, fetchHistory = true) => {
+    const state = get();
+
+    // Cancel any pending runs in the background (non-blocking)
+    const currentSessionId = state.activeSessionId;
+    if (currentSessionId && currentSessionId !== id) {
+      const currentSession = state.sessions[currentSessionId];
+      // If current session is running, stop it in background
+      if (currentSession?.status === "running") {
+        console.log(`[setActiveSessionId] Stopping current session ${currentSessionId} in background`);
+        // Use setTimeout to make it non-blocking
+        setTimeout(() => {
+          get().ipcSendEvent?.({
+            type: "session.stop",
+            payload: { sessionId: currentSessionId }
+          });
+        }, 0);
+      }
+    }
+
+    // Also cancel any pending runners in background (non-blocking)
+    setTimeout(() => {
+      get().ipcSendEvent?.({
+        type: "session.cancelPending",
+        payload: {}
+      });
+    }, 0);
+
     set((state) => {
       // Clear messages from other sessions when switching to improve performance
       const updatedSessions: Record<string, SessionView> = {};

@@ -93,6 +93,13 @@ interface Window {
     clearProcessedUnreadEmailIds: (accountId: string, folderId: string) => Promise<void>;
     updateEmailConversationId: (accountId: string, folderId: string, messageId: string, conversationId: string, agentId?: string) => Promise<void>;
     getProcessedUnreadEmailDebugInfo: (accountId: string, folderId: string, limit?: number) => Promise<any>;
+    getProcessedEmailDetailsFromServer: (accountId: string, folderId: string) => Promise<Array<{
+      id: string;
+      messageId: string;
+      conversationId: string | null;
+      agentId: string | null;
+      processedAt: string;
+    }>>;
 
     // ============================================
     // Vera Cowork API Integration

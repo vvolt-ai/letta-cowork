@@ -820,6 +820,20 @@ export async function markEmailAsProcessedOnServer(
   });
 }
 
+export async function getProcessedEmailByMessageId(
+  accountId: string,
+  folderId: string,
+  messageId: string
+): Promise<ProcessedEmailRecord | null> {
+  const api = getVeraCoworkApiClient();
+  try {
+    return await api.request<ProcessedEmailRecord>(`/channels/email/processed-ids/${accountId}/${folderId}/${messageId}`);
+  } catch (error) {
+    // Return null if not found
+    return null;
+  }
+}
+
 export async function clearProcessedEmailIdsOnServer(accountId: string, folderId: string): Promise<void> {
   const api = getVeraCoworkApiClient();
   await api.request<void>(`/channels/email/processed-ids/${accountId}/${folderId}`, {
