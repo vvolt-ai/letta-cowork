@@ -555,7 +555,7 @@ export type CoworkSettings = {
 
 const APP_PREFERENCES_STORAGE_KEY = "letta:app-preferences";
 
-interface AppState {
+export interface AppState {
   sessions: Record<string, SessionView>;
   activeSessionId: string | null;
   emailSessionId: string | null;

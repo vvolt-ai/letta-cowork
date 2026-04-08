@@ -2,7 +2,7 @@ import { homedir } from "os";
 import { join } from "path";
 import { promises as fs } from "fs";
 import { app } from "electron";
-import { downloadSkillsFromGitHub } from "../skillDownloader.js";
+import { downloadSkillsFromGitHub } from "./skills/index.js";
 
 const GLOBAL_SKILLS_DIR = join(homedir(), ".letta", "skills");
 

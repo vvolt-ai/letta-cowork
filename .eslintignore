@@ -1,0 +1,38 @@
+# Build outputs
+dist
+dist-react
+dist-electron
+
+# Dependencies
+node_modules
+
+# Logs
+*.log
+
+# Editor
+.vscode
+.idea
+.DS_Store
+
+# Testing
+coverage
+
+# TypeScript
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+
+# Cache
+.eslintcache
+
+# Generated
+*.min.js
+*.min.css
+
+# Letta
+.letta
+
+# Config files (self)
+eslint.config.js

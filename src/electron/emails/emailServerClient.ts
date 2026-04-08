@@ -5,7 +5,7 @@
  * This replaces the direct Zoho API calls with server-side calls.
  */
 
-import { getVeraCoworkApiClient } from '../apiClient.js';
+import { getVeraCoworkApiClient } from '../api/index.js';
 
 // Types
 export interface EmailAccount {

@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from "fs";
 import { extname, join } from "path";
 import { LettaResponder } from "./lettaResponder.js";
 import type { TelegramBridgeConfig } from "./channelConfig.js";
-import { attachFilesToAgentFolder } from "../lettaFilesystem.js";
+import { attachFilesToAgentFolder } from "../services/filesystem/index.js";
 
 type TelegramStatusState = "stopped" | "starting" | "connected" | "reconnecting" | "error";
 

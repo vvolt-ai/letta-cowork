@@ -4,7 +4,7 @@ import {
   setEmailCredential,
   deleteEmailCredential,
   clearAllEmailCredentials,
-} from '../settings.js';
+} from '../services/settings/index.js';
 
 export const APP_NAME = "MyElectronApp";
 export const OAUTH_PORT = 4321;

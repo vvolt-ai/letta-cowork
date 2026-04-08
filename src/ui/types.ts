@@ -72,6 +72,7 @@ export type SessionInfo = {
   cwd?: string;
   createdAt: number;
   updatedAt: number;
+  isEmailSession?: boolean;
 };
 
 // Server -> Client events

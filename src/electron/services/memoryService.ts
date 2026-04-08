@@ -1,7 +1,7 @@
 import { homedir } from "os";
 import { join, relative } from "path";
 import { promises as fs } from "fs";
-import { getCurrentAgentId } from "../libs/runner.js";
+import { getCurrentAgentId } from "../libs/runner/index.js";
 
 export interface MemoryFileResult {
     path: string;
