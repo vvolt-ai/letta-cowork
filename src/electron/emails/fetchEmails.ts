@@ -3,6 +3,7 @@ import { app, shell } from "electron";
 import path from "path";
 import fs from "fs";
 import { BASE_URL, clearEmailCredentials, getAccessToken, getAccountId, getInboxFolderId, getRefreshToken, saveAccountId, saveInboxFolderId } from "./helper.js";
+import { getVeraCoworkApiClient } from "../api/index.js";
 import { serverApiRequest, zohoApiRequest } from "./zohoApi.js";
 import { uploadFilePathToManager, type FileManagerUploadResult } from "./fileManager.js";
 import type {
@@ -80,6 +81,9 @@ export const fetchEmails = async (
         //   console.error("Failed to download attachments for message", email.messageId, err);
         // }
 
+        const api = getVeraCoworkApiClient();
+        const userId = api.currentUser?.id;
+
         const payload: StoreEmailPayload = {
           calendarType: 0,
           ccAddress: email.ccAddress ?? "Not Provided",
@@ -103,6 +107,7 @@ export const fetchEmails = async (
           toAddress: email.toAddress || "",
           accountId: resolvedAccountId,
           attachmentUrl,
+          userId,
         };
 
         try {

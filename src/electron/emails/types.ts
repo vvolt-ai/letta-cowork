@@ -88,6 +88,7 @@ export interface StoreEmailPayload {
   toAddress: string;
   accountId: string;
   attachmentUrl: string;
+  userId?: string;
 }
 
 // request body for Zoho update message endpoint
