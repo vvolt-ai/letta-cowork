@@ -124,6 +124,8 @@ electron.contextBridge.exposeInMainWorld("electron", {
         electron.ipcRenderer.invoke("stop-slack-bridge"),
     downloadSkill: (handles: string | string[], skillName?: string, branch?: string) =>
         electron.ipcRenderer.invoke("download-skill", handles, skillName, branch),
+    listSkills: () =>
+        electron.ipcRenderer.invoke("list-skills"),
     
     // Cowork settings
     getCoworkSettings: () =>

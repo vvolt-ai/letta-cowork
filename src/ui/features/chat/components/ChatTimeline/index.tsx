@@ -36,7 +36,7 @@ export function ChatTimeline({
   });
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-2">
       {timeline.length === 0 ? (
         <div className="py-16 text-center text-sm text-muted">
           Start a conversation to see reasoning, tool activity, and results here.

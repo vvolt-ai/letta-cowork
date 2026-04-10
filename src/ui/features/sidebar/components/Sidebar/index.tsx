@@ -1,16 +1,12 @@
 import { memo, useCallback, useEffect, useState } from "react";
 import { useAppStore } from "../../../../store/useAppStore";
-import { useDownloadSkill } from "../../../../hooks/useDownloadSkill";
-import { SkillDownloadDialog } from "../../../settings/components/SkillDownloadDialog";
 import type { ZohoEmail } from "../../../../types";
 import { EmailInboxModal } from "../../../email/components/EmailInboxModal";
 import { NewMailPipelineSetting, ResumeSessionDialog } from "../index";
-import { LettaTerminal } from "../../../settings/components/LettaTerminal";
-import * as Dialog from "@radix-ui/react-dialog";
 import type { AutoSyncProcessingMode } from "../../types";
-import veraLogo from "../../../../assets/vera-logo.svg";
+// veraLogo kept for future use
+// import veraLogo from "../../../../assets/vera-logo.svg";
 import { SessionsTab } from "../SessionsTab";
-import { ConfigurationTab } from "../ConfigurationTab";
 
 export interface SidebarProps {
   connected: boolean;
@@ -51,6 +47,8 @@ export interface SidebarProps {
   errorEmailId?: string | null;
   newlyCreatedConversations?: Map<string, { conversationId: string; agentId?: string }>;
   onOpenSettings?: () => void;
+  onOpenConfiguration?: () => void;
+  onOpenSkills?: () => void;
   // Pagination props
   hasMoreEmails?: boolean;
   isLoadingMoreEmails?: boolean;
@@ -62,19 +60,19 @@ export interface SidebarProps {
 
 export const Sidebar = memo(function Sidebar({
   onNewSession,
-  lettaEnvOpen,
-  onLettaEnvOpenChange,
+  lettaEnvOpen: _lettaEnvOpen,
+  onLettaEnvOpenChange: _onLettaEnvOpenChange,
   onDeleteSession,
-  onConnectEmail,
-  onDisconnectEmail,
+  onConnectEmail: _onConnectEmail,
+  onDisconnectEmail: _onDisconnectEmail,
   isEmailConnected,
   refetchEmails,
   emails,
   onUseEmailAsInput,
   isProcessingEmailInput,
   isFetchingEmails,
-  autoSyncEnabled,
-  onToggleAutoSync,
+  autoSyncEnabled: _autoSyncEnabled,
+  onToggleAutoSync: _onToggleAutoSync,
   autoSyncAgentIds,
   onAddAutoSyncAgent,
   onRemoveAutoSyncAgent,
@@ -97,7 +95,9 @@ export const Sidebar = memo(function Sidebar({
   awaitingConversationEmailId,
   errorEmailId,
   newlyCreatedConversations,
-  onOpenSettings,
+  onOpenSettings: _onOpenSettings,
+  onOpenConfiguration,
+  onOpenSkills,
   hasMoreEmails,
   isLoadingMoreEmails,
   onLoadMoreEmails,
@@ -106,33 +106,18 @@ export const Sidebar = memo(function Sidebar({
 }: SidebarProps) {
   const coworkSettings = useAppStore((state) => state.coworkSettings);
 
-  const [skillDownloadOpen, setSkillDownloadOpen] = useState(false);
   const [resumeSessionId, setResumeSessionId] = useState<string | null>(null);
   const [showEmailView, setShowEmailView] = useState(false);
   const [showAddAgentsModal, setShowAddAgentsModal] = useState(false);
-  const [showLettaCli, setShowLettaCli] = useState(false);
-  const [activeTab, setActiveTab] = useState<"sessions" | "configuration">("sessions");
-
-  const {
-    skillUrl,
-    setSkillUrl,
-    skillName,
-    setSkillName,
-    skillDownloading,
-    skillDownloadSuccess,
-    skillDownloadError,
-    handleDownloadSkill,
-    resetForm: resetSkillForm,
-  } = useDownloadSkill();
 
   useEffect(() => {
     if (!isEmailConnected) {
       setShowEmailView(false);
-      setActiveTab("sessions");
     }
   }, [isEmailConnected]);
 
-  const unreadCount = emails.filter((email) => {
+  // unreadCount kept for potential future use in sidebar badges
+  const _unreadCount = emails.filter((email) => {
     const status = String(email.status ?? "").toLowerCase();
     const status2 = String(email.status2 ?? "").toLowerCase();
     return (
@@ -142,86 +127,58 @@ export const Sidebar = memo(function Sidebar({
       status2 === "0"
     );
   }).length;
-
-  const unreadLabel = isEmailConnected ? `${unreadCount} unread` : "Not connected";
+  void _unreadCount;
 
   const handleOpenEmailView = useCallback(() => {
     setShowEmailView(true);
-    setActiveTab("configuration");
   }, []);
 
-  const tabs: Array<{ id: "sessions" | "configuration"; label: string }> = [
-    { id: "sessions", label: "Sessions" },
-    { id: "configuration", label: "Configuration" },
-  ];
-
   return (
-    <aside className="flex h-full w-full flex-col gap-5 border-r border-[var(--color-border)] bg-[var(--color-sidebar)]/98 px-4 py-5 backdrop-blur-sm">
-      <div className="flex items-center justify-between">
-        <div className="mt-5 flex items-center gap-3">
-          <img src={veraLogo} alt="Vera logo" className="h-6 w-auto" />
-          <div>
-            <span className="text-[11px] font-semibold uppercase tracking-[0.3em] text-muted">Workspace</span>
-            <h1 className="mt-1 text-sm font-semibold text-ink-900">Vera Cowork</h1>
-          </div>
-        </div>
+    <aside className="flex h-full w-full flex-col border-r border-[var(--color-border)] bg-[var(--color-sidebar)]/98 backdrop-blur-sm">
+
+      {/* Top nav — Skills / Emails / Configuration (below traffic lights) */}
+      <div className="pt-8 px-3 pb-2 flex flex-col gap-0.5">
         <button
-          onClick={onOpenSettings}
-          className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-ink-600 transition hover:bg-[var(--color-sidebar-hover)] hover:text-ink-900"
-          aria-label="Open settings"
+          onClick={onOpenSkills}
+          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13.5px] text-ink-700 transition hover:bg-[var(--color-sidebar-hover)] hover:text-ink-900"
         >
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          <svg className="h-[18px] w-[18px] shrink-0 text-ink-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+            <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
           </svg>
+          Skills
+        </button>
+        <button
+          onClick={handleOpenEmailView}
+          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13.5px] text-ink-700 transition hover:bg-[var(--color-sidebar-hover)] hover:text-ink-900"
+        >
+          <svg className="h-[18px] w-[18px] shrink-0 text-ink-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+            <polyline points="22,6 12,13 2,6" />
+          </svg>
+          Emails
+        </button>
+        <button
+          onClick={onOpenConfiguration}
+          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13.5px] text-ink-700 transition hover:bg-[var(--color-sidebar-hover)] hover:text-ink-900"
+        >
+          <svg className="h-[18px] w-[18px] shrink-0 text-ink-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.75">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          Configuration
         </button>
       </div>
 
-      <div className="flex items-center gap-1 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]/92 p-1.5 text-xs font-medium shadow-sm">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex-1 rounded-full px-3 py-1 transition ${
-              activeTab === tab.id
-                ? "bg-[var(--color-accent)] text-white shadow-sm"
-                : "text-ink-500 hover:bg-[var(--color-sidebar-hover)] hover:text-ink-800"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex-1 overflow-y-auto pt-1">
-        {activeTab === "sessions" ? (
-          <SessionsTab
-            onNewSession={onNewSession}
-            onDeleteSession={onDeleteSession}
-            onResumeSession={setResumeSessionId}
-            onOpenEmailView={handleOpenEmailView}
-            coworkSettings={coworkSettings}
-            emails={emails}
-          />
-        ) : (
-          <ConfigurationTab
-            coworkSettings={coworkSettings}
-            lettaEnvOpen={lettaEnvOpen}
-            onLettaEnvOpenChange={onLettaEnvOpenChange}
-            onOpenSettings={onOpenSettings}
-            onOpenSkillDownload={() => setSkillDownloadOpen(true)}
-            onOpenLettaCli={() => setShowLettaCli(true)}
-            isEmailConnected={isEmailConnected}
-            unreadLabel={unreadLabel}
-            autoSyncEnabled={autoSyncEnabled}
-            onToggleAutoSync={onToggleAutoSync}
-            onConnectEmail={onConnectEmail}
-            onDisconnectEmail={onDisconnectEmail}
-            onOpenEmailView={handleOpenEmailView}
-            onRefreshEmails={refetchEmails}
-            onOpenAddAgentsModal={() => setShowAddAgentsModal(true)}
-          />
-        )}
+      {/* Conversations list — scrollable */}
+      <div className="flex-1 overflow-y-auto">
+        <SessionsTab
+          onNewSession={onNewSession}
+          onDeleteSession={onDeleteSession}
+          onResumeSession={setResumeSessionId}
+          onOpenEmailView={handleOpenEmailView}
+          coworkSettings={coworkSettings}
+          emails={emails}
+        />
       </div>
 
       <ResumeSessionDialog
@@ -254,51 +211,6 @@ export const Sidebar = memo(function Sidebar({
         onRunAutoSyncNow={onRunAutoSyncNow}
         onRefreshEmailMailbox={onRefreshEmailMailbox}
       />
-
-      <SkillDownloadDialog
-        open={skillDownloadOpen}
-        onOpenChange={(open) => {
-          setSkillDownloadOpen(open);
-          if (!open) {
-            resetSkillForm();
-          }
-        }}
-        skillUrl={skillUrl}
-        onSkillUrlChange={setSkillUrl}
-        skillName={skillName}
-        onSkillNameChange={setSkillName}
-        skillDownloading={skillDownloading}
-        skillDownloadError={skillDownloadError}
-        skillDownloadSuccess={skillDownloadSuccess}
-        onDownload={handleDownloadSkill}
-        onReset={resetSkillForm}
-      />
-
-      {/* Letta CLI Dialog */}
-      <Dialog.Root open={showLettaCli} onOpenChange={setShowLettaCli}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-ink-900/50 backdrop-blur-sm" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-60 w-full max-w-3xl -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-ink-900/10 bg-[#0d1117] shadow-2xl focus:outline-none">
-            <div className="flex items-center justify-between px-5 py-3 border-b border-ink-900/20">
-              <div className="flex items-center gap-2">
-                <svg viewBox="0 0 24 24" className="h-4 w-4 text-[var(--color-accent)]" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="4 17 10 11 4 5" />
-                  <line x1="12" y1="19" x2="20" y2="19" />
-                </svg>
-                <Dialog.Title className="text-sm font-semibold text-ink-100">Letta CLI</Dialog.Title>
-              </div>
-              <Dialog.Close asChild>
-                <button className="rounded-full p-1.5 text-ink-500 hover:bg-ink-900/30 hover:text-ink-300 transition" aria-label="Close">
-                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M6 6l12 12M18 6l-12 12" />
-                  </svg>
-                </button>
-              </Dialog.Close>
-            </div>
-            <LettaTerminal className="rounded-b-2xl" style={{ height: "520px" }} />
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
 
       {/* User Section */}
       {userEmail && (

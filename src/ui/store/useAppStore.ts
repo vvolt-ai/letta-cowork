@@ -712,6 +712,30 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
             payload: { sessionId: id }
           });
         }
+
+        // Auto-resume: if the session is idle/completed (not actively running),
+        // reset its ephemeral status to "idle" so it appears ready for new messages
+        // without the user needing to do any manual resume action.
+        if (session && session.status !== "running" && state.ipcSendEvent) {
+          set((s) => {
+            const sess = s.sessions[id];
+            if (!sess) return s;
+            if (sess.ephemeral.status === "idle") return s; // already ready
+            return {
+              sessions: {
+                ...s.sessions,
+                [id]: {
+                  ...sess,
+                  ephemeral: {
+                    ...sess.ephemeral,
+                    status: "idle",
+                    errorMessage: undefined,
+                  },
+                },
+              },
+            };
+          });
+        }
       }, 0);
     }
   },
@@ -917,6 +941,11 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
             nextEphemeral.status = "error";
             nextEphemeral.errorMessage = error ?? "Unknown error";
           }
+          // When the backend goes idle (e.g. after session.stop), reset display status immediately
+          if (status === "idle") {
+            nextEphemeral.status = "idle";
+            nextEphemeral.errorMessage = undefined;
+          }
           return {
             sessions: {
               ...state.sessions,
@@ -935,7 +964,34 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
           };
         });
 
-        // Only switch to this session if not a background session and pendingStart is true
+        // After a session completes its task, reset ephemeral status to idle after a short
+        // display window so the session appears ready for the next message.
+        if (status === "completed") {
+          setTimeout(() => {
+            set((state) => {
+              const sess = state.sessions[sessionId];
+              if (!sess) return state;
+              // Only reset if still completed — don't overwrite running/error states
+              if (sess.ephemeral.status !== "completed") return state;
+              return {
+                sessions: {
+                  ...state.sessions,
+                  [sessionId]: {
+                    ...sess,
+                    // Keep backend status as-is; only reset the visual display status
+                    ephemeral: {
+                      ...sess.ephemeral,
+                      status: "idle",
+                      errorMessage: undefined,
+                    },
+                  },
+                },
+              };
+            });
+          }, 1500);
+        }
+
+        // Switch to this session if it's the one we were waiting for
         if (rootState.pendingStart && !background) {
           if (status === "running") {
             get().setActiveSessionId(sessionId);
@@ -947,6 +1003,17 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
               ...(status === "error" ? { globalError: error ?? "Failed to start session." } : {}),
             });
           }
+        } else if (
+          // Late arrival: session arrived after the 45s timeout fired.
+          // If the user sees "Failed to start session" but the session IS now running,
+          // auto-navigate to it and clear the error.
+          !background &&
+          status === "running" &&
+          !rootState.activeSessionId &&
+          rootState.globalError?.includes("Failed to start session")
+        ) {
+          get().setActiveSessionId(sessionId);
+          set({ showStartModal: false, prompt: "", globalError: null });
         }
         break;
       }

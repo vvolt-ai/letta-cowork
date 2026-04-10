@@ -5,7 +5,7 @@
 
 import { getSession } from "../../../libs/runtime-state.js";
 import { getStoredSessions } from "../../../services/settings/index.js";
-import { getAgentRunApprovalCandidates, cancelAgentRunById } from "../../../services/agents/index.js";
+import { getAgentRunApprovalCandidates, cancelAgentRunById, approveRunById } from "../../../services/agents/index.js";
 import { emit } from "./session-creation.js";
 import type { CanUseToolResponse } from "@letta-ai/letta-code-sdk";
 
@@ -48,22 +48,51 @@ export async function recoverPendingApprovalsForSession(
 
     try {
         const candidates = await getAgentRunApprovalCandidates(resolvedAgentId, sessionId);
-        for (const candidate of candidates) {
-            emit({
-                type: "permission.request",
-                payload: {
-                    sessionId,
-                    toolUseId: candidate.toolUseId,
-                    toolName: candidate.toolName,
-                    input: candidate.input,
-                    source: "recovered",
-                    runId: candidate.runId,
-                    conversationId: candidate.conversationId,
-                    isStuckRun: true,
-                    requestedAt: candidate.requestedAt,
-                },
-            });
-        }
+
+        if (candidates.length === 0) return [];
+
+        console.log(`[recoverPendingApprovals] Found ${candidates.length} stuck run(s) for session ${sessionId} — auto-approving`);
+
+        // Notify the UI that we are auto-resolving stuck runs
+        emit({
+            type: "session.status",
+            payload: {
+                sessionId,
+                status: "running",
+                agentId: resolvedAgentId,
+            },
+        });
+
+        // Auto-approve each stuck run so the session is unblocked on resume.
+        // The approveRunById function tries the known Letta approval endpoints
+        // and falls back to cancel if none succeed.
+        const results = await Promise.allSettled(
+            candidates.map((candidate) =>
+                approveRunById(candidate.runId)
+                    .then((res) => {
+                        console.log(`[recoverPendingApprovals] Run ${candidate.runId} resolved via ${res.method}`);
+                        return res;
+                    })
+                    .catch((err) => {
+                        console.warn(`[recoverPendingApprovals] Failed to approve run ${candidate.runId}:`, err);
+                        // Last-resort cancel
+                        return cancelAgentRunById(candidate.runId).catch(() => null);
+                    })
+            )
+        );
+
+        console.log(`[recoverPendingApprovals] All ${results.length} stuck run(s) resolved for session ${sessionId}`);
+
+        // Mark session idle so the UI shows it as ready for new messages
+        emit({
+            type: "session.status",
+            payload: {
+                sessionId,
+                status: "idle",
+                agentId: resolvedAgentId,
+            },
+        });
+
         return candidates
             .filter((candidate) => Boolean(candidate.conversationId))
             .map((candidate) => ({

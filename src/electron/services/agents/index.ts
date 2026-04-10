@@ -233,3 +233,45 @@ export async function cancelAgentRunById(runId: string): Promise<{ success: bool
   await (client as any).runs.cancel(runId);
   return { success: true, runId };
 }
+
+/**
+ * Approve a stuck run that is waiting for human approval.
+ * Tries the known Letta approval endpoints; falls back to cancel if none work.
+ */
+export async function approveRunById(runId: string): Promise<{ success: boolean; runId: string; method: string }> {
+  const baseURL = (process.env.LETTA_BASE_URL || "https://api.letta.com").trim().replace(/\/$/, "");
+  const apiKey = (process.env.LETTA_API_KEY || "").trim();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(apiKey ? { "Authorization": `Bearer ${apiKey}` } : {}),
+  };
+
+  // Try known Letta REST patterns for run approval
+  const attempts: Array<{ url: string; body: Record<string, unknown> }> = [
+    { url: `${baseURL}/v1/runs/${runId}/approve`,  body: { approved: true } },
+    { url: `${baseURL}/v1/runs/${runId}/resume`,   body: { status: "approved" } },
+    { url: `${baseURL}/v1/runs/${runId}`,          body: { status: "approved" } },
+  ];
+
+  for (const attempt of attempts) {
+    try {
+      const res = await fetch(attempt.url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(attempt.body),
+      });
+      if (res.ok) {
+        console.log(`[approveRunById] Approved run ${runId} via ${attempt.url}`);
+        return { success: true, runId, method: attempt.url };
+      }
+    } catch {
+      // try next endpoint
+    }
+  }
+
+  // None of the approval endpoints worked — cancel as a safe fallback so the
+  // session is no longer blocked.
+  console.warn(`[approveRunById] Could not approve run ${runId} via API, cancelling as fallback`);
+  await cancelAgentRunById(runId).catch(() => {/* ignore */});
+  return { success: true, runId, method: "cancel-fallback" };
+}

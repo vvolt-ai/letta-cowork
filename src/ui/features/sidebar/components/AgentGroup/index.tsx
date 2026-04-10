@@ -10,90 +10,106 @@ type SidebarSessionSummary = Pick<
 interface AgentGroupProps {
   agentId: string | undefined;
   agentName: string | undefined;
+  agentDescription?: string;
   sessions: SidebarSessionSummary[];
   activeSessionId: string | null;
   onSelectSession: (sessionId: string) => void;
   onDeleteSession: (sessionId: string) => void;
   onResumeSession?: (sessionId: string) => void;
   onRenameSession: (sessionId: string, title: string) => void;
+  onNewSession?: () => void;
+}
+
+// Generate a consistent color for each agent based on name
+function agentColor(name: string): string {
+  const colors = [
+    "#5C6BC0", "#26A69A", "#EF5350", "#AB47BC",
+    "#42A5F5", "#FF7043", "#66BB6A", "#FFA726",
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return colors[Math.abs(hash) % colors.length];
 }
 
 export function AgentGroup({
   agentId: _agentId,
   agentName,
+  agentDescription,
   sessions,
   activeSessionId,
   onSelectSession,
   onDeleteSession,
   onResumeSession,
   onRenameSession,
+  onNewSession,
 }: AgentGroupProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const hasActiveSession = sessions.some((s) => s.id === activeSessionId);
 
-  // Auto-expand if there's an active session in this group
   useEffect(() => {
-    if (hasActiveSession) {
-      setIsExpanded(true);
-    }
+    if (hasActiveSession) setIsExpanded(true);
   }, [hasActiveSession]);
 
   const displayName = agentName || "Unknown Agent";
-  const sessionCount = sessions.length;
+  const dotColor = agentColor(displayName);
 
   return (
-    <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
-      {/* Agent Header - Click to expand/collapse */}
-      <button
-        onClick={() => setIsExpanded(!isExpanded)}
-        className={`flex w-full items-center justify-between px-3 py-2.5 text-left transition hover:bg-[var(--color-sidebar-hover)] ${
-          hasActiveSession ? "bg-[var(--color-sidebar-active)]" : ""
-        }`}
-      >
-        <div className="flex min-w-0 items-center gap-2">
-          {/* Expand/Collapse Icon */}
-          <svg
-            viewBox="0 0 24 24"
-            className={`h-4 w-4 shrink-0 text-muted transition-transform ${isExpanded ? "rotate-90" : ""}`}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M9 6l6 6-6 6" />
-          </svg>
+    <div className="mb-3">
+      {/* Agent Header */}
+      <div className="group flex items-start justify-between gap-2 px-3 py-1.5">
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
+        >
+          {/* Status dot */}
+          <span className="mt-[5px] flex h-2.5 w-2.5 shrink-0 items-center justify-center">
+            <span
+              className="h-2.5 w-2.5 rounded-full"
+              style={{ backgroundColor: dotColor }}
+            />
+          </span>
 
-          {/* Agent Avatar/Icon */}
-          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)] text-xs font-semibold text-white">
-            {displayName.charAt(0).toUpperCase()}
-          </div>
-
-          {/* Agent Name and Count */}
+          {/* Agent name + description */}
           <div className="min-w-0">
-            <span className={`block truncate text-sm font-medium ${hasActiveSession ? "text-ink-900" : "text-ink-700"}`}>
+            <span className="block truncate text-[14px] font-semibold leading-tight text-ink-900">
               {displayName}
             </span>
+            {agentDescription && (
+              <span className="mt-0.5 block truncate text-[11.5px] leading-tight text-muted">
+                {agentDescription}
+              </span>
+            )}
           </div>
-        </div>
+        </button>
 
-        {/* Session Count Badge */}
-        <span className="ml-2 inline-flex min-w-5 items-center justify-center rounded-full bg-[var(--color-surface-secondary)] px-2 py-0.5 text-[11px] font-semibold text-ink-600">
-          {sessionCount}
-        </span>
-      </button>
+        {/* New conversation pencil icon */}
+        {onNewSession && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onNewSession(); }}
+            className="mt-0.5 shrink-0 text-muted opacity-0 transition-opacity hover:text-ink-600 group-hover:opacity-100"
+            title="New conversation"
+            aria-label="New conversation"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.75">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+          </button>
+        )}
+      </div>
 
-      {/* Conversations List - Collapsible */}
+      {/* Conversations */}
       {isExpanded && (
-        <div className="border-t border-[var(--color-border)]">
-          <ConversationList
-            sessions={sessions}
-            activeSessionId={activeSessionId}
-            onSelectSession={onSelectSession}
-            onDeleteSession={onDeleteSession}
-            onResumeSession={onResumeSession}
-            onRenameSession={onRenameSession}
-            emptyMessage=""
-          />
-        </div>
+        <ConversationList
+          sessions={sessions}
+          activeSessionId={activeSessionId}
+          onSelectSession={onSelectSession}
+          onDeleteSession={onDeleteSession}
+          onResumeSession={onResumeSession}
+          onRenameSession={onRenameSession}
+          emptyMessage=""
+          maxVisible={4}
+        />
       )}
     </div>
   );

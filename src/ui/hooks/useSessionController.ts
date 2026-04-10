@@ -68,11 +68,8 @@ export function useSessionController({ connected, sendEvent }: UseSessionControl
 
   const handlePermissionResult = useCallback((toolUseId: string, result: CanUseToolResponse) => {
     if (!activeSessionId || !activeSession) return;
-    const request = activeSession.permissionRequests.find((item) => item.toolUseId === toolUseId);
-    if (request?.source === "recovered") {
-      setGlobalError("This approval was recovered from a stuck run. Direct approve/deny is not available yet — cancel the stuck run first.");
-      return;
-    }
+    // Recovered runs are now auto-approved on resume; this path should rarely be reached.
+    // If it does (race condition), let the normal permission response flow handle it.
     sendEvent({ type: "permission.response", payload: { sessionId: activeSessionId, toolUseId, result } });
     resolvePermissionRequest(activeSessionId, toolUseId);
   }, [activeSession, activeSessionId, resolvePermissionRequest, sendEvent, setGlobalError]);

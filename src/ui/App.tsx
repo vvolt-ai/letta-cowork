@@ -10,6 +10,12 @@ import { useEmailAsInput } from "./hooks/useEmailAsInput";
 import { useEmailSelection } from "./hooks/useEmailSelection";
 import { WorkspaceLayout } from "./features/layout/components/WorkspaceLayout";
 import { ChatWorkspace } from "./features/chat/components/ChatWorkspace";
+import { ConfigurationTab } from "./features/sidebar/components/ConfigurationTab";
+import { SkillsPanel } from "./features/skills/SkillsPanel";
+import { SkillDownloadDialog } from "./features/settings/components/SkillDownloadDialog";
+import { LettaTerminal } from "./features/settings/components/LettaTerminal";
+import { useDownloadSkill } from "./hooks/useDownloadSkill";
+import * as Dialog from "@radix-ui/react-dialog";
 import { ActivityPanel } from "./features/activity/components/ActivityPanel";
 import { GlobalErrorToast } from "./features/system/components/GlobalErrorToast";
 import { EmailDetailsDialog } from "./features/email/components/EmailDetailsDialog";
@@ -131,6 +137,22 @@ function App() {
   const [hasNewMessages, setHasNewMessages] = useState(false);
   const [lettaEnvOpen, setLettaEnvOpen] = useState(false);
   const [isActivityOpen, setIsActivityOpen] = useState(false);
+  const [showConfiguration, setShowConfiguration] = useState(false);
+  const [showSkills, setShowSkills] = useState(false);
+  const [skillDownloadOpen, setSkillDownloadOpen] = useState(false);
+  const [showLettaCli, setShowLettaCli] = useState(false);
+
+  const {
+    skillUrl,
+    setSkillUrl,
+    skillName,
+    setSkillName,
+    skillDownloading,
+    skillDownloadSuccess,
+    skillDownloadError,
+    handleDownloadSkill,
+    resetForm: resetSkillForm,
+  } = useDownloadSkill();
   const [isMemoryOpen, setIsMemoryOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     if (typeof window === "undefined") {
@@ -338,6 +360,14 @@ function App() {
   useEffect(() => {
     handlePartialMessagesRef.current = handlePartialMessages;
   }, [handlePartialMessages]);
+
+  // Close Configuration / Skills panel when the user selects a conversation
+  useEffect(() => {
+    if (activeSessionId) {
+      setShowConfiguration(false);
+      setShowSkills(false);
+    }
+  }, [activeSessionId]);
 
   // Wrapped handleStartSessionClick for Sidebar - calls with setLettaEnvOpen callback
   const handleStartSessionClickWithEnv = useCallback(() => {
@@ -629,6 +659,8 @@ function App() {
             errorEmailId={errorEmailId}
             newlyCreatedConversations={newlyCreatedConversations}
             onOpenSettings={() => setShowCoworkSettings(true)}
+            onOpenConfiguration={() => { setShowConfiguration(true); setShowSkills(false); }}
+            onOpenSkills={() => { setShowSkills(true); setShowConfiguration(false); }}
             hasMoreEmails={hasMoreEmails}
             isLoadingMoreEmails={isLoadingMoreEmails}
             onLoadMoreEmails={handleLoadMoreEmails}
@@ -637,34 +669,74 @@ function App() {
           />
         }
         chat={
-          <ChatWorkspace
-            title={activeSession?.title}
-            agentName={activeSession?.agentName}
-            agentId={activeSession?.agentId}
-            activeSessionId={activeSessionId}
-            visibleMessages={visibleMessages}
-            hasNewMessages={hasNewMessages}
-            shouldAutoScroll={shouldAutoScroll}
-            agentStatus={agentStatus}
-            partialMessage={partialMessage}
-            showPartialMessage={showPartialMessage}
-            partialReasoning={partialReasoning}
-            isHistoryLoading={Boolean(activeSession?.isLoadingHistory)}
-            hasMoreHistory={hasMoreHistory || Boolean(activeSession?.totalDisplayableCount && activeSession.totalDisplayableCount > visibleMessages.length)}
-            reasoningSteps={reasoningSteps}
-            toolExecutions={toolExecutions}
-            cliResults={ephemeralState?.cliResults ?? []}
-            onScroll={handleScroll}
-            onScrollToBottom={scrollToBottom}
-            onSendMessage={handleSendMessage}
-            onLoadMoreHistory={handleLoadMoreHistory}
-            sendEvent={sendEvent}
-            scrollContainerRef={scrollContainerRef}
-            messagesEndRef={messagesEndRef}
-            activityOpen={isActivityOpen}
-            onToggleActivity={handleToggleActivityPanel}
-            onOpenMemory={() => setIsMemoryOpen(true)}
-          />
+          showSkills ? (
+            <SkillsPanel onClose={() => setShowSkills(false)} />
+          ) : showConfiguration ? (
+            <div className="flex h-full flex-col">
+              {/* Configuration header */}
+              <div className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-4">
+                <h2 className="text-base font-semibold text-ink-900">Configuration</h2>
+                <button
+                  onClick={() => setShowConfiguration(false)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-muted hover:bg-[var(--color-sidebar-hover)] hover:text-ink-700 transition"
+                  aria-label="Close configuration"
+                >
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M6 6l12 12M18 6l-12 12" />
+                  </svg>
+                </button>
+              </div>
+              {/* Configuration content */}
+              <div className="flex-1 overflow-y-auto px-6 py-6">
+                <ConfigurationTab
+                  coworkSettings={coworkSettings}
+                  lettaEnvOpen={lettaEnvOpen}
+                  onLettaEnvOpenChange={setLettaEnvOpen}
+                  onOpenSettings={() => setShowCoworkSettings(true)}
+                  onOpenSkillDownload={() => setSkillDownloadOpen(true)}
+                  onOpenLettaCli={() => setShowLettaCli(true)}
+                  isEmailConnected={isMailConnected}
+                  unreadLabel={""}
+                  autoSyncEnabled={autoSyncEnabled}
+                  onToggleAutoSync={setAutoSyncEnabled}
+                  onConnectEmail={connectEmail}
+                  onDisconnectEmail={disconnectEmail}
+                  onOpenEmailView={() => setShowConfiguration(false)}
+                  onRefreshEmails={refetchEmails}
+                  onOpenAddAgentsModal={() => setShowConfiguration(false)}
+                />
+              </div>
+            </div>
+          ) : (
+            <ChatWorkspace
+              title={activeSession?.title}
+              agentName={activeSession?.agentName}
+              agentId={activeSession?.agentId}
+              activeSessionId={activeSessionId}
+              visibleMessages={visibleMessages}
+              hasNewMessages={hasNewMessages}
+              shouldAutoScroll={shouldAutoScroll}
+              agentStatus={agentStatus}
+              partialMessage={partialMessage}
+              showPartialMessage={showPartialMessage}
+              partialReasoning={partialReasoning}
+              isHistoryLoading={Boolean(activeSession?.isLoadingHistory)}
+              hasMoreHistory={hasMoreHistory || Boolean(activeSession?.totalDisplayableCount && activeSession.totalDisplayableCount > visibleMessages.length)}
+              reasoningSteps={reasoningSteps}
+              toolExecutions={toolExecutions}
+              cliResults={ephemeralState?.cliResults ?? []}
+              onScroll={handleScroll}
+              onScrollToBottom={scrollToBottom}
+              onSendMessage={handleSendMessage}
+              onLoadMoreHistory={handleLoadMoreHistory}
+              sendEvent={sendEvent}
+              scrollContainerRef={scrollContainerRef}
+              messagesEndRef={messagesEndRef}
+              activityOpen={isActivityOpen}
+              onToggleActivity={handleToggleActivityPanel}
+              onOpenMemory={() => setIsMemoryOpen(true)}
+            />
+          )
         }
         activity={
           isActivityOpen ? (
@@ -715,6 +787,50 @@ function App() {
         onAuthError={handleAuthError}
       />
       <MemoryDialog open={isMemoryOpen} onOpenChange={setIsMemoryOpen} />
+
+      {/* Skill Download Dialog */}
+      <SkillDownloadDialog
+        open={skillDownloadOpen}
+        onOpenChange={(open) => {
+          setSkillDownloadOpen(open);
+          if (!open) resetSkillForm();
+        }}
+        skillUrl={skillUrl}
+        onSkillUrlChange={setSkillUrl}
+        skillName={skillName}
+        onSkillNameChange={setSkillName}
+        skillDownloading={skillDownloading}
+        skillDownloadError={skillDownloadError}
+        skillDownloadSuccess={skillDownloadSuccess}
+        onDownload={handleDownloadSkill}
+        onReset={resetSkillForm}
+      />
+
+      {/* Letta CLI Dialog */}
+      <Dialog.Root open={showLettaCli} onOpenChange={setShowLettaCli}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-ink-900/50 backdrop-blur-sm" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-[60] w-full max-w-3xl -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-ink-900/10 bg-[#0d1117] shadow-2xl focus:outline-none">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-ink-900/20">
+              <div className="flex items-center gap-2">
+                <svg viewBox="0 0 24 24" className="h-4 w-4 text-[var(--color-accent)]" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="4 17 10 11 4 5" />
+                  <line x1="12" y1="19" x2="20" y2="19" />
+                </svg>
+                <Dialog.Title className="text-sm font-semibold text-ink-100">Letta CLI</Dialog.Title>
+              </div>
+              <Dialog.Close asChild>
+                <button className="rounded-full p-1.5 text-ink-500 hover:bg-ink-900/30 hover:text-ink-300 transition" aria-label="Close">
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M6 6l12 12M18 6l-12 12" />
+                  </svg>
+                </button>
+              </Dialog.Close>
+            </div>
+            <LettaTerminal className="rounded-b-2xl" style={{ height: "520px" }} />
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
       <EmailDetailsDialog
         open={isEmailDetailsOpen}
         onOpenChange={setIsEmailDetailsOpen}

@@ -255,16 +255,24 @@ export const SessionsTab = memo(function SessionsTab({
   );
 
   return (
-    <div className="space-y-4">
-      <button
-        onClick={onNewSession}
-        className="flex h-8 w-full items-center justify-center rounded-md bg-[var(--color-accent)] text-xs font-semibold text-white transition hover:bg-[var(--color-accent-hover)]"
-      >
-        New Task
-      </button>
-      <SidebarSection title="Conversations">
+    <div className="flex flex-col">
+      {/* Section header */}
+      <div className="px-4 pt-3 pb-1">
+        <span className="text-[13px] font-medium text-ink-600">All agents</span>
+      </div>
+      {/* New conversation link */}
+      <div className="px-4 pb-2">
+        <button
+          onClick={onNewSession}
+          className="flex items-center gap-1.5 text-[13px] text-muted hover:text-ink-700 transition-colors"
+        >
+          <span className="text-base leading-none">+</span>
+          <span>New conversation</span>
+        </button>
+      </div>
+      <div>
         {sessionsGroupedByAgent.length > 0 ? (
-          <div className="space-y-1">
+          <div className="flex flex-col">
             {sessionsGroupedByAgent.map((group) => (
               <AgentGroup
                 key={group.agentId || "unknown"}
@@ -276,17 +284,18 @@ export const SessionsTab = memo(function SessionsTab({
                 onDeleteSession={onDeleteSession}
                 onResumeSession={onResumeSession}
                 onRenameSession={handleRenameSession}
+                onNewSession={onNewSession}
               />
             ))}
           </div>
         ) : (
-          <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-4 text-center text-xs text-muted">
+          <div className="px-3 py-4 text-center text-xs text-muted">
             No conversations yet.
           </div>
         )}
-      </SidebarSection>
+      </div>
 
-      {(coworkSettings.showEmailAutomation || autoEmailSessions.length > 0) ? (
+      {false && (coworkSettings.showEmailAutomation || autoEmailSessions.length > 0) ? (
         <SidebarSection
           title="Email Conversations"
           action={

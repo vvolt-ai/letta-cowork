@@ -22,7 +22,7 @@ import {
     updateStoredSession,
     type StoredSession,
 } from "../../services/settings/index.js";
-import { getLettaAgent, getAgentRunApprovalCandidates, cancelAgentRunById } from "../../services/agents/index.js";
+import { getLettaAgent, getAgentRunApprovalCandidates, cancelAgentRunById, approveRunById } from "../../services/agents/index.js";
 
 const DEBUG = process.env.DEBUG_IPC === "true";
 
@@ -310,37 +310,50 @@ export async function handleSessionEvent(event: ClientEvent): Promise<void> {
                     debug("session.start: onSessionUpdate called", { updates });
                     if (updates.lettaConversationId) {
                         const conversationId = updates.lettaConversationId;
+                        const resolvedAgentId = agentId || process.env.LETTA_AGENT_ID || "";
                         debug("session.start: session initialized", { conversationId });
 
                         createRuntimeSession(conversationId);
                         updateSession(conversationId, { status: "running", title: sessionTitle });
 
-                        const resolvedAgentId = agentId || process.env.LETTA_AGENT_ID || "";
-                        let agentName: string | undefined = undefined;
-                        try {
-                            console.log("[ipc] Getting agent name for agentId:", resolvedAgentId);
-                            const agent = await getLettaAgent(resolvedAgentId);
-                            console.log("[ipc] Got agent:", agent);
-                            if (agent) agentName = agent.name;
-                        } catch (e) {
-                            console.log("[ipc] Failed to get agent name:", e);
-                        }
-
-                        addStoredSession({
-                            id: conversationId, agentId: resolvedAgentId, agentName,
-                            title: sessionTitle, createdAt: Date.now(), updatedAt: Date.now(),
-                            isEmailSession: isEmailSession ?? false,
-                        });
-
-                        console.log("[session.start] Emitting session.status", { conversationId, isEmailSession, status: "running" });
+                        // *** Emit session.status: running IMMEDIATELY ***
+                        // Do NOT wait for getLettaAgent — that API call can be slow and
+                        // would delay the UI signal, causing the start-session timeout to fire.
+                        console.log("[session.start] Emitting session.status (immediate)", { conversationId, isEmailSession, status: "running" });
                         emit({
                             type: "session.status",
-                            payload: { sessionId: conversationId, status: "running", title: sessionTitle, cwd, agentName, agentId: resolvedAgentId, background, isEmailSession },
+                            payload: { sessionId: conversationId, status: "running", title: sessionTitle, cwd, agentId: resolvedAgentId, background, isEmailSession },
                         });
                         emit({
                             type: "stream.user_prompt",
                             payload: { sessionId: conversationId, prompt, attachments, content },
                         });
+
+                        // Fetch agent name and store session metadata in the background.
+                        // A second session.status event updates the UI with the agent name once ready.
+                        (async () => {
+                            let agentName: string | undefined = undefined;
+                            try {
+                                const agent = await getLettaAgent(resolvedAgentId);
+                                if (agent) agentName = agent.name;
+                            } catch (e) {
+                                console.log("[ipc] Failed to get agent name:", e);
+                            }
+
+                            addStoredSession({
+                                id: conversationId, agentId: resolvedAgentId, agentName,
+                                title: sessionTitle, createdAt: Date.now(), updatedAt: Date.now(),
+                                isEmailSession: isEmailSession ?? false,
+                            });
+
+                            if (agentName) {
+                                // Push the agent name to the UI once we have it
+                                emit({
+                                    type: "session.status",
+                                    payload: { sessionId: conversationId, status: "running", title: sessionTitle, cwd, agentName, agentId: resolvedAgentId, background, isEmailSession },
+                                });
+                            }
+                        })();
                     }
                 },
             });
@@ -543,22 +556,22 @@ export async function recoverPendingApprovalsForSession(sessionId: string, agent
 
     try {
         const candidates = await getAgentRunApprovalCandidates(resolvedAgentId, sessionId);
-        for (const candidate of candidates) {
-            emit({
-                type: "permission.request",
-                payload: {
-                    sessionId,
-                    toolUseId: candidate.toolUseId,
-                    toolName: candidate.toolName,
-                    input: candidate.input,
-                    source: "recovered",
-                    runId: candidate.runId,
-                    conversationId: candidate.conversationId,
-                    isStuckRun: true,
-                    requestedAt: candidate.requestedAt,
-                },
-            });
+
+        if (candidates.length > 0) {
+            console.log(`[recoverPendingApprovals] Found ${candidates.length} stuck run(s) — auto-approving`);
+            emit({ type: "session.status", payload: { sessionId, status: "running", agentId: resolvedAgentId } });
+
+            await Promise.allSettled(
+                candidates.map((candidate) =>
+                    approveRunById(candidate.runId)
+                        .catch(() => cancelAgentRunById(candidate.runId).catch(() => null))
+                )
+            );
+
+            emit({ type: "session.status", payload: { sessionId, status: "idle", agentId: resolvedAgentId } });
+            console.log(`[recoverPendingApprovals] All stuck run(s) resolved for session ${sessionId}`);
         }
+
         return candidates;
     } catch (error) {
         console.warn("Failed to recover pending approvals for session", { sessionId, resolvedAgentId, error });

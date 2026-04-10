@@ -272,6 +272,50 @@ export function registerAllIpcHandlers(mainWindow: BrowserWindow): void {
         return { success: true, skillDirs: dirs };
     });
 
+    // List installed skills from ~/.letta/skills
+    ipcMain.handle("list-skills", async () => {
+        const { readdir, readFile, stat } = await import("fs/promises");
+        const { join } = await import("path");
+        const skillsDir = join(process.env.HOME || process.env.USERPROFILE || "~", ".letta/skills");
+        try {
+            const entries = await readdir(skillsDir, { withFileTypes: true });
+            const skills = await Promise.all(
+                entries
+                    .filter((e) => e.isDirectory())
+                    .map(async (dir) => {
+                        const skillMdPath = join(skillsDir, dir.name, "SKILL.md");
+                        let description = "";
+                        let name = dir.name;
+                        try {
+                            const content = await readFile(skillMdPath, "utf-8");
+                            // Parse frontmatter: ---\nname: ...\ndescription: ...\n---
+                            const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
+                            if (fmMatch) {
+                                const fm = fmMatch[1];
+                                const nameMatch = fm.match(/^name:\s*(.+)$/m);
+                                const descMatch = fm.match(/^description:\s*(.+)$/m);
+                                if (nameMatch) name = nameMatch[1].trim();
+                                if (descMatch) description = descMatch[1].trim();
+                            } else {
+                                // No frontmatter — use first line as description
+                                description = content.split("\n").find((l) => l.trim()) || "";
+                            }
+                        } catch { /* no SKILL.md */ }
+                        // Get mtime for sorting
+                        let updatedAt = 0;
+                        try {
+                            const s = await stat(join(skillsDir, dir.name));
+                            updatedAt = s.mtimeMs;
+                        } catch { /* ignore */ }
+                        return { id: dir.name, name, description, folder: dir.name, updatedAt };
+                    })
+            );
+            return { success: true, skills: skills.sort((a, b) => b.updatedAt - a.updatedAt) };
+        } catch {
+            return { success: true, skills: [] };
+        }
+    });
+
     // Register domain-specific handlers
     registerChannelHandlers();
     registerEmailHandlers();

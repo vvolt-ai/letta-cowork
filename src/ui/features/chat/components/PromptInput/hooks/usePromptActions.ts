@@ -237,13 +237,16 @@ export function usePromptActions(
         (session) => session.status === "running"
       );
 
+      // Only show the error if the session truly hasn't appeared yet.
+      // The Letta API can sometimes take >15s to respond; giving it 45s
+      // prevents false "Failed to start" errors when the server is just slow.
       if (state.pendingStart && !state.activeSessionId && !hasRunningSession) {
         state.setPendingStart(false);
         state.setGlobalError("Failed to start session. Please try again.");
       }
 
       startTimeoutRef.current = null;
-    }, 15000);
+    }, 45000);
 
     return () => {
       if (startTimeoutRef.current) {

@@ -30,8 +30,8 @@ export const AssistantMessage = memo(function AssistantMessage({ message, fallba
   }
 
   return (
-    <article className="max-w-3xl px-1 py-2 text-sm text-ink-800">
-      <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-muted">
+    <article className="w-full px-1 py-3">
+      <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-muted">
         <span>{agentName}</span>
         {isStreaming ? (
           <span className="relative inline-flex h-2 w-2">
@@ -41,7 +41,7 @@ export const AssistantMessage = memo(function AssistantMessage({ message, fallba
         ) : null}
       </div>
       {textContent ? (
-        <div className="text-[15px] leading-7 text-ink-800 [&_p:first-child]:mt-0 [&_pre]:bg-gray-50 [&_pre]:rounded-lg [&_pre]:p-3 [&_pre]:text-ink-800 [&_code]:text-[13px] [&_ul]:pl-2 [&_ol]:pl-2">
+        <div className="[&>*:first-child]:mt-0 [&>p:first-child]:mt-0">
           <MDContent text={textContent} />
         </div>
       ) : (
