@@ -122,8 +122,13 @@ const buildAttachmentsSection = (
  * Similar to auto-sync but triggered manually
  */
 export function useProcessEmailToAgent(onConversationCreated?: (messageId: string, conversationId: string, agentId?: string) => void) {
+  // Processing: API call in progress (fetching content, uploading attachments, sending to agent)
   const [processingEmailId, setProcessingEmailId] = useState<string | null>(null);
-  const [successEmailId, setSuccessEmailId] = useState<string | null>(null);
+  // AwaitingConversation: Email sent to agent, waiting for conversationId from session.status event
+  const [awaitingConversationEmailId, setAwaitingConversationEmailId] = useState<string | null>(null);
+  // Error state for failed processing
+  const [errorEmailId, setErrorEmailId] = useState<string | null>(null);
+  
   const currentEmailRef = useRef<{ accountId: string; folderId: string; messageId: string; agentId: string } | null>(null);
   const onConversationCreatedRef = useRef(onConversationCreated);
 
@@ -167,12 +172,16 @@ export function useProcessEmailToAgent(onConversationCreated?: (messageId: strin
             );
             console.log(`[useProcessEmailToAgent] Updated conversation ID ${conversationId} for email ${emailInfo.messageId}`);
 
+            // Clear the awaiting state since we now have the conversationId
+            setAwaitingConversationEmailId(prev => prev === emailInfo.messageId ? null : prev);
+
             // Notify callback that conversation was created
             if (onConversationCreatedRef.current) {
               onConversationCreatedRef.current(emailInfo.messageId, conversationId, agentId || emailInfo.agentId);
             }
           } catch (err) {
             console.warn(`[useProcessEmailToAgent] Error updating conversation ID:`, err);
+            // Keep in awaiting state on error - the callback will handle showing error
           }
         } else {
           console.warn(`[useProcessEmailToAgent] Missing emailInfo or conversationId`, { emailInfo, conversationId });
@@ -182,10 +191,11 @@ export function useProcessEmailToAgent(onConversationCreated?: (messageId: strin
     return unsubscribe;
   }, []);
   
-  const processEmailToAgent = useCallback(async (email: ZohoEmail, agentId: string) => {
+  const processEmailToAgent = useCallback(async (email: ZohoEmail, agentId: string, additionalInstructions?: string) => {
     const messageId = String(email.messageId);
     setProcessingEmailId(messageId);
-    setSuccessEmailId(null);
+    setAwaitingConversationEmailId(null);
+    setErrorEmailId(null);
     
     // Store current email info for the event listener
     currentEmailRef.current = {
@@ -253,6 +263,14 @@ export function useProcessEmailToAgent(onConversationCreated?: (messageId: strin
         );
       }
 
+      // Append additional user instructions if provided
+      if (additionalInstructions && additionalInstructions.trim()) {
+        promptSections.push(
+          "## Additional User Instructions",
+          additionalInstructions.trim()
+        );
+      }
+
       const prompt = promptSections.join("\n\n");
 
       const chatAttachments: ChatAttachment[] = uploadedAttachments.map(toChatAttachment);
@@ -277,15 +295,28 @@ export function useProcessEmailToAgent(onConversationCreated?: (messageId: strin
       } catch (processError) {
         console.warn(`[useProcessEmailToAgent] Failed to mark email as processed:`, processError);
       }
+    } catch (error) {
+      console.error(`[useProcessEmailToAgent] Error processing email ${messageId}:`, error);
+      setErrorEmailId(messageId);
+      setProcessingEmailId(null);
+      setAwaitingConversationEmailId(null);
+      // Clear error after 5 seconds
+      setTimeout(() => {
+        setErrorEmailId(prev => prev === messageId ? null : prev);
+      }, 5000);
     } finally {
       setProcessingEmailId(null);
-      setSuccessEmailId(messageId);
-      // Clear success message after 3 seconds
-      setTimeout(() => {
-        setSuccessEmailId((current) => (current === messageId ? null : current));
-      }, 3000);
+      // Transition to awaiting conversation state - will be cleared when session.status event arrives
+      setAwaitingConversationEmailId(messageId);
     }
   }, []);
 
-  return { processEmailToAgent, processingEmailId, successEmailId };
+  return { 
+    processEmailToAgent, 
+    processingEmailId, 
+    awaitingConversationEmailId,
+    errorEmailId,
+    // Helper to clear states manually if needed
+    clearAwaitingConversation: () => setAwaitingConversationEmailId(null),
+  };
 }

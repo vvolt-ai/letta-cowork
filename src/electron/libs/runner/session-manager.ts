@@ -103,25 +103,62 @@ export function createOrResumeSession(
 
 /**
  * Initialize session after creation.
+ * Will wait for Letta to provide a real conversationId by calling initialize().
+ * For resumed sessions with existing conversationId, uses that directly.
  */
-export function initializeSession(
+export async function initializeSession(
   lettaSession: LettaSession,
   resumeConversationId: string | undefined,
   onSessionUpdate?: (updates: { lettaConversationId?: string }) => void
-): { sessionKey: string; currentSessionId: string } {
-  // Store session for abort handling
-  const sessionKey = resumeConversationId || lettaSession.conversationId || `temp-${Date.now()}`;
+): Promise<{ sessionKey: string; currentSessionId: string }> {
+  // For resumed sessions with valid ID, use that
+  if (resumeConversationId && isValidLettaId(resumeConversationId)) {
+    const sessionKey = resumeConversationId;
+    storeSession(sessionKey, lettaSession);
+
+    debug("session initialized (resumed)", { conversationId: resumeConversationId, agentId: lettaSession.agentId });
+    onSessionUpdate?.({ lettaConversationId: resumeConversationId });
+
+    if (lettaSession.agentId && !getCachedAgentId()) {
+      setCachedAgentId(lettaSession.agentId);
+      debug("cached agentId for future conversations", { agentId: lettaSession.agentId });
+    }
+
+    return { sessionKey, currentSessionId: sessionKey };
+  }
+
+  // For new sessions, initialize and wait for real conversationId from SDK
+  debug("initializing new Letta session, waiting for conversationId...");
+
+  // The SDK's initialize() returns an init message with conversation_id
+  // If already initialized, this is a no-op and we check conversationId directly
+  let conversationId = lettaSession.conversationId;
+
+  if (!conversationId) {
+    // Call initialize() to trigger the init message from CLI
+    // This sets _conversationId on the Session object
+    try {
+      const initResult = await lettaSession.initialize();
+      conversationId = initResult.conversationId;
+      debug("session initialized via initialize()", { conversationId, agentId: initResult.agentId });
+    } catch (initError) {
+      log("ERROR: failed to initialize Letta session", { error: String(initError) });
+      throw new Error(`Session initialization failed: ${String(initError)}`);
+    }
+  }
+
+  // Now conversationId should be available
+  if (!conversationId) {
+    log("ERROR: no conversationId available after initialize()");
+    throw new Error("Session initialization failed: no conversationId received from Letta");
+  }
+
+  // Store session for abort handling using the real conversation ID
+  const sessionKey = conversationId;
   storeSession(sessionKey, lettaSession);
 
-  // Update sessionId if conversationId is available
-  let currentSessionId = sessionKey;
-  if (lettaSession.conversationId) {
-    currentSessionId = lettaSession.conversationId;
-    debug("session initialized", { conversationId: lettaSession.conversationId, agentId: lettaSession.agentId });
-    onSessionUpdate?.({ lettaConversationId: lettaSession.conversationId });
-  } else {
-    log("WARNING: no conversationId available after send()");
-  }
+  debug("session initialized (new)", { conversationId, agentId: lettaSession.agentId });
+  onSessionUpdate?.({ lettaConversationId: conversationId });
 
   // Cache agentId for future conversations
   if (lettaSession.agentId && !getCachedAgentId()) {
@@ -129,7 +166,7 @@ export function initializeSession(
     debug("cached agentId for future conversations", { agentId: lettaSession.agentId });
   }
 
-  return { sessionKey, currentSessionId };
+  return { sessionKey, currentSessionId: sessionKey };
 }
 
 /**

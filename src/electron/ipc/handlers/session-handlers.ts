@@ -166,6 +166,15 @@ function mapLettaMessagesToStreamMessages(rawMessages: LettaMessage[]): StreamMe
     return messages;
 }
 
+/**
+ * Check if an ID looks like a valid Letta conversation/agent ID.
+ * Valid IDs are: agent-*, conv-*, conversation-*, or UUIDs.
+ */
+function isValidLettaId(id: string | undefined): boolean {
+    if (!id) return false;
+    return /^(agent-|conv-|conversation-|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/.test(id);
+}
+
 function broadcast(event: ServerEvent) {
     const payload = JSON.stringify(event);
     const windows = BrowserWindow.getAllWindows();
@@ -210,8 +219,25 @@ export async function handleSessionEvent(event: ClientEvent): Promise<void> {
         const requestedBefore = event.payload.before || undefined;
         const status = getSession(conversationId)?.status || "idle";
 
-        const lettaClient = createLettaClient();
         debug("session.history: request", { conversationId, limit, requestedBefore });
+
+        // Guard: Only call Letta API with valid Letta conversation IDs
+        if (!isValidLettaId(conversationId)) {
+            debug("session.history: skipping remote fetch for non-Letta ID", { conversationId });
+            emit({
+                type: "session.history",
+                payload: {
+                    sessionId: conversationId,
+                    status,
+                    messages: [],
+                    hasMore: false,
+                    nextBefore: undefined,
+                },
+            });
+            return;
+        }
+
+        const lettaClient = createLettaClient();
         if (!lettaClient) {
             emit({
                 type: "session.history",
@@ -269,29 +295,22 @@ export async function handleSessionEvent(event: ClientEvent): Promise<void> {
             attachments: attachments?.length ?? 0, background, isEmailSession,
         });
         const pendingPermissions = new Map<string, PendingPermission>();
-        let conversationId: string | null = null;
-        let handle: RunnerHandle | null = null;
 
         try {
-            debug("session.start: calling runLetta");
-            handle = await runLetta({
+            debug("session.start: calling runLetta (waits for real conversation ID)");
+            const sessionTitle = (title?.trim() ?? "") || generateTitleFromPrompt(prompt);
+
+            const handle = await runLetta({
                 prompt, content, preferredAgentId: agentId, model,
-                session: { id: "pending", title, status: "running", cwd, pendingPermissions },
+                session: { id: "pending", title: sessionTitle, status: "running", cwd, pendingPermissions },
                 onEvent: (e) => {
-                    if (conversationId && "sessionId" in e.payload) {
-                        const payload = e.payload as { sessionId: string };
-                        payload.sessionId = conversationId;
-                    }
                     emit(e);
                 },
                 onSessionUpdate: async (updates) => {
-                    console.log("[session.start] onSessionUpdate called", { updates, isEmailSession, conversationId });
                     debug("session.start: onSessionUpdate called", { updates });
-                    if (updates.lettaConversationId && !conversationId) {
-                        conversationId = updates.lettaConversationId;
+                    if (updates.lettaConversationId) {
+                        const conversationId = updates.lettaConversationId;
                         debug("session.start: session initialized", { conversationId });
-
-                        const sessionTitle = (title?.trim() ?? "") || generateTitleFromPrompt(prompt);
 
                         createRuntimeSession(conversationId);
                         updateSession(conversationId, { status: "running", title: sessionTitle });
@@ -313,11 +332,6 @@ export async function handleSessionEvent(event: ClientEvent): Promise<void> {
                             isEmailSession: isEmailSession ?? false,
                         });
 
-                        if (handle) {
-                            runnerHandles.delete("pending");
-                            runnerHandles.set(conversationId, handle);
-                        }
-
                         console.log("[session.start] Emitting session.status", { conversationId, isEmailSession, status: "running" });
                         emit({
                             type: "session.status",
@@ -331,10 +345,11 @@ export async function handleSessionEvent(event: ClientEvent): Promise<void> {
                 },
             });
 
-            if (handle) {
-                runnerHandles.set("pending", handle);
-            }
-            debug("session.start: runLetta returned handle");
+            // runLetta now returns a handle with the real conversation ID
+            const conversationId = handle.sessionId;
+            runnerHandles.set(conversationId, handle);
+            debug("session.start: runLetta returned handle", { conversationId });
+
         } catch (error) {
             log("session.start: ERROR", { error: String(error) });
             console.error("Failed to start session:", error);
@@ -346,6 +361,14 @@ export async function handleSessionEvent(event: ClientEvent): Promise<void> {
 
     if (event.type === "session.continue") {
         const { sessionId: conversationId, prompt, content, attachments, cwd, model } = event.payload;
+
+        // Validate we have a real conversation ID
+        if (!conversationId || !isValidLettaId(conversationId)) {
+            log("session.continue: ERROR - invalid conversation ID", { conversationId });
+            emit({ type: "session.status", payload: { sessionId: conversationId || "unknown", status: "error", error: "Invalid conversation ID" } });
+            return;
+        }
+
         const previewPrompt = (prompt ?? "").slice(0, 50);
         debug("session.continue: continuing session", {
             conversationId, prompt: previewPrompt,
@@ -371,16 +394,9 @@ export async function handleSessionEvent(event: ClientEvent): Promise<void> {
         emit({ type: "session.status", payload: { sessionId: conversationId, status: "running", title: resolvedTitle } });
         emit({ type: "stream.user_prompt", payload: { sessionId: conversationId, prompt, attachments, content } });
 
-        const placeholderKey = `pending-${conversationId}`;
-
         try {
             debug("session.continue: calling runLetta", { conversationId });
             let actualConversationId = conversationId;
-
-            runnerHandles.set(placeholderKey, {
-                abort: async () => { debug("placeholder abort called"); },
-                sessionId: conversationId,
-            });
 
             const handle = await runLetta({
                 prompt, content, model,
@@ -414,10 +430,8 @@ export async function handleSessionEvent(event: ClientEvent): Promise<void> {
             });
             debug("session.continue: runLetta returned handle");
 
-            runnerHandles.delete(placeholderKey);
             runnerHandles.set(actualConversationId, handle);
         } catch (error) {
-            runnerHandles.delete(placeholderKey);
             log("session.continue: ERROR", { error: String(error) });
             await cancelAllRunners();
             updateSession(conversationId, { status: "error" });
@@ -431,12 +445,10 @@ export async function handleSessionEvent(event: ClientEvent): Promise<void> {
         debug("session.stop: stopping session", { conversationId, availableHandles: Array.from(runnerHandles.keys()) });
 
         let handle = runnerHandles.get(conversationId);
-        if (!handle) handle = runnerHandles.get("pending");
-        if (!handle) handle = runnerHandles.get(`pending-${conversationId}`);
 
         if (!handle) {
             for (const [key, h] of runnerHandles) {
-                if (h.sessionId === conversationId || h.sessionId === "pending") {
+                if (h.sessionId === conversationId) {
                     handle = h;
                     debug("session.stop: found handle by sessionId property", { key, sessionId: h.sessionId });
                     break;
@@ -448,8 +460,6 @@ export async function handleSessionEvent(event: ClientEvent): Promise<void> {
             debug("session.stop: aborting handle");
             await handle.abort();
             runnerHandles.delete(conversationId);
-            runnerHandles.delete("pending");
-            runnerHandles.delete(`pending-${conversationId}`);
             for (const [key, h] of runnerHandles) {
                 if (h.sessionId === conversationId) runnerHandles.delete(key);
             }

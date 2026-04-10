@@ -354,7 +354,7 @@ export const downloadEmailAttachment = async (folderId?: string, messageId?: str
     return {
       status: "success" as const,
       files: downloadedFiles,
-      path: downloadDir,
+      path: uploadedFiles.map(f => f.url).join(", ") || downloadDir,
       uploadedFiles,
       uploadErrors,
     };

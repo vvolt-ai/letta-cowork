@@ -14,7 +14,7 @@ interface UseEmailInboxProps {
   accountId?: string;
   folderId?: string;
   emails: ZohoEmail[];
-  onProcessEmailToAgent?: (email: ZohoEmail, agentId: string) => void;
+  onProcessEmailToAgent?: (email: ZohoEmail, agentId: string, additionalInstructions?: string) => void;
   newlyCreatedConversations?: Map<string, { conversationId: string; agentId?: string }>;
   onLoadMore?: () => void;
   isLoadingMore?: boolean;
@@ -40,7 +40,7 @@ interface UseEmailInboxReturn {
   
   // Handlers
   handleSelectEmail: (email: ZohoEmail) => Promise<void>;
-  handleProcessEmailToAgent: (email: ZohoEmail, agentId: string) => Promise<void>;
+  handleProcessEmailToAgent: (email: ZohoEmail, agentId: string, additionalInstructions?: string) => Promise<void>;
   handleViewConversation: (conversationId: string) => void;
   handleBackFromConversation: () => void;
   handleOpenInLetta: (conversationId: string, agentId?: string) => void;
@@ -202,10 +202,10 @@ export function useEmailInbox({
   }, [sessions, processedEmailsFromServer]);
 
   // Handle process email to agent
-  const handleProcessEmailToAgent = useCallback(async (email: ZohoEmail, agentId: string) => {
+  const handleProcessEmailToAgent = useCallback(async (email: ZohoEmail, agentId: string, additionalInstructions?: string) => {
     if (!onProcessEmailToAgent) return;
 
-    await onProcessEmailToAgent(email, agentId);
+    await onProcessEmailToAgent(email, agentId, additionalInstructions);
 
     // Update local state to mark as processed immediately
     const messageId = String(email.messageId);

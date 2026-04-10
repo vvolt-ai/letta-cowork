@@ -10,6 +10,15 @@ import { emit } from "./session-creation.js";
 import type { StreamMessage } from "../../../types.js";
 
 /**
+ * Check if an ID looks like a valid Letta conversation/agent ID.
+ * Valid IDs are: agent-*, conv-*, conversation-*, or UUIDs.
+ */
+function isValidLettaId(id: string | undefined): boolean {
+    if (!id) return false;
+    return /^(agent-|conv-|conversation-|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/.test(id);
+}
+
+/**
  * Map Letta messages to stream messages format
  */
 function mapLettaMessagesToStreamMessages(rawMessages: LettaMessage[]): StreamMessage[] {
@@ -57,8 +66,25 @@ export async function handleGetSessionHistory(
     const requestedBefore = before;
     const status = getSession(conversationId)?.status || "idle";
 
-    const lettaClient = createLettaClient();
     debug("session.history: request", { conversationId, limit, requestedBefore });
+
+    // Guard: Only call Letta API with valid Letta conversation IDs
+    if (!isValidLettaId(conversationId)) {
+        debug("session.history: skipping remote fetch for non-Letta ID", { conversationId });
+        emit({
+            type: "session.history",
+            payload: {
+                sessionId: conversationId,
+                status,
+                messages: [],
+                hasMore: false,
+                nextBefore: undefined,
+            },
+        });
+        return;
+    }
+
+    const lettaClient = createLettaClient();
 
     if (!lettaClient) {
         emit({

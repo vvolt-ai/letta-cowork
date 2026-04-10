@@ -9,19 +9,18 @@ import { runnerHandles, emit, cancelAllRunners } from "./session-creation.js";
 
 /**
  * Handle session.abort event - abort a specific session
+ * Only works with real Letta conversation IDs.
  */
 export async function handleAbortSession(sessionId: string): Promise<void> {
     debug("session.abort: aborting session", { sessionId, availableHandles: Array.from(runnerHandles.keys()) });
 
-    // Try direct handle abort first
+    // Try direct handle lookup by real conversation ID
     let handle = runnerHandles.get(sessionId);
-    if (!handle) handle = runnerHandles.get("pending");
-    if (!handle) handle = runnerHandles.get(`pending-${sessionId}`);
 
-    // Search by sessionId property
+    // Search by sessionId property if not found by key
     if (!handle) {
         for (const [key, h] of runnerHandles) {
-            if (h.sessionId === sessionId || h.sessionId === "pending") {
+            if (h.sessionId === sessionId) {
                 handle = h;
                 debug("session.abort: found handle by sessionId property", { key, sessionId: h.sessionId });
                 break;
@@ -33,8 +32,7 @@ export async function handleAbortSession(sessionId: string): Promise<void> {
         debug("session.abort: aborting handle");
         await handle.abort();
         runnerHandles.delete(sessionId);
-        runnerHandles.delete("pending");
-        runnerHandles.delete(`pending-${sessionId}`);
+        // Also clean up any entries matching this sessionId
         for (const [key, h] of runnerHandles) {
             if (h.sessionId === sessionId) runnerHandles.delete(key);
         }

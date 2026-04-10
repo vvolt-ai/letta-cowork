@@ -13,11 +13,20 @@ import { runnerHandles, emit } from "./session-creation.js";
 
 /**
  * Handle session.continue event
+ * Only works with real Letta conversation IDs.
  */
 export async function handleContinueSession(
     options: SessionContinueOptions
 ): Promise<void> {
     const { sessionId: conversationId, prompt, content, attachments, cwd, model } = options;
+
+    // Validate we have a real conversation ID
+    if (!conversationId || !/^(agent-|conv-|conversation-|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/.test(conversationId)) {
+        log("session.continue: ERROR - invalid conversation ID", { conversationId });
+        emit({ type: "session.status", payload: { sessionId: conversationId || "unknown", status: "error", error: "Invalid conversation ID" } });
+        return;
+    }
+
     const previewPrompt = (prompt ?? "").slice(0, 50);
     debug("session.continue: continuing session", {
         conversationId, prompt: previewPrompt,
@@ -43,16 +52,9 @@ export async function handleContinueSession(
     emit({ type: "session.status", payload: { sessionId: conversationId, status: "running", title: resolvedTitle } });
     emit({ type: "stream.user_prompt", payload: { sessionId: conversationId, prompt, attachments, content } });
 
-    const placeholderKey = `pending-${conversationId}`;
-
     try {
         debug("session.continue: calling runLetta", { conversationId });
         let actualConversationId = conversationId;
-
-        runnerHandles.set(placeholderKey, {
-            abort: async () => { debug("placeholder abort called"); },
-            sessionId: conversationId,
-        });
 
         const handle = await runLetta({
             prompt: prompt ?? "",
@@ -88,10 +90,8 @@ export async function handleContinueSession(
         });
         debug("session.continue: runLetta returned handle");
 
-        runnerHandles.delete(placeholderKey);
         runnerHandles.set(actualConversationId, handle);
     } catch (error) {
-        runnerHandles.delete(placeholderKey);
         log("session.continue: ERROR", { error: String(error) });
         await Promise.all(Array.from(runnerHandles.values()).map(h => h.abort()));
         runnerHandles.clear();

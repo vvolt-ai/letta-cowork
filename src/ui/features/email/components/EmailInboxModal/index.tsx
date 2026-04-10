@@ -21,7 +21,8 @@ export function EmailInboxModal({
   selectedAgentId,
   onProcessEmailToAgent,
   processingEmailId,
-  successEmailId,
+  awaitingConversationEmailId,
+  errorEmailId,
   newlyCreatedConversations,
   onRefresh,
   onSearch,
@@ -161,7 +162,8 @@ export function EmailInboxModal({
                   localEmailDetailsError={localEmailDetailsError}
                   isFetchingLocalContent={isFetchingLocalContent}
                   processingEmailId={processingEmailId}
-                  successEmailId={successEmailId}
+                  awaitingConversationEmailId={awaitingConversationEmailId}
+                  errorEmailId={errorEmailId}
                   isProcessingEmailInput={isProcessingEmailInput}
                   selectedAgentId={selectedAgentId}
                   processedEmailsFromServer={processedEmailsFromServer}

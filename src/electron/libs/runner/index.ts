@@ -34,6 +34,7 @@ export { abortAllSessions, abortSessionById } from "./abort-handler.js";
 
 /**
  * Run a Letta session with the given options.
+ * Returns a handle once the session has a real Letta conversation ID.
  */
 export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
   const { prompt, content, session, resumeConversationId, preferredAgentId, model, onEvent, onSessionUpdate } = options;
@@ -46,8 +47,8 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
   // Store abort controller globally for external access
   setCurrentAbortController(abortController);
 
-  // Session key - will be set when session is created
-  let sessionKey: string = `pending-${Date.now()}`;
+  // Will be set when Letta provides a real conversation ID
+  let sessionKey: string = "";
   let lettaSessionRef: LettaSession | null = null;
 
   const promptPreview = (prompt ?? "").slice(0, 100);
@@ -69,6 +70,14 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
   const sendMessage = createMessageSender(currentSessionId, onEvent);
   const sendPermissionRequest = createPermissionRequestSender(currentSessionId, onEvent);
 
+  // Promise to resolve when we have a real conversation ID
+  let resolveConversationId!: (id: string) => void;
+  let rejectConversationId!: (error: Error) => void;
+  const conversationIdPromise = new Promise<string>((resolve, reject) => {
+    resolveConversationId = resolve;
+    rejectConversationId = reject;
+  });
+
   // Start the query in the background
   (async () => {
     try {
@@ -79,17 +88,30 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
       const lettaSession = createOrResumeSession(options, canUseTool);
       debug("session created successfully");
 
-      // Initialize session
-      const initResult = initializeSession(lettaSession, resumeConversationId, onSessionUpdate);
+      // Initialize session - async wait for real conversation ID from Letta
+      let initResult;
+      try {
+        initResult = await initializeSession(lettaSession, resumeConversationId, (updates) => {
+          onSessionUpdate?.(updates);
+        });
+      } catch (initError) {
+        // Session initialization failed
+        rejectConversationId(initError as Error);
+        throw initError;
+      }
+
       sessionKey = initResult.sessionKey;
       currentSessionId = initResult.currentSessionId;
       lettaSessionRef = lettaSession;
+
+      // Resolve with the real conversation ID
+      resolveConversationId(currentSessionId);
 
       // Update senders with correct session ID
       const sendMessageWithId = createMessageSender(currentSessionId, onEvent);
       const sendPermissionRequestWithId = createPermissionRequestSender(currentSessionId, onEvent);
 
-      // Send the prompt (triggers init internally)
+      // Send the prompt (session is already initialized above)
       debug("calling send()");
       timing.mark("before send()");
       const sendStartTime = Date.now();
@@ -193,13 +215,18 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
       const errorMessage = `Failed to start session: ${String(error)}\n\nAgent ID: ${errorDetails.agentId}\nBase URL: ${errorDetails.baseURL}\nAPI Key: ${errorDetails.apiKeyMasked}`;
       sendSessionStatus(currentSessionId, "error", onEvent, undefined, errorMessage);
     } finally {
-      cleanupSession(sessionKey, lettaSessionRef);
+      if (sessionKey) {
+        cleanupSession(sessionKey, lettaSessionRef);
+      }
       setCurrentAbortController(null);
     }
   })();
 
+  // Wait for the real conversation ID before returning
+  const realConversationId = await conversationIdPromise;
+
   return {
-    abort: createAbortHandler(sessionKey, lettaSessionRef, abortController),
-    sessionId: sessionKey
+    abort: createAbortHandler(realConversationId, lettaSessionRef, abortController),
+    sessionId: realConversationId
   };
 }

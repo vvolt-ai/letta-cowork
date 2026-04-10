@@ -12,17 +12,16 @@ import type { ServerEvent } from "./types.js";
 
 /**
  * Handle session.stop event
+ * Only works with real Letta conversation IDs.
  */
 export async function handleStopSession(sessionId: string): Promise<void> {
     debug("session.stop: stopping session", { sessionId, availableHandles: Array.from(runnerHandles.keys()) });
 
     let handle = runnerHandles.get(sessionId);
-    if (!handle) handle = runnerHandles.get("pending");
-    if (!handle) handle = runnerHandles.get(`pending-${sessionId}`);
 
     if (!handle) {
         for (const [key, h] of runnerHandles) {
-            if (h.sessionId === sessionId || h.sessionId === "pending") {
+            if (h.sessionId === sessionId) {
                 handle = h;
                 debug("session.stop: found handle by sessionId property", { key, sessionId: h.sessionId });
                 break;
@@ -34,8 +33,6 @@ export async function handleStopSession(sessionId: string): Promise<void> {
         debug("session.stop: aborting handle");
         await handle.abort();
         runnerHandles.delete(sessionId);
-        runnerHandles.delete("pending");
-        runnerHandles.delete(`pending-${sessionId}`);
         for (const [key, h] of runnerHandles) {
             if (h.sessionId === sessionId) runnerHandles.delete(key);
         }

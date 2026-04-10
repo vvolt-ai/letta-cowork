@@ -668,42 +668,22 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
   setGlobalError: (globalError) => set({ globalError }),
   setShowStartModal: (showStartModal) => set({ showStartModal }),
   setActiveSessionId: (id, fetchHistory = true) => {
-    const state = get();
-
-    // Cancel any pending runs in the background (non-blocking)
-    const currentSessionId = state.activeSessionId;
-    if (currentSessionId && currentSessionId !== id) {
-      const currentSession = state.sessions[currentSessionId];
-      // If current session is running, stop it in background
-      if (currentSession?.status === "running") {
-        console.log(`[setActiveSessionId] Stopping current session ${currentSessionId} in background`);
-        // Use setTimeout to make it non-blocking
-        setTimeout(() => {
-          get().ipcSendEvent?.({
-            type: "session.stop",
-            payload: { sessionId: currentSessionId }
-          });
-        }, 0);
-      }
-    }
-
-    // Also cancel any pending runners in background (non-blocking)
-    setTimeout(() => {
-      get().ipcSendEvent?.({
-        type: "session.cancelPending",
-        payload: {}
-      });
-    }, 0);
+    // NOTE: Do NOT stop running sessions on conversation switch.
+    // Background sessions should continue running while the user browses other conversations.
 
     set((state) => {
-      // Clear messages from other sessions when switching to improve performance
+      // Clear messages from inactive sessions to free memory,
+      // but NEVER clear a session that is currently running (it may be processing in background).
       const updatedSessions: Record<string, SessionView> = {};
       
       for (const [sessionId, sess] of Object.entries(state.sessions)) {
         if (sessionId === id) {
           updatedSessions[sessionId] = sess;
+        } else if (sess.status === "running") {
+          // Keep running sessions fully intact — they are processing in background
+          updatedSessions[sessionId] = sess;
         } else {
-          // Keep session but clear messages to free memory
+          // Only clear idle/stopped sessions to free memory
           updatedSessions[sessionId] = {
             ...sess,
             messages: [],

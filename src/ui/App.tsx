@@ -178,7 +178,7 @@ function App() {
     });
   }, [newlyCreatedConversations]);
 
-  const { processEmailToAgent, processingEmailId, successEmailId } = useProcessEmailToAgent(
+  const { processEmailToAgent, processingEmailId, awaitingConversationEmailId, errorEmailId } = useProcessEmailToAgent(
     useCallback((messageId: string, conversationId: string, agentId?: string) => {
       console.log(`[App] Conversation created callback for email ${messageId}: ${conversationId}`);
       setNewlyCreatedConversations(prev => {
@@ -625,7 +625,8 @@ function App() {
             selectedAgentId={selectedAutoSyncAgentIds[0]}
             onProcessEmailToAgent={processEmailToAgent}
             processingEmailId={processingEmailId}
-            successEmailId={successEmailId}
+            awaitingConversationEmailId={awaitingConversationEmailId}
+            errorEmailId={errorEmailId}
             newlyCreatedConversations={newlyCreatedConversations}
             onOpenSettings={() => setShowCoworkSettings(true)}
             hasMoreEmails={hasMoreEmails}

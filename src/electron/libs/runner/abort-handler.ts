@@ -34,23 +34,13 @@ export async function abortAllSessions(): Promise<void> {
 
 /**
  * Abort a specific session by conversationId.
+ * Only works with real Letta conversation IDs.
  */
 export async function abortSessionById(conversationId: string): Promise<boolean> {
   console.log("[runner] abortSessionById called:", conversationId, "active sessions:", getActiveSessions().size);
 
-  // Try to find the session by exact match
-  let sessionToAbort = getSession(conversationId);
-
-  // If not found, try to find by prefix match (e.g., "pending-" prefix)
-  if (!sessionToAbort) {
-    for (const [key, session] of getActiveSessions()) {
-      if (key === conversationId || key.includes(conversationId) || conversationId.includes(key)) {
-        sessionToAbort = session;
-        console.log("[runner] found session by partial match:", key);
-        break;
-      }
-    }
-  }
+  // Try to find the session by exact match (real conversation ID only)
+  const sessionToAbort = getSession(conversationId);
 
   if (sessionToAbort) {
     try {

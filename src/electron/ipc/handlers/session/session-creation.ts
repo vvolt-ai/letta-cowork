@@ -9,13 +9,14 @@ import type { MessageContentItem } from "@letta-ai/letta-code-sdk";
 import type { PendingPermission } from "../../../libs/runtime-state.js";
 import { createRuntimeSession, updateSession } from "../../../libs/runtime-state.js";
 import type { SessionStatus } from "../../../libs/runtime-state.js";
-import { addStoredSession, type StoredSession } from "../../../services/settings/index.js";
+import { addStoredSession } from "../../../services/settings/index.js";
 import { getLettaAgent } from "../../../services/agents/index.js";
 import { log, debug, broadcast } from "./utils.js";
 import { generateTitleFromPrompt } from "./title-generator.js";
 import type { ServerEvent, SessionStartOptions } from "./types.js";
+import type { RunnerSession } from "../../../libs/runner/types.js";
 
-// Track active runner handles (shared across handlers)
+// Track active runner handles by real Letta conversation IDs (shared across handlers)
 export const runnerHandles = new Map<string, RunnerHandle>();
 
 /**
@@ -47,6 +48,7 @@ export function emit(event: ServerEvent): void {
 
 /**
  * Handle session.start event
+ * Waits for a real Letta conversation ID before creating/exposing the session.
  */
 export async function handleStartSession(
     options: SessionStartOptions
@@ -61,31 +63,34 @@ export async function handleStartSession(
     });
 
     const pendingPermissions = new Map<string, PendingPermission>();
-    let conversationId: string | null = null;
-    let handle: RunnerHandle | null = null;
+    const safePrompt = prompt ?? "";
+    const safeTitle = (title?.trim() ?? "") || generateTitleFromPrompt(safePrompt);
 
     try {
-        debug("session.start: calling runLetta");
-        const safePrompt = prompt ?? "";
-        const safeTitle = (title?.trim() ?? "") || generateTitleFromPrompt(safePrompt);
-        handle = await runLetta({
+        debug("session.start: calling runLetta (waits for real conversation ID)");
+
+        const sessionConfig: RunnerSession = {
+            id: "pending", // Will be replaced by real conversation ID
+            title: safeTitle,
+            status: "running",
+            cwd,
+            pendingPermissions
+        };
+
+        const handle = await runLetta({
             prompt: safePrompt,
             content: content as MessageContentItem[] | undefined,
             preferredAgentId: agentId,
             model,
-            session: { id: "pending", title: safeTitle, status: "running", cwd, pendingPermissions },
+            session: sessionConfig,
             onEvent: (e) => {
-                if (conversationId && "sessionId" in e.payload) {
-                    const payload = e.payload as { sessionId: string };
-                    payload.sessionId = conversationId;
-                }
+                // All events now should have the real conversation ID
                 emit(e);
             },
             onSessionUpdate: async (updates) => {
-                console.log("[session.start] onSessionUpdate called", { updates, isEmailSession, conversationId });
                 debug("session.start: onSessionUpdate called", { updates });
-                if (updates.lettaConversationId && !conversationId) {
-                    conversationId = updates.lettaConversationId;
+                if (updates.lettaConversationId) {
+                    const conversationId = updates.lettaConversationId;
                     debug("session.start: session initialized", { conversationId });
 
                     const sessionTitle = safeTitle;
@@ -110,11 +115,6 @@ export async function handleStartSession(
                         isEmailSession: isEmailSession ?? false,
                     });
 
-                    if (handle) {
-                        runnerHandles.delete("pending");
-                        runnerHandles.set(conversationId, handle);
-                    }
-
                     console.log("[session.start] Emitting session.status", { conversationId, isEmailSession, status: "running" });
                     emit({
                         type: "session.status",
@@ -128,10 +128,11 @@ export async function handleStartSession(
             },
         });
 
-        if (handle) {
-            runnerHandles.set("pending", handle);
-        }
-        debug("session.start: runLetta returned handle");
+        // runLetta now returns a handle with the real conversation ID
+        const conversationId = handle.sessionId;
+        runnerHandles.set(conversationId, handle);
+        debug("session.start: runLetta returned handle", { conversationId });
+
     } catch (error) {
         log("session.start: ERROR", { error: String(error) });
         console.error("Failed to start session:", error);

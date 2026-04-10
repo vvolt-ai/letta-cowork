@@ -55,9 +55,10 @@ export interface EmailInboxModalProps {
   onUseEmailAsInput: (email: ZohoEmail) => void;
   isProcessingEmailInput?: boolean;
   selectedAgentId?: string;
-  onProcessEmailToAgent?: (email: ZohoEmail, agentId: string) => void;
+  onProcessEmailToAgent?: (email: ZohoEmail, agentId: string, additionalInstructions?: string) => void;
   processingEmailId?: string | null;
-  successEmailId?: string | null;
+  awaitingConversationEmailId?: string | null;
+  errorEmailId?: string | null;
   newlyCreatedConversations?: Map<string, { conversationId: string; agentId?: string }>;
   onRefresh?: () => void;
   onSearch?: (query: string) => void;
