@@ -97,6 +97,31 @@ From the full email body, extract ALL of the following that are present:
 
 ---
 
+## Step 2b: Category-Specific Processing
+
+After completing Step 2, run the category-specific processing for the classified email type **before** moving to Step 3.
+
+### If category = "Placing a Purchase Order"
+
+Run the full PO processing checklist from `references/po-processing.md`. This covers:
+
+1. **CRM sender lookup** — is the sender's email already in Odoo?
+2. **Email validity check** — is this a corporate email? (Reject gmail, hotmail, yahoo, etc.)
+3. **Domain/org match** — if sender not in CRM, does their domain match an existing company?
+4. **Contact creation decision** — create new contact and/or company if needed (propose, don't execute yet)
+5. **Payment terms check** — do the PO terms match the CRM terms?
+   - If discrepancy → draft a payment terms clarification email
+   - If CRM = "Immediate Payment" → draft a payment instructions email with payment link, bank details, and proforma invoice
+6. Add all findings and any drafted emails to the Step 4 approval summary
+
+**CRITICAL:** Do NOT create Odoo records or send any emails until Step 4 is approved.
+
+### All other categories
+
+No additional processing required — proceed directly to Step 3.
+
+---
+
 ## Step 3: Verify and Download Attachment
 
 **Goal:** If an attachment is present, download it and extract key data from it.
@@ -186,5 +211,6 @@ Do NOT:
 
 ## References
 
-- `references/classification-guide.md` — full email label taxonomy and examples for Step 1
+- `references/classification-guide.md` — full email category taxonomy and examples for Step 1
+- `references/po-processing.md` — Purchase Order processing checklist (CRM lookup, contact creation, payment terms, draft emails) for Step 2b
 - `references/approval-template.md` — structured output format for Step 4

@@ -14,7 +14,7 @@ Do NOT deviate from this format. Do NOT skip any section.
 ### Classification
 | Field | Value |
 |-------|-------|
-| **Label** | <LABEL> |
+| **Category** | <CATEGORY> |
 | **Confidence** | High / Medium / Low |
 | **Reasoning** | <one sentence explaining why> |
 
@@ -60,12 +60,32 @@ Do NOT deviate from this format. Do NOT skip any section.
 
 ---
 
+### PO Processing Checks *(include only when category = "Placing a Purchase Order")*
+
+| Check | Result |
+|-------|--------|
+| **Sender in CRM** | Found: <name, company> / Not Found |
+| **Email type** | Corporate ✅ / Non-corporate ❌ (blocked) |
+| **Domain match in CRM** | Match: <company name> / No match / N/A |
+| **CRM Contact action** | Existing / Create contact / Create company + contact / N/A |
+| **PO Payment Terms** | <what PO states, or "Not specified"> |
+| **CRM Payment Terms** | <what CRM has, or "New contact — default"> |
+| **Payment Terms Status** | ✅ Match / ⚠️ Discrepancy / 🔴 Immediate Payment / ➖ N/A |
+
+### Draft Email *(if applicable — payment terms discrepancy or immediate payment)*
+
+```
+<Full draft email here, or "No draft required">
+```
+
+---
+
 ### ⚠️ Awaiting Your Approval
 
-**Do you approve proceeding with the proposed action?**
+**Do you approve proceeding with the proposed action(s)?**
 
-- ✅ **Yes** — I will proceed with the proposed action
-- ✏️ **Modify** — Tell me what to change and I will update the proposed action
+- ✅ **Yes** — I will proceed with all proposed actions
+- ✏️ **Modify** — Tell me what to change and I will update the proposal
 - ❌ **Reject** — No action will be taken
 
 > Please reply with Yes, Modify, or Reject.
