@@ -8,6 +8,8 @@
 import { BaseHttpClient } from "./base-client.js";
 import { ChannelEndpoints } from "../endpoints/channels.js";
 import { EmailEndpoints } from "../endpoints/emails.js";
+import { SchedulerEndpoints } from "../endpoints/scheduler.js";
+import type { ScheduledTask, ScheduleRun, CreateScheduledTaskDto, CreateScheduleRunDto } from "../endpoints/scheduler.js";
 import type { 
   AuthTokens, 
   Channel, 
@@ -393,6 +395,14 @@ export class VeraCoworkApiClient extends BaseHttpClient {
     messageIds: string[];
   }> {
     return EmailEndpoints.markEmailsAsRead(this, channelId, messageIds);
+  }
+
+  // ============================================
+  // Scheduler - Delegate to SchedulerEndpoints
+  // ============================================
+
+  get scheduler(): SchedulerEndpoints {
+    return new SchedulerEndpoints(this);
   }
 }
 

@@ -242,5 +242,13 @@ interface Window {
       context?: any;
       error?: string;
     }>;
+
+    // Scheduler
+    schedulerList: () => Promise<any[]>;
+    schedulerCreate: (dto: Record<string, unknown>) => Promise<any>;
+    schedulerUpdate: (id: string, dto: Record<string, unknown>) => Promise<any>;
+    schedulerToggle: (id: string) => Promise<any>;
+    schedulerDelete: (id: string) => Promise<{ success: boolean }>;
+    schedulerRuns: (id: string, limit?: number, offset?: number) => Promise<{ runs: any[]; total: number }>;
   };
 }

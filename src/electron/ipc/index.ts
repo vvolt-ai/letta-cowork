@@ -23,6 +23,7 @@ import { handleSessionEvent, recoverPendingApprovalsForSession, cancelRecoveredR
 import { registerChannelHandlers, initializeBridges } from "./handlers/channel-handlers.js";
 import { registerEmailHandlers } from "./handlers/email-handlers.js";
 import { registerAttachmentHandlers } from "./handlers/attachment-handlers.js";
+import { registerSchedulerHandlers } from "./handlers/scheduler-handlers.js";
 
 // Re-export session handlers for backward compatibility
 export { handleClientEvent, recoverPendingApprovalsForSession, cancelRecoveredRun, cleanupAllSessions };
@@ -320,6 +321,7 @@ export function registerAllIpcHandlers(mainWindow: BrowserWindow): void {
     registerChannelHandlers();
     registerEmailHandlers();
     registerAttachmentHandlers();
+    registerSchedulerHandlers();
 }
 
 /**

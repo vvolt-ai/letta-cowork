@@ -12,6 +12,7 @@ import { WorkspaceLayout } from "./features/layout/components/WorkspaceLayout";
 import { ChatWorkspace } from "./features/chat/components/ChatWorkspace";
 import { ConfigurationTab } from "./features/sidebar/components/ConfigurationTab";
 import { SkillsPanel } from "./features/skills/SkillsPanel";
+import { SchedulesPanel } from "./features/scheduler/SchedulesPanel";
 import { SkillDownloadDialog } from "./features/settings/components/SkillDownloadDialog";
 import { LettaTerminal } from "./features/settings/components/LettaTerminal";
 import { useDownloadSkill } from "./hooks/useDownloadSkill";
@@ -139,6 +140,8 @@ function App() {
   const [isActivityOpen, setIsActivityOpen] = useState(false);
   const [showConfiguration, setShowConfiguration] = useState(false);
   const [showSkills, setShowSkills] = useState(false);
+  const [showSchedules, setShowSchedules] = useState(false);
+  const [scheduleAgents, setScheduleAgents] = useState<Array<{ id: string; name: string; description?: string | null }>>([]);
   const [skillDownloadOpen, setSkillDownloadOpen] = useState(false);
   const [showLettaCli, setShowLettaCli] = useState(false);
 
@@ -361,13 +364,22 @@ function App() {
     handlePartialMessagesRef.current = handlePartialMessages;
   }, [handlePartialMessages]);
 
-  // Close Configuration / Skills panel when the user selects a conversation
+  // Close Configuration / Skills / Schedules panel when the user selects a conversation
   useEffect(() => {
     if (activeSessionId) {
       setShowConfiguration(false);
       setShowSkills(false);
+      setShowSchedules(false);
     }
   }, [activeSessionId]);
+
+  // Pre-load agents list for the Schedules panel when it opens
+  useEffect(() => {
+    if (!showSchedules) return;
+    window.electron.listLettaAgents()
+      .then((agents: Array<{ id: string; name: string }>) => setScheduleAgents(agents ?? []))
+      .catch(console.warn);
+  }, [showSchedules]);
 
   // Wrapped handleStartSessionClick for Sidebar - calls with setLettaEnvOpen callback
   const handleStartSessionClickWithEnv = useCallback(() => {
@@ -659,8 +671,9 @@ function App() {
             errorEmailId={errorEmailId}
             newlyCreatedConversations={newlyCreatedConversations}
             onOpenSettings={() => setShowCoworkSettings(true)}
-            onOpenConfiguration={() => { setShowConfiguration(true); setShowSkills(false); }}
-            onOpenSkills={() => { setShowSkills(true); setShowConfiguration(false); }}
+            onOpenConfiguration={() => { setShowConfiguration(true); setShowSkills(false); setShowSchedules(false); }}
+            onOpenSkills={() => { setShowSkills(true); setShowConfiguration(false); setShowSchedules(false); }}
+            onOpenSchedules={() => { setShowSchedules(true); setShowSkills(false); setShowConfiguration(false); }}
             hasMoreEmails={hasMoreEmails}
             isLoadingMoreEmails={isLoadingMoreEmails}
             onLoadMoreEmails={handleLoadMoreEmails}
@@ -669,7 +682,9 @@ function App() {
           />
         }
         chat={
-          showSkills ? (
+          showSchedules ? (
+            <SchedulesPanel agents={scheduleAgents} />
+          ) : showSkills ? (
             <SkillsPanel onClose={() => setShowSkills(false)} />
           ) : showConfiguration ? (
             <div className="flex h-full flex-col">

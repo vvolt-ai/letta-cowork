@@ -1,8 +1,103 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { useEffect, useRef, useState } from "react";
-import type { SessionView } from "../../../store/useAppStore";
+import type { SessionView, AgentDisplayStatus } from "../../../store/useAppStore";
 
-type ConversationListSession = Pick<SessionView, "id" | "title" | "updatedAt" | "lastPrompt">;
+type ConversationListSession = Pick<SessionView, "id" | "title" | "updatedAt" | "lastPrompt"> & {
+  ephemeralStatus?: AgentDisplayStatus;
+};
+
+// ── Status indicator shown next to conversation title ───────────────────────
+function StatusIndicator({ status }: { status: AgentDisplayStatus | undefined }) {
+  if (!status || status === "idle") return null;
+
+  if (status === "completed") {
+    return (
+      <span
+        className="inline-flex shrink-0 h-3.5 w-3.5 text-green-500"
+        title="Completed"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-full w-full">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      </span>
+    );
+  }
+
+  if (status === "thinking" || status === "generating") {
+    return (
+      <span className="inline-flex items-center gap-[3px] shrink-0" title="Thinking…">
+        {[0, 1, 2].map((i) => (
+          <span
+            key={i}
+            className="block h-[5px] w-[5px] rounded-full bg-blue-400"
+            style={{ animation: `sidebar-bounce 1.2s ease-in-out ${i * 0.2}s infinite` }}
+          />
+        ))}
+      </span>
+    );
+  }
+
+  if (status === "running_tool") {
+    return (
+      <span
+        className="inline-flex shrink-0 h-3.5 w-3.5 text-violet-500"
+        title="Running tool…"
+        style={{ animation: "sidebar-spin 1s linear infinite" }}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-full w-full">
+          <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+        </svg>
+      </span>
+    );
+  }
+
+  if (status === "waiting_approval") {
+    return (
+      <span
+        className="inline-flex shrink-0 h-3.5 w-3.5 text-amber-500"
+        title="Waiting for approval"
+        style={{ animation: "sidebar-pulse 1.5s ease-in-out infinite" }}
+      >
+        <svg viewBox="0 0 24 24" fill="currentColor" className="h-full w-full">
+          <path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm0 5v6m0 2v2" stroke="white" strokeWidth="2.5" strokeLinecap="round" fill="none"/>
+          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none"/>
+          <line x1="12" y1="8" x2="12" y2="12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          <circle cx="12" cy="16" r="1" fill="currentColor"/>
+        </svg>
+      </span>
+    );
+  }
+
+  if (status === "error") {
+    return (
+      <span className="inline-flex shrink-0 h-2 w-2 rounded-full bg-red-500" title="Error" />
+    );
+  }
+
+  return null;
+}
+
+// Keyframe styles injected once
+const STYLE_ID = "sidebar-status-keyframes";
+if (typeof document !== "undefined" && !document.getElementById(STYLE_ID)) {
+  const style = document.createElement("style");
+  style.id = STYLE_ID;
+  style.textContent = `
+    @keyframes sidebar-bounce {
+      0%, 80%, 100% { transform: scaleY(0.5); opacity: 0.4; }
+      40% { transform: scaleY(1); opacity: 1; }
+    }
+    @keyframes sidebar-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    @keyframes sidebar-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+  `;
+  document.head.appendChild(style);
+}
 
 interface ConversationListProps {
   sessions: ConversationListSession[];
@@ -91,6 +186,7 @@ export function ConversationList({
         const isEditing = editingId === session.id;
         const displayTitle = getSessionTitle?.(session) || session.title || "Untitled session";
         const subtitle = getSessionSubtitle?.(session);
+        const ephStatus = session.ephemeralStatus;
         const relTime = formatRelativeTime(session.updatedAt);
 
         return (
@@ -126,10 +222,29 @@ export function ConversationList({
                 />
               ) : (
                 <div className="min-w-0">
-                  <span className={`block truncate text-[13.5px] ${isActive ? "font-medium text-ink-900" : "text-ink-700"}`}>
-                    {displayTitle}
-                  </span>
-                  {subtitle ? (
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className={`block truncate text-[13.5px] ${isActive ? "font-medium text-ink-900" : "text-ink-700"}`}>
+                      {displayTitle}
+                    </span>
+                    <StatusIndicator status={ephStatus} />
+                  </div>
+                  {/* Status label row — only show for non-idle states */}
+                  {ephStatus && ephStatus !== "idle" && (
+                    <span className={`mt-0.5 block text-[10.5px] ${
+                      ephStatus === "error"            ? "text-red-500" :
+                      ephStatus === "waiting_approval" ? "text-amber-500" :
+                      ephStatus === "completed"        ? "text-green-600" :
+                      "text-blue-500"
+                    }`}>
+                      {ephStatus === "thinking"          ? "Thinking…" :
+                       ephStatus === "running_tool"      ? "Running tool…" :
+                       ephStatus === "generating"        ? "Generating…" :
+                       ephStatus === "waiting_approval"  ? "Needs approval" :
+                       ephStatus === "completed"         ? "Completed" :
+                       ephStatus === "error"             ? "Error" : null}
+                    </span>
+                  )}
+                  {subtitle && !ephStatus || (ephStatus === "idle" && subtitle) ? (
                     <span className="mt-0.5 block truncate text-[11px] text-muted">{subtitle}</span>
                   ) : null}
                 </div>

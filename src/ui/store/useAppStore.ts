@@ -840,8 +840,9 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
           nextSessions[session.id] = {
             ...existing,
             status: session.status,
-            title: session.title,
-            agentName: session.agentName,
+            // Preserve local title if server sends null/empty (happens on new sessions)
+            title: session.title || existing.title,
+            agentName: session.agentName || existing.agentName,
             agentId: session.agentId ?? existing.agentId,
             cwd: session.cwd,
             createdAt: session.createdAt,
@@ -964,32 +965,8 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
           };
         });
 
-        // After a session completes its task, reset ephemeral status to idle after a short
-        // display window so the session appears ready for the next message.
-        if (status === "completed") {
-          setTimeout(() => {
-            set((state) => {
-              const sess = state.sessions[sessionId];
-              if (!sess) return state;
-              // Only reset if still completed — don't overwrite running/error states
-              if (sess.ephemeral.status !== "completed") return state;
-              return {
-                sessions: {
-                  ...state.sessions,
-                  [sessionId]: {
-                    ...sess,
-                    // Keep backend status as-is; only reset the visual display status
-                    ephemeral: {
-                      ...sess.ephemeral,
-                      status: "idle",
-                      errorMessage: undefined,
-                    },
-                  },
-                },
-              };
-            });
-          }, 1500);
-        }
+        // "Completed" stays visible in the sidebar until the user sends the next message.
+        // It is cleared back to "idle" when a new prompt is submitted (see handleSend).
 
         // Switch to this session if it's the one we were waiting for
         if (rootState.pendingStart && !background) {

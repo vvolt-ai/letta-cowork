@@ -256,6 +256,20 @@ electron.contextBridge.exposeInMainWorld("electron", {
         electron.ipcRenderer.invoke("api:get-conversation-context", channelId, options),
     apiGetGroupConversationContext: (channelId: string, groupId: string, options?: { limit?: number; since?: string }) =>
         electron.ipcRenderer.invoke("api:get-group-conversation-context", channelId, groupId, options),
+
+    // ── Scheduler ────────────────────────────────────────────────────────────
+    schedulerList: () =>
+        electron.ipcRenderer.invoke("scheduler:list"),
+    schedulerCreate: (dto: Record<string, unknown>) =>
+        electron.ipcRenderer.invoke("scheduler:create", dto),
+    schedulerUpdate: (id: string, dto: Record<string, unknown>) =>
+        electron.ipcRenderer.invoke("scheduler:update", id, dto),
+    schedulerToggle: (id: string) =>
+        electron.ipcRenderer.invoke("scheduler:toggle", id),
+    schedulerDelete: (id: string) =>
+        electron.ipcRenderer.invoke("scheduler:delete", id),
+    schedulerRuns: (id: string, limit?: number, offset?: number) =>
+        electron.ipcRenderer.invoke("scheduler:runs", id, limit, offset),
 } as const)
 
 function ipcInvoke<Key extends keyof EventPayloadMapping>(key: Key, ...args: any[]): Promise<EventPayloadMapping[Key]> {

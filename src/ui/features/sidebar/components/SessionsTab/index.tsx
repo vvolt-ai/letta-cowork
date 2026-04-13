@@ -31,6 +31,7 @@ const selectSidebarSessionTokens = (state: ReturnType<typeof useAppStore.getStat
       isEmailSession: session.isEmailSession,
       agentId: session.agentId,
       agentName: session.agentName,
+      ephemeralStatus: session.ephemeral?.status,
     } satisfies SidebarSessionSummary))
     .sort((left, right) => {
       const parsedLeft = JSON.parse(left) as SidebarSessionSummary;

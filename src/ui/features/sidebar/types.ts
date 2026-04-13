@@ -1,4 +1,4 @@
-import type { SessionView } from "../../store/useAppStore";
+import type { SessionView, AgentDisplayStatus } from "../../store/useAppStore";
 
 export type EmailConversationDateFilter = "all" | "today" | "yesterday" | "older";
 
@@ -13,7 +13,9 @@ export type SidebarSessionSummary = Pick<
   | "isEmailSession"
   | "agentId"
   | "agentName"
->;
+> & {
+  ephemeralStatus?: AgentDisplayStatus;
+};
 
 export interface AgentGroupData {
   agentId: string | undefined;
