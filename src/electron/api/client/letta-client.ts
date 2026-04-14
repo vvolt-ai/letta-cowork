@@ -88,6 +88,40 @@ export class VeraCoworkApiClient extends BaseHttpClient {
     }
   }
 
+  /**
+   * Fetch the current authenticated user from the server. Throws if the session
+   * is invalid. On success, persists the user info into the token cache.
+   */
+  async fetchCurrentUser(): Promise<AuthTokens["user"]> {
+    const user = await this.request<AuthTokens["user"]>("/auth/me", {
+      suppressAuthExpired: false,
+    });
+
+    if (this.tokens) {
+      this.tokens = { ...this.tokens, user };
+      this.saveTokens();
+    }
+
+    return user;
+  }
+
+  /**
+   * Verify with the server that the stored tokens are still valid.
+   * Returns true if authenticated, false otherwise.
+   */
+  async verifyAuth(): Promise<boolean> {
+    if (!this.tokens?.accessToken) {
+      return false;
+    }
+
+    try {
+      await this.fetchCurrentUser();
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
   // ============================================
   // Channels - Delegate to ChannelEndpoints
   // ============================================

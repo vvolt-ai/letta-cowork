@@ -28,6 +28,16 @@ interface SchedulerJob {
   task: cron.ScheduledTask;
 }
 
+export type SchedulerRunResult = {
+  taskId: string;
+  status: "completed" | "failed";
+  startedAt: string;
+  completedAt: string;
+  output: string | null;
+  error: string | null;
+  conversationId: string | null;
+};
+
 class SchedulerService {
   private jobs = new Map<string, SchedulerJob>();
   private apiClient: ApiClient | null = null;
@@ -122,8 +132,8 @@ class SchedulerService {
   /**
    * Execute a task: run the Letta session and post the run log.
    */
-  private async executeTask(task: ScheduledTask) {
-    if (!this.apiClient || !this.onRunSession) return;
+  private async executeTask(task: ScheduledTask): Promise<SchedulerRunResult | null> {
+    if (!this.apiClient || !this.onRunSession) return null;
 
     const startedAt = new Date().toISOString();
     let runId: string | null = null;
@@ -178,6 +188,16 @@ class SchedulerService {
     }
 
     console.log(`[Scheduler] Task "${task.name}" ${finalStatus}`);
+
+    return {
+      taskId: task.id,
+      status: finalStatus,
+      startedAt,
+      completedAt,
+      output,
+      error,
+      conversationId: resultConversationId ?? null,
+    };
   }
 
   /**
@@ -185,6 +205,28 @@ class SchedulerService {
    */
   async refresh() {
     await this.syncTasks();
+  }
+
+  /**
+   * Manually trigger a task immediately.
+   */
+  async runTaskNow(taskId: string): Promise<SchedulerRunResult> {
+    if (!this.apiClient) {
+      throw new Error("Scheduler not initialized");
+    }
+
+    // Pull latest definition to avoid running stale cron expressions
+    const tasks = await this.apiClient.scheduler.listTasks();
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) {
+      throw new Error("Task not found");
+    }
+
+    const result = await this.executeTask(task);
+    if (!result) {
+      throw new Error("Scheduler service not ready to execute");
+    }
+    return result;
   }
 
   /**

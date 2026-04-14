@@ -14,6 +14,7 @@ import {
   type ChannelRuntimeStatus,
   type AuthTokens,
 } from "../../api/index.js";
+import { ensureSchedulerInitialized, teardownScheduler } from "../../services/scheduler/bootstrap.js";
 
 // Types for IPC events
 export interface ApiConfig {
@@ -72,8 +73,13 @@ export function initializeApiIpcHandlers(): void {
   // ============================================
 
   ipcMain.handle("api:is-authenticated", async () => {
-    const result = api.isAuthenticated();
+    const result = await api.verifyAuth();
     console.log('[API IPC] is-authenticated:', result);
+    if (result) {
+      await ensureSchedulerInitialized();
+    } else {
+      teardownScheduler();
+    }
     return result;
   });
 
@@ -87,6 +93,7 @@ export function initializeApiIpcHandlers(): void {
     try {
       const tokens = await api.login(credentials.email, credentials.password);
       console.log('[API IPC] login successful, user:', tokens.user?.email);
+      await ensureSchedulerInitialized();
       return { success: true, user: tokens.user };
     } catch (error) {
       console.error('[API IPC] login failed:', error);
@@ -99,6 +106,7 @@ export function initializeApiIpcHandlers(): void {
     try {
       const tokens = await api.register(data);
       console.log('[API IPC] register successful, user:', tokens.user?.email);
+      await ensureSchedulerInitialized();
       return { success: true, user: tokens.user };
     } catch (error) {
       console.error('[API IPC] register failed:', error);
@@ -114,6 +122,8 @@ export function initializeApiIpcHandlers(): void {
       // Clear tokens anyway
       api.clearTokens();
       return { success: true };
+    } finally {
+      teardownScheduler();
     }
   });
 

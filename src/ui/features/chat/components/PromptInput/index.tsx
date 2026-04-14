@@ -15,6 +15,7 @@ import { useModels } from "./hooks/useModels";
 import { usePromptActions } from "./hooks/usePromptActions";
 import { useSlashSuggestions } from "./hooks/useSlashCommands";
 import { buildTextWithLinks } from "./utils/formatPrompt";
+import { useSpeechToText } from "./hooks/useSpeechToText";
 
 const MAX_HEIGHT = 12 * 21;
 const MIN_HEIGHT = 52;
@@ -53,6 +54,19 @@ export const PromptInput = memo(function PromptInput({
   const [defaultAgentId, setDefaultAgentId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [selectedSlashIndex, setSelectedSlashIndex] = useState(0);
+  const [interimTranscript, setInterimTranscript] = useState("");
+
+  // Speech-to-text — appends final recognised text to the prompt
+  const promptSnapshotRef = useRef(prompt);
+  useEffect(() => { promptSnapshotRef.current = prompt; }, [prompt]);
+
+  const { isListening: isMicListening, toggle: toggleMic, error: micError, isSupported: isMicSupported } = useSpeechToText({
+    onFinalTranscript: (text) => {
+      const prev = promptSnapshotRef.current;
+      setPrompt(prev.endsWith(" ") || prev === "" ? prev + text : prev + " " + text);
+    },
+    onInterimTranscript: setInterimTranscript,
+  });
 
   // Get default agent ID from env
   useEffect(() => {
@@ -186,11 +200,13 @@ export const PromptInput = memo(function PromptInput({
           onSelectModel={(model) => { setModelTouched(true); setSelectedModel(model); }}
           onToggleReasoning={() => setShowReasoningInChat(!showReasoningInChat)} />
         <SlashCommandSuggestions suggestions={slashSuggestions} selectedIndex={selectedSlashIndex} onSelect={applySlashSuggestion} />
+        {micError && <p className="px-1 text-xs text-red-500">{micError}</p>}
         <PromptTextArea prompt={prompt} disabled={disabled} isRunning={isRunning} isUploading={isUploading} canSend={canSend}
           placeholder={disabled ? "Waiting for approval…" : "Ask Vera anything…"} promptRef={promptRef}
           onPromptChange={setPrompt} onKeyDown={handleKeyDown} onPaste={handlePaste}
-          onAttach={triggerFilePicker} onSend={handleSubmit} onStop={handleStop} />
-        {isUploading && <div className="mt-2 text-xs text-muted">Uploading attachments…</div>}
+          onAttach={triggerFilePicker} onSend={handleSubmit} onStop={handleStop}
+          onMicToggle={toggleMic} isMicListening={isMicListening}
+          interimTranscript={interimTranscript} isMicSupported={isMicSupported} />
       </div>
       <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileInputChange} />
     </section>

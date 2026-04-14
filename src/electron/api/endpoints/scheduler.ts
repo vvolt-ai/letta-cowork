@@ -64,43 +64,51 @@ export interface CreateScheduleRunDto {
 export class SchedulerEndpoints {
   constructor(private readonly client: BaseHttpClient) {}
 
+  // All scheduler calls use suppressAuthExpired: true so that a transient 401
+  // from the /schedules endpoints never triggers the global logout flow.
+
   listTasks(): Promise<ScheduledTask[]> {
-    return this.client.request<ScheduledTask[]>("/schedules");
+    return this.client.request<ScheduledTask[]>("/schedules", { suppressAuthExpired: true });
   }
 
   createTask(dto: CreateScheduledTaskDto): Promise<ScheduledTask> {
     return this.client.request<ScheduledTask>("/schedules", {
       method: "POST",
       body: dto as unknown as Record<string, unknown>,
+      suppressAuthExpired: true,
     });
   }
 
   getTask(id: string): Promise<ScheduledTask> {
-    return this.client.request<ScheduledTask>(`/schedules/${id}`);
+    return this.client.request<ScheduledTask>(`/schedules/${id}`, { suppressAuthExpired: true });
   }
 
   updateTask(id: string, dto: Partial<CreateScheduledTaskDto>): Promise<ScheduledTask> {
     return this.client.request<ScheduledTask>(`/schedules/${id}`, {
       method: "PATCH",
       body: dto as unknown as Record<string, unknown>,
+      suppressAuthExpired: true,
     });
   }
 
   toggleTask(id: string): Promise<ScheduledTask> {
     return this.client.request<ScheduledTask>(`/schedules/${id}/toggle`, {
       method: "PATCH",
+      suppressAuthExpired: true,
     });
   }
 
   deleteTask(id: string): Promise<void> {
     return this.client.request<void>(`/schedules/${id}`, {
       method: "DELETE",
+      suppressAuthExpired: true,
     });
   }
 
   listRuns(id: string, limit = 50, offset = 0): Promise<{ runs: ScheduleRun[]; total: number }> {
     return this.client.request<{ runs: ScheduleRun[]; total: number }>(
-      `/schedules/${id}/runs?limit=${limit}&offset=${offset}`
+      `/schedules/${id}/runs?limit=${limit}&offset=${offset}`,
+      { suppressAuthExpired: true }
     );
   }
 
@@ -108,6 +116,7 @@ export class SchedulerEndpoints {
     return this.client.request<ScheduleRun>(`/schedules/${id}/runs`, {
       method: "POST",
       body: dto as unknown as Record<string, unknown>,
+      suppressAuthExpired: true,
     });
   }
 }

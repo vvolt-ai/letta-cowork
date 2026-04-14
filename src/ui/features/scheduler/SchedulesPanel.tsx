@@ -47,6 +47,7 @@ export function SchedulesPanel({ agents }: Props) {
   const [editTask, setEditTask] = useState<ScheduledTask | null>(null);
   const [runsTask, setRunsTask] = useState<ScheduledTask | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [runningId, setRunningId] = useState<string | null>(null);
 
   const loadTasks = useCallback(async () => {
     try {
@@ -118,6 +119,21 @@ export function SchedulesPanel({ agents }: Props) {
       console.warn("Delete failed:", err);
     }
   }, []);
+
+  const handleRunNow = useCallback(async (task: ScheduledTask) => {
+    if (runningId) return;
+    try {
+      setRunningId(task.id);
+      await window.electron.schedulerRunNow(task.id);
+      await loadTasks();
+      setRunsTask(task);
+    } catch (err) {
+      console.warn("Run now failed:", err);
+      alert(`Failed to run schedule: ${err instanceof Error ? err.message : err}`);
+    } finally {
+      setRunningId(null);
+    }
+  }, [loadTasks, runningId]);
 
   const filtered = tasks.filter((t) => t.scheduleType === activeTab);
 
@@ -231,6 +247,16 @@ export function SchedulesPanel({ agents }: Props) {
                         title="View runs"
                       >
                         Runs {task.runCount ? `(${task.runCount})` : ""}
+                      </button>
+                      <button
+                        onClick={() => handleRunNow(task)}
+                        disabled={runningId === task.id}
+                        className={
+                          `text-xs text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed`
+                        }
+                        title="Run now"
+                      >
+                        {runningId === task.id ? "Running…" : "Run now"}
                       </button>
                       <button
                         onClick={() => setEditTask(task)}

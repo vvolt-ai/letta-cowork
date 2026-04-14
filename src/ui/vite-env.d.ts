@@ -249,6 +249,7 @@ interface Window {
     schedulerUpdate: (id: string, dto: Record<string, unknown>) => Promise<any>;
     schedulerToggle: (id: string) => Promise<any>;
     schedulerDelete: (id: string) => Promise<{ success: boolean }>;
+    schedulerRunNow: (id: string) => Promise<{ status: string; startedAt: string; completedAt?: string; error?: string | null; output?: string | null }>;
     schedulerRuns: (id: string, limit?: number, offset?: number) => Promise<{ runs: any[]; total: number }>;
   };
 }

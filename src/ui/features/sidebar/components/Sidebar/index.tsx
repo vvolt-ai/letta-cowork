@@ -181,7 +181,7 @@ export const Sidebar = memo(function Sidebar({
       </div>
 
       {/* Conversations list — scrollable */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         <SessionsTab
           onNewSession={onNewSession}
           onDeleteSession={onDeleteSession}
@@ -225,7 +225,7 @@ export const Sidebar = memo(function Sidebar({
 
       {/* User Section */}
       {userEmail && (
-        <div className="mt-auto pt-4 border-t border-[var(--color-border)]">
+        <div className="mt-auto flex-shrink-0 pt-4 border-t border-[var(--color-border)]">
           <div className="flex items-center justify-between px-2">
             <div className="flex items-center gap-2">
               <div className="h-8 w-8 rounded-full bg-[var(--color-accent)] flex items-center justify-center text-white text-sm font-medium">

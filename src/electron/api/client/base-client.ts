@@ -191,7 +191,10 @@ export class BaseHttpClient {
     path: string,
     options: RequestOptions = {}
   ): Promise<T> {
-    const { method = "GET", body, requireAuth = true, suppressAuthExpired = false } = options;
+    // Default suppressAuthExpired to true — background/IPC calls should never
+    // trigger a global logout on their own. Only callers that explicitly need
+    // logout-on-401 behaviour should pass suppressAuthExpired: false.
+    const { method = "GET", body, requireAuth = true, suppressAuthExpired = true } = options;
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -229,7 +232,7 @@ export class BaseHttpClient {
             const error = await retryResponse.text();
             throw new Error(`API error: ${retryResponse.status} - ${error}`);
           }
-          return retryResponse.json();
+          return retryResponse.status === 204 ? (undefined as unknown as T) : retryResponse.json();
         }
       }
       // Refresh failed or no refresh token - clear and notify
@@ -244,6 +247,9 @@ export class BaseHttpClient {
       const error = await response.text();
       throw new Error(`API error: ${response.status} - ${error}`);
     }
+
+    // 204 No Content — return undefined (e.g. DELETE responses)
+    if (response.status === 204) return undefined as unknown as T;
 
     return response.json();
   }

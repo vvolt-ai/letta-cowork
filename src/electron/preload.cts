@@ -268,6 +268,8 @@ electron.contextBridge.exposeInMainWorld("electron", {
         electron.ipcRenderer.invoke("scheduler:toggle", id),
     schedulerDelete: (id: string) =>
         electron.ipcRenderer.invoke("scheduler:delete", id),
+    schedulerRunNow: (id: string) =>
+        electron.ipcRenderer.invoke("scheduler:run-now", id),
     schedulerRuns: (id: string, limit?: number, offset?: number) =>
         electron.ipcRenderer.invoke("scheduler:runs", id, limit, offset),
 } as const)
