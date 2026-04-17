@@ -251,5 +251,38 @@ interface Window {
     schedulerDelete: (id: string) => Promise<{ success: boolean }>;
     schedulerRunNow: (id: string) => Promise<{ status: string; startedAt: string; completedAt?: string; error?: string | null; output?: string | null }>;
     schedulerRuns: (id: string, limit?: number, offset?: number) => Promise<{ runs: any[]; total: number }>;
+
+    // Runs Debugger
+    listAgentRuns: (params: {
+      agentId: string;
+      conversationId?: string;
+      status?: "all" | "requires_approval" | "running" | "completed" | "failed" | "cancelled";
+      limit?: number;
+      offset?: number;
+    }) => Promise<{
+      runs: Array<{
+        id: string;
+        agentId?: string;
+        conversationId?: string;
+        status?: "created" | "running" | "completed" | "failed" | "cancelled" | "requires_approval";
+        stopReason?: string | null;
+        createdAt?: string;
+        completedAt?: string | null;
+        durationMs?: number;
+        pendingApprovals?: Array<{ toolUseId: string; toolName: string; input: unknown }>;
+        raw?: unknown;
+      }>;
+      total: number;
+    }>;
+    approveAgentRun: (runId: string) => Promise<{ success: boolean; runId: string; method?: string }>;
+    rejectAgentRun: (runId: string) => Promise<{ success: boolean; runId: string }>;
+    approveAllAgentRuns: (agentId: string, conversationId?: string) => Promise<{
+      approved: string[];
+      failed: Array<{ runId: string; error: string }>;
+    }>;
+    rejectAllAgentRuns: (agentId: string, conversationId?: string) => Promise<{
+      cancelled: string[];
+      failed: Array<{ runId: string; error: string }>;
+    }>;
   };
 }

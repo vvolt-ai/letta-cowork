@@ -13,6 +13,7 @@ import { ChatWorkspace } from "./features/chat/components/ChatWorkspace";
 import { ConfigurationTab } from "./features/sidebar/components/ConfigurationTab";
 import { SkillsPanel } from "./features/skills/SkillsPanel";
 import { SchedulesPanel } from "./features/scheduler/SchedulesPanel";
+import { RunsDebuggerPanel } from "./features/runs-debugger";
 import { SkillDownloadDialog } from "./features/settings/components/SkillDownloadDialog";
 import { LettaTerminal } from "./features/settings/components/LettaTerminal";
 import { useDownloadSkill } from "./hooks/useDownloadSkill";
@@ -29,6 +30,7 @@ import { useCoworkSettings } from "./hooks/useCoworkSettings";
 import { useAutoSyncUnread } from "./hooks/useAutoSyncUnread";
 import { useProcessEmailToAgent } from "./hooks/useProcessEmailToAgent";
 import { useAuth } from "./hooks/useAuth";
+import { SessionNotifications } from "./features/system/components/SessionNotifications";
 
 const SCROLL_THRESHOLD = 50;
 const SESSION_CHANGE_SCROLL_DELAY_MS = 100;
@@ -141,6 +143,8 @@ function App() {
   const [showConfiguration, setShowConfiguration] = useState(false);
   const [showSkills, setShowSkills] = useState(false);
   const [showSchedules, setShowSchedules] = useState(false);
+  const [showRuns, setShowRuns] = useState(false);
+  const [runsPresetConversationId, setRunsPresetConversationId] = useState<string | undefined>(undefined);
   const [scheduleAgents, setScheduleAgents] = useState<Array<{ id: string; name: string; description?: string | null }>>([]);
   const [skillDownloadOpen, setSkillDownloadOpen] = useState(false);
   const [showLettaCli, setShowLettaCli] = useState(false);
@@ -364,12 +368,13 @@ function App() {
     handlePartialMessagesRef.current = handlePartialMessages;
   }, [handlePartialMessages]);
 
-  // Close Configuration / Skills / Schedules panel when the user selects a conversation
+  // Close Configuration / Skills / Schedules / Runs panel when the user selects a conversation
   useEffect(() => {
     if (activeSessionId) {
       setShowConfiguration(false);
       setShowSkills(false);
       setShowSchedules(false);
+      setShowRuns(false);
     }
   }, [activeSessionId]);
 
@@ -671,9 +676,10 @@ function App() {
             errorEmailId={errorEmailId}
             newlyCreatedConversations={newlyCreatedConversations}
             onOpenSettings={() => setShowCoworkSettings(true)}
-            onOpenConfiguration={() => { setShowConfiguration(true); setShowSkills(false); setShowSchedules(false); }}
-            onOpenSkills={() => { setShowSkills(true); setShowConfiguration(false); setShowSchedules(false); }}
-            onOpenSchedules={() => { setShowSchedules(true); setShowSkills(false); setShowConfiguration(false); }}
+            onOpenConfiguration={() => { setShowConfiguration(true); setShowSkills(false); setShowSchedules(false); setShowRuns(false); }}
+            onOpenSkills={() => { setShowSkills(true); setShowConfiguration(false); setShowSchedules(false); setShowRuns(false); }}
+            onOpenSchedules={() => { setShowSchedules(true); setShowSkills(false); setShowConfiguration(false); setShowRuns(false); }}
+            onOpenRuns={() => { setRunsPresetConversationId(undefined); setShowRuns(true); setShowSchedules(false); setShowSkills(false); setShowConfiguration(false); }}
             hasMoreEmails={hasMoreEmails}
             isLoadingMoreEmails={isLoadingMoreEmails}
             onLoadMoreEmails={handleLoadMoreEmails}
@@ -682,7 +688,16 @@ function App() {
           />
         }
         chat={
-          showSchedules ? (
+          showRuns ? (
+            <RunsDebuggerPanel
+              defaultAgentId={activeSession?.agentId}
+              defaultConversationId={runsPresetConversationId}
+              onClose={() => {
+                setShowRuns(false);
+                setRunsPresetConversationId(undefined);
+              }}
+            />
+          ) : showSchedules ? (
             <SchedulesPanel agents={scheduleAgents} />
           ) : showSkills ? (
             <SkillsPanel onClose={() => setShowSkills(false)} />
@@ -750,6 +765,13 @@ function App() {
               activityOpen={isActivityOpen}
               onToggleActivity={handleToggleActivityPanel}
               onOpenMemory={() => setIsMemoryOpen(true)}
+              onViewRuns={activeSessionId ? () => {
+                setRunsPresetConversationId(activeSessionId);
+                setShowRuns(true);
+                setShowSchedules(false);
+                setShowSkills(false);
+                setShowConfiguration(false);
+              } : undefined}
             />
           )
         }
@@ -795,6 +817,7 @@ function App() {
       {globalError && (
         <GlobalErrorToast message={globalError} onClose={() => setGlobalError(null)} />
       )}
+      <SessionNotifications />
       <ChangeEnv open={lettaEnvOpen} onOpenChange={setLettaEnvOpen} className="hidden" />
       <CoworkSettingsDialog
         open={showCoworkSettings}

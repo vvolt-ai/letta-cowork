@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useListSkills } from "../../hooks/useListSkills";
 import { useDownloadSkill } from "../../hooks/useDownloadSkill";
+import { SkillPreviewDialog } from "./SkillPreviewDialog";
 
 interface SkillsPanelProps {
   onClose: () => void;
@@ -9,6 +10,7 @@ interface SkillsPanelProps {
 export function SkillsPanel({ onClose }: SkillsPanelProps) {
   const { skills, loading, refresh } = useListSkills();
   const [searchQuery, setSearchQuery] = useState("");
+  const [previewFolder, setPreviewFolder] = useState<string | null>(null);
 
   const {
     skillUrl,
@@ -188,9 +190,12 @@ export function SkillsPanel({ onClose }: SkillsPanelProps) {
             ) : (
               <div className="grid gap-2">
                 {filteredSkills.map((skill) => (
-                  <div
+                  <button
                     key={skill.id}
-                    className="flex items-start gap-3.5 rounded-xl border border-[var(--color-border)] bg-white px-4 py-3.5"
+                    type="button"
+                    onClick={() => setPreviewFolder(skill.folder)}
+                    className="group flex w-full items-start gap-3.5 rounded-xl border border-[var(--color-border)] bg-white px-4 py-3.5 text-left transition hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-accent)]/[0.03] hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/40"
+                    aria-label={`Preview skill ${skill.name}`}
                   >
                     {/* Icon */}
                     <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--color-accent)]/10 to-[var(--color-accent)]/20 text-[var(--color-accent)]">
@@ -216,13 +221,27 @@ export function SkillsPanel({ onClose }: SkillsPanelProps) {
                         </p>
                       )}
                     </div>
-                  </div>
+                    {/* Preview affordance */}
+                    <div className="ml-auto flex shrink-0 items-center gap-1 self-center text-[11px] font-medium text-ink-400 transition group-hover:text-[var(--color-accent)]">
+                      <span>Preview</span>
+                      <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="9 18 15 12 9 6" />
+                      </svg>
+                    </div>
+                  </button>
                 ))}
               </div>
             )}
           </div>
         </div>
       </div>
+
+      <SkillPreviewDialog
+        open={!!previewFolder}
+        folder={previewFolder}
+        onOpenChange={(v) => { if (!v) setPreviewFolder(null); }}
+        onDeleted={() => { setPreviewFolder(null); refresh(); }}
+      />
     </div>
   );
 }

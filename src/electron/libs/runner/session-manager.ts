@@ -137,13 +137,39 @@ export async function initializeSession(
   if (!conversationId) {
     // Call initialize() to trigger the init message from CLI
     // This sets _conversationId on the Session object
+    //
+    // Fix C: Wrap initialize() in an explicit timeout. Without this, an invalid
+    // model override (or any other silent SDK failure) can cause initialize()
+    // to hang forever — the UI eventually shows a generic "Failed to start
+    // session" from its 45s timeout but the user has no idea why. With this
+    // timeout, we return a descriptive error that includes the model override
+    // so the failure mode is immediately diagnosable.
+    const INIT_TIMEOUT_MS = 30_000;
+    const selectedModel = (lettaSession as unknown as { _options?: { model?: string } })?._options?.model;
+
     try {
-      const initResult = await lettaSession.initialize();
+      const initPromise = lettaSession.initialize();
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          const modelHint = selectedModel
+            ? ` (model override: "${selectedModel}" — this model may be unavailable or incompatible with the agent)`
+            : "";
+          reject(
+            new Error(
+              `Letta session initialize() timed out after ${INIT_TIMEOUT_MS / 1000}s${modelHint}`
+            )
+          );
+        }, INIT_TIMEOUT_MS);
+      });
+
+      const initResult = await Promise.race([initPromise, timeoutPromise]);
       conversationId = initResult.conversationId;
       debug("session initialized via initialize()", { conversationId, agentId: initResult.agentId });
     } catch (initError) {
-      log("ERROR: failed to initialize Letta session", { error: String(initError) });
-      throw new Error(`Session initialization failed: ${String(initError)}`);
+      const errMsg = String(initError);
+      log("ERROR: failed to initialize Letta session", { error: errMsg, selectedModel });
+      const modelContext = selectedModel ? ` [model: ${selectedModel}]` : "";
+      throw new Error(`Session initialization failed${modelContext}: ${errMsg}`);
     }
   }
 

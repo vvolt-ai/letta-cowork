@@ -34,6 +34,7 @@ interface ChatWorkspaceProps {
   activityOpen: boolean;
   onToggleActivity: () => void;
   onOpenMemory?: () => void;
+  onViewRuns?: () => void;
 }
 
 export const ChatWorkspace = memo(function ChatWorkspace({
@@ -63,6 +64,7 @@ export const ChatWorkspace = memo(function ChatWorkspace({
   activityOpen,
   onToggleActivity,
   onOpenMemory,
+  onViewRuns,
 }: ChatWorkspaceProps) {
   const resolvedTitle = title || "Untitled conversation";
   const resolvedAgentName = agentName || "Vera";
@@ -71,10 +73,12 @@ export const ChatWorkspace = memo(function ChatWorkspace({
   const errorMessage = activeSession?.ephemeral?.errorMessage;
   const setGlobalError = useAppStore((state) => state.setGlobalError);
   const [isCancellingRecoveredRun, setIsCancellingRecoveredRun] = useState(false);
+  const [isResolvingApprovals, setIsResolvingApprovals] = useState(false);
 
+  const permissionRequests = activeSession?.permissionRequests ?? [];
   const recoveredRequests = useMemo(
-    () => (activeSession?.permissionRequests ?? []).filter((request) => request.source === "recovered"),
-    [activeSession?.permissionRequests]
+    () => permissionRequests.filter((request) => request.source === "recovered"),
+    [permissionRequests]
   );
   const recoveredRunId = recoveredRequests[0]?.runId;
 
@@ -98,6 +102,7 @@ export const ChatWorkspace = memo(function ChatWorkspace({
         status={agentStatus}
         activityOpen={activityOpen}
         onToggleActivity={onToggleActivity}
+        onViewRuns={onViewRuns}
       />
 
       <div
@@ -113,6 +118,32 @@ export const ChatWorkspace = memo(function ChatWorkspace({
                 <div className="mt-1 font-medium text-ink-800">{statusCopy}</div>
               </div>
               <div className="flex items-center gap-2">
+                {permissionRequests.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!activeSessionId || !activeSession?.agentId || isResolvingApprovals) return;
+                      setIsResolvingApprovals(true);
+                      void window.electron.recoverPendingApprovals(activeSessionId, activeSession.agentId)
+                        .then((resolved) => {
+                          if (!resolved || resolved.length === 0) {
+                            setGlobalError("No pending approvals were resolved automatically. Open the Activity panel to review approvals manually.");
+                          }
+                        })
+                        .catch((error) => {
+                          console.error("Failed to resolve approvals", error);
+                          setGlobalError(`Failed to resolve approvals: ${String(error)}`);
+                        })
+                        .finally(() => {
+                          setIsResolvingApprovals(false);
+                        });
+                    }}
+                    className="rounded-full border border-gray-300 bg-white px-3 py-1.5 text-[11px] font-medium text-gray-700 transition hover:border-gray-400 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-70"
+                    disabled={isResolvingApprovals}
+                  >
+                    {isResolvingApprovals ? "Resolving approvals…" : "Resolve approvals"}
+                  </button>
+                ) : null}
                 {recoveredRunId ? (
                   <button
                     type="button"

@@ -34,6 +34,23 @@ export function useEmailFilters(onSearch?: (query: string) => void) {
 }
 
 /**
+ * Build a Zoho-style searchKey from a free-form user query.
+ *
+ * - If the raw query already looks like Zoho syntax (contains `:`),
+ *   pass it through unchanged so power users can use exact fields
+ *   (e.g. `sender:john@x.com::has:attachment`).
+ * - Otherwise OR across the three most useful fields so a casual query
+ *   like "invoice" matches subject, sender, or content.
+ */
+export function buildZohoSearchKey(raw: string): string {
+  const q = raw.trim();
+  if (!q) return "";
+  if (q.includes(":")) return q;
+  const safe = q.replace(/"/g, "");
+  return `subject:${safe}::or:sender:${safe}::or:content:${safe}`;
+}
+
+/**
  * Filter emails based on criteria (for future use)
  */
 export function filterEmails(

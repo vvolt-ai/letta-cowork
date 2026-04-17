@@ -2,7 +2,8 @@
  * Hook for managing model selection in the PromptInput component.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useAppStore } from "../../../../../store/useAppStore";
 
 export interface ModelOption {
   name: string;
@@ -113,6 +114,11 @@ export function useModels(options: UseModelsOptions): UseModelsResult {
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelTouched, setModelTouched] = useState(false);
 
+  // Models the Letta Code CLI runtime has rejected ("Invalid model" error).
+  // Hide them from the picker so users can't re-select a broken handle.
+  const rejectedModels = useAppStore((state) => state.rejectedModels);
+  const rejectedSet = useMemo(() => new Set(rejectedModels), [rejectedModels]);
+
   // Fetch catalog
   useEffect(() => {
     let cancelled = false;
@@ -175,7 +181,20 @@ export function useModels(options: UseModelsOptions): UseModelsResult {
             ? agent.model.trim()
             : names[0];
 
-        if (!modelTouched) {
+        // Fix A: If the currently-selected model is not valid for this agent,
+        // drop it so we fall back to the agent's default instead of shipping
+        // an unusable override to the Letta SDK (which would hang init).
+        const selectedIsValidForAgent =
+          !selectedModel ||
+          nextModels.some((m) => m.name === selectedModel);
+
+        if (!selectedIsValidForAgent) {
+          console.warn(
+            `[useModels] Selected model "${selectedModel}" is not available on agent ${agentId}. Resetting to agent default.`
+          );
+          setSelectedModel(preferred ?? "");
+          setModelTouched(false);
+        } else if (!modelTouched) {
           if (preferred && preferred !== selectedModel) {
             setSelectedModel(preferred);
           } else if (!preferred && !selectedModel && nextModels[0]) {
@@ -209,13 +228,22 @@ export function useModels(options: UseModelsOptions): UseModelsResult {
     setSelectedModel(models[0].name);
   }, [modelTouched, models, selectedModel, setSelectedModel]);
 
+  const visibleModels = useMemo(
+    () => models.filter((m) => !rejectedSet.has(m.name)),
+    [models, rejectedSet]
+  );
+  const visibleAllModels = useMemo(
+    () => allModels.filter((m) => !rejectedSet.has(m.name)),
+    [allModels, rejectedSet]
+  );
+
   const hasSelectedModelOption = selectedModel
-    ? !models.some((model) => model.name === selectedModel)
+    ? !visibleModels.some((model) => model.name === selectedModel)
     : false;
 
   return {
-    models,
-    allModels,
+    models: visibleModels,
+    allModels: visibleAllModels,
     modelsLoading,
     hasSelectedModelOption,
     setModelTouched,

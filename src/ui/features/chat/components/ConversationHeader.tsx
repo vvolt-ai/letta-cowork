@@ -9,6 +9,7 @@ interface ConversationHeaderProps {
   status: AgentDisplayStatus;
   activityOpen?: boolean;
   onToggleActivity?: () => void;
+  onViewRuns?: () => void;
 }
 
 const STATUS_LABELS: Record<AgentDisplayStatus, { label: string; color: string }> = {
@@ -21,7 +22,7 @@ const STATUS_LABELS: Record<AgentDisplayStatus, { label: string; color: string }
   error: { label: "Error", color: "text-[var(--color-status-error)]" },
 };
 
-export const ConversationHeader = memo(function ConversationHeader({ title, agentName, agentId, sessionId, status, activityOpen = true, onToggleActivity }: ConversationHeaderProps) {
+export const ConversationHeader = memo(function ConversationHeader({ title, agentName, agentId, sessionId, status, activityOpen = true, onToggleActivity, onViewRuns }: ConversationHeaderProps) {
   const statusMeta = STATUS_LABELS[status] ?? STATUS_LABELS.idle;
   const toggleLabel = activityOpen ? "Hide activity" : "Show activity";
   const toggleAria = activityOpen ? "Hide activity panel" : "Show activity panel";
@@ -62,6 +63,20 @@ export const ConversationHeader = memo(function ConversationHeader({ title, agen
         </div>
 
         <div className="flex items-center gap-2">
+          {/* View Runs Button — opens Runs Debugger scoped to this conversation */}
+          {onViewRuns && sessionId && (
+            <button
+              onClick={onViewRuns}
+              className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 flex items-center gap-1 transition-colors"
+              title="View runs for this conversation"
+            >
+              <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+              </svg>
+              View Runs
+            </button>
+          )}
+
           {/* Open in Letta Button */}
           {agentId && sessionId && (
             <button

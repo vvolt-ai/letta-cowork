@@ -60,3 +60,43 @@ allowed-tools: Bash
 ## ⚠️ Error Handling
 - If a port error occurs, verify the server is running on `4321`.
 - If a search yields no results, verify `searchKey` first; only pass explicit `accountId`/`folderId` when you need a non-default mailbox.
+
+--------------------------------------------------
+DRAFT EMAIL
+--------------------------------------------------
+
+Endpoint:
+POST /draftEmail
+
+Payload:
+```
+{
+  "to": ["person@example.com"],
+  "subject": "Hello",
+  "bodyText": "Plain text body",
+  "attachments": [
+    { "name": "quote.pdf", "url": "/Users/me/Documents/quote.pdf", "mimeType": "application/pdf" }
+  ]
+}
+```
+
+- At least one `to` recipient is required.
+- Provide either `bodyText`, `bodyHtml`, or both.
+- Attachments can be local paths or HTTP(S) URLs. Files up to 20 MB are uploaded to Zoho automatically.
+
+--------------------------------------------------
+SEND EMAIL
+--------------------------------------------------
+
+Endpoint:
+POST /sendEmail
+
+Same payload as `/draftEmail`. Optional `draftId` sends an existing draft.
+
+Example:
+```
+{ "cmd": "curl -X POST -H 'Content-Type: application/json' -d '{\"to\":[\"pbhavesh45@gmail.com\"],\"cc\":[\"ops@example.com\"],\"subject\":\"Daily summary\",\"bodyHtml\":\"<p>Summary</p>\"}' "http://localhost:4321/sendEmail"" }
+```
+
+Response JSON matches the primary skill (success/error booleans).
+

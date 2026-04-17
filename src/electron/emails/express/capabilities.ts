@@ -144,6 +144,20 @@ export const agentCapabilitiesHandler: ExpressHandler = (_req: Request, res: Res
         ]
       },
       {
+        name: "draftEmail",
+        method: "POST",
+        path: "/draftEmail",
+        description: "Create an email draft with recipients, subject, body (text or HTML), and optional attachments. Returns the Zoho draft response.",
+        example: 'POST /draftEmail {"to":["user@example.com"],"subject":"Hello","bodyText":"Hi there"}',
+      },
+      {
+        name: "sendEmail",
+        method: "POST",
+        path: "/sendEmail",
+        description: "Send an email immediately. Accepts the same payload as /draftEmail plus an optional draftId to send an existing draft.",
+        example: 'POST /sendEmail {"to":["user@example.com"],"subject":"Update","bodyHtml":"<p>Hi</p>"}',
+      },
+      {
         name: "processedEmails",
         method: "GET",
         path: "/processedEmails",

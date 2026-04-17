@@ -1,453 +1,413 @@
-# Vera Cowork Functional Overview
+# Vera Cowork — Functional Overview
 
-**Vera Cowork** is an Electron + React desktop application that serves as your command center for Letta AI agents. It unifies agent conversations, email workflows, and messaging channels into a single, cohesive interface.
+**Vera Cowork** is an Electron + React desktop application that acts as a command center for Letta Code agents. It unifies agent chat, email ingestion, messaging bridges, scheduled automations, and business-data skills into one cohesive workspace.
+
+*Last updated: 2026-04-17*
+*Version: 0.7.1*
+*Stack: Electron 41 · React 19 · Vite 8 · TypeScript 6 · Tailwind 4 · Zustand 5 · node-cron*
 
 ---
 
-## What You Can Do with Vera Cowork
+## 1. What You Can Do
 
 | Capability | Description |
-|------------|-------------|
-| **Chat with Agents** | Interactive sessions with Letta agents that remember across conversations |
-| **Manage Emails** | Connect Zoho Mail accounts, fetch emails, and route them to agents |
-| **Bridge Channels** | Connect Discord, WhatsApp, Telegram, and Slack to your agents |
-| **Access Business Data** | Query Odoo ERP records and Neo4j email graphs |
-| **Organize Conversations** | Persistent sessions with full conversation history |
+|---|---|
+| **Chat with Agents** | Interactive Letta sessions with persistent memory across conversations |
+| **Manage Emails** | Connect Zoho Mail, fetch, search, auto-sync unread into agents |
+| **Bridge Channels** | Discord, WhatsApp, Telegram, Slack → Letta agents |
+| **Schedule Agent Runs** | Recurring (cron) and one-off agent executions with run history |
+| **Access Business Data** | Query Odoo ERP and Neo4j email graph via skills/MCP |
+| **Approve Agent Actions** | In-UI permission requests with allow/deny/always controls |
+| **Install Skills** | Downloadable agent-facing skill packs |
+| **Session Notifications** | Toast alerts when background sessions complete |
 
 ---
 
-## Architecture Overview
+## 2. High-Level Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                     React User Interface                        │
-│          Components, Hooks, Zustand Store                        │
-└───────────────────────┬─────────────────────────────────────────┘
-                        │ IPC Bridge (preload)
-                        ▼
+│                     React Renderer (src/ui/)                    │
+│  App.tsx · features/* · hooks · Zustand (useAppStore)           │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ window.electron (preload IPC bridge)
+                           ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                   Electron Main Process                          │
-├─────────────────────────────────────────────────────────────────┤
-│  Bridges          │  Email Server     │  API Clients            │
-│  Discord          │  Express          │  Letta SDK              │
-│  WhatsApp         │  localhost:4321   │  Vera Cowork Server     │
-│  Telegram         │  Zoho Mail API    │  Neo4j / Odoo           │
-│  Slack            │  PDF Converter    │                         │
-└───────────────────────┬─────────────────────────────────────────┘
-                        │
-        ┌───────────────┼───────────────┬───────────────┐
-        ▼               ▼               ▼               ▼
-┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
-│ Letta Cloud  │ │ Zoho Mail    │ │ Neo4j        │ │ Odoo ERP     │
-│ Agent Memory │ │ OAuth API    │ │ Email Graph  │ │ via MCP      │
-└──────────────┘ └──────────────┘ └──────────────┘ └──────────────┘
+│              Electron Main Process (src/electron/)              │
+│  main/ · ipc/handlers/ · api/ · services/ · bridges/ · emails/  │
+└──┬────────────────┬──────────────┬──────────────┬───────────────┘
+   ▼                ▼              ▼              ▼
+┌──────────┐ ┌──────────┐   ┌──────────┐   ┌──────────────┐
+│ Letta    │ │ Zoho     │   │ Channels │   │ Vera Cowork  │
+│ Cloud    │ │ Mail     │   │ (DC/WA/  │   │ Server       │
+│ / SDK    │ │ OAuth    │   │  TG/SL)  │   │ (NestJS)     │
+└──────────┘ └──────────┘   └──────────┘   └──────────────┘
+                                                   │
+                                      ┌────────────┼────────────┐
+                                      ▼            ▼            ▼
+                                   Neo4j         Odoo       Schedules
+                                (email graph)   (via MCP)    (store)
 ```
 
-**Key Directories**
+### Key Directory Map
 
 | Path | Purpose |
-|------|---------|
-| `src/electron/` | Main process, IPC handlers, bridges, email server |
-| `src/ui/` | React renderer components and hooks |
-| `skills/` | Agent-facing documentation and guides |
-| `src/electron/emails/express/` | Local Express API server |
+|---|---|
+| `src/electron/main/` | App boot, window, menu, lifecycle |
+| `src/electron/ipc/handlers/` | IPC routes (session, permissions, scheduler, channels, emails) |
+| `src/electron/api/` | Typed clients + endpoints (letta-client, scheduler, channels) |
+| `src/electron/services/` | scheduler, agents, env, filesystem, skills, tools, memory |
+| `src/electron/bridges/` | Channel integrations + `lettaResponder.ts` adapter |
+| `src/electron/emails/` | Express OAuth server + Zoho API + fetchEmails |
+| `src/electron/libs/` | Session runner + runtime state |
+| `src/electron/preload.cts` | Safe renderer IPC surface |
+| `src/ui/App.tsx` | Panel routing, layout composition, notifications mount |
+| `src/ui/store/useAppStore.ts` | Zustand session state machine |
+| `src/ui/features/` | activity · auth · channels · chat · email · layout · scheduler · settings · sidebar · skills · system |
+| `src/ui/hooks/` | useIPC, useSessionController, useAutoSyncUnread, useZohoEmail, … |
+| `skills/` | Bundled agent skills (mails, neo4j-email, odoo, pdf-reader, cowork-*) |
 
 ---
 
-## Authentication
+## 3. Authentication
 
-Vera Cowork handles authentication across three services, each with its own token lifecycle.
+Three token systems, each with its own lifecycle.
 
-### Authentication Flow
+| Service | Source | Header | Storage |
+|---|---|---|---|
+| **Letta Cloud** | `LETTA_API_KEY` env | `Bearer …` | `.env` |
+| **Vera Cowork Server** | Login flow | `Bearer …` | `~/.letta-cowork/.cowork-token` |
+| **Zoho Mail** | OAuth (local callback on `:4321`) | `Zoho-oauthtoken …` | electron-store (auto-refresh) |
 
-```mermaid
-sequenceDiagram
-    participant User
-    participant App as Vera Cowork App
-    participant Letta as Letta Cloud
-    participant Cowork as Vera Cowork Server
-    participant Zoho as Zoho Mail
-
-    Note over User,Zoho: Letta Authentication
-    App->>Letta: API calls with Bearer token
-    Letta-->>App: Response
-    Note over App: Token from LETTA_API_KEY env
-
-    Note over User,Zoho: Vera Cowork Server
-    User->>App: Login
-    App->>Cowork: Authenticate
-    Cowork-->>App: COWORK_TOKEN
-    App->>App: Persist to ~/.letta-cowork/
-
-    Note over User,Zoho: Zoho Mail OAuth
-    User->>App: Click "Connect Email"
-    App->>Zoho: Redirect to OAuth
-    User->>Zoho: Authorize
-    Zoho->>App: Callback with code
-    App->>Zoho: Exchange for tokens
-    Zoho-->>App: access_token, refresh_token
-    App->>App: Store in electron-store
-```
-
-### Token Reference
-
-| Service | Token Source | Auth Header | Storage |
-|---------|--------------|-------------|---------|
-| Letta Cloud | `LETTA_API_KEY` env var | `Bearer xxx` | `.env` file |
-| Vera Cowork Server | Login flow | `Bearer xxx` | `~/.letta-cowork/.cowork-token` |
-| Zoho Mail | OAuth flow | `Zoho-oauthtoken xxx` | electron-store |
-
-### Token Lifecycle Notes
-
-- **Letta**: Static API key configured via environment variable
-- **Vera Cowork Server**: Token persists to disk and shell env; re-login required on 401
-- **Zoho Mail**: Access tokens auto-refresh; cleared on refresh failure requiring reconnection
+- Letta local dev server ignores the API key (use `dummy`).
+- Zoho tokens auto-refresh on `401` or `INVALID_TICKET`; failed refresh clears tokens.
+- Cowork token persists to disk + shell env; user must re-login on 401.
 
 ---
 
-## Email Integration
+## 4. Sessions & Agent Interaction
 
-Vera Cowork connects to Zoho Mail, fetches emails, and stores them in Neo4j for agent access.
+### Key Concepts
 
-### Email Connect & OAuth Flow
+| Term | Meaning |
+|---|---|
+| **Agent** (`agentId`) | Persistent entity — memory survives across sessions |
+| **Conversation** (`conversationId`) | A message thread within an agent |
+| **Session** (`sessionId`) | A single streaming execution/connection |
 
-```mermaid
-flowchart TD
-    A[User clicks Connect Email] --> B[GET /connect]
-    B --> C[Opens Zoho OAuth URL]
-    C --> D[User authorizes]
-    D --> E[Zoho redirects to /callback]
-    E --> F[Exchange code for tokens]
-    F --> G[Store in electron-store]
-    G --> H[Sync to Vera Cowork Server]
-    H --> I[Connection established]
-```
+Agents remember across conversations via memory blocks. Multiple conversations can run concurrently on one agent.
 
-### Email Fetch Flow
-
-```mermaid
-flowchart TD
-    A[Request emails] --> B[Resolve accountId]
-    B --> C[Build query params]
-    C --> D[Call Zoho API]
-    D --> E[Receive email list]
-
-    E --> F{For each email}
-    F --> G[Add accountId to response]
-    G --> H[Trigger async storeEmail]
-    H --> I[POST to Vera Cowork Server]
-
-    I --> J[Create Account node]
-    J --> K[Create Email node]
-    K --> L[Create Person nodes]
-    L --> M[Create Thread relationship]
-```
-
-### Email Storage: Neo4j Graph
-
-Emails are stored as a relationship graph in Neo4j:
+### Session Status Lifecycle
 
 ```
-┌─────────────┐      HAS_EMAIL      ┌─────────────┐
-│   Account   │────────────────────▶│    Email    │
-└─────────────┘                     └──────┬──────┘
-                                          │
-                        ┌─────────────────┼─────────────────┐
-                        │ IN_THREAD       │ TO              │ SENT
-                        ▼                 ▼                 ▼
-                 ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
-                 │   Thread    │   │   Person    │◀──│   Person    │
-                 └─────────────┘   │ (recipient) │   │  (sender)   │
-                                   └─────────────┘   └─────────────┘
+          ┌─ completed ────────── (auto-reset to idle after 1500ms)
+          │
+idle → running ─┬─ error
+          │     │
+          │     └─ waiting_approval ──(approve/deny)──► running
+          │
+          └─ cancelled / stopped → idle
 ```
 
-**Query Examples**
+| Status | Meaning |
+|---|---|
+| `idle` | No active run |
+| `running` | Session streaming |
+| `waiting_approval` | Tool call needs user approval (preserved while `permissionRequests` exist) |
+| `completed` | Finished successfully |
+| `error` | Runner/session failed |
 
-```cypher
--- Get emails for an account
-MATCH (a:Account {accountId: $accountId})-[:HAS_EMAIL]->(e:Email)
-RETURN e
+**Status integrity rule (fix 2026-04-15):** The `session.status` IPC handler checks `existing.permissionRequests?.length` before overwriting. If permissions are pending, `waiting_approval` is preserved — preventing a regression where users saw "Completed" while Letta still showed `requires_approval`.
 
--- Get sender of an email
-MATCH (p:Person)-[:SENT]->(e:Email {messageId: $messageId})
-RETURN p
+### Session Start (fix 2026-04-10)
 
--- Get full context for an email
-MATCH (e:Email {messageId: $messageId})
-OPTIONAL MATCH (a:Account)-[:HAS_EMAIL]->(e)
-OPTIONAL MATCH (p:Person)-[:SENT]->(e)
-OPTIONAL MATCH (e)-[:TO]->(r:Person)
-OPTIONAL MATCH (e)-[:IN_THREAD]->(t:Thread)
-RETURN e, a, p, collect(r) as recipients, t
-```
+The runner emits `session.status: running` **immediately** after it receives a `conversationId`. Agent-name resolution happens in a fire-and-forget IIFE and re-emits a `running` event once available. Timeout extended to 45s with late-arrival auto-recovery in the store.
 
-### Email API Endpoints
+### Stuck-Run Auto-Recovery
 
-| Endpoint | Purpose |
-|----------|---------|
-| `GET /connect` | Initiate Zoho OAuth |
-| `GET /callback` | OAuth callback handler |
-| `GET /fetchAccount` | List Zoho accounts |
-| `GET /fetchFolders` | List folders for account |
-| `GET /fetchEmails` | Fetch paginated email list |
-| `GET /fetchEmailById` | Get full email content |
-| `GET /searchEmails` | Search by query |
-| `GET /downloadAttachment` | Download and upload attachments |
-
----
-
-## Discord Integration
-
-Discord messages flow through the bridge into Letta agents, with configurable policies for DMs and groups.
-
-### Discord Inbound Flow
-
-```mermaid
-flowchart TD
-    A[Message received] --> B{From bot?}
-    B -->|Yes| Z[Ignore]
-    B -->|No| C{DM or Guild?}
-
-    C -->|DM| D[Check dmPolicy]
-
-    D -->|open| G[Process message]
-    D -->|pairing| E{User paired?}
-    E -->|No| F[Issue pairing code]
-    E -->|Yes| G
-    D -->|allowlist| E2{In allowedUsers?}
-    E2 -->|No| Z
-    E2 -->|Yes| G
-
-    C -->|Guild| H[Get group config]
-    H --> I{Mode?}
-
-    I -->|disabled| Z
-    I -->|mention-only| J{Mentioned?}
-    J -->|No| Z
-    J -->|Yes| K{In group allowedUsers?}
-    I -->|listen| K
-    I -->|open| K
-
-    K -->|No| Z
-    K -->|Yes| G
-
-    G --> L[Build prompt with metadata]
-    L --> M[LettaResponder]
-    M --> N[Create/resume Letta session]
-    N --> O[Stream agent response]
-    O --> P[Reply to Discord]
-```
-
-### DM Policies
-
-| Policy | Behavior |
-|--------|----------|
-| `open` | All users can DM the bot |
-| `pairing` | Users must pair via 6-character code approved by admin |
-| `allowlist` | Only users in `allowedUsers` array can DM |
-
-### Group Modes
-
-| Mode | Behavior |
-|------|----------|
-| `open` | Bot responds to all messages |
-| `listen` | Process for memory, respond when mentioned |
-| `mention-only` | Only respond when bot is mentioned |
-| `disabled` | Ignore all messages in group |
-
-### Configuration Hierarchy
-
-Group configs are checked in this order:
-1. Channel-specific: `config.groups[channelId]`
-2. Server-wide: `config.groups[guildId]`
-3. Default: `config.groups["*"]`
-
----
-
-## Odoo Integration
-
-Access Odoo ERP data through Vera Cowork server (read-only) or MCP server (full CRUD).
-
-### Odoo Flow
-
-```mermaid
-flowchart TD
-    subgraph Read Operations
-        A[Need ERP data] --> B{Simple read?}
-        B -->|Yes| C[Use Vera Cowork Server API]
-        B -->|No| D[Use MCP Server]
-
-        C --> E[POST /odoo/models/search]
-        E --> F[Results returned]
-    end
-
-    subgraph Write Operations
-        G[Need to create/update] --> H[Use MCP Server]
-        H --> I[SSE handshake]
-        I --> J[POST JSON-RPC to session]
-        J --> K[Execute tool]
-    end
-
-    subgraph MCP Tools
-        L[odoo_search] --> M[Fetch records]
-        N[odoo_create] --> O[Create record]
-        P[odoo_update] --> Q[Update record]
-        R[odoo_get_fields] --> S[Inspect schema]
-    end
-```
-
-### Supported Operations
-
-| Method | Service | Description |
-|--------|---------|-------------|
-| Read (simple) | Vera Cowork Server | `POST /odoo/models/search` with `COWORK_TOKEN` |
-| Read (advanced) | MCP Server | `odoo_search`, `odoo_count`, `odoo_group` |
-| Write | MCP Server | `odoo_create`, `odoo_update`, `odoo_delete` |
-| Schema | MCP Server | `odoo_get_models`, `odoo_get_fields` |
-
-### Common Odoo Models
-
-| Model | Description |
-|-------|-------------|
-| `res.partner` | Customers and contacts |
-| `crm.lead` | CRM leads and opportunities |
-| `sale.order` | Sales orders |
-| `account.move` | Invoices |
-| `product.product` | Products |
-| `hr.employee` | Employees |
-
-### Recommended Workflow
-
-1. Start with Vera Cowork Server API for reads (simpler auth)
-2. Use `odoo_get_models` if unsure which model to use
-3. Use `odoo_get_fields` to inspect available fields
-4. Only use write tools when explicitly creating or updating records
-
----
-
-## Sessions & Agent Interaction
-
-Each chat with an agent creates or resumes a session, streaming responses back to the UI.
+On session resume, `recoverPendingApprovals` attempts `POST /runs/{id}/approve → /resume → PATCH`. If all fail, the run is cancelled so the session unblocks. Emits `running` → `idle` to reflect readiness.
 
 ### Session Flow
 
 ```mermaid
 sequenceDiagram
     participant User
-    participant UI as React Renderer
+    participant UI as React (useAppStore)
     participant IPC as Electron Main
-    participant Runner as Session Runner
-    participant Letta as Letta Cloud
+    participant Runner
+    participant Letta
 
-    User->>UI: Send message
-    UI->>IPC: session.start event
-    IPC->>Runner: Create session
-    Runner->>Letta: Initialize agent connection
-
-    alt New Conversation
-        Runner->>Letta: createSession(agentId)
-    else Resume Conversation
-        Runner->>Letta: resumeSession(conversationId)
+    User->>UI: Send prompt
+    UI->>IPC: session.start
+    IPC->>Runner: runLetta()
+    Runner->>Letta: createSession / resumeSession
+    Runner-->>IPC: conversationId received
+    IPC-->>UI: session.status: running (immediate)
+    loop Stream
+        Letta-->>Runner: stream events
+        Runner-->>IPC: server-event
+        IPC-->>UI: stream.message / permissions / status
     end
-
-    Letta-->>Runner: Stream messages
-    loop Stream events
-        Runner->>IPC: server-event
-        IPC->>UI: state update
-        UI->>User: Show response
-    end
-
-    Runner->>IPC: Session completed
-    IPC->>UI: status = completed
+    Runner->>IPC: completed
+    IPC->>UI: session.status: completed (toast via SessionNotifications)
 ```
 
-### Session Lifecycle
+### Session Completion Notifications (2026-04-16)
 
-| Status | Meaning |
-|--------|---------|
-| `idle` | No active session |
-| `running` | Session actively streaming |
-| `completed` | Session finished successfully |
-| `error` | Session failed |
-
-### Key Concepts
-
-| Term | Description |
-|------|-------------|
-| **Agent** | Persistent entity with memory that survives across sessions |
-| **Conversation** | A message thread within an agent (has `conversationId`) |
-| **Session** | A single execution/connection (has `sessionId`) |
-
-Agents remember across conversations via memory blocks, but each conversation maintains its own message history.
+`SessionNotifications` lives at `src/ui/features/system/components/SessionNotifications/` and is mounted in `App.tsx`. When a background session (one the user isn't actively viewing) completes, a toast appears — restoring visibility into agent activity.
 
 ---
 
-## Important Operational Notes
+## 5. Scheduler (April 2026)
 
-### Email Pipeline
+Schedule Letta agent runs on cron expressions or one-off dates.
 
-- Polling-based sync (every minute for unread emails)
-- Rendered-driven, not a background service
-- Emails marked read only after Letta session completes successfully
-- **Not yet implemented**: Retry policy, dead-letter queue, durable state machine
+### Components
 
-### Attachment Handling
+| Layer | File |
+|---|---|
+| Client runner | `src/electron/services/scheduler/index.ts` (node-cron singleton) |
+| API client | `src/electron/api/endpoints/scheduler.ts` |
+| IPC handlers | `src/electron/ipc/handlers/scheduler-handlers.ts` |
+| UI page | `src/ui/features/scheduler/SchedulesPanel.tsx` |
+| Dialog | `CreateScheduleDialog.tsx` |
+| Run history | `ScheduleRunsDrawer.tsx` |
+| Backend | `vera-cowork-server/src/scheduler/` (NestJS + TypeORM) |
 
-- Zoho API requires `Zoho-oauthtoken` header (not `Bearer`)
-- PDFs are converted to markdown for agent processing
-- Upload errors don't fail the parent operation (graceful degradation)
+### Architecture Choices
 
-### Token Refresh
+- **Runner lives client-side** (Electron) because the Letta SDK runs there.
+- **Task definitions live on the backend** — persistent, survive reinstalls.
+- **Run logs posted to backend** — visible in run-history drawer.
+- **Notifications reuse Channel API** via optional `notifyChannelId`.
 
-- Zoho tokens auto-refresh on 401 or `INVALID_TICKET` error
-- Failed refresh clears tokens, requiring user to reconnect
+### Flow
 
-### Discord Quirks
-
-- Long messages (>2000 chars) are split into chunks
-- Mention detection: `content.includes(<@{botId}>)`
-
-### Environment Security
-
-- Never expose `LETTA_API_KEY` in logs or docs
-- Local Letta server ignores `LETTA_API_KEY` (can use `dummy`)
+```
+Backend (ScheduledTask)  ←─── CRUD via IPC/REST ──── UI (SchedulesPanel)
+        │
+        │ sync every 5 min
+        ▼
+Electron node-cron singleton
+        │
+        │ cron fires
+        ▼
+Letta session executed → run log POSTed → channel notification (optional)
+```
 
 ---
 
-## Quick Reference: Endpoints
+## 6. Email Integration
 
-### Local Email Server (`localhost:4321`)
+Polls Zoho unread mail, fetches content, stores in Neo4j, routes to agents.
+
+### Connect Flow
+
+```mermaid
+flowchart LR
+    A[Click Connect] --> B[GET /connect on :4321]
+    B --> C[Opens Zoho OAuth]
+    C --> D[User authorizes]
+    D --> E[/callback]
+    E --> F[Exchange code for tokens]
+    F --> G[electron-store]
+    G --> H[Sync to Cowork Server]
+```
+
+### Neo4j Graph Schema
+
+```
+Account ──HAS_EMAIL──► Email ──IN_THREAD──► Thread
+                          │
+                   ┌──────┴──────┐
+                   │ TO          │ SENT
+                   ▼             ▼
+             Person (recipient) Person (sender)
+```
+
+### Auto-Sync Unread Pipeline
+
+```
+useAutoSyncUnread (poll every 60s)
+        ↓
+Filter processed IDs + since-date
+        ↓
+Resolve agents (routing rules → fallback list)
+        ↓
+For each email/agent:
+    fetch full content → download+upload attachments →
+    build markdown prompt → start Letta session → wait for completion
+        ↓
+If ALL routed sessions succeed → mark-as-read in Zoho + persist ID
+```
+
+**Current state:** Polling-based, renderer-driven, localStorage-backed. **Not yet:** durable queue, retry engine, dead-letter inbox.
+
+### Email Endpoints (local Express on `:4321`)
 
 | Endpoint | Purpose |
-|----------|---------|
+|---|---|
+| `GET /connect` `/callback` | Zoho OAuth |
 | `GET /fetchAccount` | List Zoho accounts |
 | `GET /fetchFolders` | List folders |
-| `GET /fetchEmails` | List emails (paginated) |
-| `GET /fetchEmailById` | Get full email content |
-| `GET /searchEmails` | Search emails |
-| `GET /downloadAttachment` | Download attachments |
-| `POST /neo4j/runReadQuery` | Execute Neo4j query |
+| `GET /fetchEmails` | Paginated email list |
+| `GET /fetchEmailById` | Full email content |
+| `GET /searchEmails` | Search by query |
+| `GET /downloadAttachment` | Download + upload attachments (PDFs → markdown) |
+| `POST /neo4j/runReadQuery` | Execute Neo4j read |
+
+---
+
+## 7. Channel Bridges
+
+Inbound messages from external platforms → Letta agents → reply back.
+
+### Supported Channels
+
+| Channel | Transport |
+|---|---|
+| Discord | `discord.js` |
+| WhatsApp | `@whiskeysockets/baileys` (QR pairing) |
+| Telegram | Bot token |
+| Slack | `@slack/bolt` socket mode |
+
+### Inbound Flow
+
+```mermaid
+flowchart TD
+    Msg[Inbound message] --> Bot{From bot?}
+    Bot -->|Yes| Ign[Ignore]
+    Bot -->|No| Ctx{DM or Guild?}
+    Ctx -->|DM| DM[Check dmPolicy: open/pairing/allowlist]
+    Ctx -->|Guild| GMode[Check group mode: open/listen/mention-only/disabled]
+    DM --> Resp[lettaResponder]
+    GMode --> Resp
+    Resp --> Session[create/resume Letta session]
+    Session --> Stream[stream response]
+    Stream --> Send[send back to platform]
+```
+
+### Discord DM Policies
+
+| Policy | Behavior |
+|---|---|
+| `open` | All users |
+| `pairing` | 6-char admin-approved code |
+| `allowlist` | `allowedUsers` only |
+
+### Group Config Lookup Order
+
+1. Channel-specific: `config.groups[channelId]`
+2. Server-wide: `config.groups[guildId]`
+3. Default: `config.groups["*"]`
+
+### Responder Adapter
+
+`src/electron/bridges/lettaResponder.ts` is the single adapter between channel metadata and Letta session execution. Handles prompt building, attachment normalization, 2000-char Discord splitting, and stream→reply consolidation.
+
+---
+
+## 8. Odoo Integration
+
+| Method | Service | Use When |
+|---|---|---|
+| Simple read | Cowork Server (`POST /odoo/models/search`) | Basic lookups, needs only `COWORK_TOKEN` |
+| Advanced read | MCP Server (`odoo_search/count/group`) | Filtered, grouped, complex reads |
+| Write | MCP Server (`odoo_create/update/delete`) | Create/update records |
+| Schema | MCP (`odoo_get_models/fields`) | Discover model shape |
+
+**Common models:** `res.partner`, `crm.lead`, `sale.order`, `account.move`, `product.product`, `hr.employee`.
+
+---
+
+## 9. Permissions & Approvals
+
+- Tool calls that require approval emit `permissionRequests` into the session state.
+- UI surfaces them in the decision panel/sidebar; sidebar shows "Needs approval" badge.
+- `waiting_approval` status is preserved (see §4) until every pending permission is resolved.
+- Approve/Deny/Allow-always options round-trip via IPC → Letta runtime.
+
+---
+
+## 10. Configuration & Persistence
+
+| Layer | Used For |
+|---|---|
+| `.env` | `LETTA_API_KEY`, `LETTA_BASE_URL`, `LETTA_AGENT_ID`, `EMAIL_SERVER_BASE_URL`, `DEBUG_IPC` |
+| electron-store (`settings.ts`) | Cowork UI settings, stored session metadata, Zoho tokens |
+| `~/.letta-cowork/.cowork-token` | Cowork server bearer token |
+| Renderer localStorage | Auto-sync unread config, processed IDs, UI prefs |
+
+### Core Env Vars
+
+| Variable | Default |
+|---|---|
+| `LETTA_API_KEY` | *(required, except local)* |
+| `LETTA_BASE_URL` | `https://api.letta.com` |
+| `LETTA_AGENT_ID` | LRU agent |
+| `EMAIL_SERVER_BASE_URL` | `http://localhost:8000` |
+
+---
+
+## 11. Quick Reference — External Endpoints
+
+### Letta Cloud (`api.letta.com`)
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /v1/agents` | List agents |
+| `POST /v1/agents/{id}/messages` | Send message |
+| `GET /v1/agents/{id}/core-memory/blocks` | Core memory |
+| `POST /v1/runs/{id}/approve` · `/resume` | Approval lifecycle |
 
 ### Vera Cowork Server (`vera-cowork-server.ngrok.app`)
 
 | Endpoint | Purpose |
-|----------|---------|
-| `GET /channels` | List channels |
-| `POST /channels/{id}/start` | Start channel runtime |
+|---|---|
+| `GET /channels` · `POST /channels/{id}/start` | Channel runtime |
 | `GET /channels/{id}/messages` | Message logs |
-| `POST /odoo/models/search` | Search Odoo records |
-| `POST /odoo/models/count` | Count Odoo records |
-| `POST /neo4j/runReadQuery` | Neo4j read query |
-
-### Letta Cloud API (`api.letta.com`)
-
-| Endpoint | Purpose |
-|----------|---------|
-| `GET /v1/agents` | List agents |
-| `POST /v1/agents/{id}/messages` | Send message to agent |
-| `GET /v1/agents/{id}/core-memory/blocks` | Get memory blocks |
-| `POST /v1/agents/{id}/archival-memory` | Create archival memory |
+| `POST /odoo/models/search` · `/count` | Odoo reads |
+| `POST /neo4j/runReadQuery` | Neo4j read |
+| `/schedules` (CRUD + toggle + runs) | Scheduler |
 
 ---
 
-*Last updated: 2026-04-09*
+## 12. Where to Start Reading
+
+| Task | Files |
+|---|---|
+| Chat/session bugs | `store/useAppStore.ts`, `ipc/handlers/session-handlers.ts`, `libs/runner.ts` |
+| Permissions/approvals | `ipc/handlers/session/permission-handlers.ts`, `features/chat/*` |
+| Unread email auto-sync | `hooks/useAutoSyncUnread.ts`, `emails/fetchEmails.ts` |
+| Channel bots | `bridges/channelBridgeManager.ts`, `bridges/lettaResponder.ts` |
+| Scheduler | `services/scheduler/index.ts`, `features/scheduler/*` |
+| Environment/config | `envManager.ts`, `services/settings`, `features/settings` |
+| Notifications | `features/system/components/SessionNotifications/` |
+
+---
+
+## 13. Known Limitations & Tech Debt
+
+1. **Email pipeline** — renderer-driven, no durable queue, no retry/dead-letter, 100-email poll cap, processed IDs local-only.
+2. **Scheduler** — not yet tested live end-to-end against the backend under load; no retry policy on failed runs.
+3. **Persistence split** — some settings in electron-store, some in localStorage; not unified.
+4. **Session status semantics** — hardening against unconditional overwrites still ongoing (see §4 fix).
+5. **Token handling** — Zoho refresh is resilient, but failure states still require manual reconnect.
+
+---
+
+## 14. Recent Changes (April 2026)
+
+| Date | Change |
+|---|---|
+| 2026-04-10 | Session-start race fix (emit `running` immediately) + 45s timeout + late-arrival recovery |
+| 2026-04-10 | Stuck-run auto-recovery on session resume |
+| 2026-04-10–11 | Scheduler feature (client runner + backend + UI) |
+| 2026-04-11 | Dep upgrades — Electron 41, TS 6, Vite 8, React 19.2 |
+| 2026-04-15 | Status-mismatch fix — `waiting_approval` preserved when `permissionRequests` exist |
+| 2026-04-16 | `SessionNotifications` wired into `App.tsx` — toasts on background completion |
+
+---
+
+*Maintainer: Bhavesh Prajapati*
+*For agent-facing orientation, see `AGENT-README.md` and `project-feature.md`.*

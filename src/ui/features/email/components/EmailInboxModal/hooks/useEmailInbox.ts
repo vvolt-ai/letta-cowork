@@ -1,12 +1,13 @@
-import { useState, useCallback, useRef, useEffect } from "react";
-import type { ZohoEmail, SessionInfo } from "../../../../../types";
-import { useAppStore } from "../../../../../store/useAppStore";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import type { ZohoEmail } from "../../../../../types";
+import { useAppStore, type SessionView, type AgentDisplayStatus } from "../../../../../store/useAppStore";
 import { useShallow } from "zustand/react/shallow";
 import {
   SCROLL_THRESHOLD,
   DEFAULT_LIST_WIDTH,
   clampListWidth,
   type ProcessedEmailData,
+  type EmailStatusInfo,
 } from "../../../types";
 
 interface UseEmailInboxProps {
@@ -14,11 +15,20 @@ interface UseEmailInboxProps {
   accountId?: string;
   folderId?: string;
   emails: ZohoEmail[];
+  /**
+   * Optional extra pool of emails (e.g. server-side search results) that are
+   * visible in the list but not part of the main `emails` prop. Used so
+   * `selectedEmail` can still resolve when the user clicks one of these.
+   */
+  extraLookupEmails?: ZohoEmail[];
   onProcessEmailToAgent?: (email: ZohoEmail, agentId: string, additionalInstructions?: string) => void;
   newlyCreatedConversations?: Map<string, { conversationId: string; agentId?: string }>;
   onLoadMore?: () => void;
   isLoadingMore?: boolean;
   hasMore?: boolean;
+  processingEmailId?: string | null;
+  awaitingConversationEmailId?: string | null;
+  errorEmailId?: string | null;
 }
 
 interface UseEmailInboxReturn {
@@ -32,6 +42,7 @@ interface UseEmailInboxReturn {
   // Conversation state
   processedEmailsFromServer: Map<string, ProcessedEmailData>;
   viewingConversationId: string | null;
+  emailStatusById: Map<string, EmailStatusInfo>;
   
   // List resize state
   listWidth: number;
@@ -57,11 +68,15 @@ export function useEmailInbox({
   accountId,
   folderId,
   emails,
+  extraLookupEmails,
   onProcessEmailToAgent,
   newlyCreatedConversations,
   onLoadMore,
   isLoadingMore,
   hasMore,
+  processingEmailId,
+  awaitingConversationEmailId,
+  errorEmailId,
 }: UseEmailInboxProps): UseEmailInboxReturn {
   // Selection state
   const [localSelectedId, setLocalSelectedId] = useState<string | null>(null);
@@ -81,10 +96,14 @@ export function useEmailInbox({
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Get session data from store
-  const sessions = useAppStore(useShallow((state) => state.sessions)) as Record<string, SessionInfo>;
+  const sessions = useAppStore(useShallow((state) => state.sessions)) as Record<string, SessionView>;
 
-  // Get selected email
-  const selectedEmail = emails.find(e => e.messageId === localSelectedId);
+  // Get selected email — look in both the main list AND the extra lookup pool
+  // (server-side search results) so selection works even when the clicked
+  // email isn't part of the paginated feed.
+  const selectedEmail =
+    emails.find(e => e.messageId === localSelectedId) ??
+    (extraLookupEmails ? extraLookupEmails.find(e => e.messageId === localSelectedId) : undefined);
 
   // Load processed emails from server when modal opens
   useEffect(() => {
@@ -201,6 +220,89 @@ export function useEmailInbox({
     return null;
   }, [sessions, processedEmailsFromServer]);
 
+  const mapAgentStatusToDisplay = useCallback((status: AgentDisplayStatus | undefined, conversationId?: string, error?: string): EmailStatusInfo | null => {
+    if (!status) return null;
+    const mapping: Record<AgentDisplayStatus, { label: string; dot: string; text: string }> = {
+      idle: { label: "Ready", dot: "bg-gray-300", text: "text-gray-600" },
+      thinking: { label: "Thinking…", dot: "bg-sky-400", text: "text-sky-700" },
+      running_tool: { label: "Running tool…", dot: "bg-violet-400", text: "text-violet-700" },
+      waiting_approval: { label: "Waiting approval", dot: "bg-amber-400", text: "text-amber-700" },
+      generating: { label: "Generating…", dot: "bg-sky-300", text: "text-sky-600" },
+      completed: { label: "Completed", dot: "bg-emerald-500", text: "text-emerald-600" },
+      error: { label: "Error", dot: "bg-red-500", text: "text-red-600" },
+    };
+    const style = mapping[status];
+    if (!style) return null;
+    return {
+      state: status,
+      label: style.label,
+      dotClass: style.dot,
+      textClass: style.text,
+      conversationId,
+      error,
+    };
+  }, []);
+
+  const buildCustomStatus = useCallback((state: EmailStatusInfo["state"], label: string, dotClass: string, textClass: string, conversationId?: string, error?: string): EmailStatusInfo => ({
+    state,
+    label,
+    dotClass,
+    textClass,
+    conversationId,
+    error,
+  }), []);
+
+  const getEmailStatusInfo = useCallback((email: ZohoEmail): EmailStatusInfo | null => {
+    const messageId = String(email.messageId);
+    if (processingEmailId && String(processingEmailId) === messageId) {
+      return buildCustomStatus("uploading", "Uploading to agent…", "bg-slate-400", "text-slate-600");
+    }
+    if (awaitingConversationEmailId && String(awaitingConversationEmailId) === messageId) {
+      return buildCustomStatus("starting", "Starting session…", "bg-blue-300", "text-blue-600");
+    }
+    if (errorEmailId && String(errorEmailId) === messageId) {
+      return buildCustomStatus("failure", "Failed to send", "bg-red-500", "text-red-600");
+    }
+
+    const serverData = processedEmailsFromServer.get(messageId);
+    const conversationId = serverData?.conversationId || findConversationIdForEmail(email);
+    if (conversationId) {
+      const session = sessions[conversationId];
+      if (session) {
+        const derivedStatus: AgentDisplayStatus | undefined = session.ephemeral?.status ?? (() => {
+          switch (session.status) {
+            case "running":
+              return "thinking";
+            case "completed":
+              return "completed";
+            case "error":
+              return "error";
+            default:
+              return "idle";
+          }
+        })();
+        const info = mapAgentStatusToDisplay(derivedStatus, conversationId, session.ephemeral?.errorMessage);
+        if (info) {
+          return info;
+        }
+      }
+      return buildCustomStatus("success", "Processed", "bg-emerald-500", "text-emerald-600", conversationId);
+    }
+
+    return null;
+  }, [awaitingConversationEmailId, buildCustomStatus, errorEmailId, findConversationIdForEmail, mapAgentStatusToDisplay, processedEmailsFromServer, processingEmailId, sessions]);
+
+  const emailStatusById = useMemo(() => {
+    const map = new Map<string, EmailStatusInfo>();
+    emails.forEach((email) => {
+      const info = getEmailStatusInfo(email);
+      if (info) {
+        map.set(String(email.messageId), info);
+      }
+    });
+    return map;
+  }, [emails, getEmailStatusInfo]);
+
   // Handle process email to agent
   const handleProcessEmailToAgent = useCallback(async (email: ZohoEmail, agentId: string, additionalInstructions?: string) => {
     if (!onProcessEmailToAgent) return;
@@ -285,6 +387,7 @@ export function useEmailInbox({
     isFetchingLocalContent,
     processedEmailsFromServer,
     viewingConversationId,
+    emailStatusById,
     listWidth,
     isResizingList,
     scrollContainerRef,

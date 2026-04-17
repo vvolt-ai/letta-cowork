@@ -2,10 +2,11 @@
 import { app, shell } from "electron";
 import path from "path";
 import fs from "fs";
+import { fileURLToPath } from "url";
 import { BASE_URL, clearEmailCredentials, getAccessToken, getAccountId, getInboxFolderId, getRefreshToken, saveAccountId, saveInboxFolderId } from "./helper.js";
+import { FormData, File } from 'undici';
 import { getVeraCoworkApiClient } from "../api/index.js";
 import { serverApiRequest, zohoApiRequest } from "./zohoApi.js";
-import { uploadFilePathToManager, type FileManagerUploadResult } from "./fileManager.js";
 import type {
   AttachmentInfoResponse,
   AccountsResponse,
@@ -139,6 +140,25 @@ type DownloadAttachmentResult = {
   uploadedFiles?: UploadedEmailAttachment[];
   uploadErrors?: { file: string; error: string }[];
 };
+
+export interface EmailAttachmentInput {
+  name: string;
+  url: string;
+  mimeType?: string;
+}
+
+export interface EmailComposePayload {
+  to: string[];
+  cc?: string[];
+  bcc?: string[];
+  subject: string;
+  bodyText?: string;
+  bodyHtml?: string;
+  attachments?: EmailAttachmentInput[];
+  fromAddress?: string;
+  requestReadReceipt?: boolean;
+  draftId?: string;
+}
 
 export const fetchEmailDetails = async (messageId: string, accountId?: string, folderId?: string) => {
   // resolve accountId from parameter or electron-store
@@ -336,21 +356,6 @@ export const downloadEmailAttachment = async (folderId?: string, messageId?: str
       downloadedFilePaths.push(filePath);
     }
 
-    for (const filePath of downloadedFilePaths) {
-      try {
-        const uploadResult = await uploadFilePathToManager(filePath);
-        const kind: UploadedEmailAttachment["kind"] = uploadResult.mimeType.toLowerCase().startsWith("image/") ? "image" : "file";
-        uploadedFiles.push({
-          ...uploadResult,
-          kind,
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.error("[downloadEmailAttachment] failed to upload attachment", { filePath, error: message });
-        uploadErrors.push({ file: path.basename(filePath), error: message });
-      }
-    }
-
     return {
       status: "success" as const,
       files: downloadedFiles,
@@ -377,6 +382,175 @@ export const uploadEmailAttachmentToAgent = async (
 
   return await downloadEmailAttachment(folderId, messageId, accountId, resolvedAgentId);
 };
+
+const HTTP_URL_PATTERN = /^https?:\/\//i;
+let cachedFromAddress: string | null = null;
+
+async function getDefaultFromAddress(): Promise<string | undefined> {
+  if (cachedFromAddress) {
+    return cachedFromAddress;
+  }
+  try {
+    const accounts = await fetchAccounts();
+    const primary = accounts?.data?.[0];
+    const email = primary?.primaryEmailAddress || primary?.emailAddress || primary?.incomingUserName;
+    if (email) {
+      cachedFromAddress = email;
+      return email;
+    }
+  } catch (error) {
+    console.warn('Failed to resolve default fromAddress', error);
+  }
+  return undefined;
+}
+
+
+function normalizeAddressList(list?: string[]): string | undefined {
+  if (!list || list.length === 0) return undefined;
+  const trimmed = list
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value));
+  return trimmed.length > 0 ? trimmed.join(",") : undefined;
+}
+
+async function loadAttachmentBuffer(location: string): Promise<Buffer> {
+  if (!location) {
+    throw new Error('Attachment url is required');
+  }
+
+  if (HTTP_URL_PATTERN.test(location)) {
+    const response = await fetch(location);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch attachment from ${location}`);
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  }
+
+  let filePath = location;
+  if (location.startsWith('file://')) {
+    filePath = fileURLToPath(location);
+  }
+
+  return await fs.promises.readFile(filePath);
+}
+
+async function uploadAttachmentToZoho(accountId: string, attachment: EmailAttachmentInput) {
+  if (!attachment.name || !attachment.url) {
+    throw new Error('Attachment requires both name and url');
+  }
+
+  const buffer = await loadAttachmentBuffer(attachment.url);
+  const MAX_SIZE_BYTES = 20 * 1024 * 1024;
+  if (buffer.byteLength > MAX_SIZE_BYTES) {
+    throw new Error(`Attachment ${attachment.name} exceeds 20MB limit`);
+  }
+
+  const file = new File([buffer], attachment.name, { type: attachment.mimeType ?? 'application/octet-stream' });
+  const formData = new FormData();
+  formData.append('attach', file);
+
+  const search = new URLSearchParams({ uploadType: 'multipart' });
+  const response = await zohoApiRequest(`/accounts/${accountId}/messages/attachments?${search.toString()}`, {
+    method: 'POST',
+    body: formData as any,
+  });
+
+  const uploaded = response?.data?.attachments || response?.attachments;
+  if (!uploaded || uploaded.length === 0) {
+    throw new Error('Zoho attachment upload failed to return metadata');
+  }
+  const metadata = uploaded[0];
+
+  if (!metadata.storeName || !metadata.attachmentPath) {
+    throw new Error('Zoho attachment upload response missing storeName or attachmentPath');
+  }
+
+  return {
+    attachmentName: metadata.attachmentName || attachment.name,
+    attachmentPath: metadata.attachmentPath,
+    storeName: metadata.storeName,
+  };
+}
+
+async function transformAttachments(accountId: string, inputs?: EmailAttachmentInput[]): Promise<
+  | Array<{ attachmentName: string; attachmentPath: string; storeName: string }>
+  | undefined
+> {
+  if (!inputs || inputs.length === 0) return undefined;
+  const results = await Promise.all(inputs.map((input) => uploadAttachmentToZoho(accountId, input)));
+  return results.length ? results : undefined;
+}
+
+async function buildMaildataFromPayload(accountId: string, payload: EmailComposePayload) {
+  if (!payload.subject || !payload.subject.trim()) {
+    throw new Error('Email subject is required');
+  }
+
+  const toAddress = normalizeAddressList(payload.to);
+  if (!toAddress) {
+    throw new Error('At least one recipient is required');
+  }
+
+  const content = payload.bodyHtml ?? payload.bodyText;
+  if (!content || !content.trim()) {
+    throw new Error('Either bodyHtml or bodyText must be provided');
+  }
+
+  const ccAddress = normalizeAddressList(payload.cc);
+  const bccAddress = normalizeAddressList(payload.bcc);
+  const attachments = await transformAttachments(accountId, payload.attachments);
+
+  const maildata: Record<string, unknown> = {
+    subject: payload.subject,
+    toAddress,
+    content,
+  };
+
+  const fromAddress = payload.fromAddress || (await getDefaultFromAddress());
+  if (fromAddress) maildata.fromAddress = fromAddress;
+  if (ccAddress) maildata.ccAddress = ccAddress;
+  if (bccAddress) maildata.bccAddress = bccAddress;
+  if (payload.requestReadReceipt) maildata.askReceipt = 'yes';
+  if (attachments) maildata.attachments = attachments;
+
+  return maildata;
+}
+
+export async function createEmailDraft(payload: EmailComposePayload) {
+  const accountId = await getAccountId();
+  if (!accountId) {
+    throw new Error('Email account is not connected. Please connect Zoho Mail first.');
+  }
+
+  const maildata = await buildMaildataFromPayload(accountId, payload);
+  return zohoApiRequest(`/accounts/${accountId}/drafts`, {
+    method: 'POST',
+    body: JSON.stringify({ maildata }),
+  });
+}
+
+export async function sendComposedEmail(payload: EmailComposePayload) {
+  const accountId = await getAccountId();
+  if (!accountId) {
+    throw new Error('Email account is not connected. Please connect Zoho Mail first.');
+  }
+
+  const maildata = await buildMaildataFromPayload(accountId, payload);
+  console.log('[EmailCompose] Built maildata', maildata);
+
+  if (payload.draftId) {
+    return zohoApiRequest(`/accounts/${accountId}/drafts/${payload.draftId}/send`, {
+      method: 'POST',
+      body: JSON.stringify({ maildata }),
+    });
+  }
+
+  return zohoApiRequest(`/accounts/${accountId}/messages`, {
+    method: 'POST',
+    body: JSON.stringify(maildata),
+  });
+}
 
 // fetch all accounts for the current Zoho access token
 export const fetchAccounts = async (): Promise<AccountsResponse> => {

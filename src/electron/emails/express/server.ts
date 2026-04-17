@@ -12,6 +12,7 @@ import { fetchAccountHandler, fetchFoldersHandler } from "./account-handlers.js"
 import { downloadAttachmentHandler, uploadToAgentHandler } from "./attachment-handlers.js";
 import { processedEmailsHandler } from "./processed-email-handlers.js";
 import { lettaConversationHandler, lettaMessagesHandler, lettaAgentHandler } from "./letta-handlers.js";
+import { draftEmailHandler, sendEmailHandler } from "./email-compose-handlers.js";
 import { agentCapabilitiesHandler } from "./capabilities.js";
 import { neo4jExplainHandler, neo4jRunQueryHandler, neo4jRunReadQueryHandler } from './neo4j-handlers.js';
 
@@ -42,6 +43,8 @@ export function createExpressServer(mainWindow: BrowserWindow): express.Express 
   api.get("/fetchEmails", fetchEmailsHandler);
   api.get("/fetchEmailById", fetchEmailByIdHandler);
   api.get("/searchEmails", searchEmailsHandler);
+  api.post("/draftEmail", draftEmailHandler);
+  api.post("/sendEmail", sendEmailHandler);
 
   // ============================================
   // Attachment Endpoints

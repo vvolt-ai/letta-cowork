@@ -6,7 +6,7 @@
 
 import { BASE_URL, getAccessToken, getRefreshToken, removeToken, saveAccessToken } from "./helper.js";
 import { storeEmailTokensOnServer } from "../api/index.js";
-import { Agent, setGlobalDispatcher } from 'undici';
+import { Agent, setGlobalDispatcher, FormData as UndiciFormData } from 'undici';
 
 // Set global undici agent with longer connection timeout
 setGlobalDispatcher(new Agent({
@@ -82,13 +82,19 @@ export async function zohoApiRequest(
 
   try {
     console.log(`[Zoho API] Requesting: ${path}`);
+    const rawBody = options.body;
+    const isFormDataBody = rawBody instanceof UndiciFormData;
+
+    const headers = new Headers(options.headers as HeadersInit | undefined);
+    headers.set('Authorization', `Zoho-oauthtoken ${accessToken}`);
+    if (!isFormDataBody && !headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json');
+    }
+
     const response = await fetch(`https://mail.zoho.com/api${path}`, {
       ...options,
-      headers: {
-        ...(options.headers || {}),
-        Authorization: `Zoho-oauthtoken ${accessToken}`,
-        "Content-Type": "application/json",
-      },
+      body: rawBody as any,
+      headers,
       signal: controller.signal,
     });
 

@@ -173,6 +173,60 @@ Never fabricate messageId.
 Always extract messageId from search results JSON.
 
 --------------------------------------------------
+DRAFT EMAIL
+--------------------------------------------------
+
+Endpoint:
+POST /draftEmail
+
+Payload (JSON):
+```
+{
+  "to": ["person@example.com"],
+  "cc": ["team@example.com"],
+  "bcc": [],
+  "subject": "Status update",
+  "bodyText": "Plain text body",
+  "bodyHtml": "<p>HTML body</p>",
+  "attachments": [
+    { "name": "quote.pdf", "url": "/path/to/quote.pdf", "mimeType": "application/pdf" }
+  ]
+}
+```
+
+Notes:
+- At least one `to` recipient is required.
+- Provide either `bodyText`, `bodyHtml`, or both.
+- Attachments may be local file paths (`/Users/...` or `file:///...`) or HTTP/HTTPS URLs.
+
+Example Bash call:
+```
+{ "cmd": "curl -X POST -H 'Content-Type: application/json' -d '{\"to\":[\"person@example.com\"],\"subject\":\"Hello\",\"bodyText\":\"Hi there\"}' "http://localhost:4321/draftEmail"" }
+```
+
+--------------------------------------------------
+SEND EMAIL
+--------------------------------------------------
+
+Endpoint:
+POST /sendEmail
+
+Payload matches `/draftEmail`. Optional `draftId` lets you send an existing draft.
+
+Example:
+```
+{ "cmd": "curl -X POST -H 'Content-Type: application/json' -d '{\"to\":[\"pbhavesh45@gmail.com\"],\"cc\":[\"ops@example.com\"],\"subject\":\"Daily summary\",\"bodyHtml\":\"<p>Summary attached</p>\"}' "http://localhost:4321/sendEmail"" }
+```
+
+Response:
+- Success → `{ "success": true, "data": { ... } }`
+- Error → `{ "success": false, "error": "message" }`
+
+Attachments (draft + send): specify `{ "name": "file.pdf", "url": "/Users/me/file.pdf", "mimeType": "application/pdf" }`.
+- Local paths (`/Users/...` or `file:///...`) and HTTP(S) URLs are supported.
+- Server uploads each file to Zoho automatically; max size 20MB per file.
+
+--------------------------------------------------
 ATTACHMENT INGESTION
 --------------------------------------------------
 

@@ -57,6 +57,8 @@ export type EphemeralState = {
   status: AgentDisplayStatus;
   lastUpdated: number;
   errorMessage?: string;
+  pendingResultStatus?: "completed" | "error";
+  pendingResultError?: string;
 };
 
 function initialEphemeralState(): EphemeralState {
@@ -66,6 +68,8 @@ function initialEphemeralState(): EphemeralState {
     cliResults: [],
     status: "idle",
     lastUpdated: Date.now(),
+    pendingResultStatus: undefined,
+    pendingResultError: undefined,
   };
 }
 
@@ -441,6 +445,8 @@ function clearEphemeral(_ephemeral: EphemeralState, status: AgentDisplayStatus =
     status,
     errorMessage,
     lastUpdated: Date.now(),
+    pendingResultStatus: undefined,
+    pendingResultError: undefined,
   };
 }
 
@@ -553,7 +559,23 @@ export type CoworkSettings = {
   showLettaEnv: boolean;
 };
 
+export type SessionCompletionNotification = {
+  id: string;
+  sessionId: string;
+  title?: string;
+  agentName?: string;
+  status: "completed" | "error";
+  timestamp: number;
+};
+
 const APP_PREFERENCES_STORAGE_KEY = "letta:app-preferences";
+
+const createNotificationId = () => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return `notif-${Math.random().toString(36).slice(2)}`;
+};
 
 export interface AppState {
   sessions: Record<string, SessionView>;
@@ -568,7 +590,15 @@ export interface AppState {
   historyRequested: Set<string>;
   coworkSettings: CoworkSettings;
   selectedModel: string;
+  /**
+   * Models that the Letta Code CLI runtime has rejected during session init
+   * with an "Invalid model" error. The Letta workspace catalog can list
+   * models that the underlying CLI subprocess doesn't accept; once we've
+   * hit that error, we hide the model from the picker for the session.
+   */
+  rejectedModels: string[];
   showReasoningInChat: boolean;
+  notifications: SessionCompletionNotification[];
   // IPC function reference
   ipcSendEvent: ((event: ClientEvent) => void) | null;
 
@@ -586,7 +616,11 @@ export interface AppState {
   resolvePermissionRequest: (sessionId: string, toolUseId: string) => void;
   setCoworkSettings: (settings: CoworkSettings) => void;
   setSelectedModel: (model: string) => void;
+  markModelRejected: (model: string) => void;
   setShowReasoningInChat: (show: boolean) => void;
+  addNotification: (notification: SessionCompletionNotification) => void;
+  dismissNotification: (id: string) => void;
+  dismissNotificationsForSession: (sessionId: string) => void;
   handleServerEvent: (event: ServerEvent) => void;
   appendCliResult: (sessionId: string, result: CliResultMessage) => void;
 }
@@ -625,10 +659,26 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
     showLettaEnv: false,
   },
   selectedModel: "",
+  rejectedModels: [],
   showReasoningInChat: true,
+  notifications: [],
   ipcSendEvent: null,
 
   setIPCSendEvent: (sendEvent) => set({ ipcSendEvent: sendEvent }),
+
+  addNotification: (notification) =>
+    set((state) => ({
+      notifications: [
+        ...state.notifications.filter((n) => n.sessionId !== notification.sessionId),
+        notification,
+      ],
+    })),
+
+  dismissNotification: (id) =>
+    set((state) => ({ notifications: state.notifications.filter((n) => n.id !== id) })),
+
+  dismissNotificationsForSession: (sessionId) =>
+    set((state) => ({ notifications: state.notifications.filter((n) => n.sessionId !== sessionId) })),
 
   fetchSessionHistory: (sessionId, limit = 50, before) => {
     const state = get();
@@ -697,6 +747,10 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
       
       return { activeSessionId: id, sessions: updatedSessions };
     });
+    
+    if (id) {
+      get().dismissNotificationsForSession(id);
+    }
     
     // Always try to fetch history - the useEffect will also try, but this ensures it happens
     // We don't clear historyRequested here anymore to avoid race conditions
@@ -774,6 +828,15 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
 
   setCoworkSettings: (settings) => {
     set({ coworkSettings: settings });
+  },
+
+  markModelRejected: (model) => {
+    if (!model) return;
+    set((state) => ({
+      rejectedModels: state.rejectedModels.includes(model)
+        ? state.rejectedModels
+        : [...state.rejectedModels, model],
+    }));
   },
 
   setSelectedModel: (model) => {
@@ -931,39 +994,79 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
 
       case "session.status": {
         const { sessionId, status, title, cwd, error, agentName, agentId, background, isEmailSession } = event.payload;
+        const existing = rootState.sessions[sessionId] ?? createSession(sessionId);
+        const previousStatus = existing.status;
+        const hadPendingPermissions = (existing.permissionRequests?.length ?? 0) > 0;
+
+        // Detect "Invalid model" CLI rejection — the Letta workspace catalog lists
+        // models the underlying CLI runtime doesn't accept. Auto-recover by clearing
+        // the selected model (falls back to agent default on next send) and rewriting
+        // the error to something the user can act on.
+        let resolvedError = error;
+        if (status === "error" && error) {
+          const invalidModelMatch = /Invalid model\s+"([^"]+)"/i.exec(error);
+          if (invalidModelMatch) {
+            const badModel = invalidModelMatch[1];
+            resolvedError = `The model "${badModel}" is not supported by Letta Code's runtime. We've reverted to the agent's default model — please resend your message.`;
+            // Remember that this model is broken so we hide it from future pickers
+            // and clear the selected model so the next send uses the agent default.
+            get().markModelRejected(badModel);
+            if (rootState.selectedModel === badModel || rootState.selectedModel) {
+              set({ selectedModel: "" });
+            }
+          }
+        }
+
         set((state) => {
-          const existing = state.sessions[sessionId] ?? createSession(sessionId);
-          const nextEphemeral = { ...existing.ephemeral };
+          const current = state.sessions[sessionId] ?? createSession(sessionId);
+          const nextEphemeral = { ...current.ephemeral };
           if (status === "completed") {
             nextEphemeral.status = "completed";
             nextEphemeral.errorMessage = undefined;
           }
           if (status === "error") {
             nextEphemeral.status = "error";
-            nextEphemeral.errorMessage = error ?? "Unknown error";
+            nextEphemeral.errorMessage = resolvedError ?? "Unknown error";
           }
           // When the backend goes idle (e.g. after session.stop), reset display status immediately
           if (status === "idle") {
             nextEphemeral.status = "idle";
             nextEphemeral.errorMessage = undefined;
           }
+          if (hadPendingPermissions) {
+            nextEphemeral.status = "waiting_approval";
+          }
           return {
             sessions: {
               ...state.sessions,
               [sessionId]: {
-                ...existing,
+                ...current,
                 status,
-                title: title ?? existing.title,
-                cwd: cwd ?? existing.cwd,
-                agentName: agentName ?? existing.agentName,
-                agentId: agentId ?? existing.agentId,
-                isEmailSession: isEmailSession ?? existing.isEmailSession,
+                title: title ?? current.title,
+                cwd: cwd ?? current.cwd,
+                agentName: agentName ?? current.agentName,
+                agentId: agentId ?? current.agentId,
+                isEmailSession: isEmailSession ?? current.isEmailSession,
                 updatedAt: Date.now(),
                 ephemeral: nextEphemeral,
               },
             },
           };
         });
+
+        if (status === "completed" && previousStatus !== "completed" && !hadPendingPermissions) {
+          const activeId = get().activeSessionId;
+          if (activeId !== sessionId) {
+            get().addNotification({
+              id: createNotificationId(),
+              sessionId,
+              title: title ?? existing.title ?? "Untitled session",
+              agentName: agentName ?? existing.agentName,
+              status: "completed",
+              timestamp: Date.now(),
+            });
+          }
+        }
 
         // "Completed" stays visible in the sidebar until the user sends the next message.
         // It is cleared back to "idle" when a new prompt is submitted (see handleSend).
@@ -977,7 +1080,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
             set({
               pendingStart: false,
               showStartModal: true,
-              ...(status === "error" ? { globalError: error ?? "Failed to start session." } : {}),
+              ...(status === "error" ? { globalError: resolvedError ?? "Failed to start session." } : {}),
             });
           }
         } else if (
@@ -1089,8 +1192,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
 
               ephemeral = upsertToolExecution(currentEphemeral, message);
               const hasRunning = ephemeral.tools.some((tool) => tool.status === "running");
-              status = message.isError ? "error" : hasRunning ? "running_tool" : "generating";
-              if (message.isError) {
+              const buildToolErrorText = () => {
                 const raw = message as any;
                 const candidate = raw.output ?? raw.result ?? raw.error ?? raw.message;
                 let errorText = "Tool execution failed";
@@ -1101,11 +1203,36 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
                     errorText = String(candidate);
                   }
                 }
+                return errorText;
+              };
+
+              if (message.isError) {
+                const errorText = buildToolErrorText();
                 ephemeral = {
                   ...ephemeral,
                   errorMessage: errorText,
+                  pendingResultStatus: undefined,
+                  pendingResultError: undefined,
                 };
+                status = "error";
+                break;
               }
+
+              if (!hasRunning && ephemeral.pendingResultStatus) {
+                const finalStatus = ephemeral.pendingResultStatus;
+                const finalError = finalStatus === "error"
+                  ? (ephemeral.pendingResultError ?? buildToolErrorText())
+                  : undefined;
+                const settledTools = settleCompletedTools(ephemeral.tools);
+                status = finalStatus;
+                ephemeral = {
+                  ...clearEphemeral(ephemeral, finalStatus, finalError),
+                  tools: settledTools,
+                };
+                break;
+              }
+
+              status = hasRunning ? "running_tool" : "generating";
               break;
             }
             case "assistant": {
@@ -1132,6 +1259,34 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
                     ? messages.map((msg, idx) => (idx === existingIndex ? finalMessage : msg))
                     : [...messages, finalMessage];
                 }
+              }
+
+              const hasRunningTools = currentEphemeral.tools.some((tool) => tool.status === "running");
+              const hasPendingPermissions = (existing.permissionRequests?.length ?? 0) > 0;
+
+              if (hasPendingPermissions) {
+                status = "waiting_approval";
+                ephemeral = {
+                  ...currentEphemeral,
+                  assistantDraft: undefined,
+                  pendingResultStatus: message.success ? "completed" : "error",
+                  pendingResultError: message.success ? undefined : (message.error ?? "Assistant failed to respond"),
+                };
+                break;
+              }
+
+              if (hasRunningTools) {
+                status = "running_tool";
+                ephemeral = {
+                  ...currentEphemeral,
+                  assistantDraft: undefined,
+                  pendingResultStatus: message.success ? "completed" : "error",
+                  pendingResultError: message.success ? undefined : (message.error ?? "Assistant failed to respond"),
+                };
+                break;
+              }
+
+              if (message.success) {
                 status = "completed";
                 ephemeral = {
                   ...clearEphemeral(currentEphemeral, "completed"),

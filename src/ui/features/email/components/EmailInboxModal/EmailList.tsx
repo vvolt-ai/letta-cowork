@@ -1,5 +1,5 @@
 import type { ZohoEmail } from "../../../../types";
-import type { ProcessedEmailData } from "../../types";
+import type { ProcessedEmailData, EmailStatusInfo } from "../../types";
 import { EmailListItem } from "./EmailListItem";
 import { EmailFilters } from "./EmailFilters";
 
@@ -9,6 +9,7 @@ interface EmailListProps {
   localSelectedId: string | null;
   selectedEmailSubject?: string;
   processedEmailsFromServer: Map<string, ProcessedEmailData>;
+  emailStatusById: Map<string, EmailStatusInfo>;
   isEmailProcessed: (email: ZohoEmail) => boolean;
   onSelectEmail: (email: ZohoEmail) => void;
   onScroll: () => void;
@@ -26,6 +27,7 @@ export function EmailList({
   isFetching,
   localSelectedId,
   selectedEmailSubject,
+  emailStatusById,
   isEmailProcessed,
   onSelectEmail,
   onScroll,
@@ -65,6 +67,7 @@ export function EmailList({
                 email={email}
                 isSelected={localSelectedId === email.messageId}
                 isProcessed={isEmailProcessed(email)}
+                statusInfo={emailStatusById.get(String(email.messageId))}
                 onSelect={onSelectEmail}
               />
             ))}

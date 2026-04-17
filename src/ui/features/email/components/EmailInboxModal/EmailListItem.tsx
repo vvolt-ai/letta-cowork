@@ -1,10 +1,11 @@
 import type { ZohoEmail } from "../../../../types";
-import { isUnreadEmail, formatDate } from "../../types";
+import { isUnreadEmail, formatDate, type EmailStatusInfo } from "../../types";
 
 interface EmailListItemProps {
   email: ZohoEmail;
   isSelected: boolean;
   isProcessed: boolean;
+  statusInfo?: EmailStatusInfo | null;
   onSelect: (email: ZohoEmail) => void;
 }
 
@@ -15,6 +16,7 @@ export function EmailListItem({
   email,
   isSelected,
   isProcessed,
+  statusInfo,
   onSelect,
 }: EmailListItemProps) {
   const isUnread = isUnreadEmail(email);
@@ -51,6 +53,12 @@ export function EmailListItem({
       <div className="mt-0.5 truncate text-xs text-muted">
         {email.summary?.slice(0, 60) || "No preview"}
       </div>
+      {statusInfo ? (
+        <div className={`mt-1 flex items-center gap-1 text-[11px] font-medium ${statusInfo.textClass}`}>
+          <span className={`h-2 w-2 rounded-full ${statusInfo.dotClass}`} aria-hidden />
+          <span>{statusInfo.label}</span>
+        </div>
+      ) : null}
     </button>
   );
 }

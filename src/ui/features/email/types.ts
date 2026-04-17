@@ -1,4 +1,5 @@
 import type { ZohoEmail } from "../../types";
+import type { AgentDisplayStatus } from "../../store/useAppStore";
 import type { ProcessedUnreadEmailDebugInfo } from "../../../electron/services/settings/index.js";
 
 /**
@@ -72,6 +73,20 @@ export interface EmailInboxModalProps {
 export interface ProcessedEmailData {
   conversationId: string;
   agentId?: string;
+}
+
+export interface EmailStatusInfo {
+  state:
+    | "uploading"
+    | "starting"
+    | "failure"
+    | "success"
+    | AgentDisplayStatus;
+  label: string;
+  dotClass: string;
+  textClass: string;
+  conversationId?: string;
+  error?: string;
 }
 
 export interface EmailPreviewData {

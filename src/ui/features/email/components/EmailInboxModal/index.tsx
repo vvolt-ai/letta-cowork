@@ -1,8 +1,10 @@
 import * as Dialog from "@radix-ui/react-dialog";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { ZohoEmail } from "../../../../types";
 import { ConversationViewer } from "../../../chat/components/ConversationViewer";
 import type { EmailInboxModalProps } from "../../types";
 import { useEmailInbox } from "./hooks/useEmailInbox";
-import { useEmailFilters } from "./hooks/useEmailFilters";
+import { buildZohoSearchKey, filterEmails } from "./hooks/useEmailFilters";
 import { EmailSearchBar } from "./EmailSearchBar";
 import { EmailList } from "./EmailList";
 import { EmailPreview } from "./EmailPreview";
@@ -32,6 +34,17 @@ export function EmailInboxModal({
   accountId,
   folderId,
 }: EmailInboxModalProps) {
+  // Progressive search: instant local filter + debounced full-inbox server search.
+  // Declared first so `serverResults` is available as an extra lookup pool for
+  // `useEmailInbox` (enables selecting server-only search results).
+  const [searchQuery, setSearchQuery] = useState("");
+  const [serverResults, setServerResults] = useState<ZohoEmail[] | null>(null);
+  const [serverSearching, setServerSearching] = useState(false);
+  const [serverSearchError, setServerSearchError] = useState<string | null>(null);
+  const searchRequestIdRef = useRef(0);
+
+  const isSearching = searchQuery.trim().length > 0;
+
   // Use custom hooks for state management
   const {
     localSelectedId,
@@ -41,6 +54,7 @@ export function EmailInboxModal({
     isFetchingLocalContent,
     processedEmailsFromServer,
     viewingConversationId,
+    emailStatusById,
     listWidth,
     isResizingList,
     scrollContainerRef,
@@ -58,19 +72,111 @@ export function EmailInboxModal({
     accountId,
     folderId,
     emails,
+    extraLookupEmails: serverResults ?? undefined,
     onProcessEmailToAgent,
     newlyCreatedConversations,
     onLoadMore,
     isLoadingMore,
     hasMore,
+    processingEmailId,
+    awaitingConversationEmailId,
+    errorEmailId,
   });
 
-  const {
-    searchQuery,
-    handleSearch,
-    handleClearSearch,
-    handleSearchChange,
-  } = useEmailFilters(onSearch);
+  const handleSearchChange = (value: string) => setSearchQuery(value);
+  const handleClearSearch = () => {
+    setSearchQuery("");
+    if (onSearch) onSearch("");
+  };
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (onSearch && searchQuery.trim()) onSearch(searchQuery.trim());
+  };
+
+  // Reset search state when modal closes
+  useEffect(() => {
+    if (!open) {
+      setSearchQuery("");
+      setServerResults(null);
+      setServerSearching(false);
+      setServerSearchError(null);
+    }
+  }, [open]);
+
+  const localMatches = useMemo(
+    () => (isSearching ? filterEmails(emails, { searchQuery }) : emails),
+    [isSearching, emails, searchQuery]
+  );
+
+  // Debounced full-inbox search
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (!q) {
+      setServerResults(null);
+      setServerSearching(false);
+      setServerSearchError(null);
+      return;
+    }
+
+    const rid = ++searchRequestIdRef.current;
+    setServerSearching(true);
+    setServerSearchError(null);
+
+    const timer = window.setTimeout(async () => {
+      try {
+        const searchKey = buildZohoSearchKey(q);
+        const resp: any = await (window as any).electron.searchEmails(
+          accountId,
+          { searchKey, limit: 50 }
+        );
+        if (rid !== searchRequestIdRef.current) return;
+        const data: ZohoEmail[] = Array.isArray(resp?.data)
+          ? (resp.data as ZohoEmail[])
+          : Array.isArray(resp)
+            ? (resp as ZohoEmail[])
+            : [];
+        setServerResults(data);
+      } catch (err) {
+        if (rid !== searchRequestIdRef.current) return;
+        setServerSearchError(err instanceof Error ? err.message : "Search failed");
+        setServerResults(null);
+      } finally {
+        if (rid === searchRequestIdRef.current) setServerSearching(false);
+      }
+    }, 450);
+
+    return () => window.clearTimeout(timer);
+  }, [searchQuery, accountId]);
+
+  // Merged list: local matches first (stable scroll), then server-only matches
+  const displayedEmails = useMemo<ZohoEmail[]>(() => {
+    if (!isSearching) return emails;
+    if (!serverResults) return localMatches;
+    const seen = new Set<string>();
+    const out: ZohoEmail[] = [];
+    for (const e of localMatches) {
+      const key = String(e.messageId ?? "");
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push(e);
+    }
+    for (const e of serverResults) {
+      const key = String(e.messageId ?? "");
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push(e);
+    }
+    return out;
+  }, [isSearching, emails, localMatches, serverResults]);
+
+  const serverOnlyCount = useMemo(() => {
+    if (!serverResults || !isSearching) return 0;
+    const localKeys = new Set(localMatches.map((e) => String(e.messageId ?? "")));
+    return serverResults.filter((e) => {
+      const k = String(e.messageId ?? "");
+      return k && !localKeys.has(k);
+    }).length;
+  }, [serverResults, localMatches, isSearching]);
 
   // Get conversation ID and agent ID for selected email
   const selectedConversationId = selectedEmail ? findConversationIdForEmail(selectedEmail) : null;
@@ -106,31 +212,63 @@ export function EmailInboxModal({
             </Dialog.Close>
           </div>
 
-          {/* Search Bar */}
-          {onSearch && (
-            <EmailSearchBar
-              searchQuery={searchQuery}
-              onSearch={handleSearch}
-              onSearchChange={handleSearchChange}
-              onClearSearch={handleClearSearch}
-            />
+          {/* Search Bar — always shown */}
+          <EmailSearchBar
+            searchQuery={searchQuery}
+            onSearch={handleSearch}
+            onSearchChange={handleSearchChange}
+            onClearSearch={handleClearSearch}
+          />
+
+          {/* Search status strip */}
+          {isSearching && (
+            <div className="flex items-center justify-between gap-2 border-b border-[var(--color-border)] bg-gray-50 px-4 py-1.5 text-[11px] text-ink-600">
+              <div className="flex items-center gap-2">
+                {serverSearching ? (
+                  <>
+                    <svg className="h-3 w-3 animate-spin text-ink-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle className="opacity-20" cx="12" cy="12" r="10" />
+                      <path d="M4 12a8 8 0 018-8" />
+                    </svg>
+                    <span>Searching full inbox for &ldquo;{searchQuery}&rdquo;…</span>
+                  </>
+                ) : serverSearchError ? (
+                  <span className="text-red-600">Full-inbox search failed: {serverSearchError}</span>
+                ) : serverResults ? (
+                  <span>
+                    <strong className="text-ink-900">{displayedEmails.length}</strong> match
+                    {displayedEmails.length === 1 ? "" : "es"} — {localMatches.length} local
+                    {serverOnlyCount > 0 ? ` + ${serverOnlyCount} older from server` : ""}
+                  </span>
+                ) : (
+                  <span>{localMatches.length} local matches (full-inbox search pending)</span>
+                )}
+              </div>
+              <button
+                onClick={handleClearSearch}
+                className="rounded-md px-2 py-0.5 text-[11px] text-ink-600 hover:bg-gray-200 hover:text-ink-900"
+              >
+                Clear
+              </button>
+            </div>
           )}
 
           {/* Main Content - Split Layout */}
           <div className={`flex flex-1 min-h-0 ${isResizingList ? "select-none cursor-col-resize" : ""}`}>
             {/* Left Side - Email List */}
             <EmailList
-              emails={emails}
+              emails={displayedEmails}
               isFetching={isFetching}
               localSelectedId={localSelectedId}
               selectedEmailSubject={selectedEmail?.subject}
               processedEmailsFromServer={processedEmailsFromServer}
+              emailStatusById={emailStatusById}
               isEmailProcessed={isEmailProcessed}
               onSelectEmail={handleSelectEmail}
               onScroll={handleScroll}
               scrollContainerRef={scrollContainerRef}
-              hasMore={hasMore}
-              isLoadingMore={isLoadingMore}
+              hasMore={isSearching ? false : hasMore}
+              isLoadingMore={isSearching ? false : isLoadingMore}
               listWidth={listWidth}
             />
 

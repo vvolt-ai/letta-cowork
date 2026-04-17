@@ -234,6 +234,162 @@ export async function cancelAgentRunById(runId: string): Promise<{ success: bool
   return { success: true, runId };
 }
 
+// ============================================================================
+// Runs Debugger — list runs + bulk approve/reject
+// ============================================================================
+
+export interface AgentRun {
+  id: string;
+  agentId?: string;
+  conversationId?: string;
+  status?: "created" | "running" | "completed" | "failed" | "cancelled" | "requires_approval";
+  stopReason?: string | null;
+  createdAt?: string;
+  completedAt?: string | null;
+  durationMs?: number;
+  pendingApprovals?: Array<{ toolUseId: string; toolName: string; input: unknown }>;
+  raw?: unknown;
+}
+
+export interface ListAgentRunsParams {
+  agentId: string;
+  conversationId?: string;
+  status?: "requires_approval" | "running" | "completed" | "failed" | "cancelled" | "all";
+  limit?: number;
+  offset?: number;
+}
+
+function normalizeRun(raw: any): AgentRun {
+  const createdAt = raw?.created_at ?? raw?.createdAt;
+  const completedAt = raw?.completed_at ?? raw?.completedAt ?? null;
+  let durationMs: number | undefined;
+  if (createdAt && completedAt) {
+    const start = Date.parse(createdAt);
+    const end = Date.parse(completedAt);
+    if (!isNaN(start) && !isNaN(end)) {
+      const diff = end - start;
+      // Guard against clock skew / backfilled timestamps that produce
+      // nonsensical negative or absurdly large durations.
+      if (diff >= 0 && diff < 24 * 60 * 60 * 1000 /* 1 day cap */) {
+        durationMs = diff;
+      }
+    }
+  }
+
+  const pendingRaw = Array.isArray(raw?.pending_approvals)
+    ? raw.pending_approvals
+    : Array.isArray(raw?.pendingApprovals)
+      ? raw.pendingApprovals
+      : [];
+  const pendingApprovals = pendingRaw.map((item: any, index: number) => ({
+    toolUseId: item?.tool_use_id ?? item?.toolUseId ?? item?.id ?? `${raw?.id}-pending-${index}`,
+    toolName: item?.tool_name ?? item?.toolName ?? item?.name ?? "Approval required",
+    input: item?.input ?? item?.arguments ?? item?.tool_input ?? item,
+  }));
+
+  return {
+    id: String(raw?.id ?? ""),
+    agentId: raw?.agent_id ?? raw?.agentId ?? undefined,
+    conversationId: raw?.conversation_id ?? raw?.conversationId ?? undefined,
+    status: raw?.status ?? undefined,
+    stopReason: raw?.stop_reason ?? raw?.stopReason ?? null,
+    createdAt,
+    completedAt,
+    durationMs,
+    pendingApprovals: pendingApprovals.length ? pendingApprovals : undefined,
+    raw,
+  };
+}
+
+export async function listAgentRuns(params: ListAgentRunsParams): Promise<{ runs: AgentRun[]; total: number }> {
+  const { agentId, conversationId, status, limit = 50, offset = 0 } = params;
+  if (!agentId) return { runs: [], total: 0 };
+
+  const client = createLettaClient();
+  try {
+    const response: any = await (client as any).runs.list({ agent_id: agentId });
+    const items: any[] = Array.isArray(response?.items) ? response.items : Array.isArray(response) ? response : [];
+
+    let filtered = items;
+    if (conversationId) {
+      filtered = filtered.filter((run) => {
+        const cid = run?.conversation_id ?? run?.conversationId;
+        return cid === conversationId;
+      });
+    }
+    if (status && status !== "all") {
+      filtered = filtered.filter((run) => String(run?.status ?? "").toLowerCase() === status);
+    }
+
+    // Sort newest first
+    filtered.sort((a, b) => {
+      const aTime = Date.parse(a?.created_at ?? a?.createdAt ?? "") || 0;
+      const bTime = Date.parse(b?.created_at ?? b?.createdAt ?? "") || 0;
+      return bTime - aTime;
+    });
+
+    const total = filtered.length;
+    const page = filtered.slice(offset, offset + limit).map(normalizeRun);
+    return { runs: page, total };
+  } catch (error) {
+    console.error("[listAgentRuns] Failed:", error);
+    throw new Error(`Failed to list agent runs: ${String(error)}`);
+  }
+}
+
+export async function approveAllPendingRuns(
+  agentId: string,
+  conversationId?: string
+): Promise<{ approved: string[]; failed: Array<{ runId: string; error: string }> }> {
+  const { runs } = await listAgentRuns({ agentId, conversationId, status: "requires_approval", limit: 200 });
+  const approved: string[] = [];
+  const failed: Array<{ runId: string; error: string }> = [];
+
+  // Cap concurrency at 10 to avoid hammering the API
+  const CONCURRENCY = 10;
+  for (let i = 0; i < runs.length; i += CONCURRENCY) {
+    const batch = runs.slice(i, i + CONCURRENCY);
+    const results = await Promise.allSettled(batch.map((r) => approveRunById(r.id)));
+    results.forEach((result, idx) => {
+      const runId = batch[idx].id;
+      if (result.status === "fulfilled" && result.value?.success) {
+        approved.push(runId);
+      } else {
+        const err = result.status === "rejected" ? String(result.reason) : "unknown";
+        failed.push({ runId, error: err });
+      }
+    });
+  }
+
+  return { approved, failed };
+}
+
+export async function rejectAllPendingRuns(
+  agentId: string,
+  conversationId?: string
+): Promise<{ cancelled: string[]; failed: Array<{ runId: string; error: string }> }> {
+  const { runs } = await listAgentRuns({ agentId, conversationId, status: "requires_approval", limit: 200 });
+  const cancelled: string[] = [];
+  const failed: Array<{ runId: string; error: string }> = [];
+
+  const CONCURRENCY = 10;
+  for (let i = 0; i < runs.length; i += CONCURRENCY) {
+    const batch = runs.slice(i, i + CONCURRENCY);
+    const results = await Promise.allSettled(batch.map((r) => cancelAgentRunById(r.id)));
+    results.forEach((result, idx) => {
+      const runId = batch[idx].id;
+      if (result.status === "fulfilled" && result.value?.success) {
+        cancelled.push(runId);
+      } else {
+        const err = result.status === "rejected" ? String(result.reason) : "unknown";
+        failed.push({ runId, error: err });
+      }
+    });
+  }
+
+  return { cancelled, failed };
+}
+
 /**
  * Approve a stuck run that is waiting for human approval.
  * Tries the known Letta approval endpoints; falls back to cancel if none work.

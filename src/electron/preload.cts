@@ -126,6 +126,12 @@ electron.contextBridge.exposeInMainWorld("electron", {
         electron.ipcRenderer.invoke("download-skill", handles, skillName, branch),
     listSkills: () =>
         electron.ipcRenderer.invoke("list-skills"),
+    readSkill: (folder: string) =>
+        electron.ipcRenderer.invoke("read-skill", folder),
+    openSkillFolder: (folder: string) =>
+        electron.ipcRenderer.invoke("open-skill-folder", folder),
+    deleteSkill: (folder: string) =>
+        electron.ipcRenderer.invoke("delete-skill", folder),
     
     // Cowork settings
     getCoworkSettings: () =>
@@ -272,6 +278,18 @@ electron.contextBridge.exposeInMainWorld("electron", {
         electron.ipcRenderer.invoke("scheduler:run-now", id),
     schedulerRuns: (id: string, limit?: number, offset?: number) =>
         electron.ipcRenderer.invoke("scheduler:runs", id, limit, offset),
+
+    // ── Runs Debugger ────────────────────────────────────────────────────────
+    listAgentRuns: (params: { agentId: string; conversationId?: string; status?: string; limit?: number; offset?: number }) =>
+        electron.ipcRenderer.invoke("list-agent-runs", params),
+    approveAgentRun: (runId: string) =>
+        electron.ipcRenderer.invoke("approve-agent-run", runId),
+    rejectAgentRun: (runId: string) =>
+        electron.ipcRenderer.invoke("reject-agent-run", runId),
+    approveAllAgentRuns: (agentId: string, conversationId?: string) =>
+        electron.ipcRenderer.invoke("approve-all-agent-runs", agentId, conversationId),
+    rejectAllAgentRuns: (agentId: string, conversationId?: string) =>
+        electron.ipcRenderer.invoke("reject-all-agent-runs", agentId, conversationId),
 } as const)
 
 function ipcInvoke<Key extends keyof EventPayloadMapping>(key: Key, ...args: any[]): Promise<EventPayloadMapping[Key]> {

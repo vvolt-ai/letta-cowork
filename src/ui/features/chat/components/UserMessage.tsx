@@ -18,11 +18,11 @@ export const UserMessage = memo(function UserMessage({ message }: { message: Use
 
   return (
     <article className="ml-auto max-w-3xl">
-      <div className="mb-2 flex justify-end text-[11px] font-semibold uppercase tracking-[0.3em] text-muted">
+      <div className="mb-2 flex justify-end text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--color-accent)]">
         You
       </div>
       {message.prompt ? (
-        <div className="rounded-2xl bg-gray-50 px-5 py-4 text-sm text-ink-800 border border-[var(--color-border)]">
+        <div className="rounded-2xl border border-[var(--color-accent)]/30 bg-[var(--color-accent-subtle)] px-5 py-4 text-sm text-ink-900 shadow-sm ring-1 ring-[var(--color-accent)]/10">
           <p className="whitespace-pre-wrap text-[15px] leading-7">{message.prompt}</p>
         </div>
       ) : null}
