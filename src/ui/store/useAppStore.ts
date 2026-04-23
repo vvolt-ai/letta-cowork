@@ -955,8 +955,29 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
 
         set((state) => {
           const existing = state.sessions[sessionId] ?? createSession(sessionId);
-          const existingMessages = (existing.messages as ConversationStreamMessage[]) ?? [];
           const incoming = (historyMessages as ConversationStreamMessage[]) ?? [];
+
+          // Drop optimistic local messages that never received a server id.
+          // These are user_prompts (and potentially assistant/tool entries) inserted
+          // live by the stream handlers before Letta assigned its canonical id.
+          // When a history refetch arrives, the server has the authoritative copy
+          // with a real id — keeping the id-less local copy would cause duplicates
+          // because mergeConversationHistory can only dedupe on ids.
+          //
+          // Guard: only drop id-less locals that are OLDER than the newest incoming
+          // message. Anything newer than the server has seen is still in-flight
+          // (e.g., a user prompt whose result hasn't come back yet) — keep it so
+          // the user's message doesn't briefly vanish.
+          const incomingMaxCreatedAt = incoming.reduce(
+            (max, m) => Math.max(max, m.createdAt ?? 0),
+            0,
+          );
+          const existingMessages = ((existing.messages as ConversationStreamMessage[]) ?? [])
+            .filter((m) => {
+              if (getConversationMessageId(m) !== undefined) return true;
+              // Keep id-less messages that are still in-flight (newer than server's latest).
+              return (m.createdAt ?? 0) > incomingMaxCreatedAt;
+            });
 
           const mergedMessages = requestedBefore
             ? mergeConversationHistory(incoming, existingMessages)

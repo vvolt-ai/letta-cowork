@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useIPC } from "./hooks/useIPC";
+import { useAutoRecoverStuckRuns } from "./hooks/useAutoRecoverStuckRuns";
 import { useMessageWindow } from "./hooks/useMessageWindow";
 import { useAppStore } from "./store/useAppStore";
 import type { ServerEvent } from "./types";
@@ -377,6 +378,17 @@ function App() {
       setShowRuns(false);
     }
   }, [activeSessionId]);
+
+  // Auto-recover stuck tool approvals when the active session goes terminal.
+  // If the runner died while Letta was waiting on an approval decision, its
+  // in-memory Promise resolver is gone and any approval click would silently
+  // fail. This hook asks the electron side to query Letta for stuck runs and
+  // auto-approve them so the conversation can proceed on the next turn.
+  useAutoRecoverStuckRuns({
+    sessionId: activeSessionId,
+    status: activeSession?.status,
+    agentId: activeSession?.agentId,
+  });
 
   // Pre-load agents list for the Schedules panel when it opens
   useEffect(() => {

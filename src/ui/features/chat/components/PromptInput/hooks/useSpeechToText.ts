@@ -27,7 +27,14 @@ function getSpeechRecognition(): SpeechRecognitionCtor | null {
     ?? null;
 }
 
-export const isSpeechSupported = (): boolean => getSpeechRecognition() !== null;
+// NOTE: The Web Speech API (webkitSpeechRecognition) is exposed by Chromium
+// inside Electron but the backing Google speech endpoint is gated behind a
+// Google-internal API key that stock Electron builds don't ship. Every call
+// fails with `error: "network"`. Until we replace this with a real STT
+// backend (OpenAI Whisper API, local whisper.cpp, or similar) we force
+// `isSupported` to false so the mic button is hidden everywhere in the UI.
+// Flip to `getSpeechRecognition() !== null` once a working backend lands.
+export const isSpeechSupported = (): boolean => false;
 
 interface UseSpeechToTextOptions {
   /** Called with the final recognised utterance — append to prompt */
