@@ -23,6 +23,7 @@ export function createMainWindow(): BrowserWindow {
         webPreferences: {
             preload: getPreloadPath(),
             backgroundThrottling: false,
+            webviewTag: true,
         },
         icon: appIcon.isEmpty() ? undefined : appIcon,
         titleBarStyle: "hiddenInset",

@@ -36,7 +36,8 @@ function mapLettaMessagesToStreamMessages(rawMessages: LettaMessage[]): StreamMe
                 prompt: promptText,
                 attachments: undefined,
                 content: undefined,
-            });
+                id: (msg as any).id || (msg as any).message_id || (msg as any).uuid,
+            } as StreamMessage);
             continue;
         }
 
@@ -46,6 +47,7 @@ function mapLettaMessagesToStreamMessages(rawMessages: LettaMessage[]): StreamMe
             messages.push({
                 type: "assistant",
                 content: agentText,
+                uuid: (msg as any).id || (msg as any).message_id || (msg as any).uuid,
             } as StreamMessage);
             continue;
         }

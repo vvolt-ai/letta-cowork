@@ -2,6 +2,7 @@ import type { ZohoEmail } from "../../../../types";
 import type { ProcessedEmailData } from "../../types";
 import { extractContent, isHtmlContent } from "../../types";
 import { EmailActionButtons } from "./EmailActionButtons";
+import { ZohoMailEmbed } from "./ZohoMailEmbed";
 
 interface EmailPreviewProps {
   email: ZohoEmail;
@@ -20,6 +21,8 @@ interface EmailPreviewProps {
   onProcessEmailToAgent: (email: ZohoEmail, agentId: string, additionalInstructions?: string) => void;
   onViewConversation: (conversationId: string) => void;
   onOpenInLetta: (conversationId: string, agentId?: string) => void;
+  showZohoEmbed?: boolean;
+  onZohoMailIdChange?: (mailId: string | null, url: string) => void;
 }
 
 /**
@@ -42,6 +45,8 @@ export function EmailPreview({
   onProcessEmailToAgent,
   onViewConversation,
   onOpenInLetta,
+  showZohoEmbed = false,
+  onZohoMailIdChange,
 }: EmailPreviewProps) {
   // Extract content for preview
   const content = extractContent(localEmailDetails);
@@ -50,7 +55,14 @@ export function EmailPreview({
   // Get agentId from server data or session
   const messageId = String(email.messageId);
   
-  return (
+  return showZohoEmbed ? (
+    <div className="flex-1 min-h-0 bg-white p-3">
+      <ZohoMailEmbed
+        initialMessageId={String(email.messageId)}
+        onMailIdChange={onZohoMailIdChange}
+      />
+    </div>
+  ) : (
     <>
       {/* Email Header */}
       <div className="px-3 py-2 border-b border-[var(--color-border)]">
@@ -75,7 +87,6 @@ export function EmailPreview({
             </div>
           </div>
 
-          {/* Action Buttons */}
           <EmailActionButtons
             email={email}
             isProcessingEmailInput={isProcessingEmailInput}
@@ -94,7 +105,6 @@ export function EmailPreview({
         </div>
       </div>
 
-      {/* Processing Status - Initial processing stage */}
       {String(processingEmailId) === String(email.messageId) && (
         <div className="mt-2 rounded-lg bg-blue-50 border border-blue-200 p-3 text-xs text-blue-700">
           <div className="flex items-center gap-2">
@@ -105,18 +115,13 @@ export function EmailPreview({
             <div className="flex flex-col gap-1">
               <span className="font-medium">Processing email...</span>
               <div className="flex items-center gap-1 text-blue-500">
-                <span>Fetching content</span>
-                <span>→</span>
-                <span>Creating conversation</span>
-                <span>→</span>
-                <span>Sending to agent</span>
+                <span>Fetching content</span><span>→</span><span>Creating conversation</span><span>→</span><span>Sending to agent</span>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Awaiting Conversation Status - Waiting for conversation link */}
       {String(awaitingConversationEmailId) === String(email.messageId) && (
         <div className="mt-2 rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-700">
           <div className="flex items-center gap-2">
@@ -132,7 +137,6 @@ export function EmailPreview({
         </div>
       )}
 
-      {/* Error Status */}
       {String(errorEmailId) === String(email.messageId) && (
         <div className="mt-2 rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-700">
           <div className="flex items-center gap-2">
@@ -149,31 +153,15 @@ export function EmailPreview({
         </div>
       )}
 
-      {/* Email Content */}
       <div className="flex-1 overflow-auto p-3">
         {isFetchingLocalContent ? (
-          <div className="flex items-center justify-center py-12 text-sm text-muted">
-            Loading email content…
-          </div>
+          <div className="flex items-center justify-center py-12 text-sm text-muted">Loading email content…</div>
         ) : localEmailDetailsError ? (
-          <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-sm text-red-700">
-            {localEmailDetailsError}
-          </div>
+          <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-sm text-red-700">{localEmailDetailsError}</div>
         ) : html ? (
-          <iframe
-            title="Email content"
-            className="w-full h-full min-h-[400px] rounded-lg border border-[var(--color-border)]"
-            sandbox=""
-            srcDoc={content}
-          />
+          <iframe title="Email content" className="w-full h-full min-h-[400px] rounded-lg border border-[var(--color-border)]" sandbox="" srcDoc={content} />
         ) : (
-          <div className="prose prose-sm max-w-none">
-            {content || email.summary || (
-              <div className="text-center text-muted py-8">
-                No content available
-              </div>
-            )}
-          </div>
+          <div className="prose prose-sm max-w-none">{content || email.summary || (<div className="text-center text-muted py-8">No content available</div>)}</div>
         )}
       </div>
     </>

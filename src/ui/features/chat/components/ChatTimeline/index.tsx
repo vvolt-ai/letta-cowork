@@ -35,6 +35,15 @@ export function ChatTimeline({
     cliResults,
   });
 
+  const lastCommittedAssistant = [...messages].reverse().find((item) => item.message.type === "assistant");
+  const committedAssistantText = lastCommittedAssistant && "content" in lastCommittedAssistant.message
+    ? String((lastCommittedAssistant.message as { content?: string }).content ?? "").trim()
+    : "";
+  const streamingAssistantText = String(partialMessage ?? "").trim();
+  const shouldRenderPartialMessage = showPartialMessage
+    && streamingAssistantText.length > 0
+    && streamingAssistantText !== committedAssistantText;
+
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-2">
       {timeline.length === 0 ? (
@@ -47,7 +56,7 @@ export function ChatTimeline({
         ))
       )}
 
-      {showPartialMessage ? (
+      {shouldRenderPartialMessage ? (
         <AssistantMessage
           key="assistant-partial"
           fallbackText={partialMessage}
@@ -57,7 +66,7 @@ export function ChatTimeline({
       ) : null}
 
       {/* Show loading indicator when agent is processing but no partial message yet */}
-      {!showPartialMessage && (
+      {!shouldRenderPartialMessage && (
         <TimelineLoading agentName={agentName} agentStatus={agentStatus} />
       )}
 
