@@ -1,8 +1,9 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useMemo, useState } from "react";
 import type { EmailInboxModalProps } from "../../types";
+import type { ZohoEmail } from "../../../../types";
 import { useEmailInbox } from "./hooks/useEmailInbox";
-import { ZohoMailEmbed } from "./ZohoMailEmbed";
+import { ZohoMailEmbed, type ZohoMailNavigation } from "./ZohoMailEmbed";
 import { ConversationViewer } from "../../../chat/components/ConversationViewer";
 import { SendToAgentConfirmationModal } from "./SendToAgentConfirmationModal";
 
@@ -57,40 +58,193 @@ export function EmailInboxModal({
     errorEmailId,
   });
 
-  const [activeZohoMailId, setActiveZohoMailId] = useState<string | null>(null);
+  const [activeZohoNavigation, setActiveZohoNavigation] = useState<ZohoMailNavigation>({ kind: "none", rawId: null, url: "" });
+  const activeZohoMailId = activeZohoNavigation.messageId ?? null;
+  const [activeZohoUrl, setActiveZohoUrl] = useState<string>("");
+  const [fetchedActiveEmail, setFetchedActiveEmail] = useState<ZohoEmail | null>(null);
+  const [fetchingActiveEmailId, setFetchingActiveEmailId] = useState<string | null>(null);
+  const [fetchingThreadId, setFetchingThreadId] = useState<string | null>(null);
+  const [activeEmailFetchError, setActiveEmailFetchError] = useState<string | null>(null);
 
   // Reset active id when the modal closes
   useEffect(() => {
-    if (!open) setActiveZohoMailId(null);
+    if (!open) {
+      setActiveZohoNavigation({ kind: "none", rawId: null, url: "" });
+      setActiveZohoUrl("");
+      setFetchedActiveEmail(null);
+      setFetchingActiveEmailId(null);
+      setFetchingThreadId(null);
+      setActiveEmailFetchError(null);
+    }
   }, [open]);
 
+  const listActiveEmail = useMemo(() => {
+    // Header actions should follow the email currently open inside the Zoho
+    // webview, not the last locally selected email. When the user navigates back
+    // to the inbox/list view, Zoho reports `mailId = null`, and the header must
+    // disable "Send to Agent" / "View Conversation" instead of reusing stale state.
+    if (!activeZohoMailId) return null;
+    return emails.find((e) => String(e.messageId) === String(activeZohoMailId)) ?? null;
+  }, [emails, activeZohoMailId]);
+
   const activeEmail = useMemo(() => {
-    if (!activeZohoMailId) return selectedEmail;
-    return (
-      emails.find((e) => String(e.messageId) === String(activeZohoMailId)) ??
-      selectedEmail
-    );
-  }, [emails, selectedEmail, activeZohoMailId]);
+    if (!activeZohoMailId) return null;
+    if (listActiveEmail) return listActiveEmail;
+    if (fetchedActiveEmail && String(fetchedActiveEmail.messageId) === String(activeZohoMailId)) {
+      return fetchedActiveEmail;
+    }
+    return null;
+  }, [activeZohoMailId, listActiveEmail, fetchedActiveEmail]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchMissingActiveEmail = async () => {
+      if (!open || !accountId || !folderId) {
+        return;
+      }
+
+      if (activeZohoNavigation.kind === "thread" && activeZohoNavigation.threadId) {
+        setFetchingThreadId(activeZohoNavigation.threadId);
+        setFetchingActiveEmailId(null);
+        setActiveEmailFetchError(null);
+
+        try {
+          const apiThreadId = String(activeZohoNavigation.threadId).replace(/^t/i, "");
+          const threadResp = await window.electron.fetchEmails(accountId, {
+            folderId,
+            threadId: apiThreadId,
+            threadedMails: true,
+            limit: 100,
+          });
+
+          if (cancelled) return;
+
+          const threadEmails: ZohoEmail[] = Array.isArray(threadResp?.data)
+            ? threadResp.data.map((email: ZohoEmail) => ({ ...email, accountId: email.accountId || accountId }))
+            : [];
+
+          if (!threadEmails.length) {
+            setFetchedActiveEmail(null);
+            setActiveEmailFetchError(`No emails found for thread ${activeZohoNavigation.threadId}`);
+            return;
+          }
+
+          const latestEmail = [...threadEmails].sort((a, b) => {
+            const aTime = Number(a.receivedTime || a.sentDateInGMT || 0);
+            const bTime = Number(b.receivedTime || b.sentDateInGMT || 0);
+            return bTime - aTime;
+          })[0];
+
+          setActiveZohoNavigation((current) =>
+            current.threadId === activeZohoNavigation.threadId
+              ? { ...current, messageId: String(latestEmail.messageId) }
+              : current
+          );
+
+          setFetchedActiveEmail(latestEmail);
+          return;
+        } catch (error) {
+          if (cancelled) return;
+          setFetchedActiveEmail(null);
+          setActiveEmailFetchError(error instanceof Error ? error.message : String(error));
+          return;
+        } finally {
+          if (!cancelled) {
+            setFetchingThreadId((current) =>
+              current === activeZohoNavigation.threadId ? null : current
+            );
+          }
+        }
+      }
+
+      if (!activeZohoMailId || listActiveEmail) {
+        if (!activeZohoMailId || listActiveEmail) {
+          setFetchedActiveEmail(null);
+          setFetchingActiveEmailId(null);
+          setActiveEmailFetchError(null);
+        }
+        return;
+      }
+
+      setFetchingActiveEmailId(activeZohoMailId);
+      setActiveEmailFetchError(null);
+
+      try {
+        const result = await window.electron.fetchEmailDetails(accountId, folderId, activeZohoMailId);
+        const data = result?.data ?? result;
+        if (cancelled) return;
+
+        const normalizedEmail: ZohoEmail = {
+          accountId: String(data?.accountId ?? accountId),
+          summary: String(data?.summary ?? ""),
+          sentDateInGMT: String(data?.sentDateInGMT ?? data?.sentDate ?? data?.receivedTime ?? ""),
+          calendarType: Number(data?.calendarType ?? 0),
+          subject: String(data?.subject ?? ""),
+          messageId: String(data?.messageId ?? activeZohoMailId),
+          flagid: String(data?.flagid ?? ""),
+          status2: String(data?.status2 ?? data?.status ?? ""),
+          priority: String(data?.priority ?? ""),
+          hasInline: String(data?.hasInline ?? "false"),
+          toAddress: String(data?.toAddress ?? data?.to ?? ""),
+          folderId: String(data?.folderId ?? folderId),
+          ccAddress: String(data?.ccAddress ?? data?.cc ?? ""),
+          hasAttachment: String(data?.hasAttachment ?? "0"),
+          size: String(data?.size ?? "0"),
+          sender: String(data?.sender ?? data?.fromAddress ?? ""),
+          receivedTime: String(data?.receivedTime ?? data?.sentDateInGMT ?? ""),
+          fromAddress: String(data?.fromAddress ?? data?.sender ?? ""),
+          status: String(data?.status ?? "")
+        };
+
+        setFetchedActiveEmail(normalizedEmail);
+      } catch (error) {
+        if (cancelled) return;
+        setFetchedActiveEmail(null);
+        setActiveEmailFetchError(error instanceof Error ? error.message : String(error));
+      } finally {
+        if (!cancelled) {
+          setFetchingActiveEmailId((current) =>
+            current === activeZohoMailId ? null : current
+          );
+        }
+      }
+    };
+
+    void fetchMissingActiveEmail();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, activeZohoMailId, activeZohoNavigation.kind, activeZohoNavigation.threadId, listActiveEmail, accountId, folderId]);
 
   const activeConversationId = activeEmail ? findConversationIdForEmail(activeEmail) : null;
   const activeIsProcessed = activeEmail ? isEmailProcessed(activeEmail) : false;
 
-  const handleZohoMailIdChange = (mailId: string | null) => {
-    setActiveZohoMailId(mailId);
-    if (!mailId) return;
-    const matched = emails.find((e) => String(e.messageId) === String(mailId));
+  const handleZohoMailIdChange = (navigation: ZohoMailNavigation) => {
+    setActiveZohoNavigation(navigation);
+    setActiveZohoUrl(navigation.url);
+    const resolvedMessageId = navigation.messageId ?? null;
+    if (!resolvedMessageId) return;
+    const matched = emails.find((e) => String(e.messageId) === String(resolvedMessageId));
     if (matched && matched.messageId !== selectedEmail?.messageId) {
       void handleSelectEmail(matched);
     }
   };
 
   const activeMessageId = activeEmail ? String(activeEmail.messageId) : null;
+  const isFetchingThread = Boolean(
+    activeZohoNavigation.threadId && String(fetchingThreadId) === String(activeZohoNavigation.threadId)
+  );
+  const isFetchingActiveEmail = Boolean(
+    activeZohoMailId && String(fetchingActiveEmailId) === String(activeZohoMailId)
+  );
   const isProcessing = Boolean(activeMessageId && String(processingEmailId) === activeMessageId);
   const isAwaitingConversation = Boolean(
     activeMessageId && String(awaitingConversationEmailId) === activeMessageId
   );
   const hasSendError = Boolean(activeMessageId && String(errorEmailId) === activeMessageId);
-  const isSendBusy = isProcessing || isAwaitingConversation;
+  const isSendBusy = isFetchingThread || isFetchingActiveEmail || isProcessing || isAwaitingConversation;
 
   const canSendToAgent = Boolean(activeEmail && selectedAgentId) && !isSendBusy;
   const canViewConversation = Boolean(activeConversationId);
@@ -113,6 +267,8 @@ export function EmailInboxModal({
   };
 
   const sendButtonLabel = (() => {
+    if (isFetchingThread) return "Fetching thread...";
+    if (isFetchingActiveEmail) return "Fetching email...";
     if (isProcessing) return "Processing...";
     if (isAwaitingConversation) return "Fetching...";
     if (hasSendError) return "Failed - Retry";
@@ -152,9 +308,13 @@ export function EmailInboxModal({
               <button
                 onClick={onClickSendToAgent}
                 disabled={!canSendToAgent && !hasSendError}
-                className={`rounded-lg px-3 py-1.5 text-xs font-medium min-w-[140px] disabled:opacity-50 disabled:cursor-not-allowed ${sendButtonClass}`}
+                className={`rounded-lg px-3 py-1.5 text-xs font-medium min-w-[140px] disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 disabled:border disabled:border-slate-200 disabled:hover:bg-slate-100 ${sendButtonClass}`}
                 title={
-                  !selectedAgentId
+                  isFetchingActiveEmail
+                    ? "Fetching current email details from Zoho..."
+                    : isFetchingThread
+                    ? "Fetching latest email from this Zoho thread..."
+                    : !selectedAgentId
                     ? "Pick an agent first"
                     : activeEmail
                     ? `Send "${activeEmail.subject || activeEmail.messageId}" to agent`
@@ -162,7 +322,7 @@ export function EmailInboxModal({
                 }
               >
                 <span className="flex items-center justify-center gap-1">
-                  {(isProcessing || isAwaitingConversation) && (
+                  {(isFetchingThread || isFetchingActiveEmail || isProcessing || isAwaitingConversation) && (
                     <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
@@ -181,7 +341,7 @@ export function EmailInboxModal({
               <button
                 onClick={onClickViewConversation}
                 disabled={!canViewConversation}
-                className="rounded-lg border border-[var(--color-border)] bg-white px-3 py-1.5 text-xs font-medium text-ink-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="rounded-lg border border-[var(--color-border)] bg-white px-3 py-1.5 text-xs font-medium text-ink-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200 disabled:hover:bg-slate-100"
                 title={
                   canViewConversation
                     ? "View conversation for this email"
@@ -213,6 +373,7 @@ export function EmailInboxModal({
               onOpenChange={setShowConfirmSend}
               onConfirm={onConfirmSend}
               emailSubject={activeEmail?.subject}
+              emailUrl={activeZohoUrl}
             />
 
             {/* Conversation overlay drawer */}

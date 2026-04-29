@@ -309,13 +309,9 @@ export function useEmailInbox({
 
     await onProcessEmailToAgent(email, agentId, additionalInstructions);
 
-    // Update local state to mark as processed immediately
-    const messageId = String(email.messageId);
-    setProcessedEmailsFromServer(prev => {
-      const newMap = new Map(prev);
-      newMap.set(messageId, { conversationId: '', agentId });
-      return newMap;
-    });
+    // Do NOT create a fake processed record with an empty conversationId.
+    // That state is ambiguous and can leave the UI looking half-processed.
+    // We only mark the email as processed once a real conversation link exists.
   }, [onProcessEmailToAgent]);
 
   // Handle view conversation

@@ -50,7 +50,7 @@ export function EmailActionButtons({
   const isProcessing = String(processingEmailId) === messageId;
   const isAwaitingConversation = String(awaitingConversationEmailId) === messageId;
   const hasError = String(errorEmailId) === messageId;
-  const isButtonDisabled = isProcessing || isAwaitingConversation;
+  const isButtonDisabled = (isProcessing || isAwaitingConversation) && !hasError;
 
   const handleSendToAgent = () => {
     setShowConfirmation(true);

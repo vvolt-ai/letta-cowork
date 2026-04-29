@@ -1,4 +1,6 @@
 import { useCallback, useState, useRef, useEffect } from "react";
+
+const AWAITING_CONVERSATION_TIMEOUT_MS = 15000;
 import type { ZohoEmail, UploadedEmailAttachment, ChatAttachment } from "../types";
 
 interface EmailWithAttachments {
@@ -130,12 +132,38 @@ export function useProcessEmailToAgent(onConversationCreated?: (messageId: strin
   const [errorEmailId, setErrorEmailId] = useState<string | null>(null);
   
   const currentEmailRef = useRef<{ accountId: string; folderId: string; messageId: string; agentId: string } | null>(null);
+  const awaitingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onConversationCreatedRef = useRef(onConversationCreated);
 
   // Keep callback ref updated
   useEffect(() => {
     onConversationCreatedRef.current = onConversationCreated;
   }, [onConversationCreated]);
+
+  const clearAwaitingTimeout = useCallback(() => {
+    if (awaitingTimeoutRef.current) {
+      clearTimeout(awaitingTimeoutRef.current);
+      awaitingTimeoutRef.current = null;
+    }
+  }, []);
+
+  const beginAwaitingConversation = useCallback((messageId: string) => {
+    clearAwaitingTimeout();
+    setAwaitingConversationEmailId(messageId);
+    awaitingTimeoutRef.current = setTimeout(() => {
+      setAwaitingConversationEmailId(prev => prev === messageId ? null : prev);
+      setErrorEmailId(prev => prev ?? messageId);
+      const current = currentEmailRef.current;
+      if (current?.messageId === messageId) {
+        currentEmailRef.current = null;
+      }
+      console.warn(`[useProcessEmailToAgent] Timed out waiting for conversation link for email ${messageId}`);
+    }, AWAITING_CONVERSATION_TIMEOUT_MS);
+  }, [clearAwaitingTimeout]);
+
+  useEffect(() => {
+    return () => clearAwaitingTimeout();
+  }, [clearAwaitingTimeout]);
 
   // Listen for session.status events to update processed email records with conversation ID
   useEffect(() => {
@@ -173,7 +201,12 @@ export function useProcessEmailToAgent(onConversationCreated?: (messageId: strin
             console.log(`[useProcessEmailToAgent] Updated conversation ID ${conversationId} for email ${emailInfo.messageId}`);
 
             // Clear the awaiting state since we now have the conversationId
+            clearAwaitingTimeout();
             setAwaitingConversationEmailId(prev => prev === emailInfo.messageId ? null : prev);
+            setErrorEmailId(prev => prev === emailInfo.messageId ? null : prev);
+            if (currentEmailRef.current?.messageId === emailInfo.messageId) {
+              currentEmailRef.current = null;
+            }
 
             // Notify callback that conversation was created
             if (onConversationCreatedRef.current) {
@@ -189,10 +222,11 @@ export function useProcessEmailToAgent(onConversationCreated?: (messageId: strin
       }
     });
     return unsubscribe;
-  }, []);
+  }, [clearAwaitingTimeout]);
   
   const processEmailToAgent = useCallback(async (email: ZohoEmail, agentId: string, additionalInstructions?: string) => {
     const messageId = String(email.messageId);
+    clearAwaitingTimeout();
     setProcessingEmailId(messageId);
     setAwaitingConversationEmailId(null);
     setErrorEmailId(null);
@@ -205,6 +239,8 @@ export function useProcessEmailToAgent(onConversationCreated?: (messageId: strin
       agentId,
     };
     
+    let shouldAwaitConversation = false;
+
     try {
       const accountId = email.accountId;
       const folderId = email.folderId;
@@ -288,6 +324,8 @@ export function useProcessEmailToAgent(onConversationCreated?: (messageId: strin
         },
       });
 
+      shouldAwaitConversation = true;
+
       // Mark email as processed on server
       try {
         await window.electron.setProcessedUnreadEmailIds(accountId, folderId, [messageId]);
@@ -297,19 +335,26 @@ export function useProcessEmailToAgent(onConversationCreated?: (messageId: strin
       }
     } catch (error) {
       console.error(`[useProcessEmailToAgent] Error processing email ${messageId}:`, error);
+      clearAwaitingTimeout();
+      setAwaitingConversationEmailId(prev => prev === messageId ? null : prev);
       setErrorEmailId(messageId);
-      setProcessingEmailId(null);
-      setAwaitingConversationEmailId(null);
+      if (currentEmailRef.current?.messageId === messageId) {
+        currentEmailRef.current = null;
+      }
       // Clear error after 5 seconds
       setTimeout(() => {
         setErrorEmailId(prev => prev === messageId ? null : prev);
       }, 5000);
     } finally {
       setProcessingEmailId(null);
-      // Transition to awaiting conversation state - will be cleared when session.status event arrives
-      setAwaitingConversationEmailId(messageId);
+      // Only enter awaiting state after a successful send. If the send path
+      // failed before dispatching the session.start event, leave the email
+      // retryable instead of disabled.
+      if (shouldAwaitConversation) {
+        beginAwaitingConversation(messageId);
+      }
     }
-  }, []);
+  }, [beginAwaitingConversation, clearAwaitingTimeout]);
 
   return { 
     processEmailToAgent, 
@@ -317,6 +362,9 @@ export function useProcessEmailToAgent(onConversationCreated?: (messageId: strin
     awaitingConversationEmailId,
     errorEmailId,
     // Helper to clear states manually if needed
-    clearAwaitingConversation: () => setAwaitingConversationEmailId(null),
+    clearAwaitingConversation: () => {
+      clearAwaitingTimeout();
+      setAwaitingConversationEmailId(null);
+    },
   };
 }

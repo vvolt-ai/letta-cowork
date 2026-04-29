@@ -6,6 +6,7 @@ interface SendToAgentConfirmationModalProps {
   onOpenChange: (open: boolean) => void;
   onConfirm: (additionalInstructions?: string) => void;
   emailSubject?: string;
+  emailUrl?: string;
 }
 
 /**
@@ -17,6 +18,7 @@ export function SendToAgentConfirmationModal({
   onOpenChange,
   onConfirm,
   emailSubject,
+  emailUrl,
 }: SendToAgentConfirmationModalProps) {
   const [additionalInstructions, setAdditionalInstructions] = useState("");
 
@@ -45,6 +47,10 @@ export function SendToAgentConfirmationModal({
               ? `Send "${emailSubject.slice(0, 50)}${emailSubject.length > 50 ? "..." : ""}" to the selected agent for processing.`
               : "Send this email to the selected agent for processing."}
           </Dialog.Description>
+
+          <div className="mt-2 rounded-md bg-gray-50 px-2 py-1 text-[10px] leading-tight text-muted break-all">
+            {emailUrl || "No active Zoho URL"}
+          </div>
 
           <div className="mt-4">
             <label className="block text-sm font-medium text-ink-700 mb-1">

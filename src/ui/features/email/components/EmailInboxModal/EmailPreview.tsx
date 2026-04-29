@@ -2,7 +2,7 @@ import type { ZohoEmail } from "../../../../types";
 import type { ProcessedEmailData } from "../../types";
 import { extractContent, isHtmlContent } from "../../types";
 import { EmailActionButtons } from "./EmailActionButtons";
-import { ZohoMailEmbed } from "./ZohoMailEmbed";
+import { ZohoMailEmbed, type ZohoMailNavigation } from "./ZohoMailEmbed";
 import MDContent from "../../../../render/markdown";
 
 interface EmailPreviewProps {
@@ -23,7 +23,7 @@ interface EmailPreviewProps {
   onViewConversation: (conversationId: string) => void;
   onOpenInLetta: (conversationId: string, agentId?: string) => void;
   showZohoEmbed?: boolean;
-  onZohoMailIdChange?: (mailId: string | null, url: string) => void;
+  onZohoMailIdChange?: (navigation: ZohoMailNavigation) => void;
 }
 
 /**
