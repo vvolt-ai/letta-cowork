@@ -121,6 +121,7 @@ function normaliseLogs(value: unknown): string[] {
 export interface LettaMessage {
   id?: string;
   message_id?: string;
+  uuid?: string;
   message_type?: string;
   type?: string;
   created_at?: number;
@@ -233,7 +234,7 @@ export function filterConversationMessages(rawMessages: LettaMessage[]): Convers
       const assistantMessage: ConversationStreamMessage = {
         type: "assistant",
         content: textContent,
-        uuid: msg.id || msg.message_id || randomUUID(),
+        uuid: msg.uuid || msg.id || msg.message_id || randomUUID(),
         createdAt,
         historyOrder,
       } as ConversationStreamMessage;

@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type { ScheduleRun, ScheduledTask } from "./types";
+import MDContent from "../../render/markdown";
 
 interface Props {
   task: ScheduledTask | null;
@@ -16,6 +17,54 @@ function StatusBadge({ status }: { status: ScheduleRun["status"] }) {
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${styles[status]}`}>
       {status}
     </span>
+  );
+}
+
+function RunOutputBlock({ output }: { output: string }) {
+  const [copied, setCopied] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const isLong = output.length > 1200;
+
+  const onCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(output);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* noop */
+    }
+  }, [output]);
+
+  return (
+    <div className="mb-2">
+      <div className="flex items-center justify-between mb-1">
+        <p className="text-xs font-semibold text-gray-500">Output</p>
+        <div className="flex items-center gap-1.5">
+          {isLong && (
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="text-[11px] font-medium text-gray-500 hover:text-gray-800"
+            >
+              {expanded ? "Collapse" : "Expand"}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onCopy}
+            className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-0.5 text-[11px] font-medium text-gray-600 hover:text-gray-900"
+            aria-label="Copy output"
+          >
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </div>
+      </div>
+      <div
+        className={`bg-white rounded border border-gray-200 p-3 overflow-y-auto ${expanded ? "max-h-[60vh]" : "max-h-48"}`}
+      >
+        <MDContent text={output} />
+      </div>
+    </div>
   );
 }
 
@@ -108,10 +157,7 @@ export function ScheduleRunsDrawer({ task, onClose }: Props) {
                       <tr key={`${run.id}-detail`} className="bg-gray-50 border-b border-gray-100">
                         <td colSpan={4} className="px-6 py-4">
                           {run.output && (
-                            <div className="mb-2">
-                              <p className="text-xs font-semibold text-gray-500 mb-1">Output</p>
-                              <pre className="text-xs text-gray-700 whitespace-pre-wrap bg-white rounded border border-gray-200 p-3 max-h-48 overflow-y-auto">{run.output}</pre>
-                            </div>
+                            <RunOutputBlock output={run.output} />
                           )}
                           {run.error && (
                             <div>

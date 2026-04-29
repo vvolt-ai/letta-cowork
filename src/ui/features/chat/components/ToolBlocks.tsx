@@ -8,9 +8,41 @@ interface ToolExecutionBlockProps {
   logs?: string[];
 }
 
+interface TodoItem {
+  content: string;
+  activeForm?: string;
+  status: "pending" | "in_progress" | "completed";
+}
+
+function parseTodoInput(input?: string | null): TodoItem[] | null {
+  if (!input?.trim()) return null;
+  try {
+    const parsed = JSON.parse(input);
+    const todos = parsed?.todos;
+    if (!Array.isArray(todos)) return null;
+    return todos
+      .filter((t): t is TodoItem => t && typeof t === "object" && typeof t.content === "string" && typeof t.status === "string")
+      .map((t) => ({ content: t.content, activeForm: t.activeForm, status: t.status as TodoItem["status"] }));
+  } catch {
+    return null;
+  }
+}
+
 function summarizeToolInput(name: string, input?: string | null): string | null {
   if (!input?.trim()) return null;
   const trimmed = input.trim();
+
+  if (name === "TodoWrite") {
+    const todos = parseTodoInput(input);
+    if (!todos || todos.length === 0) return "Updated task list";
+    const done = todos.filter((t) => t.status === "completed").length;
+    const inProgress = todos.find((t) => t.status === "in_progress");
+    if (inProgress) {
+      const label = inProgress.activeForm ?? inProgress.content;
+      return `${label} (${done}/${todos.length})`;
+    }
+    return `${todos.length} task${todos.length === 1 ? "" : "s"} · ${done} done`;
+  }
 
   if (name === "Edit") {
     const fileMatch = trimmed.match(/([A-Za-z0-9_./-]+\.[A-Za-z0-9]+)/);
@@ -30,11 +62,52 @@ function summarizeToolInput(name: string, input?: string | null): string | null 
   return trimmed.length > 140 ? `${trimmed.slice(0, 137)}…` : trimmed;
 }
 
+function TodoListView({ todos }: { todos: TodoItem[] }) {
+  return (
+    <ul className="mt-1.5 space-y-1 rounded-lg border border-[var(--color-border)] bg-white px-3 py-2">
+      {todos.map((todo, idx) => {
+        const isDone = todo.status === "completed";
+        const isActive = todo.status === "in_progress";
+        return (
+          <li key={idx} className="flex items-start gap-2 text-[13px] leading-5">
+            {isDone ? (
+              <span className="mt-0.5 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] bg-green-500 text-white">
+                <svg viewBox="0 0 24 24" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="3.5">
+                  <path d="M5 13l4 4L19 7" />
+                </svg>
+              </span>
+            ) : isActive ? (
+              <span className="mt-0.5 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[3px] border-2 border-blue-500">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
+              </span>
+            ) : (
+              <span className="mt-0.5 inline-flex h-3.5 w-3.5 shrink-0 rounded-[3px] border-2 border-gray-300" />
+            )}
+            <span
+              className={
+                isDone
+                  ? "text-ink-400 line-through"
+                  : isActive
+                    ? "font-medium text-ink-900"
+                    : "text-ink-700"
+              }
+            >
+              {isActive && todo.activeForm ? todo.activeForm : todo.content}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 export const ToolExecutionBlock = memo(function ToolExecutionBlock({ name, status, input, output, logs = [] }: ToolExecutionBlockProps) {
   const isRunning = status === "running";
   const isError = status === "failed";
-  const [expanded, setExpanded] = useState(false);
+  const isTodoWrite = name === "TodoWrite";
+  const [expanded, setExpanded] = useState(isTodoWrite);
   const outputRef = useRef<HTMLPreElement | null>(null);
+  const todos = useMemo(() => (isTodoWrite ? parseTodoInput(input ?? null) : null), [isTodoWrite, input]);
 
   useEffect(() => {
     if (!isRunning || !expanded) return;
@@ -105,12 +178,14 @@ export const ToolExecutionBlock = memo(function ToolExecutionBlock({ name, statu
 
       {expanded ? (
         <div className="mt-1.5 ml-5">
-          {safeInput ? (
+          {isTodoWrite && todos ? (
+            <TodoListView todos={todos} />
+          ) : safeInput ? (
             <div className="overflow-hidden rounded-md border border-[var(--color-border)] bg-gray-50 px-2.5 py-1.5 font-mono text-[11px] text-ink-700">
               <div className="overflow-auto whitespace-pre-wrap">{safeInput}</div>
             </div>
           ) : null}
-          {transcript ? (
+          {!isTodoWrite && transcript ? (
             <div className={outputContainerClass}>
               <pre ref={outputRef} className={outputTextClass}>{transcript}</pre>
             </div>

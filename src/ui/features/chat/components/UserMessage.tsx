@@ -17,7 +17,7 @@ export const UserMessage = memo(function UserMessage({ message }: { message: Use
   const attachments = message.attachments ?? [];
 
   return (
-    <article className="ml-auto max-w-3xl">
+    <article className="ml-auto max-w-3xl" data-message-type="user">
       <div className="mb-2 flex justify-end text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--color-accent)]">
         You
       </div>

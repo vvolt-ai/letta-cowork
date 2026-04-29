@@ -3,6 +3,7 @@ import type { ProcessedEmailData } from "../../types";
 import { extractContent, isHtmlContent } from "../../types";
 import { EmailActionButtons } from "./EmailActionButtons";
 import { ZohoMailEmbed } from "./ZohoMailEmbed";
+import MDContent from "../../../../render/markdown";
 
 interface EmailPreviewProps {
   email: ZohoEmail;
@@ -161,7 +162,13 @@ export function EmailPreview({
         ) : html ? (
           <iframe title="Email content" className="w-full h-full min-h-[400px] rounded-lg border border-[var(--color-border)]" sandbox="" srcDoc={content} />
         ) : (
-          <div className="prose prose-sm max-w-none">{content || email.summary || (<div className="text-center text-muted py-8">No content available</div>)}</div>
+          <div className="max-w-none">
+            {content || email.summary ? (
+              <MDContent text={String(content || email.summary || "")} />
+            ) : (
+              <div className="text-center text-muted py-8">No content available</div>
+            )}
+          </div>
         )}
       </div>
     </>

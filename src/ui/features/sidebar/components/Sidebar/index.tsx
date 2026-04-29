@@ -97,7 +97,7 @@ export const Sidebar = memo(function Sidebar({
   awaitingConversationEmailId,
   errorEmailId,
   newlyCreatedConversations,
-  onOpenSettings: _onOpenSettings,
+  onOpenSettings,
   onOpenConfiguration,
   onOpenSkills,
   onOpenSchedules,
@@ -188,6 +188,23 @@ export const Sidebar = memo(function Sidebar({
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
           Configuration
+        </button>
+        <button
+          onClick={onOpenSettings}
+          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13.5px] text-ink-700 transition hover:bg-[var(--color-sidebar-hover)] hover:text-ink-900"
+        >
+          <svg className="h-[18px] w-[18px] shrink-0 text-ink-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.75">
+            <line x1="4" y1="6" x2="14" y2="6" />
+            <line x1="18" y1="6" x2="20" y2="6" />
+            <circle cx="16" cy="6" r="2" />
+            <line x1="4" y1="12" x2="8" y2="12" />
+            <line x1="12" y1="12" x2="20" y2="12" />
+            <circle cx="10" cy="12" r="2" />
+            <line x1="4" y1="18" x2="14" y2="18" />
+            <line x1="18" y1="18" x2="20" y2="18" />
+            <circle cx="16" cy="18" r="2" />
+          </svg>
+          Settings
         </button>
       </div>
 

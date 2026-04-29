@@ -621,6 +621,37 @@ function App() {
   const reasoningSteps = ephemeralState?.reasoning ?? [];
   const toolExecutions = ephemeralState?.tools ?? [];
 
+  // When agent completes, scroll to the last user message so the user can
+  // see the full response from the beginning instead of being stuck at the
+  // very bottom (past tool outputs and the end of the assistant reply).
+  const prevAgentStatusRef = useRef(agentStatus);
+  useEffect(() => {
+    const prevStatus = prevAgentStatusRef.current;
+    prevAgentStatusRef.current = agentStatus;
+
+    if (agentStatus === "completed" && prevStatus !== "completed") {
+      // Find the last user message element in the scroll container
+      const container = scrollContainerRef.current;
+      if (!container) return;
+
+      // Use requestAnimationFrame to ensure DOM is updated with final messages
+      requestAnimationFrame(() => {
+        const userMessages = container.querySelectorAll('[data-message-type="user"]');
+        if (userMessages.length > 0) {
+          const lastUserMsg = userMessages[userMessages.length - 1] as HTMLElement;
+          // Scroll so the last user message is near the top of the viewport
+          const containerRect = container.getBoundingClientRect();
+          const msgRect = lastUserMsg.getBoundingClientRect();
+          const offset = msgRect.top - containerRect.top + container.scrollTop;
+          container.scrollTo({
+            top: Math.max(0, offset - 20), // 20px padding above the user message
+            behavior: "smooth",
+          });
+        }
+      });
+    }
+  }, [agentStatus]);
+
   // Show loading while checking auth
   if (isAuthLoading) {
     return (

@@ -168,7 +168,9 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
               message as Parameters<typeof handleResultMessage>[0],
               currentSessionId,
               onEvent,
-              agentName
+              agentName,
+              lettaSession.agentId,
+              lettaSession.conversationId
             );
           }
         }

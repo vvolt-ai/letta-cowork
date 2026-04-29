@@ -36,12 +36,27 @@ export function getConversationMessageId(message: ConversationStreamMessage): st
   return undefined;
 }
 
+/**
+ * Compute a content-based fingerprint for assistant messages.
+ * Used as a dedup fallback when UUID-based dedup fails (e.g., stream UUID
+ * differs from API history ID for the same message).
+ */
+function assistantContentFingerprint(message: ConversationStreamMessage): string | undefined {
+  if (message.type !== "assistant") return undefined;
+  const content = typeof (message as any).content === "string" ? (message as any).content : undefined;
+  if (!content || content.length < 10) return undefined; // too short to fingerprint reliably
+  // Use first 200 chars + length as a fingerprint
+  const preview = content.slice(0, 200);
+  return `assistant:${content.length}:${preview}`;
+}
+
 export function mergeConversationHistory(
   existing: ConversationStreamMessage[],
   incoming: ConversationStreamMessage[],
 ): ConversationStreamMessage[] {
   const merged: ConversationStreamMessage[] = [];
-  const seen = new Set<string>();
+  const seenById = new Set<string>();
+  const seenByContent = new Map<string, number>(); // fingerprint -> index in merged
 
   const sorted = [...existing, ...incoming].sort((a, b) => {
     const aCreatedAt = typeof a.createdAt === "number" && Number.isFinite(a.createdAt) ? a.createdAt : undefined;
@@ -65,8 +80,37 @@ export function mergeConversationHistory(
 
   for (const message of sorted) {
     const id = getConversationMessageId(message);
-    if (id && seen.has(id)) continue;
-    if (id) seen.add(id);
+
+    // ID-based dedup (primary)
+    if (id && seenById.has(id)) {
+      console.debug("[conversation] mergeConversationHistory DEDUP (id) skipped", {
+        id,
+        type: message.type,
+        uuid: (message as any).uuid,
+        contentPreview: typeof (message as any).content === "string" ? (message as any).content.slice(0, 80) : undefined,
+      });
+      continue;
+    }
+
+    // Content-based dedup for assistant messages (fallback when UUIDs don't match)
+    const fingerprint = assistantContentFingerprint(message);
+    if (fingerprint && seenByContent.has(fingerprint)) {
+      console.debug("[conversation] mergeConversationHistory DEDUP (content) skipped", {
+        fingerprint,
+        type: message.type,
+        uuid: (message as any).uuid,
+        contentPreview: typeof (message as any).content === "string" ? (message as any).content.slice(0, 80) : undefined,
+      });
+      // Replace the earlier copy with this one (history version is more authoritative)
+      const existingIdx = seenByContent.get(fingerprint)!;
+      merged[existingIdx] = message;
+      // Update the ID set with the new message's ID if it has one
+      if (id) seenById.add(id);
+      continue;
+    }
+
+    if (id) seenById.add(id);
+    if (fingerprint) seenByContent.set(fingerprint, merged.length);
     merged.push(message);
   }
 

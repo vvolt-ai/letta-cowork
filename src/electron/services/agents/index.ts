@@ -55,12 +55,11 @@ export async function listLettaAgents(): Promise<LettaAgent[]> {
   
   try {
     console.log('[lettaAgents] Fetching agents from Letta API...');
-    const response = await client.agents.list({tags: ['user_visible']});
+    const response = await client.agents.list();
     // Get the data from the paginated response
     const agents = await response;
-    console.log('[lettaAgents] Received', agents.items?.length || 0, 'agents with user_visible tag');
-    
-    // Filter agents to only show those with user_visible: true in metadata
+    console.log('[lettaAgents] Received', agents.items?.length || 0, 'agents');
+
     return agents.items
       .map((agent) => {
         const raw: any = agent;

@@ -1,5 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import type { ZohoEmail } from "../../../../types";
+import MDContent from "../../../../render/markdown";
 
 interface EmailDetailsDialogProps {
   open: boolean;
@@ -70,9 +71,13 @@ export function EmailDetailsDialog({
                 sandbox=""
                 srcDoc={content}
               />
+            ) : content ? (
+              <div className="text-sm text-ink-800">
+                <MDContent text={String(content)} />
+              </div>
             ) : (
               <pre className="whitespace-pre-wrap break-words text-sm text-ink-800">
-                {content || "No detail content available."}
+                No detail content available.
               </pre>
             )}
           </div>

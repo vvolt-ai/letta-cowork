@@ -874,18 +874,41 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
       const existing = state.sessions[sessionId];
       if (!existing) return {};
       const remaining = existing.permissionRequests.filter((req) => req.toolUseId !== toolUseId);
-      const nextStatus: AgentDisplayStatus = remaining.length === 0 ? "generating" : existing.ephemeral.status;
+      // When all permissions are resolved, check if there's a pending result status
+      // (e.g. an error that arrived while we were waiting for approval)
+      let nextStatus: AgentDisplayStatus;
+      if (remaining.length === 0) {
+        const pendingResult = existing.ephemeral.pendingResultStatus;
+        if (pendingResult === "error") {
+          nextStatus = "error";
+        } else if (pendingResult === "completed") {
+          nextStatus = "completed";
+        } else {
+          nextStatus = "generating";
+        }
+      } else {
+        nextStatus = existing.ephemeral.status;
+      }
+      const nextEphemeral = {
+        ...existing.ephemeral,
+        status: nextStatus,
+        lastUpdated: Date.now(),
+      };
+      // Clear pending result status once applied
+      if (remaining.length === 0 && existing.ephemeral.pendingResultStatus) {
+        nextEphemeral.pendingResultStatus = undefined;
+        nextEphemeral.pendingResultError = undefined;
+        if (nextStatus === "error") {
+          nextEphemeral.errorMessage = existing.ephemeral.pendingResultError ?? "Assistant failed to respond";
+        }
+      }
       return {
         sessions: {
           ...state.sessions,
           [sessionId]: {
             ...existing,
             permissionRequests: remaining,
-            ephemeral: {
-              ...existing.ephemeral,
-              status: nextStatus,
-              lastUpdated: Date.now(),
-            },
+            ephemeral: nextEphemeral,
           },
         },
       };
@@ -1048,13 +1071,20 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
           if (status === "error") {
             nextEphemeral.status = "error";
             nextEphemeral.errorMessage = resolvedError ?? "Unknown error";
+            // If we also have pending permissions, store the error as pending
+            // so it gets applied when permissions are resolved
+            if (hadPendingPermissions) {
+              nextEphemeral.pendingResultStatus = "error";
+              nextEphemeral.pendingResultError = resolvedError ?? "Unknown error";
+              nextEphemeral.status = "waiting_approval";
+            }
           }
           // When the backend goes idle (e.g. after session.stop), reset display status immediately
           if (status === "idle") {
             nextEphemeral.status = "idle";
             nextEphemeral.errorMessage = undefined;
           }
-          if (hadPendingPermissions) {
+          if (hadPendingPermissions && status !== "error") {
             nextEphemeral.status = "waiting_approval";
           }
           return {
