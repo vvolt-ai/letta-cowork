@@ -64,7 +64,6 @@ export function EmailInboxModal({
   const [fetchedActiveEmail, setFetchedActiveEmail] = useState<ZohoEmail | null>(null);
   const [fetchingActiveEmailId, setFetchingActiveEmailId] = useState<string | null>(null);
   const [fetchingThreadId, setFetchingThreadId] = useState<string | null>(null);
-  const [activeEmailFetchError, setActiveEmailFetchError] = useState<string | null>(null);
 
   // Reset active id when the modal closes
   useEffect(() => {
@@ -74,7 +73,6 @@ export function EmailInboxModal({
       setFetchedActiveEmail(null);
       setFetchingActiveEmailId(null);
       setFetchingThreadId(null);
-      setActiveEmailFetchError(null);
     }
   }, [open]);
 
@@ -107,7 +105,6 @@ export function EmailInboxModal({
       if (activeZohoNavigation.kind === "thread" && activeZohoNavigation.threadId) {
         setFetchingThreadId(activeZohoNavigation.threadId);
         setFetchingActiveEmailId(null);
-        setActiveEmailFetchError(null);
 
         try {
           const apiThreadId = String(activeZohoNavigation.threadId).replace(/^t/i, "");
@@ -126,7 +123,6 @@ export function EmailInboxModal({
 
           if (!threadEmails.length) {
             setFetchedActiveEmail(null);
-            setActiveEmailFetchError(`No emails found for thread ${activeZohoNavigation.threadId}`);
             return;
           }
 
@@ -147,7 +143,6 @@ export function EmailInboxModal({
         } catch (error) {
           if (cancelled) return;
           setFetchedActiveEmail(null);
-          setActiveEmailFetchError(error instanceof Error ? error.message : String(error));
           return;
         } finally {
           if (!cancelled) {
@@ -162,13 +157,11 @@ export function EmailInboxModal({
         if (!activeZohoMailId || listActiveEmail) {
           setFetchedActiveEmail(null);
           setFetchingActiveEmailId(null);
-          setActiveEmailFetchError(null);
         }
         return;
       }
 
       setFetchingActiveEmailId(activeZohoMailId);
-      setActiveEmailFetchError(null);
 
       try {
         const result = await window.electron.fetchEmailDetails(accountId, folderId, activeZohoMailId);
@@ -201,7 +194,6 @@ export function EmailInboxModal({
       } catch (error) {
         if (cancelled) return;
         setFetchedActiveEmail(null);
-        setActiveEmailFetchError(error instanceof Error ? error.message : String(error));
       } finally {
         if (!cancelled) {
           setFetchingActiveEmailId((current) =>
