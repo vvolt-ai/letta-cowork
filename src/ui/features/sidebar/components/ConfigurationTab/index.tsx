@@ -1,5 +1,6 @@
 import { memo } from "react";
 import { IntegrationList } from "../IntegrationList";
+import { MigrateAgentRow } from "./MigrateAgentRow";
 
 interface ConfigurationTabProps {
   coworkSettings: {
@@ -125,6 +126,11 @@ export const ConfigurationTab = memo(function ConfigurationTab({
             onClick={onOpenLettaCli}
           />
         </div>
+      </ConfigSection>
+
+      {/* Tool access — migrate to letta_v1_agent for Bash / Skill / file ops */}
+      <ConfigSection title="Tool Access">
+        <MigrateAgentRow />
       </ConfigSection>
 
       {/* Channels */}

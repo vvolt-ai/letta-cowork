@@ -1,0 +1,97 @@
+/**
+ * Client-tools framework — registers locally-executable tools and
+ * exposes them in the shape Letta's `client_tools` parameter expects.
+ *
+ * Public API:
+ *   • getClientToolsForWire()   — array to pass into messages.create
+ *   • isClientTool(name)        — does this tool name belong to us?
+ *   • runClientTool(name, args) — execute by name
+ *   • registerClientTool(def)   — add new tool at runtime (for tests / extensions)
+ */
+
+import { bashTool } from "./runners/bash.js";
+import {
+    editTool,
+    globTool,
+    grepTool,
+    lsTool,
+    readTool,
+    todoWriteTool,
+    writeTool,
+} from "./runners/fs.js";
+import { listSkillsTool, skillTool } from "./runners/skill.js";
+import type {
+    ClientToolDefinition,
+    ClientToolWireDef,
+    ToolRunContext,
+    ToolRunResult,
+} from "./types.js";
+
+const registry = new Map<string, ClientToolDefinition>();
+
+function register(def: ClientToolDefinition): void {
+    registry.set(def.name, def);
+}
+
+// Phase A: full Letta-code core toolset minus the UI/subagent ones.
+//   Bash, Read, Write, Edit, LS, Glob, Grep, TodoWrite, Skill, list_skills.
+//   Deferred (need UI/subagent runtime): AskUserQuestion, MultiEdit,
+//   BashOutput, KillBash, EnterPlanMode, ExitPlanMode, Task/TaskOutput/
+//   TaskStop, ViewImage, memory, ReadLSP.
+register(bashTool);
+register(readTool);
+register(writeTool);
+register(editTool);
+register(lsTool);
+register(globTool);
+register(grepTool);
+register(todoWriteTool);
+register(skillTool);
+register(listSkillsTool);
+
+export function registerClientTool(def: ClientToolDefinition): void {
+    register(def);
+}
+
+export function isClientTool(name: string): boolean {
+    return registry.has(name);
+}
+
+export function getClientToolsForWire(): ClientToolWireDef[] {
+    return Array.from(registry.values()).map((t) => ({
+        name: t.name,
+        description: t.description,
+        parameters: t.parameters,
+    }));
+}
+
+export async function runClientTool(
+    name: string,
+    args: Record<string, unknown>,
+    ctx: ToolRunContext
+): Promise<ToolRunResult> {
+    const def = registry.get(name);
+    if (!def) {
+        return {
+            output: `Client tool '${name}' is not registered on this device.`,
+            isError: true,
+        };
+    }
+    try {
+        return await def.run(args, ctx);
+    } catch (err) {
+        return {
+            output: `Client tool '${name}' threw: ${
+                err instanceof Error ? err.stack ?? err.message : String(err)
+            }`,
+            isError: true,
+        };
+    }
+}
+
+export type {
+    ClientToolDefinition,
+    ClientToolWireDef,
+    ToolRunContext,
+    ToolRunResult,
+} from "./types.js";

@@ -3,6 +3,7 @@ import { execSync } from "child_process";
 import { isDev, DEV_PORT } from "../utils/index.js";
 import { stopPolling } from "../utils/test-helper.js";
 import { cleanupAllSessions } from "../ipc/index.js";
+import { shutdownListener as shutdownWsListener } from "../libs/runner/ws/index.js";
 
 let cleanupComplete = false;
 
@@ -32,6 +33,7 @@ export async function cleanup(): Promise<void> {
     globalShortcut.unregisterAll();
     stopPolling();
     await cleanupAllSessions();
+    shutdownWsListener();
     killViteDevServer();
 }
 

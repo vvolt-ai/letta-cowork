@@ -47,6 +47,11 @@ interface Window {
     // Letta
     getLettaEnv: () => Promise<any>;
     listLettaAgents: () => Promise<any>;
+    /** Clone an existing agent as letta_v1_agent for runtime client_tools support. */
+    lettaMigrateAgent: (opts: { sourceAgentId: string; newName?: string; baseTools?: string[] }) => Promise<
+      | { ok: true; data: { sourceAgentId: string; newAgentId: string; newAgentName: string; blocksCopied: number; skippedBlocks: Array<{ label: string; reason: string }> } }
+      | { ok: false; error: string }
+    >;
     listLettaModels: () => Promise<any>;
     getLettaAgent: (agentId: string) => Promise<any>;
     recoverPendingApprovals: (sessionId: string, agentId?: string) => Promise<any[]>;

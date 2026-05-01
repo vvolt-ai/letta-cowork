@@ -35,6 +35,8 @@ import { registerChannelHandlers, initializeBridges } from "./handlers/channel-h
 import { registerEmailHandlers } from "./handlers/email-handlers.js";
 import { registerAttachmentHandlers } from "./handlers/attachment-handlers.js";
 import { registerSchedulerHandlers } from "./handlers/scheduler-handlers.js";
+import { registerSkillSyncHandlers } from "./handlers/skill-sync-handlers.js";
+import { registerAgentMigrationHandlers } from "./handlers/agent-migration-handlers.js";
 
 // Re-export session handlers for backward compatibility
 export { handleClientEvent, recoverPendingApprovalsForSession, cancelRecoveredRun, cleanupAllSessions };
@@ -506,6 +508,8 @@ export function registerAllIpcHandlers(mainWindow: BrowserWindow): void {
     registerEmailHandlers();
     registerAttachmentHandlers();
     registerSchedulerHandlers();
+    registerSkillSyncHandlers();
+    registerAgentMigrationHandlers();
 }
 
 /**

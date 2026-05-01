@@ -1,0 +1,155 @@
+/**
+ * Agent migration — clone an existing agent into a brand-new
+ * `letta_v1_agent` so it natively supports runtime client_tools
+ * (Bash, Skill, file ops, etc.).
+ *
+ * Strategy:
+ *   1. Read the source agent's name, system prompt, model, memory blocks.
+ *   2. Create a new agent with agent_type=letta_v1_agent, copying:
+ *      • name (suffixed " (v1)" so the user can tell them apart)
+ *      • system prompt verbatim
+ *      • model
+ *      • memory blocks as independent copies (label + value + description)
+ *      • tools = web_search, fetch_webpage  (letta-code's defaults; client
+ *        tools come in at runtime via client_tools)
+ *   3. Return the new agent id.
+ *
+ * What we deliberately do NOT do:
+ *   • copy conversation history — letta_v1 manages conversations differently
+ *   • share block ids — independent copies so changes don't bleed across
+ *   • copy tool attachments — the new agent uses runtime client_tools
+ */
+
+import { Letta } from "@letta-ai/letta-client";
+
+function getClient(): Letta {
+    const apiKey = (process.env.LETTA_API_KEY ?? "").trim();
+    const baseURL = (
+        process.env.LETTA_BASE_URL || "https://api.letta.com"
+    ).trim();
+    if (!apiKey) throw new Error("LETTA_API_KEY is not configured");
+    return new Letta({ apiKey, baseURL });
+}
+
+export interface MigrationOptions {
+    /** Required — id of the source agent to clone. */
+    sourceAgentId: string;
+    /** Optional override for the new agent's name. Defaults to "<source> (v1)". */
+    newName?: string;
+    /** Server-side tools to attach. Defaults to letta-code's choices. */
+    baseTools?: string[];
+}
+
+export interface MigrationResult {
+    sourceAgentId: string;
+    newAgentId: string;
+    newAgentName: string;
+    blocksCopied: number;
+    skippedBlocks: Array<{ label: string; reason: string }>;
+}
+
+interface SourceAgentSnapshot {
+    id: string;
+    name: string;
+    system: string;
+    model: string;
+    embeddingHandle: string | null;
+    blocks: Array<{
+        label: string;
+        value: string;
+        description: string | null;
+        limit: number | null;
+    }>;
+}
+
+/** Fetch the source agent's details into a normalised snapshot. */
+async function snapshotSource(
+    client: Letta,
+    sourceAgentId: string
+): Promise<SourceAgentSnapshot> {
+    const agent = (await (client.agents as unknown as {
+        retrieve: (id: string) => Promise<unknown>;
+    }).retrieve(sourceAgentId)) as Record<string, unknown>;
+
+    const memory = (agent.memory ?? {}) as { blocks?: Array<Record<string, unknown>> };
+    const blocks = (memory.blocks ?? []).map((b) => ({
+        label: String(b.label ?? ""),
+        value: String(b.value ?? ""),
+        description: (b.description as string | null) ?? null,
+        limit: typeof b.limit === "number" ? (b.limit as number) : null,
+    })).filter((b) => b.label.length > 0);
+
+    return {
+        id: String(agent.id ?? sourceAgentId),
+        name: String(agent.name ?? "untitled"),
+        system: String(agent.system ?? ""),
+        model: String(agent.model ?? ""),
+        // Embedding can come back under different keys depending on SDK version.
+        embeddingHandle:
+            (agent.embedding as string | null) ??
+            (agent.embedding_handle as string | null) ??
+            null,
+        blocks,
+    };
+}
+
+/** Create the new letta_v1_agent with copied memory blocks. */
+async function createTargetAgent(
+    client: Letta,
+    snapshot: SourceAgentSnapshot,
+    opts: MigrationOptions
+): Promise<{ id: string; name: string }> {
+    const newName = opts.newName?.trim() || `${snapshot.name} (v1)`;
+    const baseTools = opts.baseTools ?? ["web_search", "fetch_webpage"];
+
+    const memoryBlocks = snapshot.blocks.map((b) => ({
+        label: b.label,
+        value: b.value,
+        description: b.description ?? undefined,
+        ...(b.limit ? { limit: b.limit } : {}),
+    }));
+
+    const createBody: Record<string, unknown> = {
+        name: newName,
+        agent_type: "letta_v1_agent",
+        system: snapshot.system,
+        model: snapshot.model,
+        tools: baseTools,
+        memory_blocks: memoryBlocks,
+    };
+    if (snapshot.embeddingHandle) {
+        createBody.embedding = snapshot.embeddingHandle;
+    }
+
+    const created = (await (client.agents as unknown as {
+        create: (body: Record<string, unknown>) => Promise<unknown>;
+    }).create(createBody)) as Record<string, unknown>;
+
+    const id = String(created.id ?? "");
+    if (!id) throw new Error("agents.create returned no id");
+    return { id, name: String(created.name ?? newName) };
+}
+
+/**
+ * Public API — migrate an existing agent into a fresh letta_v1_agent.
+ * Idempotent on the source: source is read-only, never modified.
+ */
+export async function migrateAgentToV1(
+    opts: MigrationOptions
+): Promise<MigrationResult> {
+    if (!opts.sourceAgentId || typeof opts.sourceAgentId !== "string") {
+        throw new Error("migrateAgentToV1: sourceAgentId is required");
+    }
+
+    const client = getClient();
+    const snapshot = await snapshotSource(client, opts.sourceAgentId);
+    const target = await createTargetAgent(client, snapshot, opts);
+
+    return {
+        sourceAgentId: snapshot.id,
+        newAgentId: target.id,
+        newAgentName: target.name,
+        blocksCopied: snapshot.blocks.length,
+        skippedBlocks: [],
+    };
+}

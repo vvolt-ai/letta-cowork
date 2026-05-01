@@ -244,13 +244,15 @@ export function EmailInboxModal({
   const [showConfirmSend, setShowConfirmSend] = useState(false);
 
   const onClickSendToAgent = () => {
-    if (!activeEmail || !selectedAgentId || isSendBusy) return;
+    // Agent is now picked inside the modal, so we no longer require a
+    // pre-selected one. Just need an email and not be mid-send.
+    if (!activeEmail || isSendBusy) return;
     setShowConfirmSend(true);
   };
 
-  const onConfirmSend = (additionalInstructions?: string) => {
-    if (!activeEmail || !selectedAgentId) return;
-    void handleProcessEmailToAgent(activeEmail, selectedAgentId, additionalInstructions);
+  const onConfirmSend = (agentId: string, additionalInstructions?: string) => {
+    if (!activeEmail || !agentId) return;
+    void handleProcessEmailToAgent(activeEmail, agentId, additionalInstructions);
   };
 
   const onClickViewConversation = () => {
@@ -366,6 +368,7 @@ export function EmailInboxModal({
               onConfirm={onConfirmSend}
               emailSubject={activeEmail?.subject}
               emailUrl={activeZohoUrl}
+              defaultAgentId={selectedAgentId}
             />
 
             {/* Conversation overlay drawer */}

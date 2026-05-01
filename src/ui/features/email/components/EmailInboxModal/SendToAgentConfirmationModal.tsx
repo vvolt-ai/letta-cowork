@@ -1,17 +1,45 @@
 import * as Dialog from "@radix-ui/react-dialog";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { AgentDropdown } from "../../../chat/components/AgentDropdown";
 
 interface SendToAgentConfirmationModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onConfirm: (additionalInstructions?: string) => void;
+  onConfirm: (agentId: string, additionalInstructions?: string) => void;
   emailSubject?: string;
   emailUrl?: string;
+  /** Default agent — used the very first time, or if the persisted
+   *  last-picked agent doesn't exist anymore. */
+  defaultAgentId?: string;
+}
+
+/** Persists the last agent the user explicitly picked in this modal,
+ *  so they don't have to find it in the dropdown every time. */
+const LAST_AGENT_STORAGE_KEY = "cowork:send-to-agent:last-agent-id";
+
+function readLastAgentId(): string {
+  try {
+    return localStorage.getItem(LAST_AGENT_STORAGE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function writeLastAgentId(agentId: string): void {
+  try {
+    if (agentId) localStorage.setItem(LAST_AGENT_STORAGE_KEY, agentId);
+  } catch {
+    // localStorage can throw in private mode / quota — ignore.
+  }
 }
 
 /**
- * Confirmation modal for Send to Agent action
- * Allows user to optionally add additional instructions before sending
+ * Confirmation modal for Send to Agent action.
+ *
+ * Renders an agent picker so the user can choose which agent should
+ * process this email, plus an optional instructions field. The picker
+ * defaults to `defaultAgentId` so the existing one-click flow stays
+ * fast — change only if you want a different agent.
  */
 export function SendToAgentConfirmationModal({
   open,
@@ -19,12 +47,29 @@ export function SendToAgentConfirmationModal({
   onConfirm,
   emailSubject,
   emailUrl,
+  defaultAgentId,
 }: SendToAgentConfirmationModalProps) {
   const [additionalInstructions, setAdditionalInstructions] = useState("");
+  // Prefer the persisted last-picked agent; fall back to the global
+  // default only when the user has never picked one before.
+  const [agentId, setAgentId] = useState<string>(
+    () => readLastAgentId() || defaultAgentId || ""
+  );
+
+  // On each open, refresh from storage so a pick made elsewhere (or
+  // in a previous run) is honoured. Falls back to defaultAgentId only
+  // if storage is empty.
+  useEffect(() => {
+    if (open) {
+      setAgentId(readLastAgentId() || defaultAgentId || "");
+    }
+  }, [open, defaultAgentId]);
 
   const handleConfirm = () => {
+    if (!agentId) return;
     const trimmedInstructions = additionalInstructions.trim();
-    onConfirm(trimmedInstructions || undefined);
+    writeLastAgentId(agentId);
+    onConfirm(agentId, trimmedInstructions || undefined);
     setAdditionalInstructions("");
     onOpenChange(false);
   };
@@ -44,12 +89,16 @@ export function SendToAgentConfirmationModal({
           </Dialog.Title>
           <Dialog.Description className="mt-1 text-sm text-muted">
             {emailSubject
-              ? `Send "${emailSubject.slice(0, 50)}${emailSubject.length > 50 ? "..." : ""}" to the selected agent for processing.`
-              : "Send this email to the selected agent for processing."}
+              ? `Send "${emailSubject.slice(0, 50)}${emailSubject.length > 50 ? "..." : ""}" to the chosen agent for processing.`
+              : "Send this email to the chosen agent for processing."}
           </Dialog.Description>
 
           <div className="mt-2 rounded-md bg-gray-50 px-2 py-1 text-[10px] leading-tight text-muted break-all">
             {emailUrl || "No active Zoho URL"}
+          </div>
+
+          <div className="mt-4">
+            <AgentDropdown value={agentId} onChange={setAgentId} />
           </div>
 
           <div className="mt-4">
@@ -74,7 +123,8 @@ export function SendToAgentConfirmationModal({
             </button>
             <button
               onClick={handleConfirm}
-              className="rounded-lg bg-accent px-3 py-2 text-sm font-medium text-white hover:bg-accent-hover transition-colors"
+              disabled={!agentId}
+              className="rounded-lg bg-accent px-3 py-2 text-sm font-medium text-white hover:bg-accent-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Send
             </button>

@@ -35,6 +35,10 @@ electron.contextBridge.exposeInMainWorld("electron", {
 
     // ✅ ADD THIS
     openExternal: (url: string) => electron.ipcRenderer.invoke("open-external", url),
+    /** Clone an existing agent into a brand-new letta_v1_agent so it
+     *  natively supports runtime client_tools (Bash, Skill, etc.). */
+    lettaMigrateAgent: (opts: { sourceAgentId: string; newName?: string; baseTools?: string[] }) =>
+        electron.ipcRenderer.invoke("letta:migrate-agent", opts),
     
     // Email Channel Configuration (Server-Side)
     setEmailChannelId: (channelId: string | null) =>
