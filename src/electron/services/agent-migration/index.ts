@@ -21,6 +21,7 @@
  */
 
 import { Letta } from "@letta-ai/letta-client";
+import { buildLettaSystemPrompt } from "./buildSystemPrompt.js";
 
 function getClient(): Letta {
     const apiKey = (process.env.LETTA_API_KEY ?? "").trim();
@@ -38,6 +39,20 @@ export interface MigrationOptions {
     newName?: string;
     /** Server-side tools to attach. Defaults to letta-code's choices. */
     baseTools?: string[];
+    /**
+     * Strategy for building the new agent's system prompt:
+     *   • 'letta-code' (default) — use letta-code's coding-agent prompt
+     *     (letta.md) plus the memory-blocks addon. The agent will know
+     *     about Bash/Read/Edit/etc. and use them naturally.
+     *   • 'letta-code+persona' — letta-code prompt PLUS the source
+     *     agent's old prompt appended as a "Persona override". Best of
+     *     both worlds when the user wants to keep their agent's voice.
+     *   • 'preserve' — copy the source agent's prompt verbatim. The
+     *     agent will have the same persona but no tool awareness; only
+     *     useful when you've already manually authored a tool-aware
+     *     prompt.
+     */
+    systemPromptMode?: "letta-code" | "letta-code+persona" | "preserve";
 }
 
 export interface MigrationResult {
@@ -109,10 +124,22 @@ async function createTargetAgent(
         ...(b.limit ? { limit: b.limit } : {}),
     }));
 
+    // Build the new agent's system prompt. Default = letta-code's
+    // prompt so the agent actually knows it has Bash/Read/Edit/etc.
+    const mode = opts.systemPromptMode ?? "letta-code";
+    let systemPrompt: string;
+    if (mode === "preserve") {
+        systemPrompt = snapshot.system;
+    } else if (mode === "letta-code+persona") {
+        systemPrompt = buildLettaSystemPrompt("blocks", snapshot.system);
+    } else {
+        systemPrompt = buildLettaSystemPrompt("blocks");
+    }
+
     const createBody: Record<string, unknown> = {
         name: newName,
         agent_type: "letta_v1_agent",
-        system: snapshot.system,
+        system: systemPrompt,
         model: snapshot.model,
         tools: baseTools,
         memory_blocks: memoryBlocks,
@@ -151,5 +178,48 @@ export async function migrateAgentToV1(
         newAgentName: target.name,
         blocksCopied: snapshot.blocks.length,
         skippedBlocks: [],
+    };
+}
+
+/**
+ * Update an EXISTING agent's system prompt to letta-code's. Use this
+ * when an agent is already letta_v1_agent but doesn't know it has
+ * tools — much faster than full migration. The old system prompt can
+ * be appended as a "Persona override" section so the agent's voice is
+ * preserved.
+ *
+ * Returns {oldLength, newLength} so the UI can show a diff summary.
+ */
+export async function refreshAgentSystemPrompt(opts: {
+    agentId: string;
+    /** Default 'letta-code+persona' — keeps the agent's old persona below the letta-code prompt. */
+    mode?: "letta-code" | "letta-code+persona";
+    memoryMode?: "blocks" | "memfs";
+}): Promise<{ oldLength: number; newLength: number; system: string }> {
+    if (!opts.agentId || typeof opts.agentId !== "string") {
+        throw new Error("refreshAgentSystemPrompt: agentId is required");
+    }
+    const client = getClient();
+    const agent = (await client.agents.retrieve(opts.agentId)) as unknown as {
+        system?: string;
+    };
+    const oldSystem = String(agent.system ?? "");
+    const memoryMode = opts.memoryMode ?? "blocks";
+    const mode = opts.mode ?? "letta-code+persona";
+    const newSystem =
+        mode === "letta-code"
+            ? buildLettaSystemPrompt(memoryMode)
+            : buildLettaSystemPrompt(memoryMode, oldSystem);
+
+    await (
+        client.agents as unknown as {
+            modify: (id: string, body: Record<string, unknown>) => Promise<unknown>;
+        }
+    ).modify(opts.agentId, { system: newSystem });
+
+    return {
+        oldLength: oldSystem.length,
+        newLength: newSystem.length,
+        system: newSystem,
     };
 }

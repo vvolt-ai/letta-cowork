@@ -102,7 +102,7 @@ export class WsSession {
         this._agentId = opts.agentId ?? null;
         this._conversationId = opts.conversationId ?? null;
         console.log(
-            "[WsSession] constructed (build-id: client_tools-v6-approval-shape)"
+            "[WsSession] constructed (build-id: client_tools-v10-letta-code-port)"
         );
     }
 
@@ -782,13 +782,18 @@ export class WsSession {
                 return;
             }
             case "stop_reason": {
-                this.enqueue({
-                    type: "result",
-                    success: true,
+                // DO NOT emit a {type:"result"} here. Each individual
+                // stream in a multi-turn pump fires a stop_reason event
+                // (requires_approval → end_turn → next_turn → end_turn …),
+                // so emitting "result" here flips the UI to "completed"
+                // mid tool-execution. Only the pump's finally block in
+                // send() emits the single terminal result for the whole
+                // user turn.
+                //
+                // We still log so the trace stays useful for debugging.
+                debug("WsSession: intermediate stop_reason", {
                     stopReason: String(e.stop_reason ?? ""),
-                    durationMs: Date.now() - this.startedAt,
-                    conversationId: this._conversationId,
-                } as SDKResultMessage);
+                });
                 return;
             }
             case "letta_ping":

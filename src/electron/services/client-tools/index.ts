@@ -10,15 +10,7 @@
  */
 
 import { bashTool } from "./runners/bash.js";
-import {
-    editTool,
-    globTool,
-    grepTool,
-    lsTool,
-    readTool,
-    todoWriteTool,
-    writeTool,
-} from "./runners/fs.js";
+import { lettaCodeTools } from "./runners/letta_tools/index.js";
 import { listSkillsTool, skillTool } from "./runners/skill.js";
 import type {
     ClientToolDefinition,
@@ -33,19 +25,24 @@ function register(def: ClientToolDefinition): void {
     registry.set(def.name, def);
 }
 
-// Phase A: full Letta-code core toolset minus the UI/subagent ones.
-//   Bash, Read, Write, Edit, LS, Glob, Grep, TodoWrite, Skill, list_skills.
-//   Deferred (need UI/subagent runtime): AskUserQuestion, MultiEdit,
-//   BashOutput, KillBash, EnterPlanMode, ExitPlanMode, Task/TaskOutput/
-//   TaskStop, ViewImage, memory, ReadLSP.
+// Faithful port of letta-code's tool set (cowork-gui src/tools/impl/*).
+// Schemas + descriptions + impls are the actual files copied from
+// cowork-gui — not reimplementations. The `letta_tools/index.ts` adapter
+// converts each tool's typed result to our {output,isError} shape.
+//
+// Currently registered:
+//   • Bash (our v9 port — full launcher chain + ENV prelude)
+//   • Read, Write, Edit, MultiEdit, Glob, Grep, LS — file ops
+//   • ApplyPatch — codex-style unified-diff patches
+//   • TodoWrite, AskUserQuestion — workflow
+//   • Skill, list_skills — kept from our earlier impl
+//
+// Deferred (need agent runtime / memory subsystem / UI hooks):
+//   BashOutput, KillBash, EnterPlanMode, ExitPlanMode,
+//   Task/TaskOutput/TaskStop, ViewImage, Memory/MemoryApplyPatch,
+//   MessageChannel, ReadLSP.
 register(bashTool);
-register(readTool);
-register(writeTool);
-register(editTool);
-register(lsTool);
-register(globTool);
-register(grepTool);
-register(todoWriteTool);
+for (const tool of lettaCodeTools) register(tool);
 register(skillTool);
 register(listSkillsTool);
 
