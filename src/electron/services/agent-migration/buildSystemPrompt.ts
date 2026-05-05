@@ -1,15 +1,18 @@
 /**
- * Builds the letta-code-style system prompt that establishes the agent
- * as a coding agent with access to tools, subagents, and memory.
+ * Builds the letta-code system prompt that establishes the agent as a
+ * coding agent with access to tools, subagents, and memory.
  *
- * Without this prompt, the agent literally doesn't know `Bash`/`Read`/
- * `Edit`/etc. exist, even when we pass them via the `client_tools`
- * parameter at runtime — the model has no instruction in its persona
- * saying "you can call these tools". Letta-code creates new agents
- * with this prompt baked into the `system` field
- * (see cowork-gui/src/agent/create.ts:339).
+ * Without this prompt the model literally has no instruction in its
+ * persona saying "you can call Bash/Read/Edit/etc.", so the runtime
+ * `client_tools` parameter never gets exercised.
  *
- * Mirrors cowork-gui's promptAssets.ts → buildSystemPrompt().
+ * Mirrors the latest letta-code (`@letta-ai/letta-code` v0.25+):
+ *   • src/agent/promptAssets.ts → buildSystemPrompt(presetId, memoryMode)
+ *   • src/agent/prompts/letta_no_memfs.md   ← "standard" memory mode (DEFAULT)
+ *   • src/agent/prompts/letta.md            ← "memfs"     memory mode (variant)
+ *
+ * Letta-code consolidated the "core prompt + memory addon" structure
+ * into two self-contained files. We keep the same shape here.
  */
 
 import { readFileSync } from "node:fs";
@@ -20,48 +23,41 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const PROMPTS_DIR = join(__dirname, "prompts");
 
-export type MemoryPromptMode = "memfs" | "blocks";
+/** Letta-code's MemoryPromptMode — values match promptAssets.ts:102. */
+export type MemoryPromptMode = "standard" | "memfs";
 
-function loadPrompt(name: string): string {
+let _standard: string | null = null;
+let _memfs: string | null = null;
+
+function load(name: string): string {
     return readFileSync(join(PROMPTS_DIR, `${name}.md`), "utf-8");
 }
 
-let _letta: string | null = null;
-let _blocks: string | null = null;
-let _memfs: string | null = null;
-
-function letta(): string {
-    if (_letta === null) _letta = loadPrompt("letta");
-    return _letta;
+function standardPrompt(): string {
+    if (_standard === null) _standard = load("letta_no_memfs");
+    return _standard;
 }
-function blocksAddon(): string {
-    if (_blocks === null) _blocks = loadPrompt("system_prompt_blocks");
-    return _blocks;
-}
-function memfsAddon(): string {
-    if (_memfs === null) _memfs = loadPrompt("system_prompt_memfs");
+function memfsPrompt(): string {
+    if (_memfs === null) _memfs = load("letta");
     return _memfs;
 }
 
 /**
- * Build the full system prompt for a letta-code-style agent.
+ * Build the system prompt for the "letta" / "default" preset.
  *
- *   buildLettaSystemPrompt("blocks")   → letta.md + memory-blocks addon
- *   buildLettaSystemPrompt("memfs")    → letta.md + memfs addon
+ *   buildLettaSystemPrompt("standard") → letta_no_memfs.md  (DEFAULT)
+ *   buildLettaSystemPrompt("memfs")    → letta.md (memfs variant)
  *
- * Optionally append a custom persona override (e.g. "You are Bhavesh PA,
- * an executive assistant...") at the end, so users can keep their old
- * agent's voice while still getting tool awareness.
+ * Optionally append a custom persona override at the end so users keep
+ * their old agent's voice while gaining tool awareness.
  */
 export function buildLettaSystemPrompt(
-    memoryMode: MemoryPromptMode = "blocks",
+    memoryMode: MemoryPromptMode = "standard",
     appendPersona?: string
 ): string {
-    const base = letta().trimEnd();
-    const addon = (memoryMode === "memfs" ? memfsAddon() : blocksAddon()).trimStart();
-    let out = `${base}\n\n${addon}`.trim();
+    const base = (memoryMode === "memfs" ? memfsPrompt() : standardPrompt()).trim();
     if (appendPersona && appendPersona.trim()) {
-        out += `\n\n# Persona override\n\n${appendPersona.trim()}`;
+        return `${base}\n\n# Persona override\n\n${appendPersona.trim()}`;
     }
-    return out;
+    return base;
 }

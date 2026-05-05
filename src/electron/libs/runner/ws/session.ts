@@ -102,7 +102,7 @@ export class WsSession {
         this._agentId = opts.agentId ?? null;
         this._conversationId = opts.conversationId ?? null;
         console.log(
-            "[WsSession] constructed (build-id: client_tools-v10-letta-code-port)"
+            "[WsSession] constructed (build-id: client_tools-v12-19tools)"
         );
     }
 

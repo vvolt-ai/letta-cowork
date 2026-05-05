@@ -21,24 +21,36 @@ import type {
 
 import ApplyPatchSchema from "../_shared/schemas/ApplyPatch.json" with { type: "json" };
 import AskUserQuestionSchema from "../_shared/schemas/AskUserQuestion.json" with { type: "json" };
+import BashOutputSchema from "../_shared/schemas/BashOutput.json" with { type: "json" };
 import EditSchema from "../_shared/schemas/Edit.json" with { type: "json" };
 import GlobSchema from "../_shared/schemas/Glob.json" with { type: "json" };
 import GrepSchema from "../_shared/schemas/Grep.json" with { type: "json" };
+import KillBashSchema from "../_shared/schemas/KillBash.json" with { type: "json" };
 import LSSchema from "../_shared/schemas/LS.json" with { type: "json" };
 import MultiEditSchema from "../_shared/schemas/MultiEdit.json" with { type: "json" };
 import ReadSchema from "../_shared/schemas/Read.json" with { type: "json" };
+import ReadLSPSchema from "../_shared/schemas/ReadLSP.json" with { type: "json" };
+import TaskOutputSchema from "../_shared/schemas/TaskOutput.json" with { type: "json" };
+import TaskStopSchema from "../_shared/schemas/TaskStop.json" with { type: "json" };
 import TodoWriteSchema from "../_shared/schemas/TodoWrite.json" with { type: "json" };
+import ViewImageSchema from "../_shared/schemas/ViewImage.json" with { type: "json" };
 import WriteSchema from "../_shared/schemas/Write.json" with { type: "json" };
 
 import { apply_patch } from "./ApplyPatch.js";
 import { ask_user_question } from "./AskUserQuestion.js";
+import { bash_output } from "./BashOutput.js";
 import { edit } from "./Edit.js";
 import { glob } from "./Glob.js";
 import { grep } from "./Grep.js";
+import { kill_bash } from "./KillBash.js";
 import { ls } from "./LS.js";
 import { multi_edit } from "./MultiEdit.js";
 import { read } from "./Read.js";
+import { read_lsp } from "./ReadLSP.js";
+import { task_output } from "./TaskOutput.js";
+import { task_stop } from "./TaskStop.js";
 import { todo_write } from "./TodoWrite.js";
+import { view_image } from "./ViewImage.js";
 import { write } from "./Write.js";
 
 import { readFileSync } from "node:fs";
@@ -57,13 +69,19 @@ function loadDesc(name: string): string {
 }
 const ApplyPatchDescription = loadDesc("ApplyPatch");
 const AskUserQuestionDescription = loadDesc("AskUserQuestion");
+const BashOutputDescription = loadDesc("BashOutput");
 const EditDescription = loadDesc("Edit");
 const GlobDescription = loadDesc("Glob");
 const GrepDescription = loadDesc("Grep");
+const KillBashDescription = loadDesc("KillBash");
 const LSDescription = loadDesc("LS");
 const MultiEditDescription = loadDesc("MultiEdit");
 const ReadDescription = loadDesc("Read");
+const ReadLSPDescription = loadDesc("ReadLSP");
+const TaskOutputDescription = loadDesc("TaskOutput");
+const TaskStopDescription = loadDesc("TaskStop");
 const TodoWriteDescription = loadDesc("TodoWrite");
+const ViewImageDescription = loadDesc("ViewImage");
 const WriteDescription = loadDesc("Write");
 
 type ImplFn = (args: Record<string, unknown>) => Promise<unknown>;
@@ -163,4 +181,10 @@ export const lettaCodeTools: ClientToolDefinition[] = [
     makeTool("ApplyPatch", ApplyPatchDescription, ApplyPatchSchema as Record<string, unknown>, apply_patch as unknown as ImplFn),
     makeTool("TodoWrite", TodoWriteDescription, TodoWriteSchema as Record<string, unknown>, todo_write as unknown as ImplFn),
     makeTool("AskUserQuestion", AskUserQuestionDescription, AskUserQuestionSchema as Record<string, unknown>, ask_user_question as unknown as ImplFn),
+    makeTool("BashOutput", BashOutputDescription, BashOutputSchema as Record<string, unknown>, bash_output as unknown as ImplFn),
+    makeTool("KillBash", KillBashDescription, KillBashSchema as Record<string, unknown>, kill_bash as unknown as ImplFn),
+    makeTool("ViewImage", ViewImageDescription, ViewImageSchema as Record<string, unknown>, view_image as unknown as ImplFn),
+    makeTool("TaskOutput", TaskOutputDescription, TaskOutputSchema as Record<string, unknown>, task_output as unknown as ImplFn),
+    makeTool("TaskStop", TaskStopDescription, TaskStopSchema as Record<string, unknown>, task_stop as unknown as ImplFn),
+    makeTool("ReadLSP", ReadLSPDescription, ReadLSPSchema as Record<string, unknown>, read_lsp as unknown as ImplFn),
 ];

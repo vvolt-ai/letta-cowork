@@ -131,9 +131,9 @@ async function createTargetAgent(
     if (mode === "preserve") {
         systemPrompt = snapshot.system;
     } else if (mode === "letta-code+persona") {
-        systemPrompt = buildLettaSystemPrompt("blocks", snapshot.system);
+        systemPrompt = buildLettaSystemPrompt("standard", snapshot.system);
     } else {
-        systemPrompt = buildLettaSystemPrompt("blocks");
+        systemPrompt = buildLettaSystemPrompt("standard");
     }
 
     const createBody: Record<string, unknown> = {
@@ -194,7 +194,7 @@ export async function refreshAgentSystemPrompt(opts: {
     agentId: string;
     /** Default 'letta-code+persona' — keeps the agent's old persona below the letta-code prompt. */
     mode?: "letta-code" | "letta-code+persona";
-    memoryMode?: "blocks" | "memfs";
+    memoryMode?: "standard" | "memfs";
 }): Promise<{ oldLength: number; newLength: number; system: string }> {
     if (!opts.agentId || typeof opts.agentId !== "string") {
         throw new Error("refreshAgentSystemPrompt: agentId is required");
@@ -204,7 +204,7 @@ export async function refreshAgentSystemPrompt(opts: {
         system?: string;
     };
     const oldSystem = String(agent.system ?? "");
-    const memoryMode = opts.memoryMode ?? "blocks";
+    const memoryMode = opts.memoryMode ?? "standard";
     const mode = opts.mode ?? "letta-code+persona";
     const newSystem =
         mode === "letta-code"

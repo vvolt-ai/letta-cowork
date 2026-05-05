@@ -40,7 +40,7 @@ export function registerAgentMigrationHandlers(): void {
             opts: {
                 agentId: string;
                 mode?: "letta-code" | "letta-code+persona";
-                memoryMode?: "blocks" | "memfs";
+                memoryMode?: "standard" | "memfs";
             }
         ) => {
             try {
