@@ -231,7 +231,7 @@ export class WsSession {
                     // any prior stuck "requires_approval" runs before
                     // sending. Without this, the server returns CONFLICT
                     // and the conversation is permanently blocked.
-                    await this.recoverStuckApprovals();
+                   // await this.recoverStuckApprovals();
                     if (ctrl.signal.aborted) break;
 
                     const turnResult = await this.runOneStreamTurn(
@@ -441,16 +441,16 @@ export class WsSession {
                         `[WsSession] approval conflict on attempt ${attempt}, recovering and retrying:`,
                         errMessage
                     );
-                    try {
-                        await this.recoverStuckApprovals();
-                    } catch (recoverErr) {
-                        console.warn(
-                            "[WsSession] recoverStuckApprovals during retry failed:",
-                            recoverErr instanceof Error
-                                ? recoverErr.message
-                                : String(recoverErr)
-                        );
-                    }
+                    // try {
+                    //     await this.recoverStuckApprovals();
+                    // } catch (recoverErr) {
+                    //     console.warn(
+                    //         "[WsSession] recoverStuckApprovals during retry failed:",
+                    //         recoverErr instanceof Error
+                    //             ? recoverErr.message
+                    //             : String(recoverErr)
+                    //     );
+                    // }
                     // Loop back and retry the pump from scratch.
                     continue;
                 }
@@ -705,12 +705,12 @@ export class WsSession {
         // pending approval. Fire-and-forget; failures fall through to
         // the next session's pre-flight recovery.
         if (hadActivePumps && this._agentId && this._conversationId) {
-            void this.recoverStuckApprovals().catch((err) => {
-                debug("WsSession: post-close recovery failed (non-fatal)", {
-                    error:
-                        err instanceof Error ? err.message : String(err),
-                });
-            });
+            // void this.recoverStuckApprovals().catch((err) => {
+            //     debug("WsSession: post-close recovery failed (non-fatal)", {
+            //         error:
+            //             err instanceof Error ? err.message : String(err),
+            //     });
+            // });
         }
     }
 
