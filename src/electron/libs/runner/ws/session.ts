@@ -201,8 +201,26 @@ export class WsSession {
         this.activePumps.add(ctrl);
         this.startedAt = Date.now();
 
+        // Detect the Letta CONFLICT response that fires when the conversation
+        // has a pending tool approval. Recoverable: cancel the stuck runs and
+        // retry the send once.
+        const isApprovalConflictError = (msg: string): boolean => {
+            return (
+                /CONFLICT/i.test(msg) &&
+                /(waiting for approval|pending approval|approval on a tool call)/i.test(msg)
+            );
+        };
+
         // Background pump — multi-turn loop, fire-and-forget.
+        // Wrapped in an outer retry loop so we can recover once from approval
+        // conflicts that race past the pre-flight recoverStuckApprovals call.
         void (async () => {
+            let attempt = 0;
+            const MAX_ATTEMPTS = 2;
+
+            // eslint-disable-next-line no-constant-condition
+            while (true) {
+            attempt++;
             try {
                 let nextMessages: unknown[] = initialMessages;
                 let turnCount = 0;
@@ -403,10 +421,43 @@ export class WsSession {
                     durationMs: Date.now() - this.startedAt,
                     conversationId: this._conversationId,
                 } as SDKResultMessage);
+                // Successful pump — break the retry loop.
+                break;
             } catch (err) {
-                if (ctrl.signal.aborted) return;
+                if (ctrl.signal.aborted) {
+                    this.activePumps.delete(ctrl);
+                    return;
+                }
                 const errMessage =
                     err instanceof Error ? err.message : String(err);
+
+                // If this is an approval-conflict race AND we have retries
+                // left, cancel the stuck runs server-side and retry the
+                // entire pump once. Without this, headless callers (e.g.
+                // /letta/respond, scheduler) hit a permanent CONFLICT
+                // whenever a pending approval is in flight.
+                if (
+                    isApprovalConflictError(errMessage) &&
+                    attempt < MAX_ATTEMPTS
+                ) {
+                    console.warn(
+                        `[WsSession] approval conflict on attempt ${attempt}, recovering and retrying:`,
+                        errMessage
+                    );
+                    try {
+                        await this.recoverStuckApprovals();
+                    } catch (recoverErr) {
+                        console.warn(
+                            "[WsSession] recoverStuckApprovals during retry failed:",
+                            recoverErr instanceof Error
+                                ? recoverErr.message
+                                : String(recoverErr)
+                        );
+                    }
+                    // Loop back and retry the pump from scratch.
+                    continue;
+                }
+
                 console.error("[WsSession] stream pump failed:", err);
                 this.enqueue({
                     type: "error",
@@ -419,9 +470,11 @@ export class WsSession {
                     durationMs: Date.now() - this.startedAt,
                     conversationId: this._conversationId,
                 } as SDKResultMessage);
-            } finally {
-                this.activePumps.delete(ctrl);
+                break;
             }
+            } // end retry while-loop
+
+            this.activePumps.delete(ctrl);
         })();
     }
 
