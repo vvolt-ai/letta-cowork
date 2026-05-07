@@ -52,6 +52,12 @@ export const lettaRespondHandler: ExpressHandler = async (
     const result = await runScheduledPrompt(agentId, conversationId, text);
 
     if (result.error) {
+      console.error("[letta-respond] Agent turn failed:", {
+        agentId,
+        conversationId,
+        error: result.error,
+        partialOutput: result.output ? result.output.slice(0, 200) : null,
+      });
       res.status(500).json({
         error: result.error,
         assistantText: result.output ?? null,

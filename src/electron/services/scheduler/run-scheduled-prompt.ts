@@ -68,7 +68,12 @@ export async function runScheduledPrompt(
   };
 
   const handleEvent = (event: ServerEvent) => {
-    if (event.type === "stream.message" && event.payload.sessionId === actualConversationId) {
+    // Note: the original sessionId filter on stream / status events was
+    // dropped intentionally. runScheduledPrompt only ever runs ONE session
+    // per call, so any event we see belongs to it; filtering by
+    // actualConversationId can race with onSessionUpdate and silently drop
+    // the very status event we are waiting for.
+    if (event.type === "stream.message") {
       const msg = event.payload.message as any;
       if (msg?.type === "assistant" || msg?.type === "assistant_message") {
         const text = extractAssistantText(msg);
@@ -78,11 +83,14 @@ export async function runScheduledPrompt(
       }
     }
 
-    if (event.type === "session.status" && event.payload.sessionId === actualConversationId) {
+    if (event.type === "session.status") {
       if (event.payload.status === "completed" || event.payload.status === "error") {
         finalStatus = event.payload.status;
         if (event.payload.error) {
           error = event.payload.error;
+        } else if (event.payload.status === "error") {
+          // status=error but no error string - capture so diagnostics aren't empty
+          error = "Session ended with status=error (no error message provided by runner)";
         }
         maybeResolve();
       }
@@ -95,18 +103,29 @@ export async function runScheduledPrompt(
     }
   };
 
-  await runLetta({
-    prompt,
-    session,
-    preferredAgentId: agentId,
-    resumeConversationId: conversationId ?? undefined,
-    onEvent: handleEvent,
-    onSessionUpdate: (updates) => {
-      if (updates.lettaConversationId) {
-        actualConversationId = updates.lettaConversationId;
-      }
-    },
-  });
+  try {
+    await runLetta({
+      prompt,
+      session,
+      preferredAgentId: agentId,
+      resumeConversationId: conversationId ?? undefined,
+      onEvent: handleEvent,
+      onSessionUpdate: (updates) => {
+        if (updates.lettaConversationId) {
+          actualConversationId = updates.lettaConversationId;
+        }
+      },
+    });
+  } catch (err) {
+    // runLetta itself rejected (e.g. session.initialize() threw because of
+    // a 404 agent or invalid API key). Capture the message so the caller
+    // sees the real cause instead of the generic fallback.
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[runScheduledPrompt] runLetta threw:", err);
+    error = message;
+    finalStatus = "error";
+    maybeResolve();
+  }
 
   await completionPromise;
 
