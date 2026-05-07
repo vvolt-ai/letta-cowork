@@ -441,16 +441,16 @@ export class WsSession {
                         `[WsSession] approval conflict on attempt ${attempt}, recovering and retrying:`,
                         errMessage
                     );
-                    // try {
-                    //     await this.recoverStuckApprovals();
-                    // } catch (recoverErr) {
-                    //     console.warn(
-                    //         "[WsSession] recoverStuckApprovals during retry failed:",
-                    //         recoverErr instanceof Error
-                    //             ? recoverErr.message
-                    //             : String(recoverErr)
-                    //     );
-                    // }
+                    try {
+                        await this.recoverStuckApprovals();
+                    } catch (recoverErr) {
+                        console.warn(
+                            "[WsSession] recoverStuckApprovals during retry failed:",
+                            recoverErr instanceof Error
+                                ? recoverErr.message
+                                : String(recoverErr)
+                        );
+                    }
                     // Loop back and retry the pump from scratch.
                     continue;
                 }
