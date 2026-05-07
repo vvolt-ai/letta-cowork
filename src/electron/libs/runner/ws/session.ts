@@ -30,10 +30,7 @@ import {
     isClientTool,
     runClientTool,
 } from "../../../services/client-tools/index.js";
-import {
-    cancelAgentRunById,
-    getAgentRunApprovalCandidates,
-} from "../../../services/agents/index.js";
+import { clearPendingApprovals } from "../../../services/agents/approval-recovery.js";
 import type {
     SDKAssistantMessage,
     SDKErrorMessage,
@@ -479,40 +476,28 @@ export class WsSession {
     }
 
     /**
-     * Pre-flight: clear any stuck "requires_approval" runs left over
-     * from a prior turn. Without this, the server rejects the next
-     * messages.create with CONFLICT — "Cannot send a new message: The
-     * agent is waiting for approval on a tool call."
+     * Pre-flight (and post-stop) recovery: clear any stuck
+     * "requires_approval" state on this conversation. Without this,
+     * the server rejects the next messages.create with CONFLICT —
+     * "Cannot send a new message: The agent is waiting for approval
+     * on a tool call."
      *
-     * Mirrors letta-code's approval-conflict recovery in
-     * agent/approval-recovery.ts. Best-effort — failures here are
-     * logged and we continue (the actual send will surface a clearer
-     * error if the conflict persists).
+     * Delegates to the canonical helper in
+     * services/agents/approval-recovery.ts which mirrors letta-code's
+     * `getResumeDataFromBackend` + `resolveAllPendingApprovals`
+     * pattern: discover via `conversation.in_context_message_ids`
+     * (not `runs.list`), filter out already-completed tool_call_ids,
+     * submit a real `{type:'approval', approvals:[...]}` rejection,
+     * and loop until the conversation is clean (handles cascading
+     * parallel approvals).
+     *
+     * Best-effort. Failures are logged and we continue — the actual
+     * send will surface a clearer error if the conflict persists.
      */
     private async recoverStuckApprovals(): Promise<void> {
         if (!this._agentId || !this._conversationId) return;
         try {
-            const candidates = await getAgentRunApprovalCandidates(
-                this._agentId,
-                this._conversationId
-            );
-            if (candidates.length === 0) return;
-            const seenRunIds = new Set<string>();
-            for (const c of candidates) {
-                if (!c.runId || seenRunIds.has(c.runId)) continue;
-                seenRunIds.add(c.runId);
-                try {
-                    await cancelAgentRunById(c.runId);
-                    debug("WsSession: recovered stuck run", {
-                        runId: c.runId,
-                    });
-                } catch (err) {
-                    console.warn(
-                        `[WsSession] failed to cancel stuck run ${c.runId}:`,
-                        err instanceof Error ? err.message : String(err)
-                    );
-                }
-            }
+            await clearPendingApprovals(getClient(), this._conversationId);
         } catch (err) {
             console.warn(
                 "[WsSession] recoverStuckApprovals failed:",
@@ -704,11 +689,29 @@ export class WsSession {
     }
 
     close(): void {
+        const hadActivePumps = this.activePumps.size > 0;
         for (const ctrl of this.activePumps) ctrl.abort();
         this.activePumps.clear();
         this.streamClosed = true;
         for (const resolve of this.streamResolvers) resolve(null);
         this.streamResolvers = [];
+
+        // If the user clicked stop mid-turn while a tool approval was
+        // pending, the server-side conversation is left in
+        // `requires_approval`. The next inbound message would 409 with
+        // CONFLICT until the pre-flight recovery clears it. Doing the
+        // cleanup here too means the stop button takes effect end-to-
+        // end: kill the local pump AND tell the server to drop the
+        // pending approval. Fire-and-forget; failures fall through to
+        // the next session's pre-flight recovery.
+        if (hadActivePumps && this._agentId && this._conversationId) {
+            void this.recoverStuckApprovals().catch((err) => {
+                debug("WsSession: post-close recovery failed (non-fatal)", {
+                    error:
+                        err instanceof Error ? err.message : String(err),
+                });
+            });
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────
