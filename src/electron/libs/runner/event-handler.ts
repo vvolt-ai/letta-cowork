@@ -196,5 +196,21 @@ export function handleResultMessage(
     return;
   }
 
-  sendSessionStatus(currentSessionId, status, onEvent, agentName);
+  // Propagate the error string carried on the result message (set e.g. by
+  // WsSession's stream-pump catch handler with the underlying API error)
+  // so headless callers like runScheduledPrompt see the real cause instead
+  // of a bare status=error.
+  const resultError =
+    status === "error"
+      ? (message as any).error ?? (message as any).errorDetail ?? (message as any).errorMessage
+      : undefined;
+  sendSessionStatus(
+    currentSessionId,
+    status,
+    onEvent,
+    agentName,
+    typeof resultError === "string" && resultError.length > 0
+      ? resultError
+      : undefined,
+  );
 }
