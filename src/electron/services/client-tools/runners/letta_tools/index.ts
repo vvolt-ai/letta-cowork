@@ -30,6 +30,7 @@ import LSSchema from "../_shared/schemas/LS.json" with { type: "json" };
 import MultiEditSchema from "../_shared/schemas/MultiEdit.json" with { type: "json" };
 import ReadSchema from "../_shared/schemas/Read.json" with { type: "json" };
 import ReadLSPSchema from "../_shared/schemas/ReadLSP.json" with { type: "json" };
+import TaskSchema from "../_shared/schemas/Task.json" with { type: "json" };
 import TaskOutputSchema from "../_shared/schemas/TaskOutput.json" with { type: "json" };
 import TaskStopSchema from "../_shared/schemas/TaskStop.json" with { type: "json" };
 import TodoWriteSchema from "../_shared/schemas/TodoWrite.json" with { type: "json" };
@@ -47,6 +48,7 @@ import { ls } from "./LS.js";
 import { multi_edit } from "./MultiEdit.js";
 import { read } from "./Read.js";
 import { read_lsp } from "./ReadLSP.js";
+import { task } from "./Task.js";
 import { task_output } from "./TaskOutput.js";
 import { task_stop } from "./TaskStop.js";
 import { todo_write } from "./TodoWrite.js";
@@ -78,6 +80,7 @@ const LSDescription = loadDesc("LS");
 const MultiEditDescription = loadDesc("MultiEdit");
 const ReadDescription = loadDesc("Read");
 const ReadLSPDescription = loadDesc("ReadLSP");
+const TaskDescription = loadDesc("Task");
 const TaskOutputDescription = loadDesc("TaskOutput");
 const TaskStopDescription = loadDesc("TaskStop");
 const TodoWriteDescription = loadDesc("TodoWrite");
@@ -155,6 +158,12 @@ function makeTool(
                 const out = await impl({
                     ...args,
                     signal: ctx.signal,
+                    // Thread runtime context through so tools that need to
+                    // know "what agent / conversation am I running under?"
+                    // (Task, Memory, MessageChannel) can pick it up. Most
+                    // tools ignore these fields.
+                    _runtime_agent_id: ctx.agentId,
+                    _runtime_conversation_id: ctx.conversationId,
                 });
                 return adaptResult(out);
             } catch (err) {
@@ -187,4 +196,5 @@ export const lettaCodeTools: ClientToolDefinition[] = [
     makeTool("TaskOutput", TaskOutputDescription, TaskOutputSchema as Record<string, unknown>, task_output as unknown as ImplFn),
     makeTool("TaskStop", TaskStopDescription, TaskStopSchema as Record<string, unknown>, task_stop as unknown as ImplFn),
     makeTool("ReadLSP", ReadLSPDescription, ReadLSPSchema as Record<string, unknown>, read_lsp as unknown as ImplFn),
+    makeTool("Task", TaskDescription, TaskSchema as Record<string, unknown>, task as unknown as ImplFn),
 ];

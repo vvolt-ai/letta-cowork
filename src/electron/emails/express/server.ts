@@ -12,6 +12,7 @@ import { fetchAccountHandler, fetchFoldersHandler } from "./account-handlers.js"
 import { downloadAttachmentHandler, uploadToAgentHandler } from "./attachment-handlers.js";
 import { processedEmailsHandler } from "./processed-email-handlers.js";
 import { lettaConversationHandler, lettaMessagesHandler, lettaAgentHandler } from "./letta-handlers.js";
+import { lettaRespondHandler } from "./respond-handler.js";
 import { draftEmailHandler, sendEmailHandler } from "./email-compose-handlers.js";
 import { agentCapabilitiesHandler } from "./capabilities.js";
 import { neo4jExplainHandler, neo4jRunQueryHandler, neo4jRunReadQueryHandler } from './neo4j-handlers.js';
@@ -63,6 +64,7 @@ export function createExpressServer(mainWindow: BrowserWindow): express.Express 
   api.get("/letta/conversation/:conversationId", lettaConversationHandler);
   api.get("/letta/conversation/:conversationId/messages", lettaMessagesHandler);
   api.get("/letta/agent/:agentId", lettaAgentHandler);
+  api.post("/letta/respond", lettaRespondHandler);
 
   // ============================================
   // Agent Capabilities Documentation

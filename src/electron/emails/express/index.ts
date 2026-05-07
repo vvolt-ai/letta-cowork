@@ -33,6 +33,7 @@ export { fetchAccountHandler, fetchFoldersHandler } from "./account-handlers.js"
 export { downloadAttachmentHandler, uploadToAgentHandler } from "./attachment-handlers.js";
 export { processedEmailsHandler } from "./processed-email-handlers.js";
 export { lettaConversationHandler, lettaMessagesHandler, lettaAgentHandler } from "./letta-handlers.js";
+export { lettaRespondHandler } from "./respond-handler.js";
 export { neo4jRunQueryHandler, neo4jRunReadQueryHandler, neo4jExplainHandler } from './neo4j-handlers.js';
 export { agentCapabilitiesHandler } from "./capabilities.js";
 export { createExpressServer, startExpressServer } from "./server.js";
