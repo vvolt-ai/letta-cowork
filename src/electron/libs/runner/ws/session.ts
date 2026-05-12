@@ -186,11 +186,35 @@ export class WsSession {
                 content:
                     typeof message === "string"
                         ? message
-                        : message.map((m) =>
-                              m.type === "text"
-                                  ? { type: "text" as const, text: m.text }
-                                  : { type: "text" as const, text: "[image omitted]" }
-                          ),
+                        : message.map((m) => {
+                              if (m.type === "text") {
+                                  return { type: "text" as const, text: m.text };
+                              }
+                              // Image content blocks: the agent's model may
+                              // not be vision-capable, but the URL is still
+                              // useful — agents can fetch the bytes, share
+                              // the link, or hand it to a downstream tool.
+                              // Surface the URL as text so it never gets
+                              // dropped. Vision-capable agents can switch
+                              // back to passing the typed image block when
+                              // we wire that up.
+                              const anyM = m as unknown as {
+                                  type?: string;
+                                  source?: { url?: string; data?: string };
+                                  image_url?: string | { url?: string };
+                                  url?: string;
+                              };
+                              const url =
+                                  anyM.source?.url ||
+                                  (typeof anyM.image_url === "string"
+                                      ? anyM.image_url
+                                      : anyM.image_url?.url) ||
+                                  anyM.url;
+                              if (anyM.type === "image" && url) {
+                                  return { type: "text" as const, text: `[image: ${url}]` };
+                              }
+                              return { type: "text" as const, text: "[image omitted]" };
+                          }),
             },
         ];
 
