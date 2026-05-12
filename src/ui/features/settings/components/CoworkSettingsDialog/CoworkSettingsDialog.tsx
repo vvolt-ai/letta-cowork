@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useCoworkSettings } from "../../../../hooks/useCoworkSettings";
 import { ChannelsManager } from "../../../channels/components/ChannelsManager";
+import { McpSettings } from "../McpSettings";
 
 interface CoworkSettings {
   showWhatsApp: boolean;
@@ -17,7 +18,7 @@ interface CoworkSettingsDialogProps {
   onAuthError?: (error: Error) => void;
 }
 
-type TabId = 'channels' | 'features';
+type TabId = 'channels' | 'mcp' | 'features';
 
 export function CoworkSettingsDialog({ open, onOpenChange, onAuthError }: CoworkSettingsDialogProps) {
   const { coworkSettings: coworkSettingsStore, updateCoworkSettings } = useCoworkSettings();
@@ -110,6 +111,16 @@ export function CoworkSettingsDialog({ open, onOpenChange, onAuthError }: Cowork
                 Channels
               </button>
               <button
+                onClick={() => setActiveTab('mcp')}
+                className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                  activeTab === 'mcp'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                MCP
+              </button>
+              <button
                 onClick={() => setActiveTab('features')}
                 className={`px-3 py-1 text-sm rounded-md transition-colors ${
                   activeTab === 'features'
@@ -136,6 +147,8 @@ export function CoworkSettingsDialog({ open, onOpenChange, onAuthError }: Cowork
         <div className="flex-1 overflow-auto">
           {activeTab === 'channels' ? (
             <ChannelsManager onAuthError={onAuthError} />
+          ) : activeTab === 'mcp' ? (
+            <McpSettings />
           ) : (
             <div className="p-4">
               {loading ? (

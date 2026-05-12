@@ -332,6 +332,122 @@ export function initializeApiIpcHandlers(): void {
     }
   });
 
+  // ============================================
+  // MCP — model-context-protocol servers + attachments
+  // ============================================
+  // Same {success,...} envelope pattern as channels so the UI can use
+  // a single error path. The server already returns 4xx/5xx for hard
+  // failures; we trap those into the envelope to avoid forcing the
+  // renderer to try/catch on every call.
+
+  ipcMain.handle("api:mcp:list-servers", async () => {
+    try {
+      const servers = await api.mcpListServers();
+      return { success: true, servers };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle("api:mcp:get-server", async (_, id: string) => {
+    try {
+      const server = await api.mcpGetServer(id);
+      return { success: true, server };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle("api:mcp:create-server", async (_, data: Parameters<typeof api.mcpCreateServer>[0]) => {
+    try {
+      const server = await api.mcpCreateServer(data);
+      return { success: true, server };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle("api:mcp:update-server", async (_, id: string, data: Parameters<typeof api.mcpUpdateServer>[1]) => {
+    try {
+      const server = await api.mcpUpdateServer(id, data);
+      return { success: true, server };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle("api:mcp:delete-server", async (_, id: string) => {
+    try {
+      await api.mcpDeleteServer(id);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle("api:mcp:refresh-tools", async (_, id: string) => {
+    try {
+      const tools = await api.mcpRefreshTools(id);
+      return { success: true, tools };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle("api:mcp:test-server", async (_, id: string) => {
+    try {
+      const result = await api.mcpTestServer(id);
+      return { success: true, result };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle("api:mcp:list-attachments", async (_, agentId: string) => {
+    try {
+      const attachments = await api.mcpListAttachments(agentId);
+      return { success: true, attachments };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle("api:mcp:attach", async (_, agentId: string, mcpServerId: string, toolNames: string[] | null) => {
+    try {
+      const attachment = await api.mcpAttach(agentId, mcpServerId, toolNames);
+      return { success: true, attachment };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle("api:mcp:update-attachment", async (_, agentId: string, mcpServerId: string, toolNames: string[] | null) => {
+    try {
+      const attachment = await api.mcpUpdateAttachment(agentId, mcpServerId, toolNames);
+      return { success: true, attachment };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle("api:mcp:detach", async (_, agentId: string, mcpServerId: string) => {
+    try {
+      await api.mcpDetach(agentId, mcpServerId);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle("api:mcp:list-tools-for-agent", async (_, agentId: string) => {
+    try {
+      const tools = await api.mcpListToolsForAgent(agentId);
+      return { success: true, tools };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
   console.log("API IPC handlers initialized");
 }
 

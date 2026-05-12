@@ -50,3 +50,13 @@ export { SessionEndpoints } from "./endpoints/sessions.js";
 export { ChannelEndpoints } from "./endpoints/channels.js";
 export { EmailEndpoints } from "./endpoints/emails.js";
 export { ProcessedEmailEndpoints } from "./endpoints/processed-emails.js";
+export { McpEndpoints } from "./endpoints/mcp.js";
+export type {
+  McpServer,
+  McpServerWithTools,
+  McpTool,
+  McpAttachment,
+  CreateMcpServerInput,
+  UpdateMcpServerInput,
+  McpTransport,
+} from "./endpoints/mcp.js";

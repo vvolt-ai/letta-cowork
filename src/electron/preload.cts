@@ -283,6 +283,35 @@ electron.contextBridge.exposeInMainWorld("electron", {
     schedulerRuns: (id: string, limit?: number, offset?: number) =>
         electron.ipcRenderer.invoke("scheduler:runs", id, limit, offset),
 
+    // ── MCP ──────────────────────────────────────────────────────────────────
+    // All return the same {success, ...} envelope pattern as channels.
+    // `data` typed as `any` here to keep the preload contract loose;
+    // the renderer-side wrapper imposes the real types.
+    apiMcpListServers: () =>
+        electron.ipcRenderer.invoke("api:mcp:list-servers"),
+    apiMcpGetServer: (id: string) =>
+        electron.ipcRenderer.invoke("api:mcp:get-server", id),
+    apiMcpCreateServer: (data: any) =>
+        electron.ipcRenderer.invoke("api:mcp:create-server", data),
+    apiMcpUpdateServer: (id: string, data: any) =>
+        electron.ipcRenderer.invoke("api:mcp:update-server", id, data),
+    apiMcpDeleteServer: (id: string) =>
+        electron.ipcRenderer.invoke("api:mcp:delete-server", id),
+    apiMcpRefreshTools: (id: string) =>
+        electron.ipcRenderer.invoke("api:mcp:refresh-tools", id),
+    apiMcpTestServer: (id: string) =>
+        electron.ipcRenderer.invoke("api:mcp:test-server", id),
+    apiMcpListAttachments: (agentId: string) =>
+        electron.ipcRenderer.invoke("api:mcp:list-attachments", agentId),
+    apiMcpAttach: (agentId: string, mcpServerId: string, toolNames: string[] | null) =>
+        electron.ipcRenderer.invoke("api:mcp:attach", agentId, mcpServerId, toolNames),
+    apiMcpUpdateAttachment: (agentId: string, mcpServerId: string, toolNames: string[] | null) =>
+        electron.ipcRenderer.invoke("api:mcp:update-attachment", agentId, mcpServerId, toolNames),
+    apiMcpDetach: (agentId: string, mcpServerId: string) =>
+        electron.ipcRenderer.invoke("api:mcp:detach", agentId, mcpServerId),
+    apiMcpListToolsForAgent: (agentId: string) =>
+        electron.ipcRenderer.invoke("api:mcp:list-tools-for-agent", agentId),
+
     // ── Runs Debugger ────────────────────────────────────────────────────────
     listAgentRuns: (params: { agentId: string; conversationId?: string; status?: string; limit?: number; offset?: number }) =>
         electron.ipcRenderer.invoke("list-agent-runs", params),

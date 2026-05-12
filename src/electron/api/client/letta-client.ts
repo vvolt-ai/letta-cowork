@@ -9,6 +9,15 @@ import { BaseHttpClient } from "./base-client.js";
 import { ChannelEndpoints } from "../endpoints/channels.js";
 import { EmailEndpoints } from "../endpoints/emails.js";
 import { SchedulerEndpoints } from "../endpoints/scheduler.js";
+import { McpEndpoints } from "../endpoints/mcp.js";
+import type {
+  McpServer,
+  McpServerWithTools,
+  McpTool,
+  McpAttachment,
+  CreateMcpServerInput,
+  UpdateMcpServerInput,
+} from "../endpoints/mcp.js";
 import type { ScheduledTask, ScheduleRun, CreateScheduledTaskDto, CreateScheduleRunDto } from "../endpoints/scheduler.js";
 import type { 
   AuthTokens, 
@@ -437,6 +446,78 @@ export class VeraCoworkApiClient extends BaseHttpClient {
 
   get scheduler(): SchedulerEndpoints {
     return new SchedulerEndpoints(this);
+  }
+
+  // ============================================
+  // MCP - Delegate to McpEndpoints
+  // ============================================
+  // Thin pass-throughs so callers can use `api.mcpListServers()`
+  // alongside `api.listChannels()` without having to import the
+  // endpoint class directly. Same convention as channels above.
+
+  async mcpListServers(): Promise<McpServer[]> {
+    return McpEndpoints.listServers(this);
+  }
+
+  async mcpGetServer(id: string): Promise<McpServerWithTools> {
+    return McpEndpoints.getServer(this, id);
+  }
+
+  async mcpCreateServer(data: CreateMcpServerInput): Promise<McpServer> {
+    return McpEndpoints.createServer(this, data);
+  }
+
+  async mcpUpdateServer(
+    id: string,
+    data: UpdateMcpServerInput,
+  ): Promise<McpServer> {
+    return McpEndpoints.updateServer(this, id, data);
+  }
+
+  async mcpDeleteServer(id: string): Promise<void> {
+    return McpEndpoints.deleteServer(this, id);
+  }
+
+  async mcpRefreshTools(id: string): Promise<McpTool[]> {
+    return McpEndpoints.refreshTools(this, id);
+  }
+
+  async mcpTestServer(
+    id: string,
+  ): Promise<{ ok: boolean; error?: string }> {
+    return McpEndpoints.testServer(this, id);
+  }
+
+  async mcpListAttachments(agentId: string): Promise<McpAttachment[]> {
+    return McpEndpoints.listAttachments(this, agentId);
+  }
+
+  async mcpAttach(
+    agentId: string,
+    mcpServerId: string,
+    toolNames: string[] | null,
+  ): Promise<McpAttachment> {
+    return McpEndpoints.attach(this, agentId, mcpServerId, toolNames);
+  }
+
+  async mcpUpdateAttachment(
+    agentId: string,
+    mcpServerId: string,
+    toolNames: string[] | null,
+  ): Promise<McpAttachment> {
+    return McpEndpoints.updateAttachment(this, agentId, mcpServerId, toolNames);
+  }
+
+  async mcpDetach(agentId: string, mcpServerId: string): Promise<void> {
+    return McpEndpoints.detach(this, agentId, mcpServerId);
+  }
+
+  async mcpListToolsForAgent(
+    agentId: string,
+  ): Promise<
+    Array<{ name: string; description: string; parameters: Record<string, unknown> }>
+  > {
+    return McpEndpoints.listToolsForAgent(this, agentId);
   }
 }
 
