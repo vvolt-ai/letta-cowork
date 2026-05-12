@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useMemo, useState } from "react";
 import type { UserPromptMessage } from "../../../types";
 
 const formatBytes = (bytes: number): string => {
@@ -13,8 +13,56 @@ const formatBytes = (bytes: number): string => {
   return `${value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 };
 
+/**
+ * Heartbeat / system_alert / system-style payloads arrive as user
+ * messages whose prompt is a JSON envelope (compaction summaries,
+ * automated re-engagement alerts, etc.). Rendering them as a normal
+ * "You" message confuses humans — those are clearly not what *they*
+ * typed.
+ *
+ * If the prompt parses as JSON and looks like a system envelope,
+ * we treat it as a system alert block — collapsed by default, styled
+ * like a ToolExecutionBlock so it visually belongs with the
+ * automation track rather than the human conversation.
+ */
+interface SystemEnvelope {
+  type: string;
+  message?: string;
+  time?: string;
+}
+
+function parseSystemEnvelope(prompt: string | undefined | null): SystemEnvelope | null {
+  if (!prompt) return null;
+  const trimmed = prompt.trim();
+  // Quick reject for human-typed prompts. JSON envelopes are always
+  // wrapped in `{ ... }` and reasonably contain `"type"`.
+  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return null;
+  if (!trimmed.includes(`"type"`)) return null;
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (parsed && typeof parsed === "object" && typeof parsed.type === "string") {
+      return parsed as SystemEnvelope;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function humanizeType(type: string): string {
+  // "system_alert" -> "System alert"
+  const spaced = type.replace(/[_-]+/g, " ").trim();
+  if (!spaced) return type;
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1).toLowerCase();
+}
+
 export const UserMessage = memo(function UserMessage({ message }: { message: UserPromptMessage }) {
   const attachments = message.attachments ?? [];
+  const envelope = useMemo(() => parseSystemEnvelope(message.prompt), [message.prompt]);
+
+  if (envelope) {
+    return <SystemAlertBlock envelope={envelope} rawPrompt={message.prompt ?? ""} />;
+  }
 
   return (
     <article className="ml-auto max-w-3xl" data-message-type="user">
@@ -70,3 +118,78 @@ export const UserMessage = memo(function UserMessage({ message }: { message: Use
     </article>
   );
 });
+
+/**
+ * Collapsed system-alert block — visual parity with ToolExecutionBlock
+ * (chevron, label + summary, expandable detail) so the chat reads as
+ * "tool track on the left, your messages on the right" without any
+ * raw JSON disrupting the flow.
+ */
+function SystemAlertBlock({
+  envelope,
+  rawPrompt,
+}: {
+  envelope: SystemEnvelope;
+  rawPrompt: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const label = humanizeType(envelope.type);
+  const summary = envelope.message
+    ? envelope.message.length > 140
+      ? `${envelope.message.slice(0, 137)}…`
+      : envelope.message
+    : null;
+
+  // Pretty JSON for the expanded detail view. Use the parsed envelope
+  // rather than the raw prompt so the indentation is consistent
+  // regardless of how the sender formatted the original payload.
+  const pretty = useMemo(() => {
+    try {
+      return JSON.stringify(JSON.parse(rawPrompt), null, 2);
+    } catch {
+      return rawPrompt;
+    }
+  }, [rawPrompt]);
+
+  return (
+    <section className="max-w-4xl px-1 py-0.5" data-message-type="system-alert">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full items-center gap-2 text-left"
+      >
+        <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center text-amber-500">
+          <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5">
+            {/* info-circle: matches tool-block icon weight/size */}
+            <path d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </span>
+        <div className="flex-1 min-w-0 flex items-center gap-1.5">
+          <span className="text-[12px] font-medium text-amber-700">{label}</span>
+          {summary && !expanded ? (
+            <span className="text-[12px] text-muted truncate">— {summary}</span>
+          ) : null}
+        </div>
+        <span className="text-ink-300 shrink-0">
+          <svg
+            viewBox="0 0 24 24"
+            className={`h-3 w-3 transition-transform ${expanded ? "rotate-90" : ""}`}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path d="m9 6 6 6-6 6" />
+          </svg>
+        </span>
+      </button>
+
+      {expanded ? (
+        <div className="mt-1.5 ml-5">
+          <div className="overflow-hidden rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 font-mono text-[11px] text-amber-900">
+            <pre className="max-h-60 overflow-auto whitespace-pre-wrap">{pretty}</pre>
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
