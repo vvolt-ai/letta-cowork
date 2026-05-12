@@ -41,6 +41,7 @@
 		"highlight.js": "^11.11.1",
 		"node-cron": "^4.2.1",
 		"os-utils": "^0.0.14",
+		"picomatch": "^4.0.4",
 		"pino": "^10.3.1",
 		"qrcode": "^1.5.4",
 		"qrcode-terminal": "^0.12.0",
