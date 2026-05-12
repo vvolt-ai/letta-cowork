@@ -46,9 +46,21 @@ export type TimelineEntry =
       logs?: string[];
       status: "running" | "succeeded" | "failed";
     }
+  | {
+      // Synthetic entry: two or more consecutive same-name tool calls
+      // collapsed into a single header (e.g. "Bash ×12") that expands
+      // to reveal the individual ToolExecutionBlocks. Only produced by
+      // useChatTimeline's post-process pass — never emitted by the
+      // stream layer directly.
+      kind: "tool_group";
+      id: string;
+      name: string;
+      children: ToolTimelineEntry[];
+    }
   | { kind: "cli_result"; id: string; command: string; output: string; exitCode: number };
 
 export type ToolTimelineEntry = Extract<TimelineEntry, { kind: "tool" }>;
+export type ToolGroupTimelineEntry = Extract<TimelineEntry, { kind: "tool_group" }>;
 
 export type ChatTimelineProps = {
   messages: IndexedMessage[];

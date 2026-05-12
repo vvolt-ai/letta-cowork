@@ -7,6 +7,7 @@ import { UserMessage } from "../UserMessage";
 import { AssistantMessage } from "../AssistantMessage";
 import { ReasoningBlock } from "../ReasoningBlock";
 import { ToolExecutionBlock } from "../ToolBlocks";
+import { ToolGroupBlock } from "../ToolGroupBlock";
 
 export type TimelineMessageProps = {
   entry: TimelineEntry;
@@ -43,6 +44,8 @@ export function TimelineMessage({ entry, agentName }: TimelineMessageProps) {
           logs={entry.logs}
         />
       );
+    case "tool_group":
+      return <ToolGroupBlock key={entry.id} group={entry} />;
     case "cli_result":
       return (
         <CliResultBlock
