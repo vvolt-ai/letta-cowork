@@ -232,12 +232,43 @@ export class WsSession {
             );
         };
 
+        // Detect transient network/socket failures mid-stream. Letta cloud's
+        // SSE stream can be killed by intermediate proxies, idle timeouts, or
+        // brief WAN blips — all recoverable by reconnecting. Covers undici
+        // (`terminated` / `UND_ERR_SOCKET` / `other side closed`) and the
+        // common Node net errors.
+        const isTransientNetworkError = (err: unknown, msg: string): boolean => {
+            if (/UND_ERR_SOCKET|other side closed|SocketError|^terminated$|stream pump failed/i.test(msg)) {
+                return true;
+            }
+            if (/ECONNRESET|ETIMEDOUT|ENOTFOUND|ECONNREFUSED|EPIPE|EAI_AGAIN|socket hang up|network|fetch failed/i.test(msg)) {
+                return true;
+            }
+            // Walk the cause chain — undici puts the real code on err.cause.code
+            let cur: unknown = err;
+            for (let depth = 0; depth < 4 && cur && typeof cur === "object"; depth++) {
+                const e = cur as { code?: unknown; name?: unknown; cause?: unknown };
+                if (typeof e.code === "string" && /UND_ERR_SOCKET|ECONNRESET|ETIMEDOUT|ENOTFOUND|ECONNREFUSED|EPIPE|EAI_AGAIN/i.test(e.code)) {
+                    return true;
+                }
+                if (typeof e.name === "string" && /SocketError/i.test(e.name)) {
+                    return true;
+                }
+                cur = e.cause;
+            }
+            return false;
+        };
+
         // Background pump — multi-turn loop, fire-and-forget.
         // Wrapped in an outer retry loop so we can recover once from approval
         // conflicts that race past the pre-flight recoverStuckApprovals call.
         void (async () => {
             let attempt = 0;
             const MAX_ATTEMPTS = 2;
+            // Network drops get their own (slightly larger) budget — these
+            // are recoverable by reconnecting the SSE stream.
+            const MAX_NETWORK_RETRIES = 4;
+            let networkRetries = 0;
 
             // eslint-disable-next-line no-constant-condition
             while (true) {
@@ -476,6 +507,34 @@ export class WsSession {
                         );
                     }
                     // Loop back and retry the pump from scratch.
+                    continue;
+                }
+
+                // Transient network drop mid-stream — reconnect with backoff.
+                // Letta's SSE can be cut by proxies/idle timeouts; the run is
+                // typically still progressing server-side, so a fresh pump
+                // either picks up trailing events or rerun cleanly.
+                if (
+                    isTransientNetworkError(err, errMessage) &&
+                    networkRetries < MAX_NETWORK_RETRIES
+                ) {
+                    networkRetries++;
+                    const backoffMs = Math.min(15_000, 1000 * 2 ** (networkRetries - 1));
+                    console.warn(
+                        `[WsSession] transient network error (retry ${networkRetries}/${MAX_NETWORK_RETRIES} in ${backoffMs}ms):`,
+                        errMessage
+                    );
+                    await new Promise<void>((resolve) => {
+                        const t = setTimeout(resolve, backoffMs);
+                        if (ctrl.signal.aborted) {
+                            clearTimeout(t);
+                            resolve();
+                        }
+                    });
+                    if (ctrl.signal.aborted) {
+                        this.activePumps.delete(ctrl);
+                        return;
+                    }
                     continue;
                 }
 
