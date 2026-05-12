@@ -24,6 +24,7 @@ import { GlobalErrorToast } from "./features/system/components/GlobalErrorToast"
 import { EmailDetailsDialog } from "./features/email/components/EmailDetailsDialog";
 import { CoworkSettingsDialog } from "./features/settings/components/CoworkSettingsDialog";
 import { MemoryDialog } from "./features/settings/components/MemoryDialog";
+import { McpServersDialog } from "./features/settings/components/McpSettings/McpServersDialog";
 import { ChangeEnv } from "./features/settings/components/ChangeEnv";
 import { LoginScreen } from "./features/auth/components/LoginScreen";
 import { useSessionController } from "./hooks/useSessionController";
@@ -149,6 +150,7 @@ function App() {
   const [scheduleAgents, setScheduleAgents] = useState<Array<{ id: string; name: string; description?: string | null }>>([]);
   const [skillDownloadOpen, setSkillDownloadOpen] = useState(false);
   const [showLettaCli, setShowLettaCli] = useState(false);
+  const [showMcpServers, setShowMcpServers] = useState(false);
 
   const {
     skillUrl,
@@ -768,6 +770,7 @@ function App() {
                   onOpenSettings={() => setShowCoworkSettings(true)}
                   onOpenSkillDownload={() => setSkillDownloadOpen(true)}
                   onOpenLettaCli={() => setShowLettaCli(true)}
+                  onOpenMcpServers={() => setShowMcpServers(true)}
                   isEmailConnected={isMailConnected}
                   unreadLabel={""}
                   autoSyncEnabled={autoSyncEnabled}
@@ -868,6 +871,7 @@ function App() {
         onAuthError={handleAuthError}
       />
       <MemoryDialog open={isMemoryOpen} onOpenChange={setIsMemoryOpen} />
+      <McpServersDialog open={showMcpServers} onOpenChange={setShowMcpServers} />
 
       {/* Skill Download Dialog */}
       <SkillDownloadDialog

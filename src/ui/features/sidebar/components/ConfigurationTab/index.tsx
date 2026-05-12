@@ -12,6 +12,7 @@ interface ConfigurationTabProps {
   onOpenSettings?: () => void;
   onOpenSkillDownload: () => void;
   onOpenLettaCli: () => void;
+  onOpenMcpServers: () => void;
   // Email integration props
   isEmailConnected: boolean;
   unreadLabel: string;
@@ -74,6 +75,7 @@ export const ConfigurationTab = memo(function ConfigurationTab({
   onOpenSettings,
   onOpenSkillDownload,
   onOpenLettaCli,
+  onOpenMcpServers,
   isEmailConnected,
   unreadLabel,
   autoSyncEnabled,
@@ -131,6 +133,24 @@ export const ConfigurationTab = memo(function ConfigurationTab({
       {/* Tool access — migrate to letta_v1_agent for Bash / Skill / file ops */}
       <ConfigSection title="Tool Access">
         <MigrateAgentRow />
+      </ConfigSection>
+
+      {/* MCP servers — external tool providers (Model Context Protocol) */}
+      <ConfigSection title="MCP Servers">
+        <ConfigRow
+          icon={
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+              {/* server stack icon */}
+              <rect x="3" y="4" width="18" height="6" rx="1.5" />
+              <rect x="3" y="14" width="18" height="6" rx="1.5" />
+              <circle cx="7" cy="7" r="0.5" fill="currentColor" />
+              <circle cx="7" cy="17" r="0.5" fill="currentColor" />
+            </svg>
+          }
+          label="Manage MCP Servers"
+          description="Connect external tool providers (Ryze, Composio, custom MCP endpoints)"
+          onClick={onOpenMcpServers}
+        />
       </ConfigSection>
 
       {/* Channels */}
