@@ -2,6 +2,10 @@ import { homedir } from "os";
 import { join, relative } from "path";
 import { promises as fs } from "fs";
 import { getCurrentAgentId } from "../libs/runner/index.js";
+import {
+    ensureCheckout,
+    type MemoryFileMeta,
+} from "./memfs/memfsGit.js";
 
 export interface MemoryFileResult {
     path: string;
@@ -12,11 +16,39 @@ export interface MemoryFileResult {
 
 /**
  * List all memory files for the current agent.
- * Walks the memory directory recursively and returns metadata for each .md file.
+ *
+ * Walks the memory directory recursively and returns metadata for each
+ * .md file. If the active agent's memory repo has never been cloned on
+ * this machine, this transparently clones it first (matching the
+ * behavior of `letta memfs pull`). For agents that already have a
+ * checkout, it performs a fast-forward pull so the listing reflects
+ * the latest server state.
+ *
+ * Falls back to a plain directory walk when:
+ *   - MEMORY_DIR is set explicitly (caller wants a specific path)
+ *   - The active agent ID isn't a real Letta agent UUID
+ *   - LETTA_API_KEY isn't configured (can't talk to the git remote)
  */
 export async function listAgentMemoryFiles(): Promise<MemoryFileResult[]> {
     const resolvedAgentId = getCurrentAgentId() || process.env.LETTA_AGENT_ID;
-    const memoryDir = process.env.MEMORY_DIR
+    const explicitDir = process.env.MEMORY_DIR;
+
+    // Try the git-backed path first when we have a real agent id and a
+    // token. ensureCheckout returns the local memory dir.
+    if (!explicitDir && resolvedAgentId && /^agent-[a-f0-9-]{36}$/i.test(resolvedAgentId) && (process.env.LETTA_API_KEY || "").trim()) {
+        try {
+            const dir = await ensureCheckout(resolvedAgentId);
+            return await walkMemoryDir(dir);
+        } catch (err) {
+            console.warn(
+                `[memoryService] ensureCheckout failed for ${resolvedAgentId}, falling back to plain walk:`,
+                err instanceof Error ? err.message : err,
+            );
+            // Fall through to plain-walk path below.
+        }
+    }
+
+    const memoryDir = explicitDir
         || (resolvedAgentId ? join(homedir(), ".letta", "agents", resolvedAgentId, "memory") : "");
 
     if (!memoryDir) {
@@ -29,6 +61,10 @@ export async function listAgentMemoryFiles(): Promise<MemoryFileResult[]> {
         throw new Error(`Agent memory directory is not accessible: ${memoryDir}${resolvedAgentId ? ` (agent: ${resolvedAgentId})` : ""}`);
     }
 
+    return walkMemoryDir(memoryDir);
+}
+
+async function walkMemoryDir(memoryDir: string): Promise<MemoryFileResult[]> {
     const results: MemoryFileResult[] = [];
 
     const walk = async (currentDir: string) => {
@@ -65,3 +101,20 @@ export async function listAgentMemoryFiles(): Promise<MemoryFileResult[]> {
     await walk(memoryDir);
     return results.sort((a, b) => a.path.localeCompare(b.path));
 }
+
+// Re-export the lower-level git API so callers (other services or IPC
+// handlers) can use clone/pull/read/write/commit without reaching into
+// the memfs/ folder directly.
+export {
+    cloneMemoryRepo,
+    pullMemory,
+    ensureCheckout,
+    commitAndPush,
+    getMemoryGitStatus,
+    listFiles as listMemoryFiles,
+    readMemoryFile,
+    writeMemoryFile,
+    getMemoryRepoDir,
+    isGitRepo,
+    type MemoryFileMeta,
+} from "./memfs/memfsGit.js";
