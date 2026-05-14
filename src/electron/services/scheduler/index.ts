@@ -7,7 +7,12 @@
  */
 
 import cron from "node-cron";
-import type { ScheduledTask, ScheduleRun, CreateScheduleRunDto } from "../../api/endpoints/scheduler.js";
+import type {
+  ScheduledTask,
+  ScheduleRun,
+  CreateScheduleRunDto,
+  UpdateScheduleRunDto,
+} from "../../api/endpoints/scheduler.js";
 
 type OnRunSession = (agentId: string, conversationId: string | null, prompt: string) => Promise<{
   output: string | null;
@@ -18,7 +23,9 @@ type OnRunSession = (agentId: string, conversationId: string | null, prompt: str
 type ApiClient = {
   scheduler: {
     listTasks: () => Promise<ScheduledTask[]>;
+    getTask: (id: string) => Promise<ScheduledTask>;
     createRun: (id: string, dto: CreateScheduleRunDto) => Promise<ScheduleRun>;
+    updateRun: (taskId: string, runId: string, dto: UpdateScheduleRunDto) => Promise<ScheduleRun>;
     toggleTask: (id: string) => Promise<ScheduledTask>;
   };
 };
@@ -130,7 +137,19 @@ class SchedulerService {
   }
 
   /**
-   * Execute a task: run the Letta session and post the run log.
+   * Execute a task: run the Letta session and post/patch the run log.
+   *
+   * Flow:
+   *   1. POST a `running` run row → capture runId
+   *   2. Invoke the agent
+   *   3. PATCH the same runId with the final status + output + completedAt
+   *
+   * The server fires the channel notification (WhatsApp etc.) on the
+   * PATCH that transitions the row into a terminal state.
+   *
+   * If step 1 fails (server unreachable etc.) we have no runId to patch
+   * later, so we fall back to POSTing a single completed row — the
+   * notification still fires from createRun's terminal-status branch.
    */
   private async executeTask(task: ScheduledTask): Promise<SchedulerRunResult | null> {
     if (!this.apiClient || !this.onRunSession) return null;
@@ -138,7 +157,7 @@ class SchedulerService {
     const startedAt = new Date().toISOString();
     let runId: string | null = null;
 
-    // Create an initial "running" log on the backend
+    // Step 1: open a `running` row on the backend
     try {
       const initRun = await this.apiClient.scheduler.createRun(task.id, {
         startedAt,
@@ -146,9 +165,14 @@ class SchedulerService {
       });
       runId = initRun.id;
     } catch (err) {
-      console.warn(`[Scheduler] Failed to create initial run log for task ${task.id}:`, err);
+      console.warn(
+        `[Scheduler] Failed to create initial run log for task ${task.id} ` +
+          `(will fall back to single-POST on completion):`,
+        err
+      );
     }
 
+    // Step 2: actually run the agent
     let output: string | null = null;
     let error: string | null = null;
     let resultConversationId: string | null = task.conversationId ?? null;
@@ -168,21 +192,28 @@ class SchedulerService {
 
     const completedAt = new Date().toISOString();
 
-    // Post the final run log
+    // Step 3: close the row. PATCH if we have a runId, otherwise POST as
+    // a single completed record (fallback path for when the initial
+    // create failed).
     try {
-      const runDto: CreateScheduleRunDto = {
-        startedAt,
-        completedAt,
-        status: finalStatus,
-        output: output ?? undefined,
-        error: error ?? undefined,
-        conversationId: resultConversationId ?? undefined,
-      };
-
-      // If we have a runId from the initial log, we'd update it.
-      // Since our API only has POST (create), we create a new completed record.
-      // The initial "running" record becomes a duplicate — acceptable for now.
-      await this.apiClient.scheduler.createRun(task.id, runDto);
+      if (runId) {
+        await this.apiClient.scheduler.updateRun(task.id, runId, {
+          completedAt,
+          status: finalStatus,
+          output: output ?? undefined,
+          error: error ?? undefined,
+          conversationId: resultConversationId ?? undefined,
+        });
+      } else {
+        await this.apiClient.scheduler.createRun(task.id, {
+          startedAt,
+          completedAt,
+          status: finalStatus,
+          output: output ?? undefined,
+          error: error ?? undefined,
+          conversationId: resultConversationId ?? undefined,
+        });
+      }
     } catch (err) {
       console.error(`[Scheduler] Failed to post run log for task ${task.id}:`, err);
     }
@@ -198,6 +229,25 @@ class SchedulerService {
       error,
       conversationId: resultConversationId ?? null,
     };
+  }
+
+  /**
+   * Public "Run now" — execute a task on demand, outside its cron
+   * schedule. Used by the UI for ad-hoc / test runs. Notification
+   * delivery follows the same path as a cron-fired run.
+   *
+   * Returns the SchedulerRunResult so the UI can display the outcome
+   * inline without round-tripping through listRuns.
+   */
+  async runTaskNow(taskId: string): Promise<SchedulerRunResult | null> {
+    if (!this.apiClient) {
+      throw new Error("Scheduler is not initialized");
+    }
+
+    // Pull fresh — the task may have been updated since the last sync,
+    // and we want runTaskNow to honor the latest prompt / agent / target.
+    const task = await this.apiClient.scheduler.getTask(taskId);
+    return this.executeTask(task);
   }
 
   /**

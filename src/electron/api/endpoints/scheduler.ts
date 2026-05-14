@@ -61,6 +61,19 @@ export interface CreateScheduleRunDto {
   conversationId?: string;
 }
 
+/**
+ * Partial update for an existing run row. Used to flip an initial
+ * `running` row into `completed`/`failed` without creating a duplicate.
+ * Channel notifications fire on the transition into a terminal state.
+ */
+export interface UpdateScheduleRunDto {
+  completedAt?: string;
+  status?: "running" | "completed" | "failed";
+  output?: string;
+  error?: string;
+  conversationId?: string;
+}
+
 export class SchedulerEndpoints {
   constructor(private readonly client: BaseHttpClient) {}
 
@@ -115,6 +128,20 @@ export class SchedulerEndpoints {
   createRun(id: string, dto: CreateScheduleRunDto): Promise<ScheduleRun> {
     return this.client.request<ScheduleRun>(`/schedules/${id}/runs`, {
       method: "POST",
+      body: dto as unknown as Record<string, unknown>,
+      suppressAuthExpired: true,
+    });
+  }
+
+  /**
+   * Patch an existing run. The scheduler creates a `running` row at
+   * task start and patches it with the final status/output when the
+   * agent finishes. The server fires the channel notification on the
+   * transition into a terminal state.
+   */
+  updateRun(taskId: string, runId: string, dto: UpdateScheduleRunDto): Promise<ScheduleRun> {
+    return this.client.request<ScheduleRun>(`/schedules/${taskId}/runs/${runId}`, {
+      method: "PATCH",
       body: dto as unknown as Record<string, unknown>,
       suppressAuthExpired: true,
     });
