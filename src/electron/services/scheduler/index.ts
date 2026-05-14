@@ -23,7 +23,6 @@ type OnRunSession = (agentId: string, conversationId: string | null, prompt: str
 type ApiClient = {
   scheduler: {
     listTasks: () => Promise<ScheduledTask[]>;
-    getTask: (id: string) => Promise<ScheduledTask>;
     createRun: (id: string, dto: CreateScheduleRunDto) => Promise<ScheduleRun>;
     updateRun: (taskId: string, runId: string, dto: UpdateScheduleRunDto) => Promise<ScheduleRun>;
     toggleTask: (id: string) => Promise<ScheduledTask>;
@@ -229,25 +228,6 @@ class SchedulerService {
       error,
       conversationId: resultConversationId ?? null,
     };
-  }
-
-  /**
-   * Public "Run now" — execute a task on demand, outside its cron
-   * schedule. Used by the UI for ad-hoc / test runs. Notification
-   * delivery follows the same path as a cron-fired run.
-   *
-   * Returns the SchedulerRunResult so the UI can display the outcome
-   * inline without round-tripping through listRuns.
-   */
-  async runTaskNow(taskId: string): Promise<SchedulerRunResult | null> {
-    if (!this.apiClient) {
-      throw new Error("Scheduler is not initialized");
-    }
-
-    // Pull fresh — the task may have been updated since the last sync,
-    // and we want runTaskNow to honor the latest prompt / agent / target.
-    const task = await this.apiClient.scheduler.getTask(taskId);
-    return this.executeTask(task);
   }
 
   /**
