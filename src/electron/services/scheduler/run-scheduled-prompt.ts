@@ -51,7 +51,15 @@ export async function runScheduledPrompt(
     pendingPermissions,
   };
 
-  let latestAssistantText: string | null = null;
+  // Capture EVERY assistant message the agent emits during the run.
+  // Keyed by message id so that streaming events that re-emit the same
+  // logical message (partial -> final, or duplicated finalize) don't
+  // produce duplicates. Order is preserved by Map iteration semantics.
+  // Messages without an id fall through to a monotonically-numbered key
+  // so the chronological order is still preserved.
+  const assistantTexts = new Map<string, string>();
+  let nextAnonymousId = 0;
+
   let error: string | null = null;
   let finalStatus: "running" | "completed" | "error" = "running";
 
@@ -78,7 +86,14 @@ export async function runScheduledPrompt(
       if (msg?.type === "assistant" || msg?.type === "assistant_message") {
         const text = extractAssistantText(msg);
         if (text) {
-          latestAssistantText = text;
+          // Use the message id when present so streaming updates to the
+          // same message overwrite in place. Fall back to a synthetic
+          // key for messages that arrive without one.
+          const key =
+            typeof msg.id === "string" && msg.id.length > 0
+              ? msg.id
+              : `__anon_${nextAnonymousId++}`;
+          assistantTexts.set(key, text);
         }
       }
     }
@@ -129,8 +144,17 @@ export async function runScheduledPrompt(
 
   await completionPromise;
 
+  // Join all assistant messages in the order they were emitted. Blank
+  // line between messages so multi-part responses (e.g. "here's the
+  // summary" followed by "want me to send it elsewhere?") read as
+  // separate paragraphs in the notification.
+  const output =
+    assistantTexts.size === 0
+      ? null
+      : Array.from(assistantTexts.values()).join("\n\n");
+
   return {
-    output: latestAssistantText,
+    output,
     conversationId: actualConversationId,
     error: finalStatus === ("completed" as "running" | "completed" | "error") ? null : error ?? "Scheduled run failed",
   };
