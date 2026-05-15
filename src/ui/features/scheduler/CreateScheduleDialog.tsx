@@ -1,24 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 
 interface LettaAgent { id: string; name: string; }
-interface Channel { id: string; name: string; provider: string; isActive: boolean; }
-
-const PROVIDER_EMOJIS: Record<string, string> = {
-  slack:    "💬",
-  discord:  "🎮",
-  telegram: "✈️",
-  whatsapp: "📱",
-  email:    "📧",
-  custom:   "🔗",
-};
-
-function ProviderIcon({ provider }: { provider: string }) {
-  return (
-    <span className="text-base leading-none" role="img" aria-label={provider}>
-      {PROVIDER_EMOJIS[provider] ?? "🔗"}
-    </span>
-  );
-}
 
 import {
   type CreateScheduledTaskForm,
@@ -51,39 +33,17 @@ const EMPTY_FORM: CreateScheduledTaskForm = {
   cronExpression: "0 9 * * *",
   timezone: "UTC",
   enabled: true,
-  notifyChannelId: "",
-  notifyTarget: "",
-};
-
-// Placeholder hints per provider so the user knows what to enter
-const TARGET_HINTS: Record<string, { label: string; placeholder: string; hint: string }> = {
-  discord:  { label: "Discord channel ID", placeholder: "e.g. 1234567890123456789", hint: "Right-click a channel in Discord → Copy Channel ID (Developer Mode must be on)" },
-  slack:    { label: "Slack channel", placeholder: "e.g. #general or C0123ABCD", hint: "Enter the channel name or ID where the bot should post" },
-  telegram: { label: "Telegram chat ID", placeholder: "e.g. -1001234567890", hint: "Use @userinfobot in Telegram to get a chat ID" },
-  whatsapp: { label: "WhatsApp number", placeholder: "e.g. +1234567890", hint: "Include country code with + prefix" },
-  email:    { label: "Email address", placeholder: "e.g. team@company.com", hint: "The email address to send the notification to" },
-  custom:   { label: "Target address", placeholder: "Recipient address", hint: "" },
 };
 
 export function CreateScheduleDialog({ open, agents, onClose, onSave, initialValues, mode = "create" }: Props) {
   const [form, setForm] = useState<CreateScheduledTaskForm>({ ...EMPTY_FORM, ...initialValues });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [channels, setChannels] = useState<Channel[]>([]);
-  const [notifyEnabled, setNotifyEnabled] = useState(!!initialValues?.notifyChannelId);
 
   useEffect(() => {
     if (open) {
       setForm({ ...EMPTY_FORM, ...initialValues });
       setError(null);
-      setNotifyEnabled(!!initialValues?.notifyChannelId);
-      // Load available channels
-      window.electron.apiListChannels()
-        .then((res) => {
-          const list = (res.channels ?? []) as Channel[];
-          setChannels(list.filter((c) => c.isActive));
-        })
-        .catch(() => setChannels([]));
     }
   }, [open, initialValues]);
 
@@ -302,97 +262,18 @@ export function CreateScheduleDialog({ open, agents, onClose, onSave, initialVal
             Scheduled tasks use a randomized delay of several minutes for performance.
           </p>
 
-          {/* ── Notifications ─────────────────────────────────────────── */}
-          <div className="border border-gray-200 rounded-xl overflow-hidden">
-            {/* Section header with toggle */}
-            <button
-              type="button"
-              onClick={() => {
-                const next = !notifyEnabled;
-                setNotifyEnabled(next);
-                if (!next) set("notifyChannelId", "");
-              }}
-              className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
-            >
-              <div className="flex items-center gap-2">
-                <svg className="h-4 w-4 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-                </svg>
-                <span className="text-sm font-medium text-gray-700">Channel notification</span>
-              </div>
-              {/* Toggle pill */}
-              <div className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors duration-200 ${notifyEnabled ? "bg-gray-900" : "bg-gray-300"}`}>
-                <span className={`inline-block h-4 w-4 mt-0.5 ml-0.5 rounded-full bg-white shadow transform transition-transform duration-200 ${notifyEnabled ? "translate-x-4" : "translate-x-0"}`} />
-              </div>
-            </button>
-
-            {notifyEnabled && (
-              <div className="px-4 py-3 space-y-3 border-t border-gray-200 bg-white">
-                {channels.length === 0 ? (
-                  <p className="text-xs text-gray-400">
-                    No active channels found. Configure a channel in the Channels section first.
-                  </p>
-                ) : (
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                      Send notification to
-                    </label>
-                    <div className="flex flex-col gap-1.5">
-                      {channels.map((ch) => (
-                        <label
-                          key={ch.id}
-                          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors ${
-                            form.notifyChannelId === ch.id
-                              ? "border-gray-900 bg-gray-50"
-                              : "border-gray-200 hover:border-gray-300"
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name="notifyChannel"
-                            value={ch.id}
-                            checked={form.notifyChannelId === ch.id}
-                            onChange={() => set("notifyChannelId", ch.id)}
-                            className="accent-gray-900"
-                          />
-                          <div className="flex items-center gap-2 min-w-0">
-                            <ProviderIcon provider={ch.provider} />
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium text-gray-800 truncate">{ch.name}</p>
-                              <p className="text-xs text-gray-400 capitalize">{ch.provider}</p>
-                            </div>
-                          </div>
-                        </label>
-                      ))}
-                    </div>
-                    {/* Target input — shown once a channel is selected */}
-                    {form.notifyChannelId && (() => {
-                      const selectedCh = channels.find((c) => c.id === form.notifyChannelId);
-                      const providerHint = TARGET_HINTS[selectedCh?.provider ?? ""] ?? TARGET_HINTS.custom;
-                      return (
-                        <div className="mt-3 pt-3 border-t border-gray-100">
-                          <label className="block text-xs font-medium text-gray-600 mb-1">
-                            {providerHint.label}
-                          </label>
-                          <input
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder={providerHint.placeholder}
-                            value={form.notifyTarget}
-                            onChange={(e) => set("notifyTarget", e.target.value)}
-                          />
-                          {providerHint.hint && (
-                            <p className="mt-1.5 text-xs text-gray-400">{providerHint.hint}</p>
-                          )}
-                          <p className="mt-1.5 text-xs text-gray-400">
-                            A message will be posted when the task completes or fails.
-                          </p>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                )}
-              </div>
-            )}
+          {/* ── Notifications hint ─────────────────────────────────────
+              Notifications used to be a configurable dispatch on the
+              server. They moved into the prompt: the agent now decides
+              whether/where/how to notify, using the cowork-channels
+              skill to call POST /channels/:id/send. The dialog used to
+              have a whole UI section for picking channel + recipient -
+              all of that came out May 15. */}
+          <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2.5 text-xs text-blue-800">
+            <div className="font-medium mb-0.5">Want a notification?</div>
+            <div className="text-blue-700">
+              Tell the agent in the prompt above. Example: <span className="font-mono">"...and send the summary to WhatsApp +1234567890"</span>. The agent uses the cowork-channels skill to deliver it.
+            </div>
           </div>
 
           {error && (

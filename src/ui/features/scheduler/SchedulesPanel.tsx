@@ -75,8 +75,6 @@ export function SchedulesPanel({ agents }: Props) {
       cronExpression: cron,
       timezone: form.timezone,
       enabled: form.enabled,
-      notifyChannelId: form.notifyChannelId || undefined,
-      notifyTarget: form.notifyTarget || undefined,
     });
     await loadTasks();
   }, [loadTasks]);
@@ -94,8 +92,6 @@ export function SchedulesPanel({ agents }: Props) {
       cronExpression: cron,
       timezone: form.timezone,
       enabled: form.enabled,
-      notifyChannelId: form.notifyChannelId || undefined,
-      notifyTarget: form.notifyTarget || undefined,
     });
     setEditTask(null);
     await loadTasks();
@@ -315,8 +311,6 @@ export function SchedulesPanel({ agents }: Props) {
             cronExpression: editTask.cronExpression,
             timezone: editTask.timezone,
             enabled: editTask.enabled,
-            notifyChannelId: editTask.notifyChannelId ?? "",
-            notifyTarget: (editTask as any).notifyTarget ?? "",
           }}
         />
       )}

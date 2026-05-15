@@ -18,7 +18,6 @@ export interface ScheduledTask {
   cronExpression: string;
   timezone: string;
   enabled: boolean;
-  notifyChannelId: string | null;
   lastRunAt: string | null;
   nextRunAt: string | null;
   runCount?: number;
@@ -49,7 +48,6 @@ export interface CreateScheduledTaskDto {
   cronExpression: string;
   timezone?: string;
   enabled?: boolean;
-  notifyChannelId?: string;
 }
 
 export interface CreateScheduleRunDto {
@@ -136,8 +134,9 @@ export class SchedulerEndpoints {
   /**
    * Patch an existing run. The scheduler creates a `running` row at
    * task start and patches it with the final status/output when the
-   * agent finishes. The server fires the channel notification on the
-   * transition into a terminal state.
+   * agent finishes. Post-run notifications are no longer dispatched
+   * by the server - the agent handles them via the cowork-channels
+   * skill (POST /channels/:id/send) as part of its prompt.
    */
   updateRun(taskId: string, runId: string, dto: UpdateScheduleRunDto): Promise<ScheduleRun> {
     return this.client.request<ScheduleRun>(`/schedules/${taskId}/runs/${runId}`, {

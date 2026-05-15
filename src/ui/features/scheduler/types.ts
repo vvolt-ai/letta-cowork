@@ -10,7 +10,6 @@ export interface ScheduledTask {
   cronExpression: string;
   timezone: string;
   enabled: boolean;
-  notifyChannelId: string | null;
   lastRunAt: string | null;
   nextRunAt: string | null;
   runCount?: number;
@@ -44,8 +43,6 @@ export interface CreateScheduledTaskForm {
   cronExpression: string; // used when frequency === "custom"
   timezone: string;
   enabled: boolean;
-  notifyChannelId: string;
-  notifyTarget: string;   // provider-specific target (Discord channel ID, Slack #channel, etc.)
 }
 
 /** Convert form frequency + time fields into a cron expression */
