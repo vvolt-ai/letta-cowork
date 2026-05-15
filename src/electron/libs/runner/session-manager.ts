@@ -148,7 +148,10 @@ export async function initializeSession(
     // session" from its 45s timeout but the user has no idea why. With this
     // timeout, we return a descriptive error that includes the model override
     // so the failure mode is immediately diagnosable.
-    const INIT_TIMEOUT_MS = 30_000;
+    // Bumped 30s -> 60s on May 15 after a real scheduled-run timeout against
+    // a heavy agent (Shelly). Cold-start of an agent with a large system prompt
+    // routinely takes 20-40s on the first connect against api.letta.com.
+    const INIT_TIMEOUT_MS = 60_000;
     const selectedModel = (lettaSession as unknown as { _options?: { model?: string } })?._options?.model;
 
     try {

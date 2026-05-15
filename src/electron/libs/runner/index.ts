@@ -209,9 +209,11 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
       };
       log("ERROR in runLetta", errorDetails);
 
-      // Cancel all active sessions on error
-      debug("cancelling all active sessions due to error");
-      await abortAllSessions();
+      // NOTE: do NOT call abortAllSessions() here. A single failed run
+      // (e.g. one scheduled task timing out on init against api.letta.com)
+      // must not nuke every other active conversation in the runtime.
+      // The caller (scheduler or UI) handles its own session's failure
+      // via the "error" status we send below. May 15 cascade incident.
 
       // Send detailed error to UI
       const errorMessage = `Failed to start session: ${String(error)}\n\nAgent ID: ${errorDetails.agentId}\nBase URL: ${errorDetails.baseURL}\nAPI Key: ${errorDetails.apiKeyMasked}`;

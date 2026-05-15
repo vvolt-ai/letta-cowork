@@ -18,17 +18,60 @@ import {
 
 /**
  * Abort all active sessions.
+ *
+ * Called from legitimate paths only (user "stop all" button, app shutdown).
+ * Do NOT call this from a per-run error handler - one failed run shouldn't
+ * tear down every other active session. See May 15 cascade incident.
+ *
+ * Robust against SDK shape drift: not every Session object exposes .abort().
+ * We try it if it exists, then fall back to the currentAbortController and
+ * to the Letta server-side cancel APIs (conversations/agents).
  */
 export async function abortAllSessions(): Promise<void> {
   console.log("[runner] abortAllSessions called, active sessions:", getActiveSessions().size);
+
+  const lettaClient = createLettaClient();
+
   for (const [sessionId, lettaSession] of getActiveSessions()) {
-    try {
-      console.log(`[runner] aborting session: ${sessionId}`);
-      await lettaSession.abort();
-    } catch (err) {
-      console.log(`[runner] error aborting session ${sessionId}:`, err);
+    console.log(`[runner] aborting session: ${sessionId}`);
+
+    // 1. SDK-side abort if the method exists on this Session instance.
+    const maybeAbort = (lettaSession as unknown as { abort?: () => Promise<void> }).abort;
+    if (typeof maybeAbort === "function") {
+      try {
+        await maybeAbort.call(lettaSession);
+      } catch (err) {
+        console.log(`[runner] lettaSession.abort() error for ${sessionId}:`, err);
+      }
+    }
+
+    // 2. Server-side cancel by conversationId (most reliable).
+    const convId = lettaSession.conversationId;
+    if (lettaClient && convId && /^conv-/.test(convId)) {
+      try {
+        await lettaClient.conversations.cancel(convId);
+      } catch (err) {
+        console.log(`[runner] conversations.cancel error for ${sessionId}:`, err);
+      }
+    }
+
+    // 3. Agent-level cancel as a final safety net.
+    const agentId = lettaSession.agentId;
+    if (lettaClient && agentId) {
+      try {
+        await lettaClient.agents.messages.cancel(agentId);
+      } catch (err) {
+        console.log(`[runner] agents.messages.cancel error for ${sessionId}:`, err);
+      }
     }
   }
+
+  // 4. Trip the global abort controller in case any stream is still consuming it.
+  const currentAbort = getCurrentAbortController();
+  if (currentAbort && !currentAbort.signal.aborted) {
+    currentAbort.abort();
+  }
+
   clearActiveSessions();
 }
 
