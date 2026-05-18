@@ -171,6 +171,15 @@ export async function clearPendingApprovals(
 ): Promise<{ iterations: number; cleared: number }> {
     let iterations = 0;
     let cleared = 0;
+    // Snapshot the set of tool_call_ids we classify as "stale" on the
+    // very first discovery. Recovery only ever runs pre-flight (or on
+    // an explicit conflict retry), so anything pending at THAT moment
+    // is legitimately stale. New tool_call_ids that surface in later
+    // iterations are post-denial cascades from the agent processing
+    // our denials — they belong to the live turn and MUST NOT be
+    // denied. Bounding by this snapshot prevents the recovery loop
+    // from trampling fresh tool calls.
+    let staleSnapshot: Set<string> | null = null;
 
     while (iterations < MAX_CLEAR_ITERATIONS) {
         iterations += 1;
@@ -185,6 +194,13 @@ export async function clearPendingApprovals(
                 error: err instanceof Error ? err.message : String(err),
             });
             break;
+        }
+
+        if (staleSnapshot === null) {
+            staleSnapshot = new Set(pending.map((p) => p.toolCallId));
+        } else {
+            // Drop anything that wasn't in the original stale set.
+            pending = pending.filter((p) => staleSnapshot!.has(p.toolCallId));
         }
 
         if (pending.length === 0) {

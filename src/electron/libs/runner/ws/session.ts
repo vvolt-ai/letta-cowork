@@ -287,7 +287,14 @@ export class WsSession {
                     // any prior stuck "requires_approval" runs before
                     // sending. Without this, the server returns CONFLICT
                     // and the conversation is permanently blocked.
-                   // await this.recoverStuckApprovals();
+                    //
+                    // Pre-flight ONLY on the first turn of this pump.
+                    // Mid-pump turns are driven by our own tool returns —
+                    // anything pending there is live, not stale, so we
+                    // must not deny it.
+                    if (turnCount === 1) {
+                        await this.recoverStuckApprovals();
+                    }
                     if (ctrl.signal.aborted) break;
 
                     const turnResult = await this.runOneStreamTurn(
