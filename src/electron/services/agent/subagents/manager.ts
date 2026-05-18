@@ -33,6 +33,7 @@ import {
     isClientTool,
     runClientTool,
 } from "../../client-tools/index.js";
+import { runWithResourceLocks } from "./parallelism.js";
 
 const MAX_TURNS = 25; // safety cap mirroring our main session pump
 
@@ -125,16 +126,22 @@ export async function runSubagent(
 
         // ── Branch 1: approval-flow (client_tools-as-approval, like our main session) ──
         //
-        // Parallel execution mirrors WsSession.runOneStreamTurn (parent
-        // session). Running tools sequentially here was the dominant
-        // source of subagent latency: a turn with N tool calls took
-        // N * tool_duration instead of max(tool_duration). With Promise.all
-        // the wall time collapses to the slowest tool plus a single
-        // approval round-trip per turn.
+        // Uses the resource-aware scheduler from ./parallelism so that:
+        //   - read-only tools (Read/Grep/Glob/web_search/...) fan out
+        //   - Edits to the same file serialize; Edits to different files
+        //     run in parallel
+        //   - Bash and other arbitrary-side-effect tools hold a global
+        //     lock so they never race with each other or with writes
+        // This mirrors letta-code's approval-execution.ts strategy and
+        // is strictly safer than blanket Promise.all while keeping the
+        // common fan-out cases fast.
         if (turn.approvalRequests.length > 0) {
             toolCallCount += turn.approvalRequests.length;
-            const executed = await Promise.all(
-                turn.approvalRequests.map(async (req) => {
+            const executed = await runWithResourceLocks(
+                turn.approvalRequests,
+                (req) => req.toolName,
+                (req) => parseArgs(req.argumentsRaw),
+                async (req) => {
                     if (!isClientTool(req.toolName)) {
                         return {
                             tool_call_id: req.toolCallId,
@@ -155,7 +162,7 @@ export async function runSubagent(
                             ? ("error" as const)
                             : ("success" as const),
                     };
-                })
+                }
             );
             const approvalEntries = executed.map((e) => ({
                 type: "tool",
@@ -171,8 +178,11 @@ export async function runSubagent(
         const clientCalls = turn.toolCalls.filter((c) => isClientTool(c.name));
         if (clientCalls.length > 0) {
             toolCallCount += clientCalls.length;
-            const toolReturns = await Promise.all(
-                clientCalls.map(async (call) => {
+            const toolReturns = await runWithResourceLocks(
+                clientCalls,
+                (call) => call.name,
+                (call) => parseArgs(call.argumentsRaw),
+                async (call) => {
                     const args = parseArgs(call.argumentsRaw);
                     const r = await runClientTool(call.name, args, {
                         signal: opts.signal,
@@ -186,7 +196,7 @@ export async function runSubagent(
                             ? ("error" as const)
                             : ("success" as const),
                     };
-                })
+                }
             );
             nextMessages = [{ tool_returns: toolReturns }];
             continue;

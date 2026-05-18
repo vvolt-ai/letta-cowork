@@ -31,6 +31,7 @@ import {
     runClientTool,
 } from "../../../services/client-tools/index.js";
 import { clearPendingApprovals } from "../../../services/agents/approval-recovery.js";
+import { runWithResourceLocks } from "../../../services/agent/subagents/parallelism.js";
 import type {
     SDKAssistantMessage,
     SDKErrorMessage,
@@ -321,8 +322,15 @@ export class WsSession {
                         if (allow) {
                             // Execute each approved tool locally, then
                             // build the type:"tool" entries.
-                            const executed = await Promise.all(
-                                turnResult.approvalRequests.map(async (req) => {
+                            // Resource-aware scheduler: reads/searches
+                            // fan out, writes to the same file_path
+                            // serialize, Bash/global-effect tools hold
+                            // a global lock. See subagents/parallelism.
+                            const executed = await runWithResourceLocks(
+                                turnResult.approvalRequests,
+                                (req) => req.toolName,
+                                (req) => parseToolArgs(req.argumentsRaw),
+                                async (req) => {
                                     const args = parseToolArgs(req.argumentsRaw);
                                     if (!isClientTool(req.toolName)) {
                                         return {
@@ -365,7 +373,7 @@ export class WsSession {
                                             ? ("error" as const)
                                             : ("success" as const),
                                     };
-                                })
+                                }
                             );
                             for (const e of executed) {
                                 approvalEntries.push({
@@ -425,8 +433,11 @@ export class WsSession {
                     if (clientCalls.length === 0) break; // turn done
 
                     // Execute the client tools and prepare returns.
-                    const toolReturns = await Promise.all(
-                        clientCalls.map(async (call) => {
+                    const toolReturns = await runWithResourceLocks(
+                        clientCalls,
+                        (call) => call.name,
+                        (call) => parseToolArgs(call.argumentsRaw),
+                        async (call) => {
                             const args = parseToolArgs(call.argumentsRaw);
                             const result = await runClientTool(
                                 call.name,
@@ -452,7 +463,7 @@ export class WsSession {
                                     ? ("error" as const)
                                     : ("success" as const),
                             } satisfies ToolReturn;
-                        })
+                        }
                     );
 
                     if (ctrl.signal.aborted) break;
