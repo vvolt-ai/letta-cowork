@@ -124,32 +124,45 @@ export async function runSubagent(
         if (turn.assistantText) finalChunks.push(turn.assistantText);
 
         // ── Branch 1: approval-flow (client_tools-as-approval, like our main session) ──
+        //
+        // Parallel execution mirrors WsSession.runOneStreamTurn (parent
+        // session). Running tools sequentially here was the dominant
+        // source of subagent latency: a turn with N tool calls took
+        // N * tool_duration instead of max(tool_duration). With Promise.all
+        // the wall time collapses to the slowest tool plus a single
+        // approval round-trip per turn.
         if (turn.approvalRequests.length > 0) {
             toolCallCount += turn.approvalRequests.length;
-            const approvalEntries: unknown[] = [];
-            for (const req of turn.approvalRequests) {
-                if (!isClientTool(req.toolName)) {
-                    approvalEntries.push({
-                        type: "tool",
-                        tool_call_id: req.toolCallId,
-                        tool_return: `Client tool '${req.toolName}' is not registered on this device.`,
-                        status: "error",
+            const executed = await Promise.all(
+                turn.approvalRequests.map(async (req) => {
+                    if (!isClientTool(req.toolName)) {
+                        return {
+                            tool_call_id: req.toolCallId,
+                            tool_return: `Client tool '${req.toolName}' is not registered on this device.`,
+                            status: "error" as const,
+                        };
+                    }
+                    const args = parseArgs(req.argumentsRaw);
+                    const result = await runClientTool(req.toolName, args, {
+                        signal: opts.signal,
+                        agentId: targetAgentId,
+                        conversationId,
                     });
-                    continue;
-                }
-                const args = parseArgs(req.argumentsRaw);
-                const result = await runClientTool(req.toolName, args, {
-                    signal: opts.signal,
-                    agentId: targetAgentId,
-                    conversationId,
-                });
-                approvalEntries.push({
-                    type: "tool",
-                    tool_call_id: req.toolCallId,
-                    tool_return: result.output,
-                    status: result.isError ? "error" : "success",
-                });
-            }
+                    return {
+                        tool_call_id: req.toolCallId,
+                        tool_return: result.output,
+                        status: result.isError
+                            ? ("error" as const)
+                            : ("success" as const),
+                    };
+                })
+            );
+            const approvalEntries = executed.map((e) => ({
+                type: "tool",
+                tool_call_id: e.tool_call_id,
+                tool_return: e.tool_return,
+                status: e.status,
+            }));
             nextMessages = [{ type: "approval", approvals: approvalEntries }];
             continue;
         }
