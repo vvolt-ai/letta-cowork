@@ -6,6 +6,7 @@ import type { IndexedMessage } from "../../../hooks/useMessageWindow";
 import { PromptInput } from "./PromptInput";
 import { ConversationHeader } from "./ConversationHeader";
 import { ChatTimeline } from "./ChatTimeline";
+import { PlanModePanel } from "./PlanModePanel";
 
 interface ChatWorkspaceProps {
   title?: string;
@@ -104,6 +105,8 @@ export const ChatWorkspace = memo(function ChatWorkspace({
         onToggleActivity={onToggleActivity}
         onViewRuns={onViewRuns}
       />
+
+      <PlanModePanel sessionId={activeSessionId} />
 
       <div
         ref={scrollContainerRef}

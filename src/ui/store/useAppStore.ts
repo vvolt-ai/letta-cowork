@@ -548,6 +548,13 @@ export type SessionView = {
   oldestMessageId?: string | null;
   isLoadingHistory?: boolean;
   ephemeral: EphemeralState;
+  /** Per-session plan-mode state, mirrored from the backend WsSession. */
+  planMode?: "plan" | "unrestricted";
+  planFilePath?: string | null;
+  /** Plan body text, populated when ExitPlanMode finalizes a plan. */
+  planBody?: string | null;
+  /** Bumps each time a new plan body arrives so the UI can re-open the viewer. */
+  planUpdatedAt?: number;
 };
 
 export type CoworkSettings = {
@@ -1452,6 +1459,45 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
 
       case "runner.error": {
         set({ globalError: event.payload.message, pendingStart: false, showStartModal: true });
+        break;
+      }
+
+      case "plan_mode_state": {
+        const { sessionId, mode, planFilePath } = event.payload;
+        set((state) => {
+          const existing = state.sessions[sessionId];
+          if (!existing) return state;
+          return {
+            sessions: {
+              ...state.sessions,
+              [sessionId]: {
+                ...existing,
+                planMode: mode,
+                planFilePath,
+              },
+            },
+          };
+        });
+        break;
+      }
+
+      case "plan_mode_plan": {
+        const { sessionId, planFilePath, body } = event.payload;
+        set((state) => {
+          const existing = state.sessions[sessionId];
+          if (!existing) return state;
+          return {
+            sessions: {
+              ...state.sessions,
+              [sessionId]: {
+                ...existing,
+                planFilePath,
+                planBody: body,
+                planUpdatedAt: Date.now(),
+              },
+            },
+          };
+        });
         break;
       }
     }

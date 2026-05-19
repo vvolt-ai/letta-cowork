@@ -1,0 +1,12 @@
+{
+  "type": "object",
+  "properties": {
+    "plan": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The full plan body. Replaces the current plan file content."
+    }
+  },
+  "required": ["plan"],
+  "additionalProperties": false
+}

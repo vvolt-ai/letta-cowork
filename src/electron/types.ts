@@ -76,6 +76,8 @@ export type ServerEvent =
   | { type: "session.pendingCancelled"; payload: {} }
   | { type: "permission.request"; payload: { sessionId: string; toolUseId: string; toolName: string; input: unknown; source?: "live" | "recovered"; runId?: string; conversationId?: string; isStuckRun?: boolean; requestedAt?: number } }
   | { type: "runner.error"; payload: { sessionId?: string; message: string } }
+  | { type: "plan_mode_state"; payload: { sessionId: string; mode: "plan" | "unrestricted"; planFilePath: string | null } }
+  | { type: "plan_mode_plan"; payload: { sessionId: string; planFilePath: string; body: string } }
   | {
       type: "whatsapp-bridge-status";
       payload: {

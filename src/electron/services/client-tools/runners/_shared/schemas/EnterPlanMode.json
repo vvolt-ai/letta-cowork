@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Optional short slug for the plan file name (e.g. 'refactor-auth'). Letters, digits, dashes, underscores only."
+    }
+  },
+  "additionalProperties": false
+}

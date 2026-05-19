@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "properties": {
+    "plan": {
+      "type": "string",
+      "description": "Optional inline plan body. If omitted, the plan is read from the plan file you wrote during plan mode."
+    }
+  },
+  "additionalProperties": false
+}

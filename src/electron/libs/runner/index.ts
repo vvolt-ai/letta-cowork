@@ -24,6 +24,8 @@ import {
   handleResultMessage,
 } from "./event-handler.js";
 import type { RunnerOptions, RunnerHandle } from "./types.js";
+import type { WsSession } from "./ws/session.js";
+import { readFile } from "node:fs/promises";
 
 // Re-export types
 export type { RunnerSession, RunnerOptions, RunnerHandle } from "./types.js";
@@ -103,6 +105,48 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
       sessionKey = initResult.sessionKey;
       currentSessionId = initResult.currentSessionId;
       lettaSessionRef = lettaSession;
+
+      // ── Plan-mode bridge ──────────────────────────────────────────
+      // WsSession (cast back from LettaSession) exposes a per-session
+      // PlanModeManager. Subscribe to mode changes and forward as
+      // `plan_mode_state` events; when the agent ExitPlanMode'd, also
+      // read the plan file body and emit `plan_mode_plan`. The UI
+      // surfaces the banner + plan viewer from these events.
+      try {
+        const ws = lettaSession as unknown as WsSession;
+        if (ws && typeof ws.planMode?.onChange === "function") {
+          ws.planMode.onChange((state) => {
+            onEvent({
+              type: "plan_mode_state",
+              payload: {
+                sessionId: currentSessionId,
+                mode: state.mode,
+                planFilePath: state.planFilePath ?? null,
+              },
+            });
+            if (state.mode === "unrestricted" && state.planFilePath) {
+              // Plan was just finalized — surface the body for the UI.
+              const planFilePath = state.planFilePath; // narrow capture
+              void readFile(planFilePath, "utf-8")
+                .then((body) => {
+                  onEvent({
+                    type: "plan_mode_plan",
+                    payload: {
+                      sessionId: currentSessionId,
+                      planFilePath,
+                      body,
+                    },
+                  });
+                })
+                .catch(() => {
+                  // No plan file or read failed — skip silently.
+                });
+            }
+          });
+        }
+      } catch (e) {
+        debug("plan-mode subscription skipped", { error: String(e) });
+      }
 
       // Resolve with the real conversation ID
       resolveConversationId(currentSessionId);

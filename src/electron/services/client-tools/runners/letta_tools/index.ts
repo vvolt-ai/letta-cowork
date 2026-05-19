@@ -23,6 +23,8 @@ import ApplyPatchSchema from "../_shared/schemas/ApplyPatch.json" with { type: "
 import AskUserQuestionSchema from "../_shared/schemas/AskUserQuestion.json" with { type: "json" };
 import BashOutputSchema from "../_shared/schemas/BashOutput.json" with { type: "json" };
 import EditSchema from "../_shared/schemas/Edit.json" with { type: "json" };
+import EnterPlanModeSchema from "../_shared/schemas/EnterPlanMode.json" with { type: "json" };
+import ExitPlanModeSchema from "../_shared/schemas/ExitPlanMode.json" with { type: "json" };
 import GlobSchema from "../_shared/schemas/Glob.json" with { type: "json" };
 import GrepSchema from "../_shared/schemas/Grep.json" with { type: "json" };
 import KillBashSchema from "../_shared/schemas/KillBash.json" with { type: "json" };
@@ -34,6 +36,7 @@ import TaskSchema from "../_shared/schemas/Task.json" with { type: "json" };
 import TaskOutputSchema from "../_shared/schemas/TaskOutput.json" with { type: "json" };
 import TaskStopSchema from "../_shared/schemas/TaskStop.json" with { type: "json" };
 import TodoWriteSchema from "../_shared/schemas/TodoWrite.json" with { type: "json" };
+import UpdatePlanSchema from "../_shared/schemas/UpdatePlan.json" with { type: "json" };
 import ViewImageSchema from "../_shared/schemas/ViewImage.json" with { type: "json" };
 import WriteSchema from "../_shared/schemas/Write.json" with { type: "json" };
 
@@ -41,6 +44,8 @@ import { apply_patch } from "./ApplyPatch.js";
 import { ask_user_question } from "./AskUserQuestion.js";
 import { bash_output } from "./BashOutput.js";
 import { edit } from "./Edit.js";
+import { enter_plan_mode } from "./EnterPlanMode.js";
+import { exit_plan_mode } from "./ExitPlanMode.js";
 import { glob } from "./Glob.js";
 import { grep } from "./Grep.js";
 import { kill_bash } from "./KillBash.js";
@@ -52,6 +57,7 @@ import { task } from "./Task.js";
 import { task_output } from "./TaskOutput.js";
 import { task_stop } from "./TaskStop.js";
 import { todo_write } from "./TodoWrite.js";
+import { update_plan } from "./UpdatePlan.js";
 import { view_image } from "./ViewImage.js";
 import { write } from "./Write.js";
 
@@ -73,6 +79,8 @@ const ApplyPatchDescription = loadDesc("ApplyPatch");
 const AskUserQuestionDescription = loadDesc("AskUserQuestion");
 const BashOutputDescription = loadDesc("BashOutput");
 const EditDescription = loadDesc("Edit");
+const EnterPlanModeDescription = loadDesc("EnterPlanMode");
+const ExitPlanModeDescription = loadDesc("ExitPlanMode");
 const GlobDescription = loadDesc("Glob");
 const GrepDescription = loadDesc("Grep");
 const KillBashDescription = loadDesc("KillBash");
@@ -84,6 +92,7 @@ const TaskDescription = loadDesc("Task");
 const TaskOutputDescription = loadDesc("TaskOutput");
 const TaskStopDescription = loadDesc("TaskStop");
 const TodoWriteDescription = loadDesc("TodoWrite");
+const UpdatePlanDescription = loadDesc("UpdatePlan");
 const ViewImageDescription = loadDesc("ViewImage");
 const WriteDescription = loadDesc("Write");
 
@@ -164,6 +173,7 @@ function makeTool(
                     // tools ignore these fields.
                     _runtime_agent_id: ctx.agentId,
                     _runtime_conversation_id: ctx.conversationId,
+                    _runtime_plan_mode: ctx.planMode,
                 });
                 return adaptResult(out);
             } catch (err) {
@@ -197,4 +207,7 @@ export const lettaCodeTools: ClientToolDefinition[] = [
     makeTool("TaskStop", TaskStopDescription, TaskStopSchema as Record<string, unknown>, task_stop as unknown as ImplFn),
     makeTool("ReadLSP", ReadLSPDescription, ReadLSPSchema as Record<string, unknown>, read_lsp as unknown as ImplFn),
     makeTool("Task", TaskDescription, TaskSchema as Record<string, unknown>, task as unknown as ImplFn),
+    makeTool("EnterPlanMode", EnterPlanModeDescription, EnterPlanModeSchema as Record<string, unknown>, enter_plan_mode as unknown as ImplFn),
+    makeTool("ExitPlanMode", ExitPlanModeDescription, ExitPlanModeSchema as Record<string, unknown>, exit_plan_mode as unknown as ImplFn),
+    makeTool("UpdatePlan", UpdatePlanDescription, UpdatePlanSchema as Record<string, unknown>, update_plan as unknown as ImplFn),
 ];

@@ -28,6 +28,12 @@ export interface ToolRunContext {
     /** Conversation/agent scope, in case a runner wants to log/route on it. */
     agentId?: string;
     conversationId?: string;
+    /**
+     * Per-session plan-mode manager. Threaded through so plan tools
+     * can mutate per-session state without a global singleton.
+     * Typed as `unknown` to avoid a circular import — narrow at usage.
+     */
+    planMode?: unknown;
 }
 
 export interface ToolRunResult {

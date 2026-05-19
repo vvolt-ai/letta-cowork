@@ -32,6 +32,12 @@ import {
 } from "../../../services/client-tools/index.js";
 import { clearPendingApprovals } from "../../../services/agents/approval-recovery.js";
 import { runWithResourceLocks } from "../../../services/agent/subagents/parallelism.js";
+import { PlanModeManager } from "./plan-mode/mode-manager.js";
+import {
+    buildTurnReminders,
+    createReminderState,
+    type ReminderState,
+} from "./plan-mode/reminders.js";
 import type {
     SDKAssistantMessage,
     SDKErrorMessage,
@@ -85,6 +91,18 @@ export class WsSession {
     private _agentId: string | null;
     private _conversationId: string | null;
     private initialized = false;
+
+    /**
+     * Per-session plan-mode manager. Tracks plan/unrestricted mode and the
+     * assigned plan file path. Threaded into the tool-run context so
+     * EnterPlanMode/ExitPlanMode/UpdatePlan can read+mutate. Exposed as
+     * public so the renderer-side IPC handler (plan-state IPC) can subscribe
+     * to onChange and surface state to the UI.
+     */
+    public readonly planMode = new PlanModeManager();
+
+    /** Reminder dedup state — one-shot reminders fire once. */
+    private readonly reminderState: ReminderState = createReminderState();
 
     /** Pending stream messages waiting for a consumer. */
     private streamQueue: SDKMessage[] = [];
@@ -181,13 +199,25 @@ export class WsSession {
             throw new Error("WsSession.send: not initialized");
         }
 
+        // Build system reminders for this turn (plan-mode banner,
+        // permission-mode change). Prepended to the user message so the
+        // agent sees the state BEFORE responding. See plan-mode/reminders.ts.
+        const reminderText = buildTurnReminders({
+            planMode: this.planMode,
+            state: this.reminderState,
+            workingDirectory: this.opts.cwd ?? process.cwd(),
+        });
+
         const initialMessages = [
             {
                 role: "user" as const,
                 content:
                     typeof message === "string"
-                        ? message
-                        : message.map((m) => {
+                        ? (reminderText ? `${reminderText}\n\n${message}` : message)
+                        : (reminderText
+                            ? [{ type: "text" as const, text: reminderText }, ...message]
+                            : message
+                          ).map((m) => {
                               if (m.type === "text") {
                                   return { type: "text" as const, text: m.text };
                               }
@@ -364,6 +394,38 @@ export class WsSession {
                                             status: "error" as const,
                                         };
                                     }
+                                    // Plan-mode permission gate — block
+                                    // write/destructive tools while in
+                                    // plan mode before they execute.
+                                    const planCheck = this.planMode.checkPermission(
+                                        req.toolName,
+                                        args as Record<string, unknown>
+                                    );
+                                    if (planCheck.decision === "deny") {
+                                        const denyMsg =
+                                            planCheck.reason ??
+                                            `Permission mode: ${this.planMode.getMode()}`;
+                                        this.enqueue({
+                                            type: "tool_call",
+                                            toolCallId: req.toolCallId,
+                                            toolName: req.toolName,
+                                            toolInput: args,
+                                            rawArguments: req.argumentsRaw,
+                                            uuid: `toolcall-${req.toolCallId}`,
+                                        } as unknown as SDKToolCallMessage);
+                                        this.enqueue({
+                                            type: "tool_result",
+                                            toolCallId: req.toolCallId,
+                                            content: denyMsg,
+                                            isError: true,
+                                            uuid: `tool-result-${req.toolCallId}`,
+                                        } as unknown as SDKToolResultMessage);
+                                        return {
+                                            tool_call_id: req.toolCallId,
+                                            tool_return: denyMsg,
+                                            status: "error" as const,
+                                        };
+                                    }
                                     const r = await runClientTool(
                                         req.toolName,
                                         args,
@@ -372,6 +434,7 @@ export class WsSession {
                                             agentId: this._agentId ?? undefined,
                                             conversationId:
                                                 this._conversationId ?? undefined,
+                                            planMode: this.planMode,
                                         }
                                     );
                                     // Mirror to the renderer so the user
@@ -464,6 +527,28 @@ export class WsSession {
                         (call) => parseToolArgs(call.argumentsRaw),
                         async (call) => {
                             const args = parseToolArgs(call.argumentsRaw);
+                            // Plan-mode gate (Branch 3 — no approval path).
+                            const planCheck = this.planMode.checkPermission(
+                                call.name,
+                                args as Record<string, unknown>
+                            );
+                            if (planCheck.decision === "deny") {
+                                const denyMsg =
+                                    planCheck.reason ??
+                                    `Permission mode: ${this.planMode.getMode()}`;
+                                this.enqueue({
+                                    type: "tool_result",
+                                    toolCallId: call.toolCallId,
+                                    content: denyMsg,
+                                    isError: true,
+                                    uuid: `tool-result-${call.toolCallId}`,
+                                } as unknown as SDKToolResultMessage);
+                                return {
+                                    tool_call_id: call.toolCallId,
+                                    tool_return: denyMsg,
+                                    status: "error" as const,
+                                } satisfies ToolReturn;
+                            }
                             const result = await runClientTool(
                                 call.name,
                                 args,
@@ -472,6 +557,7 @@ export class WsSession {
                                     agentId: this._agentId ?? undefined,
                                     conversationId:
                                         this._conversationId ?? undefined,
+                                    planMode: this.planMode,
                                 }
                             );
                             this.enqueue({
