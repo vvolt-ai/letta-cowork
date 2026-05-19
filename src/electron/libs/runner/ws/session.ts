@@ -191,28 +191,46 @@ export class WsSession {
                               if (m.type === "text") {
                                   return { type: "text" as const, text: m.text };
                               }
-                              // Image content blocks: the agent's model may
-                              // not be vision-capable, but the URL is still
-                              // useful — agents can fetch the bytes, share
-                              // the link, or hand it to a downstream tool.
-                              // Surface the URL as text so it never gets
-                              // dropped. Vision-capable agents can switch
-                              // back to passing the typed image block when
-                              // we wire that up.
+                              // Image content blocks: pass through to Letta as
+                              // a typed image block. Letta's SDK accepts:
+                              //   { type: "image", source: { type: "url"|"base64"|"letta", ... } }
+                              // The renderer (PromptInput) already builds this
+                              // shape. We normalize legacy variants (image_url,
+                              // raw .url) into the canonical form. Vision-
+                              // capable models will see the actual pixels;
+                              // non-vision models will surface a server-side
+                              // error which is the correct signal.
                               const anyM = m as unknown as {
                                   type?: string;
-                                  source?: { url?: string; data?: string };
+                                  source?: {
+                                      type?: string;
+                                      url?: string;
+                                      data?: string;
+                                      media_type?: string;
+                                      file_id?: string;
+                                      detail?: string | null;
+                                  };
                                   image_url?: string | { url?: string };
                                   url?: string;
                               };
-                              const url =
-                                  anyM.source?.url ||
-                                  (typeof anyM.image_url === "string"
-                                      ? anyM.image_url
-                                      : anyM.image_url?.url) ||
-                                  anyM.url;
-                              if (anyM.type === "image" && url) {
-                                  return { type: "text" as const, text: `[image: ${url}]` };
+
+                              if (anyM.type === "image") {
+                                  // Already canonical: { type:"image", source:{...} }
+                                  if (anyM.source && (anyM.source.url || anyM.source.data || anyM.source.file_id)) {
+                                      return { type: "image" as const, source: anyM.source };
+                                  }
+                                  // OpenAI-style: { type:"image_url", image_url: "..." | {url} }
+                                  const fromImageUrl =
+                                      typeof anyM.image_url === "string"
+                                          ? anyM.image_url
+                                          : anyM.image_url?.url;
+                                  const url = fromImageUrl || anyM.url;
+                                  if (url) {
+                                      return {
+                                          type: "image" as const,
+                                          source: { type: "url" as const, url },
+                                      };
+                                  }
                               }
                               return { type: "text" as const, text: "[image omitted]" };
                           }),
