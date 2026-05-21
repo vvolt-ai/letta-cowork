@@ -42,7 +42,7 @@ export function McpServerFormDialog({ open, editing, onClose, onSubmit }: Props)
       setName(editing.name);
       setTransport(editing.transport);
       setUrl(editing.url);
-      setConfigJson(""); // secrets are write-only; blank preserves existing secret config
+      setConfigJson(buildSavedMcpConfigJson(editing));
       setShareOrgWide(editing.ownerUserId === null);
       setEnabled(editing.enabled);
     } else {
@@ -162,7 +162,7 @@ export function McpServerFormDialog({ open, editing, onClose, onSubmit }: Props)
               label="MCP JSON config"
               hint={
                 editing
-                  ? "Paste JSON only when changing secrets/config. Leave blank to preserve existing write-only secrets. Supports Claude/OpenAI mcpServers format."
+                  ? "Saved non-secret config is loaded. Token/env secrets are write-only and preserved unless you paste new headers/env values. Supports Claude/OpenAI mcpServers format."
                   : "Paste the MCP config JSON from Claude/OpenAI docs. Supports url, headers, env, and mcpServers wrappers. Secrets are encrypted."
               }
             >
@@ -294,6 +294,31 @@ function parseMcpConfigJson(text: string): ParsedMcpConfig | undefined {
     url,
     auth: Object.keys(auth).length > 0 ? auth : undefined,
   };
+}
+
+function buildSavedMcpConfigJson(server: McpServer): string {
+  const headers: Record<string, string> = {
+    ...(server.customHeaders ?? {}),
+  };
+
+  const config: Record<string, unknown> = {
+    url: server.url,
+    transport: server.transport,
+  };
+
+  if (Object.keys(headers).length > 0) {
+    config.headers = headers;
+  }
+
+  return JSON.stringify(
+    {
+      mcpServers: {
+        [server.slug || server.name]: config,
+      },
+    },
+    null,
+    2,
+  );
 }
 
 function parseTransport(value: unknown, url?: string): McpTransport | undefined {
