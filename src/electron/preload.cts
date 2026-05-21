@@ -313,6 +313,8 @@ electron.contextBridge.exposeInMainWorld("electron", {
         electron.ipcRenderer.invoke("api:mcp:detach", agentId, mcpServerId),
     apiMcpListToolsForAgent: (agentId: string) =>
         electron.ipcRenderer.invoke("api:mcp:list-tools-for-agent", agentId),
+    apiMcpListEnvKeysForAgent: (agentId: string) =>
+        electron.ipcRenderer.invoke("api:mcp:list-env-keys-for-agent", agentId),
 
     // ── Runs Debugger ────────────────────────────────────────────────────────
     listAgentRuns: (params: { agentId: string; conversationId?: string; status?: string; limit?: number; offset?: number }) =>

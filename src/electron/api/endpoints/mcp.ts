@@ -222,4 +222,14 @@ export class McpEndpoints {
       Array<{ name: string; description: string; parameters: Record<string, unknown> }>
     >(`/mcp/agents/${agentId}/tools`);
   }
+
+  /** Diagnostic: MCP-provided Bash env keys for an agent. Values are never returned. */
+  static async listEnvKeysForAgent(
+    client: BaseHttpClient,
+    agentId: string,
+  ): Promise<{ agentId: string; keys: string[] }> {
+    return client.request<{ agentId: string; keys: string[] }>(
+      `/mcp/agents/${agentId}/env-keys`,
+    );
+  }
 }

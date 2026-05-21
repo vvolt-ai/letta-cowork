@@ -539,4 +539,8 @@ export class VeraCoworkApiClient extends BaseHttpClient {
   > {
     return McpEndpoints.listToolsForAgent(this, agentId);
   }
+
+  async mcpListEnvKeysForAgent(agentId: string): Promise<{ agentId: string; keys: string[] }> {
+    return McpEndpoints.listEnvKeysForAgent(this, agentId);
+  }
 }

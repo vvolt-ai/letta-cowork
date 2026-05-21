@@ -467,6 +467,15 @@ export function initializeApiIpcHandlers(): void {
     }
   });
 
+  ipcMain.handle("api:mcp:list-env-keys-for-agent", async (_, agentId: string) => {
+    try {
+      const result = await api.mcpListEnvKeysForAgent(agentId);
+      return { success: true, ...result };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
   console.log("API IPC handlers initialized");
 }
 
