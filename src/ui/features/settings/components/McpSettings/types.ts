@@ -48,6 +48,7 @@ export interface CreateMcpServerInput {
     authHeaderName?: string;
     authToken?: string;
     customHeaders?: Record<string, string>;
+    env?: Record<string, string>;
   };
   enabled?: boolean;
   shareOrgWide?: boolean;

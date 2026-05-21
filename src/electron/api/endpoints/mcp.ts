@@ -69,6 +69,8 @@ export interface CreateMcpServerInput {
     /** Plaintext token. Server encrypts at rest. Never returned by GET. */
     authToken?: string;
     customHeaders?: Record<string, string>;
+    /** Plaintext env vars. Server encrypts at rest. Never returned by GET. */
+    env?: Record<string, string>;
   };
   enabled?: boolean;
   /** Opt-in org sharing. Omit/false = private to creating user. */

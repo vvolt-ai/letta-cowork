@@ -31,6 +31,7 @@ export function McpServerFormDialog({ open, editing, onClose, onSubmit }: Props)
   const [url, setUrl] = useState("");
   const [authHeaderName, setAuthHeaderName] = useState("Authorization");
   const [authToken, setAuthToken] = useState("");
+  const [secretEnvText, setSecretEnvText] = useState("");
   const [shareOrgWide, setShareOrgWide] = useState(false);
   const [enabled, setEnabled] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -45,6 +46,7 @@ export function McpServerFormDialog({ open, editing, onClose, onSubmit }: Props)
       setUrl(editing.url);
       setAuthHeaderName(editing.authHeaderName ?? "Authorization");
       setAuthToken(""); // never pre-fill — token is write-only
+      setSecretEnvText(""); // write-only — blank preserves existing env
       setShareOrgWide(editing.ownerUserId === null);
       setEnabled(editing.enabled);
     } else {
@@ -53,6 +55,7 @@ export function McpServerFormDialog({ open, editing, onClose, onSubmit }: Props)
       setUrl("");
       setAuthHeaderName("Authorization");
       setAuthToken("");
+      setSecretEnvText("");
       setShareOrgWide(false);
       setEnabled(true);
     }
@@ -71,14 +74,25 @@ export function McpServerFormDialog({ open, editing, onClose, onSubmit }: Props)
       return;
     }
 
-    // Build the auth bundle. Omit entirely if user left both fields
-    // blank — sends an explicit `null`-like state to the server only
-    // when the user pasted a token.
+    let env: Record<string, string> | undefined;
+    try {
+      env = parseSecretEnv(secretEnvText);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      return;
+    }
+
+    // Build the auth bundle. Secrets are write-only. In edit mode, omitted
+    // secret fields are preserved server-side; only entered fields are changed.
+    const hasAuthToken = authToken.trim().length > 0;
+    const hasEnv = env !== undefined && Object.keys(env).length > 0;
+    const shouldSendAuth = hasAuthToken || hasEnv || editing !== null;
     const auth =
-      authToken.trim().length > 0
+      shouldSendAuth
         ? {
             authHeaderName: authHeaderName.trim() || "Authorization",
-            authToken: authToken.trim(),
+            ...(hasAuthToken ? { authToken: authToken.trim() } : {}),
+            ...(hasEnv ? { env } : {}),
           }
         : undefined;
 
@@ -186,6 +200,24 @@ export function McpServerFormDialog({ open, editing, onClose, onSubmit }: Props)
               />
             </Field>
 
+            <Field
+              label="Secret env vars"
+              hint={
+                editing
+                  ? "Optional KEY=value lines injected into Bash only for agents this MCP server is attached to. Leave blank to keep existing env secrets."
+                  : "Optional KEY=value lines. Stored encrypted; injected into Bash child-process env for attached agents."
+              }
+            >
+              <textarea
+                value={secretEnvText}
+                onChange={(e) => setSecretEnvText(e.target.value)}
+                className="w-full px-3 py-2 border rounded-md text-sm font-mono min-h-24"
+                placeholder={"ZOHO_ACCESS_TOKEN=1000.xxxxx\nZOHO_ACCOUNT_ID=2467477000000008002\nZOHO_API_BASE_URL=https://mail.zoho.com/api"}
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </Field>
+
             <div className="flex items-center justify-between py-2">
               <div>
                 <p className="font-medium text-gray-900 text-sm">Share with organization</p>
@@ -235,6 +267,28 @@ export function McpServerFormDialog({ open, editing, onClose, onSubmit }: Props)
       </div>
     </div>
   );
+}
+
+function parseSecretEnv(text: string): Record<string, string> | undefined {
+  const trimmed = text.trim();
+  if (!trimmed) return undefined;
+
+  const env: Record<string, string> = {};
+  for (const rawLine of trimmed.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const eq = line.indexOf("=");
+    if (eq <= 0) {
+      throw new Error(`Invalid env line: ${rawLine}. Use KEY=value.`);
+    }
+    const key = line.slice(0, eq).trim();
+    const value = line.slice(eq + 1).trim();
+    if (!/^[A-Z_][A-Z0-9_]*$/.test(key)) {
+      throw new Error(`Invalid env name '${key}'. Use uppercase letters, numbers, and underscores.`);
+    }
+    env[key] = value;
+  }
+  return Object.keys(env).length > 0 ? env : undefined;
 }
 
 interface FieldProps {
