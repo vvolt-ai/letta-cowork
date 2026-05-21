@@ -29,9 +29,7 @@ export function McpServerFormDialog({ open, editing, onClose, onSubmit }: Props)
   const [name, setName] = useState("");
   const [transport, setTransport] = useState<McpTransport>("http");
   const [url, setUrl] = useState("");
-  const [authHeaderName, setAuthHeaderName] = useState("Authorization");
-  const [authToken, setAuthToken] = useState("");
-  const [secretEnvText, setSecretEnvText] = useState("");
+  const [configJson, setConfigJson] = useState("");
   const [shareOrgWide, setShareOrgWide] = useState(false);
   const [enabled, setEnabled] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -44,18 +42,14 @@ export function McpServerFormDialog({ open, editing, onClose, onSubmit }: Props)
       setName(editing.name);
       setTransport(editing.transport);
       setUrl(editing.url);
-      setAuthHeaderName(editing.authHeaderName ?? "Authorization");
-      setAuthToken(""); // never pre-fill — token is write-only
-      setSecretEnvText(""); // write-only — blank preserves existing env
+      setConfigJson(""); // secrets are write-only; blank preserves existing secret config
       setShareOrgWide(editing.ownerUserId === null);
       setEnabled(editing.enabled);
     } else {
       setName("");
       setTransport("http");
       setUrl("");
-      setAuthHeaderName("Authorization");
-      setAuthToken("");
-      setSecretEnvText("");
+      setConfigJson("");
       setShareOrgWide(false);
       setEnabled(true);
     }
@@ -69,38 +63,30 @@ export function McpServerFormDialog({ open, editing, onClose, onSubmit }: Props)
     e.preventDefault();
     setError(null);
 
-    if (!name.trim() || !url.trim()) {
-      setError("Name and URL are required.");
-      return;
-    }
-
-    let env: Record<string, string> | undefined;
+    let parsed: ParsedMcpConfig | undefined;
     try {
-      env = parseSecretEnv(secretEnvText);
+      parsed = parseMcpConfigJson(configJson);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       return;
     }
 
-    // Build the auth bundle. Secrets are write-only. In edit mode, omitted
-    // secret fields are preserved server-side; only entered fields are changed.
-    const hasAuthToken = authToken.trim().length > 0;
-    const hasEnv = env !== undefined && Object.keys(env).length > 0;
-    const shouldSendAuth = hasAuthToken || hasEnv || editing !== null;
-    const auth =
-      shouldSendAuth
-        ? {
-            authHeaderName: authHeaderName.trim() || "Authorization",
-            ...(hasAuthToken ? { authToken: authToken.trim() } : {}),
-            ...(hasEnv ? { env } : {}),
-          }
-        : undefined;
+    const resolvedName = parsed?.name ?? name.trim();
+    const resolvedTransport = parsed?.transport ?? transport;
+    const resolvedUrl = parsed?.url ?? url.trim();
+
+    if (!resolvedName || !resolvedUrl) {
+      setError("Name and URL are required. Add them in the fields above or paste a JSON config with url.");
+      return;
+    }
+
+    const auth = parsed?.auth ?? (editing ? {} : undefined);
 
     setSubmitting(true);
     const payload: CreateMcpServerInput = {
-      name: name.trim(),
-      transport,
-      url: url.trim(),
+      name: resolvedName,
+      transport: resolvedTransport,
+      url: resolvedUrl,
       auth,
       enabled,
       shareOrgWide,
@@ -172,47 +158,19 @@ export function McpServerFormDialog({ open, editing, onClose, onSubmit }: Props)
               />
             </Field>
 
-            <Field label="Auth header name" hint="Defaults to Authorization. Leave blank if the server is public.">
-              <input
-                type="text"
-                value={authHeaderName}
-                onChange={(e) => setAuthHeaderName(e.target.value)}
-                className="w-full px-3 py-2 border rounded-md text-sm font-mono"
-                placeholder="Authorization"
-              />
-            </Field>
-
             <Field
-              label="Auth token"
+              label="MCP JSON config"
               hint={
                 editing
-                  ? "Leave blank to keep the existing token. Enter a new value to replace it."
-                  : "Bearer token or API key. Stored encrypted at rest, never returned by the API."
-              }
-            >
-              <input
-                type="password"
-                value={authToken}
-                onChange={(e) => setAuthToken(e.target.value)}
-                className="w-full px-3 py-2 border rounded-md text-sm font-mono"
-                placeholder={editing ? "•••••••••• (unchanged)" : "Bearer xxxxxxxx"}
-                autoComplete="off"
-              />
-            </Field>
-
-            <Field
-              label="Secret env vars"
-              hint={
-                editing
-                  ? "Optional KEY=value lines injected into Bash only for agents this MCP server is attached to. Leave blank to keep existing env secrets."
-                  : "Optional KEY=value lines. Stored encrypted; injected into Bash child-process env for attached agents."
+                  ? "Paste JSON only when changing secrets/config. Leave blank to preserve existing write-only secrets. Supports Claude/OpenAI mcpServers format."
+                  : "Paste the MCP config JSON from Claude/OpenAI docs. Supports url, headers, env, and mcpServers wrappers. Secrets are encrypted."
               }
             >
               <textarea
-                value={secretEnvText}
-                onChange={(e) => setSecretEnvText(e.target.value)}
-                className="w-full px-3 py-2 border rounded-md text-sm font-mono min-h-24"
-                placeholder={"ZOHO_ACCESS_TOKEN=1000.xxxxx\nZOHO_ACCOUNT_ID=2467477000000008002\nZOHO_API_BASE_URL=https://mail.zoho.com/api"}
+                value={configJson}
+                onChange={(e) => setConfigJson(e.target.value)}
+                className="w-full px-3 py-2 border rounded-md text-sm font-mono min-h-40"
+                placeholder={defaultMcpJsonExample}
                 autoComplete="off"
                 spellCheck={false}
               />
@@ -269,26 +227,96 @@ export function McpServerFormDialog({ open, editing, onClose, onSubmit }: Props)
   );
 }
 
-function parseSecretEnv(text: string): Record<string, string> | undefined {
+const defaultMcpJsonExample = `{
+  "mcpServers": {
+    "ryze": {
+      "url": "https://mcp.get-ryze.ai/mcp/unified/",
+      "headers": {
+        "Authorization": "Bearer YOUR_TOKEN"
+      },
+      "env": {
+        "RYZE_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}`;
+
+interface ParsedMcpConfig {
+  name?: string;
+  transport?: McpTransport;
+  url?: string;
+  auth?: CreateMcpServerInput["auth"];
+}
+
+function parseMcpConfigJson(text: string): ParsedMcpConfig | undefined {
   const trimmed = text.trim();
   if (!trimmed) return undefined;
 
-  const env: Record<string, string> = {};
-  for (const rawLine of trimmed.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) continue;
-    const eq = line.indexOf("=");
-    if (eq <= 0) {
-      throw new Error(`Invalid env line: ${rawLine}. Use KEY=value.`);
+  const root = JSON.parse(trimmed) as Record<string, unknown>;
+  let name: string | undefined;
+  let config: Record<string, unknown> = root;
+
+  if (isRecord(root.mcpServers)) {
+    const entries = Object.entries(root.mcpServers).filter(([, value]) => isRecord(value));
+    if (entries.length === 0) {
+      throw new Error("mcpServers must contain at least one server config.");
     }
-    const key = line.slice(0, eq).trim();
-    const value = line.slice(eq + 1).trim();
-    if (!/^[A-Z_][A-Z0-9_]*$/.test(key)) {
-      throw new Error(`Invalid env name '${key}'. Use uppercase letters, numbers, and underscores.`);
-    }
-    env[key] = value;
+    [name, config] = entries[0] as [string, Record<string, unknown>];
+  } else if (typeof root.name === "string") {
+    name = root.name;
   }
-  return Object.keys(env).length > 0 ? env : undefined;
+
+  if (typeof config.command === "string") {
+    throw new Error("Stdio MCP configs with command/args are not supported here yet. Use an HTTP/SSE MCP URL.");
+  }
+
+  const url = typeof config.url === "string" ? config.url : undefined;
+  const transport = parseTransport(config.transport, url);
+  const headers = isRecord(config.headers) ? stringRecord(config.headers, "headers") : undefined;
+  const env = isRecord(config.env) ? stringRecord(config.env, "env") : undefined;
+
+  const authHeader = typeof config.authHeaderName === "string" ? config.authHeaderName : "Authorization";
+  const directToken = typeof config.authToken === "string" ? config.authToken : undefined;
+  const authorization = headers?.Authorization ?? headers?.authorization ?? directToken;
+  const customHeaders = headers
+    ? Object.fromEntries(Object.entries(headers).filter(([key]) => key.toLowerCase() !== "authorization"))
+    : undefined;
+
+  const auth: CreateMcpServerInput["auth"] = {
+    ...(authorization ? { authHeaderName: authHeader, authToken: authorization } : {}),
+    ...(customHeaders && Object.keys(customHeaders).length > 0 ? { customHeaders } : {}),
+    ...(env && Object.keys(env).length > 0 ? { env } : {}),
+  };
+
+  return {
+    name,
+    transport,
+    url,
+    auth: Object.keys(auth).length > 0 ? auth : undefined,
+  };
+}
+
+function parseTransport(value: unknown, url?: string): McpTransport | undefined {
+  if (value === "http" || value === "sse") return value;
+  if (typeof value === "string" && value.toLowerCase().includes("sse")) return "sse";
+  if (url?.endsWith("/sse")) return "sse";
+  if (url) return "http";
+  return undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function stringRecord(value: Record<string, unknown>, label: string): Record<string, string> {
+  const output: Record<string, string> = {};
+  for (const [key, raw] of Object.entries(value)) {
+    if (typeof raw !== "string") {
+      throw new Error(`${label}.${key} must be a string.`);
+    }
+    output[key] = raw;
+  }
+  return output;
 }
 
 interface FieldProps {
