@@ -66,6 +66,7 @@ export class VeraCoworkApiClient extends BaseHttpClient {
     password: string;
     firstName?: string;
     lastName?: string;
+    organizationId?: string;
   }): Promise<AuthTokens> {
     const response = await fetch(`${this.baseUrl}/auth/register`, {
       method: "POST",
@@ -103,6 +104,25 @@ export class VeraCoworkApiClient extends BaseHttpClient {
    */
   async fetchCurrentUser(): Promise<AuthTokens["user"]> {
     const user = await this.request<AuthTokens["user"]>("/auth/me", {
+      suppressAuthExpired: false,
+    });
+
+    if (this.tokens) {
+      this.tokens = { ...this.tokens, user };
+      this.saveTokens();
+    }
+
+    return user;
+  }
+
+  async updateCurrentUserProfile(data: {
+    firstName?: string;
+    lastName?: string | null;
+    phoneNumber?: string | null;
+  }): Promise<AuthTokens["user"]> {
+    const user = await this.request<AuthTokens["user"]>("/auth/me", {
+      method: "PATCH",
+      body: data,
       suppressAuthExpired: false,
     });
 
@@ -520,5 +540,3 @@ export class VeraCoworkApiClient extends BaseHttpClient {
     return McpEndpoints.listToolsForAgent(this, agentId);
   }
 }
-
-

@@ -13,6 +13,8 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   const [password, setPassword] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [workspaceMode, setWorkspaceMode] = useState<"new" | "existing">("new");
+  const [organizationId, setOrganizationId] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,6 +46,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
           password,
           firstName: firstName || undefined,
           lastName: lastName || undefined,
+          organizationId: workspaceMode === "existing" ? organizationId.trim() || undefined : undefined,
         });
         console.log('[LoginScreen] Register result:', result);
         if (result.success) {
@@ -131,6 +134,50 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                     placeholder="Doe"
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Workspace
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 mb-2">
+                    <button
+                      type="button"
+                      onClick={() => setWorkspaceMode("new")}
+                      className={`px-3 py-2 rounded-lg border text-sm transition-all ${
+                        workspaceMode === "new"
+                          ? "border-blue-500 bg-blue-50 text-blue-700"
+                          : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      New workspace
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setWorkspaceMode("existing")}
+                      className={`px-3 py-2 rounded-lg border text-sm transition-all ${
+                        workspaceMode === "existing"
+                          ? "border-blue-500 bg-blue-50 text-blue-700"
+                          : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      Join existing
+                    </button>
+                  </div>
+                  {workspaceMode === "existing" && (
+                    <>
+                      <input
+                        type="text"
+                        value={organizationId}
+                        onChange={(e) => setOrganizationId(e.target.value)}
+                        required
+                        className="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all font-mono text-sm"
+                        placeholder="Workspace / organization ID"
+                      />
+                      <p className="text-xs text-slate-500 mt-1">
+                        Ask an existing teammate for their workspace ID.
+                      </p>
+                    </>
+                  )}
+                </div>
               </>
             )}
 
@@ -176,7 +223,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
 
             <button
               type="submit"
-              disabled={loading || !email || !password || (mode === "register" && (!firstName || password.length < 12))}
+              disabled={loading || !email || !password || (mode === "register" && (!firstName || password.length < 12 || (workspaceMode === "existing" && !organizationId.trim())))}
               className="w-full py-2.5 px-4 rounded-lg bg-gradient-to-r from-blue-500 to-purple-600 text-white font-medium hover:from-blue-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               {loading ? (

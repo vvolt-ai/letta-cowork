@@ -218,9 +218,11 @@ electron.contextBridge.exposeInMainWorld("electron", {
         electron.ipcRenderer.invoke("api:is-authenticated"),
     apiGetCurrentUser: () =>
         electron.ipcRenderer.invoke("api:get-current-user"),
+    apiUpdateCurrentUserProfile: (data: { firstName?: string; lastName?: string | null; phoneNumber?: string | null }) =>
+        electron.ipcRenderer.invoke("api:update-current-user-profile", data),
     apiLogin: (email: string, password: string) =>
         electron.ipcRenderer.invoke("api:login", { email, password }),
-    apiRegister: (data: { email: string; password: string; name?: string; organizationName?: string }) =>
+    apiRegister: (data: { email: string; password: string; firstName?: string; lastName?: string; organizationId?: string }) =>
         electron.ipcRenderer.invoke("api:register", data),
     apiLogout: () =>
         electron.ipcRenderer.invoke("api:logout"),

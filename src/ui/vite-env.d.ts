@@ -119,9 +119,21 @@ interface Window {
     apiGetCurrentUser: () => Promise<{
       id: string;
       email: string;
+      firstName?: string;
+      lastName?: string | null;
+      phoneNumber?: string | null;
       organizationId: string;
       role: string;
     } | null>;
+    apiUpdateCurrentUserProfile: (data: {
+      firstName?: string;
+      lastName?: string | null;
+      phoneNumber?: string | null;
+    }) => Promise<{
+      success: boolean;
+      user?: any;
+      error?: string;
+    }>;
     apiLogin: (email: string, password: string) => Promise<{
       success: boolean;
       user?: any;
@@ -132,6 +144,8 @@ interface Window {
       password: string;
       firstName?: string;
       lastName?: string;
+      phoneNumber?: string;
+      organizationId?: string;
     }) => Promise<{
       success: boolean;
       user?: any;

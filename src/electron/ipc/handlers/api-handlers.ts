@@ -31,6 +31,14 @@ export interface RegisterData {
   password: string;
   firstName?: string;
   lastName?: string;
+  phoneNumber?: string;
+  organizationId?: string;
+}
+
+export interface UpdateProfileData {
+  firstName?: string;
+  lastName?: string | null;
+  phoneNumber?: string | null;
 }
 
 export interface CreateChannelData {
@@ -86,6 +94,17 @@ export function initializeApiIpcHandlers(): void {
   ipcMain.handle("api:get-current-user", async () => {
     console.log('[API IPC] get-current-user:', api.currentUser?.email);
     return api.currentUser;
+  });
+
+  ipcMain.handle("api:update-current-user-profile", async (_, data: UpdateProfileData) => {
+    console.log('[API IPC] update-current-user-profile');
+    try {
+      const user = await api.updateCurrentUserProfile(data);
+      return { success: true, user };
+    } catch (error) {
+      console.error('[API IPC] update-current-user-profile failed:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
   });
 
   ipcMain.handle("api:login", async (_, credentials: LoginCredentials) => {
