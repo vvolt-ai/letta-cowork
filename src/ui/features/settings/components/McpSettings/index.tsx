@@ -203,16 +203,16 @@ function ServerStatus({
   }
   if (status?.state === "error") {
     return (
-      <span className="text-red-700" title={status.message}>
-        ✗ {truncate(status.message ?? "Error", 40)}
+      <span className="text-red-700 whitespace-normal break-words" title={status.message}>
+        ✗ {truncate(status.message ?? "Error", 160)}
       </span>
     );
   }
   // No live status — fall back to server.lastError / lastConnectedAt
   if (server.lastError) {
     return (
-      <span className="text-red-700" title={server.lastError}>
-        ✗ {truncate(server.lastError, 40)}
+      <span className="text-red-700 whitespace-normal break-words" title={server.lastError}>
+        ✗ {truncate(server.lastError, 160)}
       </span>
     );
   }
