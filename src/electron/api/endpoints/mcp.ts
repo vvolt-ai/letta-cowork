@@ -131,9 +131,12 @@ export class McpEndpoints {
     client: BaseHttpClient,
     id: string,
   ): Promise<McpTool[]> {
-    return client.request<McpTool[]>(`/mcp/servers/${id}/refresh`, {
+    const response = await client.request<McpTool[] | { ok: boolean; tools?: McpTool[]; error?: string }>(`/mcp/servers/${id}/refresh`, {
       method: "POST",
     });
+    if (Array.isArray(response)) return response;
+    if (response.ok) return response.tools ?? [];
+    throw new Error(response.error ?? "Failed to refresh MCP tools");
   }
 
   /** Quick connection-only health check. */
