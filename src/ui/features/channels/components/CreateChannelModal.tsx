@@ -17,7 +17,7 @@ type StepId = 'details' | 'credentials' | 'behavior';
 
 const STEPS: { id: StepId; label: string; description: string }[] = [
   { id: 'details', label: 'Details', description: 'Choose provider and agent' },
-  { id: 'credentials', label: 'Credentials', description: 'Connect the provider' },
+  { id: 'credentials', label: 'Connect', description: 'Authenticate provider' },
   { id: 'behavior', label: 'Behavior', description: 'Message routing rules' },
 ];
 
@@ -71,6 +71,7 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
   const [provider, setProvider] = useState('telegram');
   const [name, setName] = useState('');
   const [credentials, setCredentials] = useState<Record<string, string>>({});
+  const [startAfterCreate, setStartAfterCreate] = useState(true);
   const [configData, setConfigData] = useState<ConfigDataState>({ typingIndicator: true });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -151,6 +152,13 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
         throw new Error(configResult.error || 'Channel created, but configuration failed to save');
       }
 
+      if (provider === 'whatsapp' && startAfterCreate) {
+        const startResult = await api.apiStartChannel(channel.id);
+        if (!startResult.success) {
+          throw new Error(startResult.error || 'Channel created, but QR generation failed. Start the channel from the list to retry.');
+        }
+      }
+
       await onComplete(channel);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create channel');
@@ -214,8 +222,10 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
                 <select
                   value={provider}
                   onChange={(event) => {
-                    setProvider(event.target.value);
+                    const nextProvider = event.target.value;
+                    setProvider(nextProvider);
                     setCredentials({});
+                    setStartAfterCreate(nextProvider === 'whatsapp');
                     setConfigData({ typingIndicator: true });
                   }}
                   className="w-full rounded-lg border border-slate-200 px-3 py-2"
@@ -258,6 +268,25 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
           {step === 'credentials' ? (
             <div className="space-y-4">
               <div className="rounded-lg bg-blue-50 p-3 text-sm text-blue-700">{getCredentialsHelp(provider)}</div>
+              {provider === 'whatsapp' ? (
+                <div className="rounded-xl border border-green-200 bg-green-50 p-4">
+                  <div className="flex items-start gap-3">
+                    <input
+                      id="startAfterCreate"
+                      type="checkbox"
+                      checked={startAfterCreate}
+                      onChange={(event) => setStartAfterCreate(event.target.checked)}
+                      className="mt-1 rounded border-green-300"
+                    />
+                    <label htmlFor="startAfterCreate" className="text-sm text-green-900">
+                      <span className="block font-medium">Show QR code after creating</span>
+                      <span className="mt-1 block text-green-700">
+                        We will start the WhatsApp channel immediately after setup. The QR code will appear on the channel card so you can scan it from WhatsApp → Linked devices.
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              ) : null}
               {credentialFields.map((field) => (
                 <div key={field.key}>
                   <label className="mb-1 block text-sm font-medium text-slate-700">
@@ -346,7 +375,7 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
               disabled={saving}
               className="rounded-lg bg-blue-500 px-4 py-2 font-medium text-white hover:bg-blue-600 disabled:opacity-50"
             >
-              {saving ? 'Creating channel...' : 'Create channel'}
+              {saving ? (provider === 'whatsapp' && startAfterCreate ? 'Creating and generating QR...' : 'Creating channel...') : (provider === 'whatsapp' && startAfterCreate ? 'Create and show QR' : 'Create channel')}
             </button>
           ) : (
             <button
