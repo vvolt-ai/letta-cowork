@@ -24,16 +24,6 @@ export function ChannelsManager({ onAuthError }: ChannelsManagerProps) {
     // Create channel
     showCreateModal,
     setShowCreateModal,
-    newProvider,
-    setNewProvider,
-    newName,
-    setNewName,
-    newAgentId,
-    setNewAgentId,
-    newAutoStart,
-    setNewAutoStart,
-    creating,
-    handleCreateChannel,
     // Delete
     handleDeleteChannel,
     // Start/Stop
@@ -123,18 +113,13 @@ export function ChannelsManager({ onAuthError }: ChannelsManagerProps) {
       {/* Create Channel Modal */}
       {showCreateModal && (
         <CreateChannelModal
-          newName={newName}
-          setNewName={setNewName}
-          newProvider={newProvider}
-          setNewProvider={setNewProvider}
-          newAgentId={newAgentId}
-          setNewAgentId={setNewAgentId}
-          newAutoStart={newAutoStart}
-          setNewAutoStart={setNewAutoStart}
           agents={agents}
-          creating={creating}
           onClose={() => setShowCreateModal(false)}
-          onCreate={handleCreateChannel}
+          onComplete={async () => {
+            setShowCreateModal(false);
+            await loadChannels();
+            await loadStatuses();
+          }}
         />
       )}
 
