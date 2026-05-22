@@ -1,7 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 interface LoginScreenProps {
   onLoginSuccess: () => void;
+}
+
+interface WorkspaceOption {
+  id: string;
+  name: string;
 }
 
 // Helper to access API methods
@@ -15,8 +20,58 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   const [lastName, setLastName] = useState("");
   const [workspaceMode, setWorkspaceMode] = useState<"new" | "existing">("new");
   const [organizationId, setOrganizationId] = useState("");
+  const [workspaces, setWorkspaces] = useState<WorkspaceOption[]>([]);
+  const [workspacesLoading, setWorkspacesLoading] = useState(false);
+  const [workspacesError, setWorkspacesError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (mode !== "register" || workspaceMode !== "existing") {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadWorkspaces = async () => {
+      setWorkspacesLoading(true);
+      setWorkspacesError(null);
+
+      try {
+        const api = getApi();
+        const result = await api.apiListWorkspaces();
+
+        if (cancelled) {
+          return;
+        }
+
+        if (result.success) {
+          const nextWorkspaces = result.workspaces ?? [];
+          setWorkspaces(nextWorkspaces);
+
+          if (organizationId && !nextWorkspaces.some((workspace: WorkspaceOption) => workspace.id === organizationId)) {
+            setOrganizationId("");
+          }
+        } else {
+          setWorkspacesError(result.error || "Failed to load workspaces");
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setWorkspacesError(err instanceof Error ? err.message : "Failed to load workspaces");
+        }
+      } finally {
+        if (!cancelled) {
+          setWorkspacesLoading(false);
+        }
+      }
+    };
+
+    loadWorkspaces();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, workspaceMode]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -141,7 +196,10 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                   <div className="grid grid-cols-2 gap-2 mb-2">
                     <button
                       type="button"
-                      onClick={() => setWorkspaceMode("new")}
+                      onClick={() => {
+                        setWorkspaceMode("new");
+                        setOrganizationId("");
+                      }}
                       className={`px-3 py-2 rounded-lg border text-sm transition-all ${
                         workspaceMode === "new"
                           ? "border-blue-500 bg-blue-50 text-blue-700"
@@ -164,17 +222,29 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                   </div>
                   {workspaceMode === "existing" && (
                     <>
-                      <input
-                        type="text"
+                      <select
                         value={organizationId}
                         onChange={(e) => setOrganizationId(e.target.value)}
                         required
-                        className="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all font-mono text-sm"
-                        placeholder="Workspace / organization ID"
-                      />
-                      <p className="text-xs text-slate-500 mt-1">
-                        Ask an existing teammate for their workspace ID.
-                      </p>
+                        disabled={workspacesLoading}
+                        className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400"
+                      >
+                        <option value="">
+                          {workspacesLoading ? "Loading workspaces..." : "Select workspace"}
+                        </option>
+                        {workspaces.map((workspace) => (
+                          <option key={workspace.id} value={workspace.id}>
+                            {workspace.name}
+                          </option>
+                        ))}
+                      </select>
+                      {workspacesError ? (
+                        <p className="text-xs text-red-600 mt-1">{workspacesError}</p>
+                      ) : (
+                        <p className="text-xs text-slate-500 mt-1">
+                          Select the workspace you want to join.
+                        </p>
+                      )}
                     </>
                   )}
                 </div>
@@ -223,7 +293,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
 
             <button
               type="submit"
-              disabled={loading || !email || !password || (mode === "register" && (!firstName || password.length < 12 || (workspaceMode === "existing" && !organizationId.trim())))}
+              disabled={loading || workspacesLoading || !email || !password || (mode === "register" && (!firstName || password.length < 12 || (workspaceMode === "existing" && !organizationId)))}
               className="w-full py-2.5 px-4 rounded-lg bg-gradient-to-r from-blue-500 to-purple-600 text-white font-medium hover:from-blue-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               {loading ? (

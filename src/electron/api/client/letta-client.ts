@@ -61,6 +61,17 @@ export class VeraCoworkApiClient extends BaseHttpClient {
     return this.tokens;
   }
 
+  async listWorkspaces(): Promise<Array<{ id: string; name: string }>> {
+    const response = await fetch(`${this.baseUrl}/auth/workspaces`);
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Failed to load workspaces: ${error}`);
+    }
+
+    return response.json();
+  }
+
   async register(data: {
     email: string;
     password: string;

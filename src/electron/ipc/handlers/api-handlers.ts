@@ -133,6 +133,17 @@ export function initializeApiIpcHandlers(): void {
     }
   });
 
+  ipcMain.handle("api:list-workspaces", async () => {
+    console.log('[API IPC] list-workspaces');
+    try {
+      const workspaces = await api.listWorkspaces();
+      return { success: true, workspaces };
+    } catch (error) {
+      console.error('[API IPC] list-workspaces failed:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
   ipcMain.handle("api:logout", async () => {
     try {
       await api.logout();

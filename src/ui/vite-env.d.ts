@@ -151,6 +151,11 @@ interface Window {
       user?: any;
       error?: string;
     }>;
+    apiListWorkspaces: () => Promise<{
+      success: boolean;
+      workspaces?: Array<{ id: string; name: string }>;
+      error?: string;
+    }>;
     apiLogout: () => Promise<void>;
 
     // Channels

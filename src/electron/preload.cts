@@ -224,6 +224,8 @@ electron.contextBridge.exposeInMainWorld("electron", {
         electron.ipcRenderer.invoke("api:login", { email, password }),
     apiRegister: (data: { email: string; password: string; firstName?: string; lastName?: string; organizationId?: string }) =>
         electron.ipcRenderer.invoke("api:register", data),
+    apiListWorkspaces: () =>
+        electron.ipcRenderer.invoke("api:list-workspaces"),
     apiLogout: () =>
         electron.ipcRenderer.invoke("api:logout"),
     
