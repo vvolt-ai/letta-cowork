@@ -90,16 +90,23 @@ export function useChannelManager(
 
   // Delete channel
   const handleDeleteChannel = useCallback(async (channelId: string) => {
-    if (!confirm('Are you sure you want to delete this channel?')) return;
+    if (!confirm('Delete this channel? This will stop it and remove its saved credentials.')) return;
 
     try {
       const api = getApi();
-      await api.apiDeleteChannel(channelId);
+      const result = await api.apiDeleteChannel(channelId);
+
+      if (!result?.success) {
+        setError(result?.error || 'Failed to delete channel');
+        return;
+      }
+
       await loadChannels();
+      await loadStatuses();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete channel');
     }
-  }, [loadChannels, setError]);
+  }, [loadChannels, loadStatuses, setError]);
 
   // Start channel
   const handleStartChannel = useCallback(async (channelId: string, channels: Channel[]) => {
