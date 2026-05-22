@@ -15,6 +15,9 @@ export interface AuthTokens {
   user: {
     id: string;
     email: string;
+    firstName?: string;
+    lastName?: string | null;
+    phoneNumber?: string | null;
     organizationId: string;
     role: string;
   };
