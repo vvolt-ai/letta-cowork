@@ -1,6 +1,5 @@
 import { memo, useEffect, useState } from "react";
 import { IntegrationList } from "../IntegrationList";
-import { MigrateAgentRow } from "./MigrateAgentRow";
 import { useCoworkSettings } from "../../../../hooks/useCoworkSettings";
 
 interface ConfigurationTabProps {
@@ -11,7 +10,6 @@ interface ConfigurationTabProps {
   onOpenSkillDownload: () => void;
   onOpenLettaCli: () => void;
   onOpenMcpServers: () => void;
-  // Email integration props
   isEmailConnected: boolean;
   unreadLabel: string;
   autoSyncEnabled: boolean;
@@ -32,18 +30,27 @@ interface CoworkSettings {
   showLettaEnv: boolean;
 }
 
-function ConfigSection({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="mb-8">
-      <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-muted">
-        {title}
-      </h3>
+    <section className="space-y-3">
+      <div>
+        <h3 className="text-[13px] font-semibold text-ink-900">{title}</h3>
+        {description ? <p className="mt-1 text-[12px] leading-5 text-muted">{description}</p> : null}
+      </div>
       {children}
-    </div>
+    </section>
   );
 }
 
-function ConfigRow({
+function ActionCard({
   icon,
   label,
   description,
@@ -51,27 +58,33 @@ function ConfigRow({
 }: {
   icon: React.ReactNode;
   label: string;
-  description?: string;
+  description: string;
   onClick?: () => void;
 }) {
   return (
     <button
       onClick={onClick}
-      className="flex w-full items-center gap-4 rounded-xl border border-[var(--color-border)] bg-white px-4 py-3.5 text-left transition hover:border-[var(--color-accent)]/40 hover:bg-gray-50 hover:shadow-sm"
+      className="group flex min-h-[92px] w-full items-start gap-3 rounded-2xl border border-[var(--color-border)] bg-white p-4 text-left transition hover:border-[var(--color-accent)]/50 hover:bg-gray-50 hover:shadow-sm"
     >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-ink-600">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 transition group-hover:bg-blue-100">
         {icon}
       </span>
-      <div className="min-w-0">
-        <div className="text-[13.5px] font-medium text-ink-900">{label}</div>
-        {description && (
-          <div className="mt-0.5 text-[12px] text-muted">{description}</div>
-        )}
-      </div>
-      <svg className="ml-auto h-4 w-4 shrink-0 text-ink-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <span className="min-w-0 flex-1">
+        <span className="block text-[13.5px] font-semibold text-ink-900">{label}</span>
+        <span className="mt-1 block text-[12px] leading-5 text-muted">{description}</span>
+      </span>
+      <svg className="mt-1 h-4 w-4 shrink-0 text-ink-300 transition group-hover:translate-x-0.5 group-hover:text-ink-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <path d="m9 6 6 6-6 6" />
       </svg>
     </button>
+  );
+}
+
+function Panel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`rounded-2xl border border-[var(--color-border)] bg-white p-4 shadow-sm ${className}`}>
+      {children}
+    </div>
   );
 }
 
@@ -190,143 +203,65 @@ export const ConfigurationTab = memo(function ConfigurationTab({
   };
 
   return (
-    <div className="max-w-2xl">
-      {/* Environment */}
-      <ConfigSection title="Environment">
-        <div className="flex flex-col gap-2">
-          {coworkSettings.showLettaEnv && (
-            <ConfigRow
-              icon={
-                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="3" />
-                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14" />
-                </svg>
-              }
-              label="Environment Variables"
-              description="Manage Letta environment configuration"
-              onClick={() => onLettaEnvOpenChange(!lettaEnvOpen)}
-            />
-          )}
-          <ConfigRow
-            icon={
-              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-            }
-            label="Download Skill"
-            description="Install a new skill from a URL"
-            onClick={onOpenSkillDownload}
-          />
-          <ConfigRow
-            icon={
-              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="4 17 10 11 4 5" />
-                <line x1="12" y1="19" x2="20" y2="19" />
-              </svg>
-            }
-            label="Letta CLI"
-            description="Open the Letta command-line interface"
-            onClick={onOpenLettaCli}
-          />
-        </div>
-      </ConfigSection>
+    <div className="mx-auto max-w-4xl space-y-8">
+      <div className="rounded-3xl border border-[var(--color-border)] bg-gradient-to-br from-white to-blue-50/40 p-5 shadow-sm">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-600">Configuration</p>
+        <h2 className="mt-2 text-xl font-semibold text-ink-900">Set up your workspace</h2>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
+          Manage your identity, communication channels, integrations, and advanced developer options from one place.
+        </p>
+      </div>
 
-      {/* Tool access — migrate to letta_v1_agent for Bash / Skill / file ops */}
-      <ConfigSection title="Tool Access">
-        <MigrateAgentRow />
-      </ConfigSection>
-
-      {/* MCP servers — external tool providers (Model Context Protocol) */}
-      <ConfigSection title="MCP Servers">
-        <ConfigRow
-          icon={
-            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-              {/* server stack icon */}
-              <rect x="3" y="4" width="18" height="6" rx="1.5" />
-              <rect x="3" y="14" width="18" height="6" rx="1.5" />
-              <circle cx="7" cy="7" r="0.5" fill="currentColor" />
-              <circle cx="7" cy="17" r="0.5" fill="currentColor" />
-            </svg>
-          }
-          label="Manage MCP Servers"
-          description="Connect external tool providers (Ryze, Composio, custom MCP endpoints)"
-          onClick={onOpenMcpServers}
-        />
-      </ConfigSection>
-
-      {/* Channels */}
-      <ConfigSection title="Channels">
-        <ConfigRow
-          icon={
-            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-          }
-          label="Manage Channels"
-          description="Configure Discord, Telegram, and other channels"
-          onClick={onOpenChannels}
-        />
-      </ConfigSection>
-
-
-      {/* Profile */}
-      <ConfigSection title="Profile">
-        <div className="rounded-xl border border-[var(--color-border)] bg-white p-4">
-          <div className="mb-4">
-            <h4 className="text-[13.5px] font-medium text-ink-900">User profile</h4>
-            <p className="mt-1 text-[12px] text-muted">
-              Your phone number is used to match external channel identities, like WhatsApp senders, to your Cowork user.
-            </p>
-          </div>
-
-          <div className="space-y-3">
-            <label className="block">
+      <Section
+        title="Your profile"
+        description="Keep your Cowork identity up to date. Phone number helps match external channel messages to your account."
+      >
+        <Panel>
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="block md:col-span-2">
               <span className="text-sm font-medium text-gray-700">Email</span>
               <input
                 value={profile.email}
                 disabled
-                className="mt-1 w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500"
+                className="mt-1 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500"
               />
             </label>
 
-            <div className="grid grid-cols-2 gap-3">
-              <label className="block">
-                <span className="text-sm font-medium text-gray-700">First name</span>
-                <input
-                  value={profile.firstName}
-                  onChange={(event) => setProfile((prev) => ({ ...prev, firstName: event.target.value }))}
-                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </label>
-              <label className="block">
-                <span className="text-sm font-medium text-gray-700">Last name</span>
-                <input
-                  value={profile.lastName}
-                  onChange={(event) => setProfile((prev) => ({ ...prev, lastName: event.target.value }))}
-                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </label>
-            </div>
+            <label className="block">
+              <span className="text-sm font-medium text-gray-700">First name</span>
+              <input
+                value={profile.firstName}
+                onChange={(event) => setProfile((prev) => ({ ...prev, firstName: event.target.value }))}
+                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </label>
 
             <label className="block">
+              <span className="text-sm font-medium text-gray-700">Last name</span>
+              <input
+                value={profile.lastName}
+                onChange={(event) => setProfile((prev) => ({ ...prev, lastName: event.target.value }))}
+                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </label>
+
+            <label className="block md:col-span-2">
               <span className="text-sm font-medium text-gray-700">Phone number</span>
               <input
                 value={profile.phoneNumber}
                 onChange={(event) => setProfile((prev) => ({ ...prev, phoneNumber: event.target.value }))}
                 placeholder="+918849286808"
-                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
               <p className="mt-1 text-xs text-gray-500">Include country code. We normalize this before saving.</p>
             </label>
           </div>
 
-          <div className="mt-4 flex items-center gap-3">
+          <div className="mt-4 flex items-center gap-3 border-t border-gray-100 pt-4">
             <button
               onClick={handleSaveProfile}
               disabled={profileSaving || !profile.firstName.trim()}
-              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
             >
               {profileSaving ? 'Saving...' : 'Save profile'}
             </button>
@@ -336,57 +271,133 @@ export const ConfigurationTab = memo(function ConfigurationTab({
               </span>
             ) : null}
           </div>
-        </div>
-      </ConfigSection>
+        </Panel>
+      </Section>
 
-      {/* Features */}
-      <ConfigSection title="Features">
-        <div className="rounded-xl border border-[var(--color-border)] bg-white p-4">
-          <p className="mb-4 text-sm text-gray-600">Enable or disable features. Changes take effect immediately.</p>
-          <div className="space-y-3">
+      <Section
+        title="Communication"
+        description="Connect where Cowork should listen and respond. Channels are for chat platforms; email automation handles mailbox workflows."
+      >
+        <div className="grid gap-3 md:grid-cols-2">
+          <ActionCard
+            icon={
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+            }
+            label="Channels"
+            description="Configure Discord, Telegram, Slack, WhatsApp, and other chat entry points."
+            onClick={onOpenChannels}
+          />
+          {settings.showEmailAutomation ? (
+            <Panel className="md:col-span-2">
+              <IntegrationList
+                isEmailConnected={isEmailConnected}
+                unreadLabel={unreadLabel}
+                autoSyncEnabled={autoSyncEnabled}
+                onToggleAutoSync={onToggleAutoSync}
+                onConnect={onConnectEmail}
+                onDisconnect={onDisconnectEmail}
+                onOpenInbox={onOpenEmailView}
+                onRefresh={onRefreshEmails}
+                onManageRules={onOpenAddAgentsModal}
+              />
+            </Panel>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600">
+              Email automation is hidden. Enable it under Feature visibility below to configure mailbox workflows.
+            </div>
+          )}
+        </div>
+      </Section>
+
+      <Section
+        title="Agent tools"
+        description="Install skills, connect external MCP providers, or open the Letta CLI for advanced agent work."
+      >
+        <div className="grid gap-3 md:grid-cols-2">
+          <ActionCard
+            icon={
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+            }
+            label="Download skill"
+            description="Install a reusable skill from a URL."
+            onClick={onOpenSkillDownload}
+          />
+          <ActionCard
+            icon={
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="4" width="18" height="6" rx="1.5" />
+                <rect x="3" y="14" width="18" height="6" rx="1.5" />
+                <circle cx="7" cy="7" r="0.5" fill="currentColor" />
+                <circle cx="7" cy="17" r="0.5" fill="currentColor" />
+              </svg>
+            }
+            label="MCP servers"
+            description="Connect external tool providers like Ryze, Composio, or custom MCP endpoints."
+            onClick={onOpenMcpServers}
+          />
+          <ActionCard
+            icon={
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="4 17 10 11 4 5" />
+                <line x1="12" y1="19" x2="20" y2="19" />
+              </svg>
+            }
+            label="Letta CLI"
+            description="Open a command-line interface for direct runtime operations."
+            onClick={onOpenLettaCli}
+          />
+          {settings.showLettaEnv ? (
+            <ActionCard
+              icon={
+                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14" />
+                </svg>
+              }
+              label="Environment variables"
+              description="Manage advanced Letta and Vera environment configuration."
+              onClick={() => onLettaEnvOpenChange(!lettaEnvOpen)}
+            />
+          ) : null}
+        </div>
+      </Section>
+
+      <Section
+        title="Feature visibility"
+        description="Control which configuration areas are visible in the app. These toggles take effect immediately."
+      >
+        <Panel>
+          <div className="divide-y divide-gray-100">
             <SettingToggle
-              label="Email Automation"
-              description="Enable email automation for unread emails"
+              label="Email automation"
+              description="Show mailbox connection, auto-sync, and email workflow controls."
               enabled={settings.showEmailAutomation}
               onToggle={() => handleToggle('showEmailAutomation')}
             />
             <SettingToggle
-              label="Vera Environment"
-              description="Show Vera environment settings"
+              label="Environment variables"
+              description="Show advanced Vera and Letta environment controls."
               enabled={settings.showLettaEnv}
               onToggle={() => handleToggle('showLettaEnv')}
             />
           </div>
-          <div className="mt-4 border-t pt-4 flex justify-end">
+          <div className="mt-4 border-t border-gray-100 pt-4 text-right">
             <button
               onClick={handleReset}
               disabled={settingsLoading}
               className="text-sm text-gray-500 hover:text-gray-700 disabled:opacity-50"
             >
-              {settingsLoading ? 'Resetting...' : 'Reset to defaults'}
+              {settingsLoading ? 'Resetting...' : 'Reset visibility defaults'}
             </button>
           </div>
-        </div>
-      </ConfigSection>
-
-      {/* Email Integrations */}
-      {coworkSettings.showEmailAutomation && (
-        <ConfigSection title="Integrations">
-          <div className="rounded-xl border border-[var(--color-border)] bg-white p-4">
-            <IntegrationList
-              isEmailConnected={isEmailConnected}
-              unreadLabel={unreadLabel}
-              autoSyncEnabled={autoSyncEnabled}
-              onToggleAutoSync={onToggleAutoSync}
-              onConnect={onConnectEmail}
-              onDisconnect={onDisconnectEmail}
-              onOpenInbox={onOpenEmailView}
-              onRefresh={onRefreshEmails}
-              onManageRules={onOpenAddAgentsModal}
-            />
-          </div>
-        </ConfigSection>
-      )}
+        </Panel>
+      </Section>
     </div>
   );
 });
@@ -400,14 +411,14 @@ interface SettingToggleProps {
 
 function SettingToggle({ label, description, enabled, onToggle }: SettingToggleProps) {
   return (
-    <div className="flex items-center justify-between py-2">
+    <div className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
       <div>
-        <p className="font-medium text-gray-900">{label}</p>
-        <p className="text-sm text-gray-500">{description}</p>
+        <p className="text-sm font-medium text-gray-900">{label}</p>
+        <p className="mt-0.5 text-xs leading-5 text-gray-500">{description}</p>
       </div>
       <button
         onClick={onToggle}
-        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
           enabled ? 'bg-blue-500' : 'bg-gray-200'
         }`}
       >
