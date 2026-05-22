@@ -720,7 +720,6 @@ function App() {
             awaitingConversationEmailId={awaitingConversationEmailId}
             errorEmailId={errorEmailId}
             newlyCreatedConversations={newlyCreatedConversations}
-            onOpenSettings={() => setShowCoworkSettings(true)}
             onOpenConfiguration={() => { setShowConfiguration(true); setShowSkills(false); setShowSchedules(false); setShowRuns(false); }}
             onOpenSkills={() => { setShowSkills(true); setShowConfiguration(false); setShowSchedules(false); setShowRuns(false); }}
             onOpenSchedules={() => { setShowSchedules(true); setShowSkills(false); setShowConfiguration(false); setShowRuns(false); }}
@@ -767,7 +766,7 @@ function App() {
                   coworkSettings={coworkSettings}
                   lettaEnvOpen={lettaEnvOpen}
                   onLettaEnvOpenChange={setLettaEnvOpen}
-                  onOpenSettings={() => setShowCoworkSettings(true)}
+                  onOpenChannels={() => setShowCoworkSettings(true)}
                   onOpenSkillDownload={() => setSkillDownloadOpen(true)}
                   onOpenLettaCli={() => setShowLettaCli(true)}
                   onOpenMcpServers={() => setShowMcpServers(true)}
