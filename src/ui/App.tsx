@@ -723,7 +723,6 @@ function App() {
             onOpenConfiguration={() => { setShowConfiguration(true); setShowSkills(false); setShowSchedules(false); setShowRuns(false); }}
             onOpenSkills={() => { setShowSkills(true); setShowConfiguration(false); setShowSchedules(false); setShowRuns(false); }}
             onOpenSchedules={() => { setShowSchedules(true); setShowSkills(false); setShowConfiguration(false); setShowRuns(false); }}
-            onOpenRuns={() => { setRunsPresetConversationId(undefined); setShowRuns(true); setShowSchedules(false); setShowSkills(false); setShowConfiguration(false); }}
             hasMoreEmails={hasMoreEmails}
             isLoadingMoreEmails={isLoadingMoreEmails}
             onLoadMoreEmails={handleLoadMoreEmails}
