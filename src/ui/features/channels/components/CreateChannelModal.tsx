@@ -7,6 +7,7 @@ import {
   LettaAgent,
   PROVIDERS,
   TelegramConfig,
+  WeChatConfig,
   WhatsAppConfig,
 } from './types';
 import { DiscordConfigFields, TelegramConfigFields, WhatsAppConfigFields } from './ProviderConfigFields';
@@ -42,6 +43,12 @@ function getCredentialFields(provider: string): CredentialField[] {
         { key: 'botToken', label: 'Bot token (xoxb-...)', placeholder: 'xoxb-123456789012-...', type: 'password', required: true },
         { key: 'appToken', label: 'App token (xapp-...)', placeholder: 'xapp-1-A01BC...', type: 'password', required: true },
       ];
+    case 'wechat':
+      return [
+        { key: 'accountId', label: 'Account ID', placeholder: 'ilink_bot_id...', type: 'text', required: true },
+        { key: 'botToken', label: 'Bot token', placeholder: 'WeChat iLink bot token', type: 'password', required: true },
+        { key: 'baseUrl', label: 'Base URL (optional)', placeholder: 'https://ilinkai.weixin.qq.com', type: 'text', required: false },
+      ];
     case 'whatsapp':
       return [
         { key: 'sessionPath', label: 'Session path (optional)', placeholder: './data/whatsapp-session', type: 'text', required: false },
@@ -61,6 +68,8 @@ function getCredentialsHelp(provider: string): string {
       return 'Create a bot in the Discord Developer Portal and paste its bot token here.';
     case 'slack':
       return 'Create a Slack app, enable Socket Mode, then paste both the bot token and app token.';
+    case 'wechat':
+      return 'Paste WeChat iLink Bot credentials. QR login can be added after the text-channel MVP is verified.';
     default:
       return 'Paste the provider credentials required to connect this channel.';
   }
@@ -121,8 +130,11 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
     setError(null);
     try {
       const api = getApi();
+      const baseConfig = provider === 'wechat' && credentials.baseUrl?.trim()
+        ? { ...configData, baseUrl: credentials.baseUrl.trim() }
+        : configData;
       const cleanedConfig = Object.fromEntries(
-        Object.entries(configData).filter(([, value]) => value !== '' && value !== undefined)
+        Object.entries(baseConfig).filter(([, value]) => value !== '' && value !== undefined)
       );
 
       const createResult = await api.apiCreateChannel({
@@ -355,6 +367,19 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
               ) : null}
               {provider === 'discord' ? (
                 <DiscordConfigFields configData={configData as DiscordConfig} setConfigData={updateConfig} />
+              ) : null}
+              {provider === 'wechat' ? (
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">WeChat API base URL</label>
+                  <input
+                    type="text"
+                    value={(configData as WeChatConfig).baseUrl || ''}
+                    onChange={(event) => setConfigData({ ...configData, baseUrl: event.target.value || undefined })}
+                    placeholder="https://ilinkai.weixin.qq.com"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2"
+                  />
+                  <p className="mt-1 text-xs text-slate-500">Leave empty unless your WeChat iLink credentials use a different base URL.</p>
+                </div>
               ) : null}
             </div>
           ) : null}

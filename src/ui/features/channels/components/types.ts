@@ -36,7 +36,15 @@ export interface SlackConfig {
   typingIndicator?: boolean;
 }
 
-export type ChannelConfig = WhatsAppConfig | TelegramConfig | DiscordConfig | SlackConfig;
+export interface WeChatConfig {
+  autoStart?: boolean;
+  allowedUsers?: string[];
+  defaultAgentId?: string;
+  typingIndicator?: boolean;
+  baseUrl?: string;
+}
+
+export type ChannelConfig = WhatsAppConfig | TelegramConfig | DiscordConfig | SlackConfig | WeChatConfig;
 
 // Extended config type for state management
 export type ConfigDataState = {
@@ -48,12 +56,13 @@ export type ConfigDataState = {
   respondOnlyWhenMentioned?: boolean;
   selfChatMode?: boolean;
   sessionPath?: string;
+  baseUrl?: string;
   dmPolicy?: 'pairing' | 'allowlist' | 'open';
 };
 
 export interface Channel {
   id: string;
-  provider: 'whatsapp' | 'telegram' | 'discord' | 'slack' | 'email';
+  provider: 'whatsapp' | 'telegram' | 'discord' | 'slack' | 'wechat' | 'email';
   name: string;
   hasCredentials: boolean;
   isActive: boolean;
@@ -84,6 +93,7 @@ export interface ChannelsManagerProps {
 export const PROVIDERS: readonly { id: string; name: string; icon: string }[] = [
   { id: 'telegram', name: 'Telegram', icon: '📱' },
   { id: 'whatsapp', name: 'WhatsApp', icon: '💬' },
+  { id: 'wechat', name: 'WeChat', icon: '💚' },
   { id: 'discord', name: 'Discord', icon: '🎮' },
   { id: 'slack', name: 'Slack', icon: '💼' },
 ];
