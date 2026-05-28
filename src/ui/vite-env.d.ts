@@ -139,6 +139,17 @@ interface Window {
       user?: any;
       error?: string;
     }>;
+    apiRequestEmailOtp: (email: string) => Promise<{
+      success: boolean;
+      message?: string;
+      expiresInMinutes?: number;
+      error?: string;
+    }>;
+    apiVerifyEmailOtp: (email: string, otp: string) => Promise<{
+      success: boolean;
+      user?: any;
+      error?: string;
+    }>;
     apiRegister: (data: {
       email: string;
       password: string;

@@ -27,6 +27,7 @@ const EMPTY_FORM: CreateScheduledTaskForm = {
   agentId: "",
   conversationId: "",
   scheduleType: "recurring",
+  executionTarget: "cowork",
   frequency: "daily",
   time: "09:00",
   dayOfWeek: "1",
@@ -86,7 +87,7 @@ export function CreateScheduleDialog({ open, agents, onClose, onSave, initialVal
         {/* Info banner */}
         <div className="mx-6 mt-4 flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm text-blue-700">
           <span className="mt-0.5">ℹ️</span>
-          <span>Tasks only run if the Vera Cowork app is running.</span>
+          <span>Choose whether this task runs in Vera Cowork or on the server.</span>
         </div>
 
         <div className="px-6 py-4 space-y-4">
@@ -156,6 +157,30 @@ export function CreateScheduleDialog({ open, agents, onClose, onSave, initialVal
                 <option key={a.id} value={a.id}>{a.name}</option>
               ))}
             </select>
+          </div>
+
+          {/* Execution target */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Run on</label>
+            <div className="flex rounded-lg border border-gray-300 overflow-hidden">
+              {(["cowork", "server"] as const).map((target) => (
+                <button
+                  key={target}
+                  type="button"
+                  onClick={() => set("executionTarget", target)}
+                  className={`flex-1 py-2 text-sm font-medium transition-colors ${
+                    form.executionTarget === target
+                      ? "bg-gray-900 text-white"
+                      : "bg-white text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  {target === "cowork" ? "CoWork app" : "Server"}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1 text-xs text-gray-400">
+              CoWork requires the desktop app to be running. Server runs even when CoWork is closed.
+            </p>
           </div>
 
           {/* Target conversation */}

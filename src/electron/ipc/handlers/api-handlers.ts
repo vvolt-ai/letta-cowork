@@ -120,6 +120,29 @@ export function initializeApiIpcHandlers(): void {
     }
   });
 
+  ipcMain.handle("api:request-email-otp", async (_, email: string) => {
+    console.log('[API IPC] request email OTP for:', email);
+    try {
+      const result = await api.requestEmailOtp(email);
+      return { success: true, ...result };
+    } catch (error) {
+      console.error('[API IPC] request email OTP failed:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle("api:verify-email-otp", async (_, data: { email: string; otp: string }) => {
+    console.log('[API IPC] verify email OTP for:', data.email);
+    try {
+      const tokens = await api.verifyEmailOtp(data.email, data.otp);
+      await ensureSchedulerInitialized();
+      return { success: true, user: tokens.user };
+    } catch (error) {
+      console.error('[API IPC] verify email OTP failed:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
   ipcMain.handle("api:register", async (_, data: RegisterData) => {
     console.log('[API IPC] register attempt for:', data.email);
     try {

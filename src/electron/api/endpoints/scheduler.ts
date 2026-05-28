@@ -15,6 +15,7 @@ export interface ScheduledTask {
   agentId: string;
   conversationId: string | null;
   scheduleType: "recurring" | "one_off";
+  executionTarget: "cowork" | "server";
   cronExpression: string;
   timezone: string;
   enabled: boolean;
@@ -45,6 +46,7 @@ export interface CreateScheduledTaskDto {
   agentId: string;
   conversationId?: string;
   scheduleType: "recurring" | "one_off";
+  executionTarget?: "cowork" | "server";
   cronExpression: string;
   timezone?: string;
   enabled?: boolean;
@@ -105,6 +107,13 @@ export class SchedulerEndpoints {
   toggleTask(id: string): Promise<ScheduledTask> {
     return this.client.request<ScheduledTask>(`/schedules/${id}/toggle`, {
       method: "PATCH",
+      suppressAuthExpired: true,
+    });
+  }
+
+  runTaskNow(id: string): Promise<ScheduleRun> {
+    return this.client.request<ScheduleRun>(`/schedules/${id}/run-now`, {
+      method: "POST",
       suppressAuthExpired: true,
     });
   }

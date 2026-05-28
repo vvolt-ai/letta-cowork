@@ -239,6 +239,14 @@ export const fetchEmailById = async (messageId: string, accountId?: string, fold
 }
 
 export const connectEmail = async () => {
+  const api = getVeraCoworkApiClient();
+
+  if (api.isAuthenticated()) {
+    const data = await api.getEmailOAuthConnectUrl();
+    await shell.openExternal(data.auth_url);
+    return;
+  }
+
   const response = await fetch(`${BASE_URL}/connect`);
   if (!response.ok) {
     throw new Error("Failed to get auth URL");

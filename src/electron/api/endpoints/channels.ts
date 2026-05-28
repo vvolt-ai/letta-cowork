@@ -14,6 +14,19 @@ import type { Channel, ChannelRuntimeStatus, ChannelCredentials, MessageLog, Con
  */
 export class ChannelEndpoints {
   // ============================================
+  // Email OAuth
+  // ============================================
+
+  static async getEmailOAuthConnectUrl(client: BaseHttpClient): Promise<{
+    auth_url: string;
+    state: string;
+    channelId: string;
+    scopes: readonly string[];
+  }> {
+    return client.request('/channels/email/oauth/connect');
+  }
+
+  // ============================================
   // Channel CRUD
   // ============================================
 

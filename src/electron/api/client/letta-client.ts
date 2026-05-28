@@ -61,6 +61,44 @@ export class VeraCoworkApiClient extends BaseHttpClient {
     return this.tokens;
   }
 
+  async requestEmailOtp(email: string): Promise<{ success: boolean; message: string; expiresInMinutes: number }> {
+    const response = await fetch(`${this.baseUrl}/auth/otp/request`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`OTP request failed: ${error}`);
+    }
+
+    return response.json();
+  }
+
+  async verifyEmailOtp(email: string, otp: string): Promise<AuthTokens> {
+    const response = await fetch(`${this.baseUrl}/auth/otp/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, otp }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`OTP verification failed: ${error}`);
+    }
+
+    const data = await response.json();
+    this.tokens = {
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken,
+      expiresIn: data.expiresIn,
+      user: data.user,
+    };
+    this.saveTokens();
+    return this.tokens;
+  }
+
   async listWorkspaces(): Promise<Array<{ id: string; name: string }>> {
     const response = await fetch(`${this.baseUrl}/auth/workspaces`);
 
@@ -165,6 +203,15 @@ export class VeraCoworkApiClient extends BaseHttpClient {
   // ============================================
   // Channels - Delegate to ChannelEndpoints
   // ============================================
+
+  async getEmailOAuthConnectUrl(): Promise<{
+    auth_url: string;
+    state: string;
+    channelId: string;
+    scopes: readonly string[];
+  }> {
+    return ChannelEndpoints.getEmailOAuthConnectUrl(this);
+  }
 
   async listChannels(): Promise<Channel[]> {
     return ChannelEndpoints.listChannels(this);

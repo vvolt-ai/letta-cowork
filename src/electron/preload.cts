@@ -222,6 +222,10 @@ electron.contextBridge.exposeInMainWorld("electron", {
         electron.ipcRenderer.invoke("api:update-current-user-profile", data),
     apiLogin: (email: string, password: string) =>
         electron.ipcRenderer.invoke("api:login", { email, password }),
+    apiRequestEmailOtp: (email: string) =>
+        electron.ipcRenderer.invoke("api:request-email-otp", email),
+    apiVerifyEmailOtp: (email: string, otp: string) =>
+        electron.ipcRenderer.invoke("api:verify-email-otp", { email, otp }),
     apiRegister: (data: { email: string; password: string; firstName?: string; lastName?: string; organizationId?: string }) =>
         electron.ipcRenderer.invoke("api:register", data),
     apiListWorkspaces: () =>

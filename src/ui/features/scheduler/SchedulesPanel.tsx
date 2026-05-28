@@ -72,6 +72,7 @@ export function SchedulesPanel({ agents }: Props) {
       agentId: form.agentId,
       conversationId: form.conversationId || undefined,
       scheduleType: form.scheduleType,
+      executionTarget: form.executionTarget,
       cronExpression: cron,
       timezone: form.timezone,
       enabled: form.enabled,
@@ -89,6 +90,7 @@ export function SchedulesPanel({ agents }: Props) {
       agentId: form.agentId,
       conversationId: form.conversationId || undefined,
       scheduleType: form.scheduleType,
+      executionTarget: form.executionTarget,
       cronExpression: cron,
       timezone: form.timezone,
       enabled: form.enabled,
@@ -202,6 +204,7 @@ export function SchedulesPanel({ agents }: Props) {
                 <th className="text-left px-4 py-3 font-medium text-gray-500">Description</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-500">Status</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-500">Schedule</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-500">Runs on</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-500">Timezone</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-500">Created</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-500">Actions</th>
@@ -230,6 +233,9 @@ export function SchedulesPanel({ agents }: Props) {
                   </td>
                   <td className="px-4 py-4 font-mono text-xs text-gray-600">
                     {task.cronExpression}
+                  </td>
+                  <td className="px-4 py-4 text-gray-500 text-xs">
+                    {(task.executionTarget ?? "cowork") === "server" ? "Server" : "CoWork"}
                   </td>
                   <td className="px-4 py-4 text-gray-500 text-xs">{task.timezone}</td>
                   <td className="px-4 py-4 text-gray-400 text-xs">
@@ -307,6 +313,7 @@ export function SchedulesPanel({ agents }: Props) {
             agentId: editTask.agentId,
             conversationId: editTask.conversationId ?? "",
             scheduleType: editTask.scheduleType,
+            executionTarget: editTask.executionTarget ?? "cowork",
             frequency: "custom",
             cronExpression: editTask.cronExpression,
             timezone: editTask.timezone,

@@ -25,6 +25,7 @@ type ApiClient = {
     listTasks: () => Promise<ScheduledTask[]>;
     createRun: (id: string, dto: CreateScheduleRunDto) => Promise<ScheduleRun>;
     updateRun: (taskId: string, runId: string, dto: UpdateScheduleRunDto) => Promise<ScheduleRun>;
+    runTaskNow: (id: string) => Promise<ScheduleRun>;
     toggleTask: (id: string) => Promise<ScheduledTask>;
   };
 };
@@ -82,7 +83,7 @@ class SchedulerService {
       return;
     }
 
-    const activeTasks = tasks.filter((t) => t.enabled);
+    const activeTasks = tasks.filter((t) => t.enabled && (t.executionTarget ?? "cowork") === "cowork");
     const activeIds = new Set(activeTasks.map((t) => t.id));
 
     // Remove stale jobs (deleted or disabled tasks)
@@ -250,6 +251,19 @@ class SchedulerService {
     const task = tasks.find((t) => t.id === taskId);
     if (!task) {
       throw new Error("Task not found");
+    }
+
+    if ((task.executionTarget ?? "cowork") === "server") {
+      const run = await this.apiClient.scheduler.runTaskNow(task.id);
+      return {
+        taskId: task.id,
+        status: run.status === "failed" ? "failed" : "completed",
+        startedAt: run.startedAt,
+        completedAt: run.completedAt ?? new Date().toISOString(),
+        output: run.output,
+        error: run.error,
+        conversationId: run.conversationId,
+      };
     }
 
     const result = await this.executeTask(task);

@@ -7,6 +7,7 @@ export interface ScheduledTask {
   agentId: string;
   conversationId: string | null;
   scheduleType: "recurring" | "one_off";
+  executionTarget: "cowork" | "server";
   cronExpression: string;
   timezone: string;
   enabled: boolean;
@@ -37,6 +38,7 @@ export interface CreateScheduledTaskForm {
   agentId: string;
   conversationId: string;
   scheduleType: "recurring" | "one_off";
+  executionTarget: "cowork" | "server";
   frequency: "hourly" | "daily" | "weekly" | "monthly" | "custom";
   time: string;           // HH:MM format for daily/weekly
   dayOfWeek: string;      // 0-6 for weekly

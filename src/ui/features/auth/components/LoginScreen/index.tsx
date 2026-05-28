@@ -16,6 +16,8 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [otp, setOtp] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [workspaceMode, setWorkspaceMode] = useState<"new" | "existing">("new");
@@ -84,9 +86,20 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
     try {
       const api = getApi();
       if (mode === "login") {
-        console.log('[LoginScreen] Calling apiLogin...');
-        const result = await api.apiLogin(email, password);
-        console.log('[LoginScreen] Login result:', result);
+        if (!otpSent) {
+          console.log('[LoginScreen] Requesting email OTP...');
+          const result = await api.apiRequestEmailOtp(email);
+          if (result.success) {
+            setOtpSent(true);
+          } else {
+            setError(result.error || "Failed to send login code");
+          }
+          return;
+        }
+
+        console.log('[LoginScreen] Verifying email OTP...');
+        const result = await api.apiVerifyEmailOtp(email, otp);
+        console.log('[LoginScreen] OTP login result:', result);
         if (result.success) {
           console.log('[LoginScreen] Login successful, user:', result.user);
           onLoginSuccess();
@@ -120,6 +133,12 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
     }
   };
 
+  const resetLoginCode = () => {
+    setOtpSent(false);
+    setOtp("");
+    setError(null);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -139,7 +158,10 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
           {/* Tabs */}
           <div className="flex gap-1 p-1 bg-slate-100 rounded-lg mb-6">
             <button
-              onClick={() => setMode("login")}
+              onClick={() => {
+                setMode("login");
+                resetLoginCode();
+              }}
               className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
                 mode === "login"
                   ? "bg-white text-slate-900 shadow-sm"
@@ -149,7 +171,10 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
               Sign In
             </button>
             <button
-              onClick={() => setMode("register")}
+              onClick={() => {
+                setMode("register");
+                resetLoginCode();
+              }}
               className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
                 mode === "register"
                   ? "bg-white text-slate-900 shadow-sm"
@@ -258,13 +283,44 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
               <input
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (mode === "login") resetLoginCode();
+                }}
                 required
+                disabled={mode === "login" && otpSent}
                 className="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                 placeholder="you@example.com"
               />
             </div>
 
+            {mode === "login" && otpSent && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Login code
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  required
+                  minLength={6}
+                  maxLength={6}
+                  className="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all tracking-[0.5em] font-mono text-center"
+                  placeholder="123456"
+                  autoFocus
+                />
+                <div className="flex items-center justify-between mt-1">
+                  <p className="text-xs text-slate-500">Check your email. Code expires in 10 minutes.</p>
+                  <button type="button" onClick={resetLoginCode} className="text-xs text-blue-600 hover:text-blue-700">
+                    Change email
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {mode === "register" && (
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
                 Password
@@ -284,6 +340,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                 </p>
               )}
             </div>
+            )}
 
             {error && (
               <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
@@ -293,7 +350,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
 
             <button
               type="submit"
-              disabled={loading || workspacesLoading || !email || !password || (mode === "register" && (!firstName || password.length < 12 || (workspaceMode === "existing" && !organizationId)))}
+              disabled={loading || workspacesLoading || !email || (mode === "login" && otpSent && otp.length !== 6) || (mode === "register" && (!password || !firstName || password.length < 12 || (workspaceMode === "existing" && !organizationId)))}
               className="w-full py-2.5 px-4 rounded-lg bg-gradient-to-r from-blue-500 to-purple-600 text-white font-medium hover:from-blue-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               {loading ? (
@@ -302,10 +359,10 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                     <circle className="opacity-25" cx="12" cy="12" r="10" />
                     <path className="opacity-75" d="M4 12a8 8 0 018-8" />
                   </svg>
-                  {mode === "login" ? "Signing in..." : "Creating account..."}
+                  {mode === "login" ? (otpSent ? "Verifying..." : "Sending code...") : "Creating account..."}
                 </span>
               ) : (
-                mode === "login" ? "Sign In" : "Create Account"
+                mode === "login" ? (otpSent ? "Verify & Sign In" : "Send Login Code") : "Create Account"
               )}
             </button>
           </form>
