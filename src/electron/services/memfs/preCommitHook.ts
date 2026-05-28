@@ -1,33 +1,23 @@
 /**
  * Pre-commit hook for Letta agent memory repos.
  *
- * Verbatim port of `@letta-ai/letta-code`'s PRE_COMMIT_HOOK_SCRIPT
- * (memoryGit module). Installed at `.git/hooks/pre-commit` of every
- * memfs checkout so commits made from this app obey the same
- * frontmatter rules as commits made by Letta Code itself or by the
- * agent.
- *
- * Validations enforced on every staged `.md` file under `memory/`:
- *   - Frontmatter (`---` block) is present and properly closed.
- *   - Only known keys: `description`, `limit`, `read_only`.
- *   - `description` and `limit` are required.
- *   - `description` must be non-empty.
- *   - `limit` must be a positive integer.
- *   - `read_only: true` files cannot be modified.
- *   - The agent cannot change, set, or remove the `read_only` field.
- *
- * Keep in sync with letta-code upstream. Source location at port time:
- * `node_modules/@letta-ai/letta-code/letta.js` — search for
- * `PRE_COMMIT_HOOK_SCRIPT`.
+ * Ported from Letta Code upstream `src/agent/memory-git.ts` after pulling
+ * commit 6343ce40 on 2026-05-28. Keep this in sync with upstream.
  */
 export const PRE_COMMIT_HOOK_SCRIPT = `#!/usr/bin/env bash
 # Validate frontmatter in staged memory .md files
 # Installed by Letta Code CLI
 
-AGENT_EDITABLE_KEYS="description limit"
+AGENT_EDITABLE_KEYS="description"
 PROTECTED_KEYS="read_only"
-ALL_KNOWN_KEYS="description limit read_only"
+ALL_KNOWN_KEYS="description read_only limit"
 errors=""
+
+# Skills must always be directories: skills/<name>/SKILL.md
+# Reject legacy flat skill files (both current and legacy repo layouts).
+for file in $(git diff --cached --name-only --diff-filter=ACMR | grep -E '^(memory/)?skills/[^/]+\\.md$' || true); do
+  errors="$errors\\n  $file: invalid skill path (skills must be folders). Use skills/<name>/SKILL.md"
+done
 
 # Helper: extract a frontmatter value from content
 get_fm_value() {
@@ -38,7 +28,9 @@ get_fm_value() {
   echo "$content" | tail -n +2 | head -n $((closing_line - 1)) | grep "^$key:" | cut -d: -f2- | sed 's/^ *//;s/ *$//'
 }
 
-for file in $(git diff --cached --name-only --diff-filter=ACM | grep '^memory/.*\\.md$'); do
+# Match .md files under system/ or reference/ (with optional memory/ prefix).
+# Skip skill SKILL.md files — they use a different frontmatter format.
+for file in $(git diff --cached --name-only --diff-filter=ACM | grep -E '^(memory/)?(system|reference)/.*\\.md$'); do
   staged=$(git show ":$file")
 
   # Frontmatter is required
@@ -70,11 +62,14 @@ for file in $(git diff --cached --name-only --diff-filter=ACM | grep '^memory/.*
 
   # Track required fields
   has_description=false
-  has_limit=false
 
   # Validate each line
   while IFS= read -r line; do
     [ -z "$line" ] && continue
+    # Skip YAML multiline continuation lines (indented lines that continue a previous value)
+    case "$line" in
+      " "*|$'\t'*) continue ;;
+    esac
 
     key=$(echo "$line" | cut -d: -f1 | tr -d ' ')
     value=$(echo "$line" | cut -d: -f2- | sed 's/^ *//;s/ *$//')
@@ -111,10 +106,7 @@ for file in $(git diff --cached --name-only --diff-filter=ACM | grep '^memory/.*
     # Validate value types
     case "$key" in
       limit)
-        has_limit=true
-        if ! echo "$value" | grep -qE '^[0-9]+$' || [ "$value" = "0" ]; then
-          errors="$errors\\n  $file: 'limit' must be a positive integer, got '$value'"
-        fi
+        # Legacy field accepted for backward compatibility.
         ;;
       description)
         has_description=true
@@ -128,9 +120,6 @@ for file in $(git diff --cached --name-only --diff-filter=ACM | grep '^memory/.*
   # Check required fields
   if [ "$has_description" = "false" ]; then
     errors="$errors\\n  $file: missing required field 'description'"
-  fi
-  if [ "$has_limit" = "false" ]; then
-    errors="$errors\\n  $file: missing required field 'limit'"
   fi
 
   # Check if protected keys were removed (existed in HEAD but not in staged)

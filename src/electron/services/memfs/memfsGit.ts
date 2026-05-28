@@ -43,13 +43,22 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { promises as fs } from "fs";
 import { existsSync, renameSync, rmSync } from "fs";
-import { homedir } from "os";
+import { homedir, platform } from "os";
 import { join, dirname, relative } from "path";
 import { PRE_COMMIT_HOOK_SCRIPT } from "./preCommitHook.js";
 
 const execFileAsync = promisify(execFile);
 
 const AGENT_ID_RE = /^agent-[a-f0-9-]{36}$/i;
+const RETRYABLE_GIT_HTTP_ERROR_RE =
+  /(?:\bHTTP\s+(?:520|521|522|523|524)\b|The requested URL returned error:\s*(?:520|521|522|523|524))/i;
+const RETRYABLE_GIT_NETWORK_ERROR_RE =
+  /(remote end hung up unexpectedly|connection reset by peer|operation timed out|timed out|SIGTERM|ETIMEDOUT)/i;
+const MISSING_CWD_GIT_ERROR_RE =
+  /(Unable to read current working directory: No such file or directory|\buv_cwd\b|\bcwd\b.*\bENOENT\b)/i;
+
+const GIT_DEFAULT_TIMEOUT_MS = 60_000;
+const GIT_REMOTE_TIMEOUT_MS = 300_000;
 
 // ---------------------------------------------------------------------------
 // Config resolution
@@ -79,6 +88,39 @@ function normalizeCredentialBaseUrl(serverUrl: string): string {
   } catch {
     return trimmed;
   }
+}
+
+function formatGitCredentialHelperPath(path: string): string {
+  return path.replace(/\\/g, "/").replace(/\s/g, "\\$&");
+}
+
+function redactGitAuthInText(value: string): string {
+  return value
+    .replace(
+      /(http\.extraHeader=Authorization:\s*(?:Basic|Bearer)\s+)[^\s'"`]+/gi,
+      "$1<redacted>",
+    )
+    .replace(
+      /(Authorization:\s*(?:Basic|Bearer)\s+)[^\s'"`]+/gi,
+      "$1<redacted>",
+    )
+    .replace(/(password=)[^\s'"`;]+/gi, "$1<redacted>")
+    .replace(/sk-let-[A-Za-z0-9_-]+/g, "sk-let-<redacted>");
+}
+
+function isRetryableGitTransientError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  if (RETRYABLE_GIT_HTTP_ERROR_RE.test(message)) return true;
+  return message.includes("RPC failed") && RETRYABLE_GIT_NETWORK_ERROR_RE.test(message);
+}
+
+function isMissingCwdGitError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return MISSING_CWD_GIT_ERROR_RE.test(message);
+}
+
+function isRemoteGitOp(args: string[]): boolean {
+  return ["clone", "fetch", "pull", "push"].includes(args[0] ?? "");
 }
 
 function getToken(): string {
@@ -133,23 +175,32 @@ async function runGit(
   cwd: string,
   args: string[],
   token?: string,
+  options?: { timeoutMs?: number },
 ): Promise<{ stdout: string; stderr: string }> {
   const authArgs = token
     ? [
+        "-c",
+        "credential.helper=",
+        "-c",
+        "core.askPass=",
         "-c",
         `http.extraHeader=Authorization: Basic ${Buffer.from(`letta:${token}`).toString("base64")}`,
       ]
     : [];
   const allArgs = [...authArgs, ...args];
+  const timeoutMs = options?.timeoutMs ?? (isRemoteGitOp(args) ? GIT_REMOTE_TIMEOUT_MS : GIT_DEFAULT_TIMEOUT_MS);
 
   try {
     const result = await execFileAsync("git", allArgs, {
       cwd,
       maxBuffer: 10 * 1024 * 1024,
-      timeout: 60_000,
+      timeout: timeoutMs,
       env: {
         ...process.env,
         GIT_TERMINAL_PROMPT: "0",
+        GCM_INTERACTIVE: "never",
+        GIT_ASKPASS: "",
+        SSH_ASKPASS: "",
       },
     });
     return {
@@ -157,7 +208,14 @@ async function runGit(
       stderr: result.stderr?.toString() ?? "",
     };
   } catch (err) {
-    const e = err as { stdout?: unknown; stderr?: unknown; message?: string };
+    const e = err as {
+      stdout?: unknown;
+      stderr?: unknown;
+      message?: string;
+      killed?: boolean;
+      signal?: string;
+      code?: string;
+    };
     const stderr =
       typeof e?.stderr === "string"
         ? e.stderr
@@ -166,13 +224,49 @@ async function runGit(
       typeof e?.stdout === "string"
         ? e.stdout
         : (e?.stdout as Buffer | undefined)?.toString?.() ?? "";
-    const safe = args.map((a) => (a.includes("password") ? "<redacted>" : a));
+    const safe = args.map((a) => redactGitAuthInText(a.includes("password") ? "<redacted>" : a));
+    const wasTimeout =
+      e?.killed === true && (e?.signal === "SIGTERM" || e?.code === "ETIMEDOUT");
+    const detail = wasTimeout
+      ? `timed out after ${timeoutMs}ms (stderr so far: ${stderr.trim() || "<empty>"})`
+      : stderr.trim() || stdout.trim() || e?.message || "unknown error";
     throw new Error(
-      `git ${safe.join(" ")} failed: ${
-        stderr.trim() || stdout.trim() || e?.message || "unknown error"
-      }`,
+      redactGitAuthInText(`git ${safe.join(" ")} failed: ${detail}`),
     );
   }
+}
+
+async function runGitWithRetry(
+  cwd: string,
+  args: string[],
+  token?: string,
+  options?: { operation?: string; attempts?: number; baseDelayMs?: number; timeoutMs?: number },
+): Promise<{ stdout: string; stderr: string }> {
+  const attempts = options?.attempts ?? 3;
+  const baseDelayMs = options?.baseDelayMs ?? 500;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      if (!existsSync(cwd)) {
+        await fs.mkdir(cwd, { recursive: true });
+      }
+      return await runGit(cwd, args, token, { timeoutMs: options?.timeoutMs });
+    } catch (error) {
+      if (isMissingCwdGitError(error)) {
+        await fs.mkdir(cwd, { recursive: true });
+        if (attempt < attempts) continue;
+      }
+
+      if (!isRetryableGitTransientError(error) || attempt >= attempts) {
+        throw error;
+      }
+
+      const delayMs = baseDelayMs * 2 ** (attempt - 1);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+
+  throw new Error(`Unexpected retry loop exit for ${options?.operation ?? args[0] ?? "git op"}`);
 }
 
 /**
@@ -186,7 +280,17 @@ async function configureLocalCredentialHelper(
 ): Promise<void> {
   const rawBaseUrl = getRawBaseUrl();
   const normalizedBaseUrl = normalizeCredentialBaseUrl(rawBaseUrl);
-  const helper = `!f() { echo "username=letta"; echo "password=${token}"; }; f`;
+  let helper: string;
+
+  if (platform() === "win32") {
+    const helperScriptPath = join(dir, ".git", "letta-credential-helper.cmd");
+    const batchScript = `@echo off\necho username=letta\necho password=${token}\n`;
+    await fs.writeFile(helperScriptPath, batchScript, "utf-8");
+    helper = formatGitCredentialHelperPath(helperScriptPath);
+  } else {
+    helper = `!f() { echo "username=letta"; echo "password=${token}"; }; f`;
+  }
+
   await runGit(dir, [
     "config",
     `credential.${normalizedBaseUrl}.helper`,
@@ -226,7 +330,10 @@ export async function cloneMemoryRepo(agentId: string): Promise<string> {
   if (!existsSync(dir)) {
     // Fresh clone.
     await fs.mkdir(dir, { recursive: true });
-    await runGit(dir, ["clone", url, "."], token);
+    await runGitWithRetry(dir, ["clone", url, "."], token, {
+      operation: "clone memory repo",
+      timeoutMs: GIT_REMOTE_TIMEOUT_MS,
+    });
   } else if (!existsSync(join(dir, ".git"))) {
     // Migration: directory exists with content but no git. Clone to a
     // temp dir, transplant the .git in, then checkout to reconcile.
@@ -236,7 +343,10 @@ export async function cloneMemoryRepo(agentId: string): Promise<string> {
         rmSync(tmpDir, { recursive: true, force: true });
       }
       await fs.mkdir(tmpDir, { recursive: true });
-      await runGit(tmpDir, ["clone", url, "."], token);
+      await runGitWithRetry(tmpDir, ["clone", url, "."], token, {
+        operation: "clone memory repo (tmp migration)",
+        timeoutMs: GIT_REMOTE_TIMEOUT_MS,
+      });
       renameSync(join(tmpDir, ".git"), join(dir, ".git"));
       await runGit(dir, ["checkout", "--", "."], token);
     } finally {
@@ -271,7 +381,9 @@ export async function pullMemory(
   await installPreCommitHook(dir);
 
   try {
-    const { stdout, stderr } = await runGit(dir, ["pull", "--ff-only"], token);
+    const { stdout, stderr } = await runGitWithRetry(dir, ["pull", "--ff-only"], token, {
+      operation: "pull --ff-only",
+    });
     const output = stdout + stderr;
     const updated = !output.includes("Already up to date");
     return {
@@ -280,10 +392,11 @@ export async function pullMemory(
     };
   } catch {
     try {
-      const { stdout, stderr } = await runGit(
+      const { stdout, stderr } = await runGitWithRetry(
         dir,
         ["pull", "--rebase"],
         token,
+        { operation: "pull --rebase" },
       );
       return { updated: true, summary: (stdout + stderr).trim() };
     } catch (rebaseErr) {
@@ -346,7 +459,7 @@ export async function commitAndPush(
     message,
   ]);
 
-  await runGit(dir, ["push"], token);
+  await runGitWithRetry(dir, ["push"], token, { operation: "push memory repo" });
   return true;
 }
 
