@@ -123,8 +123,7 @@ export function initializeApiIpcHandlers(): void {
   ipcMain.handle("api:request-email-otp", async (_, email: string) => {
     console.log('[API IPC] request email OTP for:', email);
     try {
-      const result = await api.requestEmailOtp(email);
-      return { success: true, ...result };
+      return await api.requestEmailOtp(email);
     } catch (error) {
       console.error('[API IPC] request email OTP failed:', error);
       return { success: false, error: error instanceof Error ? error.message : String(error) };
