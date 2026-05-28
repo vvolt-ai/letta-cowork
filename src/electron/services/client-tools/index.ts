@@ -12,6 +12,7 @@
 import { bashTool } from "./runners/bash.js";
 import { lettaCodeTools } from "./runners/letta_tools/index.js";
 import { listSkillsTool, skillTool } from "./runners/skill.js";
+import { productivityTools } from "./runners/productivity.js";
 import type {
     ClientToolDefinition,
     ClientToolWireDef,
@@ -36,6 +37,7 @@ function register(def: ClientToolDefinition): void {
 //   • ApplyPatch — codex-style unified-diff patches
 //   • TodoWrite, AskUserQuestion — workflow
 //   • Skill, list_skills — kept from our earlier impl
+//   • ProjectContext, Git, LogTail, WebFetch, MemoryNotes, UserPreferences, Reminders — Cowork productivity tools
 //
 // Deferred (need agent runtime / memory subsystem / UI hooks):
 //   BashOutput, KillBash, EnterPlanMode, ExitPlanMode,
@@ -45,6 +47,7 @@ register(bashTool);
 for (const tool of lettaCodeTools) register(tool);
 register(skillTool);
 register(listSkillsTool);
+for (const tool of productivityTools) register(tool);
 
 export function registerClientTool(def: ClientToolDefinition): void {
     register(def);
