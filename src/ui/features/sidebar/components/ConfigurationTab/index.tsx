@@ -30,6 +30,22 @@ interface CoworkSettings {
   showLettaEnv: boolean;
 }
 
+interface RemoteAccessSettings {
+  enabled: boolean;
+  environmentName: string;
+  allowedDirectories: string[];
+  autoApprove: boolean;
+}
+
+interface RemoteAccessState {
+  settings: RemoteAccessSettings;
+  status: "disabled" | "connecting" | "online" | "offline" | "error";
+  environmentId?: string;
+  lastHeartbeatAt?: string;
+  lastError?: string;
+  serverUrl?: string;
+}
+
 function Section({
   title,
   description,
@@ -117,10 +133,32 @@ export const ConfigurationTab = memo(function ConfigurationTab({
   });
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
+  const [remoteState, setRemoteState] = useState<RemoteAccessState | null>(null);
+  const [remoteDirsText, setRemoteDirsText] = useState("");
+  const [remoteSaving, setRemoteSaving] = useState(false);
 
   useEffect(() => {
     setSettings(coworkSettings);
   }, [coworkSettings]);
+
+  useEffect(() => {
+    const loadRemoteAccessState = async () => {
+      try {
+        const state = await window.electron.getRemoteAccessState();
+        setRemoteState(state);
+        setRemoteDirsText((state.settings.allowedDirectories ?? []).join('\n'));
+      } catch (error) {
+        console.error("Failed to load remote access state:", error);
+      }
+    };
+
+    loadRemoteAccessState();
+    const unsubscribe = window.electron.onRemoteAccessState?.((state: RemoteAccessState) => {
+      setRemoteState(state);
+      setRemoteDirsText((state.settings.allowedDirectories ?? []).join('\n'));
+    });
+    return () => unsubscribe?.();
+  }, []);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -187,6 +225,34 @@ export const ConfigurationTab = memo(function ConfigurationTab({
       setSettings((prev) => ({ ...prev, [key]: previousValue }));
       updateCoworkSettings({ [key]: previousValue } as Partial<CoworkSettings>);
     }
+  };
+
+  const handleSaveRemoteAccess = async (updates: Partial<RemoteAccessSettings> = {}) => {
+    if (!remoteState) return;
+    setRemoteSaving(true);
+    try {
+      const nextSettings: RemoteAccessSettings = {
+        ...remoteState.settings,
+        allowedDirectories: remoteDirsText
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean),
+        ...updates,
+      };
+      const state = await window.electron.updateRemoteAccessSettings(nextSettings);
+      setRemoteState(state);
+      setRemoteDirsText((state.settings.allowedDirectories ?? []).join('\n'));
+    } catch (error) {
+      console.error("Failed to update remote access:", error);
+    } finally {
+      setRemoteSaving(false);
+    }
+  };
+
+  const handleAddRemoteDirectory = async () => {
+    const dir = await window.electron.selectDirectory();
+    if (!dir) return;
+    setRemoteDirsText((prev) => Array.from(new Set([...prev.split('\n').filter(Boolean), dir])).join('\n'));
   };
 
   const handleReset = async () => {
@@ -366,6 +432,73 @@ export const ConfigurationTab = memo(function ConfigurationTab({
             />
           ) : null}
         </div>
+      </Section>
+
+      <Section
+        title="Remote access"
+        description="Expose this desktop as an online tool runner for server-routed conversations such as WhatsApp. Phase 1 uses auto-approval plus path guardrails."
+      >
+        <Panel>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-gray-900">Remote runner</p>
+              <p className="mt-0.5 text-xs leading-5 text-gray-500">
+                Status: <span className="font-semibold">{remoteState?.status ?? 'loading'}</span>
+                {remoteState?.environmentId ? ` · ${remoteState.environmentId}` : ''}
+              </p>
+              {remoteState?.lastError ? <p className="mt-1 text-xs text-red-600">{remoteState.lastError}</p> : null}
+            </div>
+            <button
+              onClick={() => handleSaveRemoteAccess({ enabled: !(remoteState?.settings.enabled ?? false) })}
+              disabled={remoteSaving || !remoteState}
+              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                remoteState?.settings.enabled ? 'bg-blue-500' : 'bg-gray-200'
+              } disabled:opacity-50`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                remoteState?.settings.enabled ? 'translate-x-6' : 'translate-x-1'
+              }`} />
+            </button>
+          </div>
+
+          <div className="mt-4 grid gap-4 border-t border-gray-100 pt-4">
+            <label className="block">
+              <span className="text-sm font-medium text-gray-700">Environment name</span>
+              <input
+                value={remoteState?.settings.environmentName ?? ''}
+                onChange={(event) => setRemoteState((prev) => prev ? { ...prev, settings: { ...prev.settings, environmentName: event.target.value } } : prev)}
+                placeholder="Bhavesh MacBook"
+                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-medium text-gray-700">Allowed directories</span>
+              <textarea
+                value={remoteDirsText}
+                onChange={(event) => setRemoteDirsText(event.target.value)}
+                placeholder="One absolute directory per line"
+                rows={3}
+                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+              <p className="mt-1 text-xs text-gray-500">Tools can only read/run inside these directories.</p>
+            </label>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleAddRemoteDirectory}
+                className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Add directory
+              </button>
+              <button
+                onClick={() => handleSaveRemoteAccess()}
+                disabled={remoteSaving || !remoteState}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+              >
+                {remoteSaving ? 'Saving...' : 'Save remote access'}
+              </button>
+            </div>
+          </div>
+        </Panel>
       </Section>
 
       <Section

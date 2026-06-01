@@ -93,6 +93,10 @@ interface Window {
     getAutoSyncUnreadConfig: () => Promise<any>;
     updateAutoSyncUnreadConfig: (updates: any) => Promise<any>;
     resetAutoSyncUnreadConfig: () => Promise<any>;
+    getRemoteAccessState: () => Promise<any>;
+    updateRemoteAccessSettings: (updates: any) => Promise<any>;
+    resetRemoteAccessSettings: () => Promise<any>;
+    onRemoteAccessState: (callback: (state: any) => void) => (() => void);
     getProcessedUnreadEmailIds: (accountId: string, folderId: string) => Promise<string[]>;
     setProcessedUnreadEmailIds: (accountId: string, folderId: string, ids: string[]) => Promise<string[]>;
     clearProcessedUnreadEmailIds: (accountId: string, folderId: string) => Promise<void>;

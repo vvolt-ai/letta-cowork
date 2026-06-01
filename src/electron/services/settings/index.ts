@@ -10,6 +10,13 @@ interface CoworkSettings {
   showLettaEnv: boolean;
 }
 
+export interface RemoteAccessSettings {
+  enabled: boolean;
+  environmentName: string;
+  allowedDirectories: string[];
+  autoApprove: boolean;
+}
+
 export interface AutoSyncRoutingRule {
   fromPattern: string;
   agentId: string;
@@ -95,6 +102,7 @@ function deobfuscate(value: string): string {
 interface SettingsStoreSchema {
   coworkSettings: CoworkSettings;
   autoSyncUnreadConfig: AutoSyncUnreadConfig;
+  remoteAccessSettings: RemoteAccessSettings;
   sessions: StoredSession[];
   processedUnreadEmails: ProcessedUnreadEmailsStore;
   emailCredentials: EmailCredentials;
@@ -121,6 +129,13 @@ const defaultAutoSyncUnreadConfig: AutoSyncUnreadConfig = {
   sinceDate: '',
   processingMode: 'unread_only',
   markAsReadAfterProcess: true,
+};
+
+const defaultRemoteAccessSettings: RemoteAccessSettings = {
+  enabled: false,
+  environmentName: '',
+  allowedDirectories: [],
+  autoApprove: true,
 };
 
 const sanitizeAutoSyncAgentIds = (agentIds: unknown): string[] => {
@@ -166,6 +181,22 @@ const sanitizeAutoSyncUnreadConfig = (config: Partial<AutoSyncUnreadConfig> | un
   sinceDate: sanitizeAutoSyncSinceDate(config?.sinceDate),
   processingMode: sanitizeAutoSyncProcessingMode(config?.processingMode),
   markAsReadAfterProcess: config?.markAsReadAfterProcess ?? true,
+});
+
+const sanitizeRemoteAccessSettings = (settings: Partial<RemoteAccessSettings> | undefined): RemoteAccessSettings => ({
+  enabled: Boolean(settings?.enabled),
+  environmentName: typeof settings?.environmentName === 'string' ? settings.environmentName.trim() : '',
+  allowedDirectories: Array.isArray(settings?.allowedDirectories)
+    ? Array.from(
+        new Set(
+          settings.allowedDirectories
+            .filter((dir): dir is string => typeof dir === 'string')
+            .map((dir) => dir.trim())
+            .filter((dir) => dir.length > 0)
+        )
+      )
+    : [],
+  autoApprove: settings?.autoApprove ?? true,
 });
 
 const buildProcessedUnreadMailboxKey = (accountId: string, folderId: string): string =>
@@ -253,6 +284,7 @@ const store = new Store<SettingsStoreSchema>({
   defaults: {
     coworkSettings: defaultSettings,
     autoSyncUnreadConfig: defaultAutoSyncUnreadConfig,
+    remoteAccessSettings: defaultRemoteAccessSettings,
     sessions: [],
     processedUnreadEmails: {},
     emailCredentials: {},
@@ -292,6 +324,22 @@ export function updateAutoSyncUnreadConfig(updates: Partial<AutoSyncUnreadConfig
 export function resetAutoSyncUnreadConfig(): AutoSyncUnreadConfig {
   store.set('autoSyncUnreadConfig', defaultAutoSyncUnreadConfig);
   return defaultAutoSyncUnreadConfig;
+}
+
+export function getRemoteAccessSettings(): RemoteAccessSettings {
+  return sanitizeRemoteAccessSettings(store.get('remoteAccessSettings', defaultRemoteAccessSettings));
+}
+
+export function updateRemoteAccessSettings(updates: Partial<RemoteAccessSettings>): RemoteAccessSettings {
+  const current = getRemoteAccessSettings();
+  const updated = sanitizeRemoteAccessSettings({ ...current, ...updates });
+  store.set('remoteAccessSettings', updated);
+  return updated;
+}
+
+export function resetRemoteAccessSettings(): RemoteAccessSettings {
+  store.set('remoteAccessSettings', defaultRemoteAccessSettings);
+  return defaultRemoteAccessSettings;
 }
 
 // Session storage functions

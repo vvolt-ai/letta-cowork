@@ -183,6 +183,14 @@ export class BaseHttpClient {
     return this.tokens?.user || null;
   }
 
+  get accessToken(): string | null {
+    return this.tokens?.accessToken || null;
+  }
+
+  get apiBaseUrl(): string {
+    return this.baseUrl;
+  }
+
   // ============================================
   // HTTP Methods
   // ============================================

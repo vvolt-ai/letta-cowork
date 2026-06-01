@@ -150,6 +150,17 @@ electron.contextBridge.exposeInMainWorld("electron", {
         electron.ipcRenderer.invoke("update-auto-sync-unread-config", updates),
     resetAutoSyncUnreadConfig: () =>
         electron.ipcRenderer.invoke("reset-auto-sync-unread-config"),
+    getRemoteAccessState: () =>
+        electron.ipcRenderer.invoke("remote-access:get-state"),
+    updateRemoteAccessSettings: (updates: any) =>
+        electron.ipcRenderer.invoke("remote-access:update-settings", updates),
+    resetRemoteAccessSettings: () =>
+        electron.ipcRenderer.invoke("remote-access:reset-settings"),
+    onRemoteAccessState: (callback: (state: any) => void) => {
+        const cb = (_: Electron.IpcRendererEvent, state: any) => callback(state);
+        electron.ipcRenderer.on("remote-access:state", cb);
+        return () => electron.ipcRenderer.off("remote-access:state", cb);
+    },
     getProcessedUnreadEmailIds: (accountId: string, folderId: string) =>
         electron.ipcRenderer.invoke("get-processed-unread-email-ids", accountId, folderId),
     setProcessedUnreadEmailIds: (accountId: string, folderId: string, ids: string[]) =>

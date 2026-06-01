@@ -69,6 +69,7 @@ import { registerAllIpcHandlers, startResourcePolling, initializeBridges } from 
 import { expressServer } from "../emails/express/index.js";
 import { initializeApiIpcHandlers, setupApiStatusBridge } from "../ipc/handlers/api-handlers.js";
 import { installRequiredSkills } from "../services/skillInstaller.js";
+import { initializeRemoteAccessService } from "../services/remote-access/remoteAccessService.js";
 
 /**
  * Initialize the application when ready
@@ -105,4 +106,7 @@ app.on("ready", () => {
     // Initialize API IPC handlers for vera-cowork-server
     initializeApiIpcHandlers();
     setupApiStatusBridge(mainWindow);
+
+    // Initialize remote access runner for server-routed tool execution
+    initializeRemoteAccessService(mainWindow);
 });
