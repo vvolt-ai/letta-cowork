@@ -195,18 +195,6 @@ export function initializeApiIpcHandlers(): void {
     }
   });
 
-  ipcMain.handle("api:list-remote-environments", async () => {
-    console.log('[API IPC] list-remote-environments');
-    try {
-      const environments = await api.listRemoteEnvironments();
-      console.log('[API IPC] list-remote-environments result:', environments?.length, 'environments');
-      return { success: true, environments };
-    } catch (error) {
-      console.error('[API IPC] list-remote-environments failed:', error);
-      return { success: false, error: error instanceof Error ? error.message : String(error) };
-    }
-  });
-
   ipcMain.handle("api:create-channel", async (_, data: CreateChannelData) => {
     console.log('[API IPC] create-channel:', data.provider, data.name);
     try {

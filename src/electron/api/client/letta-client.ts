@@ -25,8 +25,7 @@ import type {
   ChannelRuntimeStatus, 
   ChannelCredentials,
   MessageLog,
-  ConversationContext,
-  RemoteEnvironment
+  ConversationContext
 } from "../types.js";
 
 /**
@@ -216,10 +215,6 @@ export class VeraCoworkApiClient extends BaseHttpClient {
 
   async listChannels(): Promise<Channel[]> {
     return ChannelEndpoints.listChannels(this);
-  }
-
-  async listRemoteEnvironments(): Promise<RemoteEnvironment[]> {
-    return ChannelEndpoints.listRemoteEnvironments(this);
   }
 
   async createChannel(data: {

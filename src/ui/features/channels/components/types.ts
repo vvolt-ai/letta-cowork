@@ -7,8 +7,6 @@ export interface WhatsAppConfig {
   sessionPath?: string;
   allowedUsers?: string[];
   defaultAgentId?: string;
-  remoteEnvironmentId?: string | null;
-  remoteEnvironmentName?: string | null;
   typingIndicator?: boolean;
 }
 
@@ -18,8 +16,6 @@ export interface TelegramConfig {
   respondOnlyWhenMentioned?: boolean;
   allowedUsers?: string[];
   defaultAgentId?: string;
-  remoteEnvironmentId?: string | null;
-  remoteEnvironmentName?: string | null;
   typingIndicator?: boolean;
 }
 
@@ -30,8 +26,6 @@ export interface DiscordConfig {
   respondOnlyWhenMentioned?: boolean;
   allowedUsers?: string[];
   defaultAgentId?: string;
-  remoteEnvironmentId?: string | null;
-  remoteEnvironmentName?: string | null;
   typingIndicator?: boolean;
 }
 
@@ -39,8 +33,6 @@ export interface SlackConfig {
   autoStart?: boolean;
   allowedUsers?: string[];
   defaultAgentId?: string;
-  remoteEnvironmentId?: string | null;
-  remoteEnvironmentName?: string | null;
   typingIndicator?: boolean;
 }
 
@@ -48,8 +40,6 @@ export interface WeChatConfig {
   autoStart?: boolean;
   allowedUsers?: string[];
   defaultAgentId?: string;
-  remoteEnvironmentId?: string | null;
-  remoteEnvironmentName?: string | null;
   typingIndicator?: boolean;
   baseUrl?: string;
 }
@@ -59,8 +49,6 @@ export type ChannelConfig = WhatsAppConfig | TelegramConfig | DiscordConfig | Sl
 // Extended config type for state management
 export type ConfigDataState = {
   defaultAgentId?: string;
-  remoteEnvironmentId?: string | null;
-  remoteEnvironmentName?: string | null;
   autoStart?: boolean;
   typingIndicator?: boolean;
   allowedUsers?: string[];
@@ -93,15 +81,6 @@ export interface ChannelStatus {
   error?: string;
 }
 
-
-export interface RemoteEnvironment {
-  id: string;
-  name: string;
-  machineId: string;
-  status: 'online' | 'offline' | 'reconnecting' | string;
-  capabilities?: string[];
-  lastSeenAt?: string;
-}
 
 export interface LettaAgent {
   id: string;

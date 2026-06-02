@@ -179,18 +179,6 @@ interface Window {
       channels?: any[];
       error?: string;
     }>;
-    apiListRemoteEnvironments: () => Promise<{
-      success: boolean;
-      environments?: Array<{
-        id: string;
-        name: string;
-        machineId: string;
-        status: string;
-        capabilities?: string[];
-        lastSeenAt?: string;
-      }>;
-      error?: string;
-    }>;
     apiCreateChannel: (data: {
       provider: string;
       name: string;

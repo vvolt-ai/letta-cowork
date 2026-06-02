@@ -21,8 +21,6 @@ export function ChannelsManager({ onAuthError }: ChannelsManagerProps) {
   const {
     agents,
     loadAgents,
-    remoteEnvironments,
-    loadRemoteEnvironments,
     // Create channel
     showCreateModal,
     setShowCreateModal,
@@ -51,11 +49,10 @@ export function ChannelsManager({ onAuthError }: ChannelsManagerProps) {
     handleSaveConfig,
   } = useChannelManager(loadChannels, loadStatuses, clearError);
 
-  // Load agents and remote environments on mount
+  // Load agents on mount
   useEffect(() => {
     loadAgents();
-    loadRemoteEnvironments();
-  }, [loadAgents, loadRemoteEnvironments]);
+  }, [loadAgents]);
 
   // Start/Stop handlers with channels
   const onStart = (channelId: string) => handleStartChannel(channelId, channels);
@@ -145,7 +142,6 @@ export function ChannelsManager({ onAuthError }: ChannelsManagerProps) {
           configData={configData as Record<string, unknown>}
           setConfigData={setConfigData}
           agents={agents}
-          remoteEnvironments={remoteEnvironments}
           saving={savingConfig}
           onClose={() => setShowConfigModal(false)}
           onSave={handleSaveConfig}

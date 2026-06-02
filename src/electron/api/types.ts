@@ -63,19 +63,6 @@ export interface ChannelCredentials {
 }
 
 
-export interface RemoteEnvironment {
-  id: string;
-  userId: string;
-  organizationId: string;
-  name: string;
-  machineId: string;
-  status: 'online' | 'offline' | 'reconnecting' | string;
-  capabilities: string[];
-  lastSeenAt?: string;
-  registeredAt?: string;
-  metadata?: Record<string, unknown>;
-}
-
 // ============================================
 // Message Types
 // ============================================
