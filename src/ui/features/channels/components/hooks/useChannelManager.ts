@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Channel, LettaAgent, ConfigDataState } from '../types';
+import { Channel, LettaAgent, ConfigDataState, RemoteEnvironment } from '../types';
 
 const getApi = () => (window as any).electron;
 
@@ -9,6 +9,7 @@ export function useChannelManager(
   setError: (error: string | null) => void
 ) {
   const [agents, setAgents] = useState<LettaAgent[]>([]);
+  const [remoteEnvironments, setRemoteEnvironments] = useState<RemoteEnvironment[]>([]);
 
   // Create channel modal state
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -45,6 +46,22 @@ export function useChannelManager(
       }
     } catch (err) {
       console.error('[useChannelManager] Failed to load agents:', err);
+    }
+  }, []);
+
+  // Load remote environments
+  const loadRemoteEnvironments = useCallback(async () => {
+    try {
+      const api = getApi();
+      if (!api?.apiListRemoteEnvironments) return;
+      console.log('[useChannelManager] Loading remote environments...');
+      const result = await api.apiListRemoteEnvironments();
+      console.log('[useChannelManager] Remote environments loaded:', result?.environments?.length || 0);
+      if (result?.success) {
+        setRemoteEnvironments(result.environments || []);
+      }
+    } catch (err) {
+      console.error('[useChannelManager] Failed to load remote environments:', err);
     }
   }, []);
 
@@ -255,6 +272,8 @@ export function useChannelManager(
     // Agents
     agents,
     loadAgents,
+    remoteEnvironments,
+    loadRemoteEnvironments,
     // Create channel
     showCreateModal,
     setShowCreateModal,

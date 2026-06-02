@@ -5,7 +5,7 @@
  */
 
 import type { BaseHttpClient } from "../client/base-client.js";
-import type { Channel, ChannelRuntimeStatus, ChannelCredentials, MessageLog, ConversationContext } from "../types.js";
+import type { Channel, ChannelRuntimeStatus, ChannelCredentials, MessageLog, ConversationContext, RemoteEnvironment } from "../types.js";
 
 /**
  * Channel Endpoints Mixin
@@ -32,6 +32,10 @@ export class ChannelEndpoints {
 
   static async listChannels(client: BaseHttpClient): Promise<Channel[]> {
     return client.request<Channel[]>("/channels");
+  }
+
+  static async listRemoteEnvironments(client: BaseHttpClient): Promise<RemoteEnvironment[]> {
+    return client.request<RemoteEnvironment[]>("/remote-environments");
   }
 
   static async createChannel(

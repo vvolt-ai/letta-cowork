@@ -1,4 +1,4 @@
-import { Channel, LettaAgent, WhatsAppConfig, TelegramConfig, DiscordConfig } from './types';
+import { Channel, LettaAgent, RemoteEnvironment, WhatsAppConfig, TelegramConfig, DiscordConfig } from './types';
 import { getProviderIcon } from './ChannelCard';
 import { WhatsAppConfigFields, TelegramConfigFields, DiscordConfigFields } from './ProviderConfigFields';
 
@@ -7,6 +7,7 @@ interface ConfigModalProps {
   configData: Record<string, unknown>;
   setConfigData: (v: Record<string, unknown>) => void;
   agents: LettaAgent[];
+  remoteEnvironments: RemoteEnvironment[];
   saving: boolean;
   onClose: () => void;
   onSave: () => void;
@@ -17,6 +18,7 @@ export function ConfigModal({
   configData,
   setConfigData,
   agents,
+  remoteEnvironments,
   saving,
   onClose,
   onSave,
@@ -54,6 +56,38 @@ export function ConfigModal({
             {agents.length === 0 && (
               <p className="text-xs text-amber-600 mt-1">
                 No agents found. Check your Letta configuration.
+              </p>
+            )}
+          </div>
+
+          {/* Remote Environment - All providers */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Remote Machine
+            </label>
+            <select
+              value={(configData.remoteEnvironmentId as string) || ''}
+              onChange={(e) =>
+                setConfigData({
+                  ...configData,
+                  remoteEnvironmentId: e.target.value || null,
+                })
+              }
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg"
+            >
+              <option value="">Auto-select first online machine</option>
+              {remoteEnvironments.map((environment) => (
+                <option key={environment.id} value={environment.id}>
+                  {environment.name || environment.machineId} ({environment.status})
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-slate-500 mt-1">
+              Select which registered remote runner should execute client tools for this channel.
+            </p>
+            {remoteEnvironments.length === 0 && (
+              <p className="text-xs text-amber-600 mt-1">
+                No remote machines registered. Start one from the desktop remote access settings.
               </p>
             )}
           </div>

@@ -12,6 +12,7 @@ export type {
   ChannelCredentials,
   MessageLog,
   ConversationContext,
+  RemoteEnvironment,
   EmailAccount,
   EmailFolder,
   EmailMessage,
