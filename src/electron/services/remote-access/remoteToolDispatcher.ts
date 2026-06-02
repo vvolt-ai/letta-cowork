@@ -103,7 +103,13 @@ export class RemoteToolDispatcher {
     const allowed = this.settings.allowedDirectories.map((dir) => path.resolve(expandHome(dir)));
     if (allowed.length === 0) return false;
     const resolved = path.resolve(expandHome(candidate));
-    return allowed.some((dir) => resolved === dir || resolved.startsWith(`${dir}${path.sep}`));
+    return allowed.some((dir) => {
+      // Allow configuring an entire filesystem root, e.g. "/" on macOS/Linux
+      // or "C:\\" on Windows. The generic prefix check below cannot handle
+      // root because `${dir}${path.sep}` becomes "//" on POSIX.
+      if (dir === path.parse(dir).root) return resolved.startsWith(dir);
+      return resolved === dir || resolved.startsWith(`${dir}${path.sep}`);
+    });
   }
 }
 
