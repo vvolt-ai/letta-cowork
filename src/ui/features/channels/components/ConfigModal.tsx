@@ -66,24 +66,31 @@ export function ConfigModal({
               Remote Machine
             </label>
             <select
-              value={(configData.remoteEnvironmentId as string) || ''}
+              value={
+                (configData.remoteEnvironmentName as string) ||
+                remoteEnvironments.find(
+                  (environment) => environment.id === configData.remoteEnvironmentId,
+                )?.name ||
+                ''
+              }
               onChange={(e) =>
                 setConfigData({
                   ...configData,
-                  remoteEnvironmentId: e.target.value || null,
+                  remoteEnvironmentName: e.target.value || null,
+                  remoteEnvironmentId: null,
                 })
               }
               className="w-full px-3 py-2 border border-slate-200 rounded-lg"
             >
               <option value="">Auto-select first online machine</option>
               {remoteEnvironments.map((environment) => (
-                <option key={environment.id} value={environment.id}>
+                <option key={environment.id} value={environment.name || environment.machineId}>
                   {environment.name || environment.machineId} ({environment.status})
                 </option>
               ))}
             </select>
             <p className="text-xs text-slate-500 mt-1">
-              Select which registered remote runner should execute client tools for this channel.
+              Select by per-user machine name; any of your channels can use any of your registered remote machines.
             </p>
             {remoteEnvironments.length === 0 && (
               <p className="text-xs text-amber-600 mt-1">

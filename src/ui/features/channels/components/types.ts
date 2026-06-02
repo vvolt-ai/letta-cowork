@@ -8,6 +8,7 @@ export interface WhatsAppConfig {
   allowedUsers?: string[];
   defaultAgentId?: string;
   remoteEnvironmentId?: string | null;
+  remoteEnvironmentName?: string | null;
   typingIndicator?: boolean;
 }
 
@@ -18,6 +19,7 @@ export interface TelegramConfig {
   allowedUsers?: string[];
   defaultAgentId?: string;
   remoteEnvironmentId?: string | null;
+  remoteEnvironmentName?: string | null;
   typingIndicator?: boolean;
 }
 
@@ -29,6 +31,7 @@ export interface DiscordConfig {
   allowedUsers?: string[];
   defaultAgentId?: string;
   remoteEnvironmentId?: string | null;
+  remoteEnvironmentName?: string | null;
   typingIndicator?: boolean;
 }
 
@@ -37,6 +40,7 @@ export interface SlackConfig {
   allowedUsers?: string[];
   defaultAgentId?: string;
   remoteEnvironmentId?: string | null;
+  remoteEnvironmentName?: string | null;
   typingIndicator?: boolean;
 }
 
@@ -45,6 +49,7 @@ export interface WeChatConfig {
   allowedUsers?: string[];
   defaultAgentId?: string;
   remoteEnvironmentId?: string | null;
+  remoteEnvironmentName?: string | null;
   typingIndicator?: boolean;
   baseUrl?: string;
 }
@@ -55,6 +60,7 @@ export type ChannelConfig = WhatsAppConfig | TelegramConfig | DiscordConfig | Sl
 export type ConfigDataState = {
   defaultAgentId?: string;
   remoteEnvironmentId?: string | null;
+  remoteEnvironmentName?: string | null;
   autoStart?: boolean;
   typingIndicator?: boolean;
   allowedUsers?: string[];
