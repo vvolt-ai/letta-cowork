@@ -33,8 +33,12 @@ import MultiEditSchema from "../_shared/schemas/MultiEdit.json" with { type: "js
 import ReadSchema from "../_shared/schemas/Read.json" with { type: "json" };
 import ReadLSPSchema from "../_shared/schemas/ReadLSP.json" with { type: "json" };
 import TaskSchema from "../_shared/schemas/Task.json" with { type: "json" };
+import TaskCreateSchema from "../_shared/schemas/TaskCreate.json" with { type: "json" };
+import TaskGetSchema from "../_shared/schemas/TaskGet.json" with { type: "json" };
+import TaskListSchema from "../_shared/schemas/TaskList.json" with { type: "json" };
 import TaskOutputSchema from "../_shared/schemas/TaskOutput.json" with { type: "json" };
 import TaskStopSchema from "../_shared/schemas/TaskStop.json" with { type: "json" };
+import TaskUpdateSchema from "../_shared/schemas/TaskUpdate.json" with { type: "json" };
 import TodoWriteSchema from "../_shared/schemas/TodoWrite.json" with { type: "json" };
 import UpdatePlanSchema from "../_shared/schemas/UpdatePlan.json" with { type: "json" };
 import ViewImageSchema from "../_shared/schemas/ViewImage.json" with { type: "json" };
@@ -54,8 +58,12 @@ import { multi_edit } from "./MultiEdit.js";
 import { read } from "./Read.js";
 import { read_lsp } from "./ReadLSP.js";
 import { task } from "./Task.js";
+import { task_create } from "./TaskCreate.js";
+import { task_get } from "./TaskGet.js";
+import { task_list } from "./TaskList.js";
 import { task_output } from "./TaskOutput.js";
 import { task_stop } from "./TaskStop.js";
+import { task_update } from "./TaskUpdate.js";
 import { todo_write } from "./TodoWrite.js";
 import { update_plan } from "./UpdatePlan.js";
 import { view_image } from "./ViewImage.js";
@@ -89,8 +97,12 @@ const MultiEditDescription = loadDesc("MultiEdit");
 const ReadDescription = loadDesc("Read");
 const ReadLSPDescription = loadDesc("ReadLSP");
 const TaskDescription = loadDesc("Task");
+const TaskCreateDescription = loadDesc("TaskCreate");
+const TaskGetDescription = loadDesc("TaskGet");
+const TaskListDescription = loadDesc("TaskList");
 const TaskOutputDescription = loadDesc("TaskOutput");
 const TaskStopDescription = loadDesc("TaskStop");
+const TaskUpdateDescription = loadDesc("TaskUpdate");
 const TodoWriteDescription = loadDesc("TodoWrite");
 const UpdatePlanDescription = loadDesc("UpdatePlan");
 const ViewImageDescription = loadDesc("ViewImage");
@@ -199,6 +211,10 @@ export const lettaCodeTools: ClientToolDefinition[] = [
     makeTool("LS", LSDescription, LSSchema as Record<string, unknown>, ls as unknown as ImplFn),
     makeTool("ApplyPatch", ApplyPatchDescription, ApplyPatchSchema as Record<string, unknown>, apply_patch as unknown as ImplFn),
     makeTool("TodoWrite", TodoWriteDescription, TodoWriteSchema as Record<string, unknown>, todo_write as unknown as ImplFn),
+    makeTool("TaskCreate", TaskCreateDescription, TaskCreateSchema as Record<string, unknown>, task_create as unknown as ImplFn),
+    makeTool("TaskGet", TaskGetDescription, TaskGetSchema as Record<string, unknown>, task_get as unknown as ImplFn),
+    makeTool("TaskList", TaskListDescription, TaskListSchema as Record<string, unknown>, task_list as unknown as ImplFn),
+    makeTool("TaskUpdate", TaskUpdateDescription, TaskUpdateSchema as Record<string, unknown>, task_update as unknown as ImplFn),
     makeTool("AskUserQuestion", AskUserQuestionDescription, AskUserQuestionSchema as Record<string, unknown>, ask_user_question as unknown as ImplFn),
     makeTool("BashOutput", BashOutputDescription, BashOutputSchema as Record<string, unknown>, bash_output as unknown as ImplFn),
     makeTool("KillBash", KillBashDescription, KillBashSchema as Record<string, unknown>, kill_bash as unknown as ImplFn),

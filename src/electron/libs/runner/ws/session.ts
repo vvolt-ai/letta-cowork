@@ -118,7 +118,7 @@ export class WsSession {
         this._agentId = opts.agentId ?? null;
         this._conversationId = opts.conversationId ?? null;
         console.log(
-            "[WsSession] constructed (build-id: client_tools-v13-task-subagent)"
+            "[WsSession] constructed (build-id: client_tools-v14-task-crud)"
         );
     }
 
