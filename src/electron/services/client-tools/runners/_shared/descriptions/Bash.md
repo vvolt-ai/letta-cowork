@@ -132,3 +132,7 @@ Important:
 
 # Other common operations
 - View comments on a Github PR: gh api repos/foo/bar/pulls/123/comments
+
+# Windows execution
+- Despite the tool name, on Windows this tool does not run commands through bash by default. It uses the native Windows shell launcher: PowerShell Core (`pwsh`) when available, then Windows PowerShell, then `cmd.exe` as fallback.
+- Write commands using PowerShell-compatible syntax by default. POSIX/bash constructs such as heredocs, `export VAR=...`, and Unix-style shell quoting may not work unless you explicitly invoke a POSIX shell.

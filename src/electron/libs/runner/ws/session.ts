@@ -20,6 +20,7 @@
  */
 
 import { Letta } from "@letta-ai/letta-client";
+import { Buffer } from "node:buffer";
 import type { Stream } from "@letta-ai/letta-client/core/streaming";
 import type {
     LettaStreamingResponse,
@@ -71,6 +72,38 @@ let cachedClient: Letta | null = null;
 let cachedKey = "";
 let cachedBase = "";
 
+const RESPONSE_STATE_HEADER = "X-Letta-Response-State";
+const RESPONSE_STATE_CACHE_SCOPE = "approval_boundary";
+
+function getResponseStateId(event: unknown): string | null {
+    if (!event || typeof event !== "object") return null;
+    const candidate = event as {
+        message_type?: unknown;
+        response_id?: unknown;
+        cache_scope?: unknown;
+    };
+    if (
+        candidate.message_type !== "response_state" ||
+        candidate.cache_scope !== RESPONSE_STATE_CACHE_SCOPE
+    ) {
+        return null;
+    }
+    return typeof candidate.response_id === "string" && candidate.response_id
+        ? candidate.response_id
+        : null;
+}
+
+function encodeResponseStateHeader(previousResponseId: string): string {
+    return Buffer.from(
+        JSON.stringify({
+            v: 1,
+            cache_scope: RESPONSE_STATE_CACHE_SCOPE,
+            previous_response_id: previousResponseId,
+        }),
+        "utf8"
+    ).toString("base64url");
+}
+
 function getClient(): Letta {
     const apiKey = (process.env.LETTA_API_KEY ?? "").trim();
     const baseURL = (
@@ -112,6 +145,8 @@ export class WsSession {
     /** Active background pumps — keyed by run/turn id for clean teardown. */
     private activePumps = new Set<AbortController>();
     private startedAt: number = Date.now();
+    /** Last server response-state id for auto approval continuations. */
+    private responseStateId: string | null = null;
 
     constructor(opts: WsSessionOptions = {}) {
         this.opts = opts;
@@ -324,6 +359,7 @@ export class WsSession {
             attempt++;
             try {
                 let nextMessages: unknown[] = initialMessages;
+                let allowResponseStateReuseForNextTurn = false;
                 let turnCount = 0;
                 const MAX_TURNS = 25; // safety cap against runaway tool loops
 
@@ -347,8 +383,10 @@ export class WsSession {
 
                     const turnResult = await this.runOneStreamTurn(
                         nextMessages,
-                        ctrl
+                        ctrl,
+                        { allowResponseStateReuse: allowResponseStateReuseForNextTurn }
                     );
+                    allowResponseStateReuseForNextTurn = false;
                     if (ctrl.signal.aborted) break;
 
                     // ── Branch 1: approval-required flow ──────────────
@@ -489,6 +527,11 @@ export class WsSession {
                                 approvals: approvalEntries,
                             },
                         ];
+                        // Letta Code v0.27.4 reuses the previous response id only
+                        // for client-handled approval continuations. This avoids a
+                        // full server re-run after auto-approved tool execution while
+                        // keeping normal user turns on the full path.
+                        allowResponseStateReuseForNextTurn = true;
                         continue;
                     }
 
@@ -718,7 +761,8 @@ export class WsSession {
      */
     private async runOneStreamTurn(
         messages: unknown[],
-        ctrl: AbortController
+        ctrl: AbortController,
+        options: { allowResponseStateReuse?: boolean } = {}
     ): Promise<{
         toolCalls: PendingToolCall[];
         approvalRequests: PendingApproval[];
@@ -733,6 +777,19 @@ export class WsSession {
         let sawRequiresApprovalStop = false;
 
         const wireTools = getClientToolsForWire();
+        const previousResponseId =
+            options.allowResponseStateReuse === true ? this.responseStateId : null;
+        const headers: Record<string, string> = {};
+        if (previousResponseId) {
+            headers[RESPONSE_STATE_HEADER] =
+                encodeResponseStateHeader(previousResponseId);
+            this.responseStateId = null;
+            debug("WsSession: sending response-state approval continuation", {
+                conversationId,
+            });
+        } else if (options.allowResponseStateReuse !== true) {
+            this.responseStateId = null;
+        }
         console.log(
             `[WsSession] messages.create → conv=${conversationId} client_tools=[${wireTools
                 .map((t) => t.name)
@@ -744,25 +801,30 @@ export class WsSession {
                 messages: {
                     create: (
                         convId: string,
-                        body: Record<string, unknown>
+                        body: Record<string, unknown>,
+                        options?: { headers?: Record<string, string> }
                     ) => Promise<Stream<LettaStreamingResponse>>;
                 };
             }
-        ).messages.create(conversationId, {
-            // Mirror letta-code's exact request body shape from
-            // src/agent/message.ts → buildConversationMessagesCreateRequestBody.
-            // Missing any of these fields (especially `background: true`)
-            // causes the server to NOT route client-tool calls back to us
-            // and instead return "Tool not found" via tool_return_message.
-            messages,
-            streaming: true,
-            stream_tokens: true,
-            include_pings: true,
-            background: true,
-            client_skills: [],
-            client_tools: wireTools,
-            include_compaction_messages: true,
-        })) as Stream<LettaStreamingResponse>;
+        ).messages.create(
+            conversationId,
+            {
+                // Mirror letta-code's exact request body shape from
+                // src/agent/message.ts → buildConversationMessagesCreateRequestBody.
+                // Missing any of these fields (especially `background: true`)
+                // causes the server to NOT route client-tool calls back to us
+                // and instead return "Tool not found" via tool_return_message.
+                messages,
+                streaming: true,
+                stream_tokens: true,
+                include_pings: true,
+                background: true,
+                client_skills: [],
+                client_tools: wireTools,
+                include_compaction_messages: true,
+            },
+            Object.keys(headers).length > 0 ? { headers } : undefined
+        )) as Stream<LettaStreamingResponse>;
 
         for await (const event of stream as AsyncIterable<LettaStreamingResponse>) {
             if (ctrl.signal.aborted) break;
@@ -772,6 +834,13 @@ export class WsSession {
             // stream ends. arguments arrive in fragments — concat.
             const e = event as unknown as Record<string, unknown>;
             const messageType = String(e.message_type ?? "");
+            const responseStateId = getResponseStateId(event);
+            if (responseStateId) {
+                this.responseStateId = responseStateId;
+                debug("WsSession: captured response-state id", {
+                    conversationId,
+                });
+            }
             if (messageType === "tool_call_message") {
                 const tc = (e.tool_call as
                     | {
@@ -1058,6 +1127,11 @@ export class WsSession {
                 return;
             }
             case "letta_ping":
+                return;
+            case "response_state":
+                // Letta Code v0.27.4 streams response-state cache markers for
+                // approval-continuation optimization. We capture them in
+                // runOneStreamTurn; they must stay hidden from UI/history.
                 return;
             case "usage_statistics":
                 return;
