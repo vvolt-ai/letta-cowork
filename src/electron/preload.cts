@@ -229,8 +229,12 @@ electron.contextBridge.exposeInMainWorld("electron", {
         electron.ipcRenderer.invoke("api:is-authenticated"),
     apiGetCurrentUser: () =>
         electron.ipcRenderer.invoke("api:get-current-user"),
-    apiUpdateCurrentUserProfile: (data: { firstName?: string; lastName?: string | null; phoneNumber?: string | null }) =>
+    apiUpdateCurrentUserProfile: (data: { firstName?: string; lastName?: string | null }) =>
         electron.ipcRenderer.invoke("api:update-current-user-profile", data),
+    apiRequestMobileOtp: (phoneNumber: string) =>
+        electron.ipcRenderer.invoke("api:request-mobile-otp", phoneNumber),
+    apiVerifyMobileOtp: (phoneNumber: string, otp: string) =>
+        electron.ipcRenderer.invoke("api:verify-mobile-otp", { phoneNumber, otp }),
     apiLogin: (email: string, password: string) =>
         electron.ipcRenderer.invoke("api:login", { email, password }),
     apiRequestEmailOtp: (email: string) =>

@@ -164,10 +164,32 @@ export class VeraCoworkApiClient extends BaseHttpClient {
     return user;
   }
 
+  async requestMobileOtp(phoneNumber: string): Promise<{ success: boolean; message: string; expiresInMinutes: number; phoneNumber: string }> {
+    return this.request<{ success: boolean; message: string; expiresInMinutes: number; phoneNumber: string }>("/auth/mobile-otp/request", {
+      method: "POST",
+      body: { phoneNumber },
+      suppressAuthExpired: false,
+    });
+  }
+
+  async verifyMobileOtp(phoneNumber: string, otp: string): Promise<AuthTokens["user"]> {
+    const user = await this.request<AuthTokens["user"]>("/auth/mobile-otp/verify", {
+      method: "POST",
+      body: { phoneNumber, otp },
+      suppressAuthExpired: false,
+    });
+
+    if (this.tokens) {
+      this.tokens = { ...this.tokens, user };
+      this.saveTokens();
+    }
+
+    return user;
+  }
+
   async updateCurrentUserProfile(data: {
     firstName?: string;
     lastName?: string | null;
-    phoneNumber?: string | null;
   }): Promise<AuthTokens["user"]> {
     const user = await this.request<AuthTokens["user"]>("/auth/me", {
       method: "PATCH",

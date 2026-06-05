@@ -133,6 +133,12 @@ export const ConfigurationTab = memo(function ConfigurationTab({
   });
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
+  const [verifiedPhoneNumber, setVerifiedPhoneNumber] = useState('');
+  const [mobileOtp, setMobileOtp] = useState('');
+  const [mobileOtpSending, setMobileOtpSending] = useState(false);
+  const [mobileOtpVerifying, setMobileOtpVerifying] = useState(false);
+  const [mobileOtpRequestedFor, setMobileOtpRequestedFor] = useState<string | null>(null);
+  const [mobileOtpMessage, setMobileOtpMessage] = useState<string | null>(null);
   const [remoteState, setRemoteState] = useState<RemoteAccessState | null>(null);
   const [remoteDirsText, setRemoteDirsText] = useState("");
   const [remoteSaving, setRemoteSaving] = useState(false);
@@ -165,12 +171,14 @@ export const ConfigurationTab = memo(function ConfigurationTab({
       try {
         const currentUser = await window.electron.apiGetCurrentUser();
         if (!currentUser) return;
+        const phoneNumber = currentUser.phoneNumber ?? '';
         setProfile({
           firstName: currentUser.firstName ?? '',
           lastName: currentUser.lastName ?? '',
-          phoneNumber: currentUser.phoneNumber ?? '',
+          phoneNumber,
           email: currentUser.email ?? '',
         });
+        setVerifiedPhoneNumber(phoneNumber);
       } catch (error) {
         console.error("Failed to load profile:", error);
       }
@@ -186,7 +194,6 @@ export const ConfigurationTab = memo(function ConfigurationTab({
       const result = await window.electron.apiUpdateCurrentUserProfile({
         firstName: profile.firstName.trim() || undefined,
         lastName: profile.lastName.trim() || null,
-        phoneNumber: profile.phoneNumber.trim() || null,
       });
 
       if (!result.success) {
@@ -196,18 +203,82 @@ export const ConfigurationTab = memo(function ConfigurationTab({
 
       const user = result.user;
       if (user) {
+        const phoneNumber = user.phoneNumber ?? verifiedPhoneNumber;
         setProfile({
           firstName: user.firstName ?? '',
           lastName: user.lastName ?? '',
-          phoneNumber: user.phoneNumber ?? '',
+          phoneNumber,
           email: user.email ?? profile.email,
         });
+        setVerifiedPhoneNumber(phoneNumber);
       }
       setProfileMessage('Profile saved');
     } catch (error) {
       setProfileMessage(error instanceof Error ? error.message : 'Failed to save profile');
     } finally {
       setProfileSaving(false);
+    }
+  };
+
+  const handleRequestMobileOtp = async () => {
+    const phoneNumber = profile.phoneNumber.trim();
+    if (!phoneNumber) {
+      setMobileOtpMessage('Enter a phone number first');
+      return;
+    }
+
+    setMobileOtpSending(true);
+    setMobileOtpMessage(null);
+    setMobileOtp('');
+    try {
+      const result = await window.electron.apiRequestMobileOtp(phoneNumber);
+      if (!result.success) {
+        setMobileOtpMessage(result.error || 'Failed to send verification code');
+        return;
+      }
+      const normalizedPhone = result.phoneNumber || phoneNumber;
+      setProfile((prev) => ({ ...prev, phoneNumber: normalizedPhone }));
+      setMobileOtpRequestedFor(normalizedPhone);
+      setMobileOtpMessage(`Code sent. It expires in ${result.expiresInMinutes ?? 10} minutes.`);
+    } catch (error) {
+      setMobileOtpMessage(error instanceof Error ? error.message : 'Failed to send verification code');
+    } finally {
+      setMobileOtpSending(false);
+    }
+  };
+
+  const handleVerifyMobileOtp = async () => {
+    const phoneNumber = (mobileOtpRequestedFor || profile.phoneNumber).trim();
+    if (!phoneNumber || !mobileOtp.trim()) {
+      setMobileOtpMessage('Enter the verification code');
+      return;
+    }
+
+    setMobileOtpVerifying(true);
+    setMobileOtpMessage(null);
+    try {
+      const result = await window.electron.apiVerifyMobileOtp(phoneNumber, mobileOtp.trim());
+      if (!result.success) {
+        setMobileOtpMessage(result.error || 'Failed to verify code');
+        return;
+      }
+      const user = result.user;
+      const savedPhoneNumber = user?.phoneNumber ?? phoneNumber;
+      setProfile((prev) => ({
+        ...prev,
+        firstName: user?.firstName ?? prev.firstName,
+        lastName: user?.lastName ?? prev.lastName,
+        email: user?.email ?? prev.email,
+        phoneNumber: savedPhoneNumber,
+      }));
+      setVerifiedPhoneNumber(savedPhoneNumber);
+      setMobileOtp('');
+      setMobileOtpRequestedFor(null);
+      setMobileOtpMessage('Phone verified and saved');
+    } catch (error) {
+      setMobileOtpMessage(error instanceof Error ? error.message : 'Failed to verify code');
+    } finally {
+      setMobileOtpVerifying(false);
     }
   };
 
@@ -268,6 +339,11 @@ export const ConfigurationTab = memo(function ConfigurationTab({
     }
   };
 
+  const phoneNumberChanged = profile.phoneNumber.trim() !== verifiedPhoneNumber.trim();
+  const canVerifyRequestedPhone = Boolean(
+    mobileOtpRequestedFor && mobileOtpRequestedFor === profile.phoneNumber.trim(),
+  );
+
   return (
     <div className="mx-auto max-w-4xl space-y-8">
       <div className="rounded-3xl border border-[var(--color-border)] bg-gradient-to-br from-white to-blue-50/40 p-5 shadow-sm">
@@ -311,16 +387,61 @@ export const ConfigurationTab = memo(function ConfigurationTab({
               />
             </label>
 
-            <label className="block md:col-span-2">
-              <span className="text-sm font-medium text-gray-700">Phone number</span>
-              <input
-                value={profile.phoneNumber}
-                onChange={(event) => setProfile((prev) => ({ ...prev, phoneNumber: event.target.value }))}
-                placeholder="+918849286808"
-                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-              <p className="mt-1 text-xs text-gray-500">Include country code. We normalize this before saving.</p>
-            </label>
+            <div className="block md:col-span-2">
+              <label className="block">
+                <span className="text-sm font-medium text-gray-700">Phone number</span>
+                <input
+                  value={profile.phoneNumber}
+                  onChange={(event) => {
+                    setProfile((prev) => ({ ...prev, phoneNumber: event.target.value }));
+                    setMobileOtpMessage(null);
+                    if (mobileOtpRequestedFor && event.target.value.trim() !== mobileOtpRequestedFor) {
+                      setMobileOtpRequestedFor(null);
+                      setMobileOtp('');
+                    }
+                  }}
+                  placeholder="+918849286808"
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </label>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleRequestMobileOtp}
+                  disabled={mobileOtpSending || !profile.phoneNumber.trim() || !phoneNumberChanged}
+                  className="rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400"
+                >
+                  {mobileOtpSending ? 'Sending...' : 'Send OTP'}
+                </button>
+                {canVerifyRequestedPhone ? (
+                  <>
+                    <input
+                      value={mobileOtp}
+                      onChange={(event) => setMobileOtp(event.target.value)}
+                      placeholder="Enter OTP"
+                      className="w-32 rounded-lg border border-gray-300 px-3 py-1.5 text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleVerifyMobileOtp}
+                      disabled={mobileOtpVerifying || !mobileOtp.trim()}
+                      className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+                    >
+                      {mobileOtpVerifying ? 'Verifying...' : 'Verify & save'}
+                    </button>
+                  </>
+                ) : null}
+                {!phoneNumberChanged && verifiedPhoneNumber ? (
+                  <span className="text-xs font-medium text-green-600">Verified</span>
+                ) : null}
+              </div>
+              <p className="mt-1 text-xs text-gray-500">Include country code. Changed phone numbers are saved only after OTP verification.</p>
+              {mobileOtpMessage ? (
+                <p className={`mt-1 text-xs ${mobileOtpMessage.includes('sent') || mobileOtpMessage.includes('verified') ? 'text-green-600' : 'text-red-600'}`}>
+                  {mobileOtpMessage}
+                </p>
+              ) : null}
+            </div>
           </div>
 
           <div className="mt-4 flex items-center gap-3 border-t border-gray-100 pt-4">

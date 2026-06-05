@@ -132,8 +132,19 @@ interface Window {
     apiUpdateCurrentUserProfile: (data: {
       firstName?: string;
       lastName?: string | null;
-      phoneNumber?: string | null;
     }) => Promise<{
+      success: boolean;
+      user?: any;
+      error?: string;
+    }>;
+    apiRequestMobileOtp: (phoneNumber: string) => Promise<{
+      success: boolean;
+      message?: string;
+      expiresInMinutes?: number;
+      phoneNumber?: string;
+      error?: string;
+    }>;
+    apiVerifyMobileOtp: (phoneNumber: string, otp: string) => Promise<{
       success: boolean;
       user?: any;
       error?: string;

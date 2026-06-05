@@ -239,14 +239,9 @@ export const fetchEmailById = async (messageId: string, accountId?: string, fold
 }
 
 export const connectEmail = async () => {
-  const api = getVeraCoworkApiClient();
-
-  if (api.isAuthenticated()) {
-    const data = await api.getEmailOAuthConnectUrl();
-    await shell.openExternal(data.auth_url);
-    return;
-  }
-
+  // Cowork uses the Zoho email OAuth service to generate the Zoho auth URL.
+  // Do not route this through the Vera Cowork API; the local callback handler
+  // expects the Zoho service flow (`${BASE_URL}/connect` -> local /callback).
   const response = await fetch(`${BASE_URL}/connect`);
   if (!response.ok) {
     throw new Error("Failed to get auth URL");

@@ -38,7 +38,6 @@ export interface RegisterData {
 export interface UpdateProfileData {
   firstName?: string;
   lastName?: string | null;
-  phoneNumber?: string | null;
 }
 
 export interface CreateChannelData {
@@ -103,6 +102,27 @@ export function initializeApiIpcHandlers(): void {
       return { success: true, user };
     } catch (error) {
       console.error('[API IPC] update-current-user-profile failed:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle("api:request-mobile-otp", async (_, phoneNumber: string) => {
+    console.log('[API IPC] request mobile OTP');
+    try {
+      return await api.requestMobileOtp(phoneNumber);
+    } catch (error) {
+      console.error('[API IPC] request mobile OTP failed:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle("api:verify-mobile-otp", async (_, data: { phoneNumber: string; otp: string }) => {
+    console.log('[API IPC] verify mobile OTP');
+    try {
+      const user = await api.verifyMobileOtp(data.phoneNumber, data.otp);
+      return { success: true, user };
+    } catch (error) {
+      console.error('[API IPC] verify mobile OTP failed:', error);
       return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   });
