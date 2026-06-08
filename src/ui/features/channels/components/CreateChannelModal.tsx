@@ -69,10 +69,29 @@ function getCredentialsHelp(provider: string): string {
     case 'slack':
       return 'Create a Slack app, enable Socket Mode, then paste both the bot token and app token.';
     case 'wechat':
-      return 'Paste WeChat iLink Bot credentials. QR login can be added after the text-channel MVP is verified.';
+      return 'Connect a WeChat iLink Bot using its Account ID and Bot token. This MVP uses iLink Bot API credentials; QR login/personal-WeChat login is not supported yet.';
     default:
       return 'Paste the provider credentials required to connect this channel.';
   }
+}
+
+function WeChatCredentialsGuide() {
+  return (
+    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+      <div className="font-semibold">How to get WeChat iLink credentials</div>
+      <ol className="mt-2 list-decimal space-y-1 pl-5 text-emerald-800">
+        <li>Open the WeChat iLink / iLink AI bot console for the account you want Vera to use.</li>
+        <li>Create a new bot, or open an existing bot that should receive and send messages.</li>
+        <li>Copy the bot/account identifier into <span className="font-medium">Account ID</span>.</li>
+        <li>Create or reveal the iLink bot access token and paste it into <span className="font-medium">Bot token</span>.</li>
+        <li>Leave <span className="font-medium">Base URL</span> empty unless iLink gives you a custom API host. The default is <code className="rounded bg-white/70 px-1">https://ilinkai.weixin.qq.com</code>.</li>
+        <li>After creating the channel, start it and send a test message to the iLink bot.</li>
+      </ol>
+      <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+        Do not paste a WeChat Official Account app secret, personal WeChat password, or QR-login session here. This channel only accepts iLink Bot API credentials.
+      </div>
+    </div>
+  );
 }
 
 export function CreateChannelModal({ agents, onClose, onComplete }: CreateChannelModalProps) {
@@ -280,6 +299,7 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
           {step === 'credentials' ? (
             <div className="space-y-4">
               <div className="rounded-lg bg-blue-50 p-3 text-sm text-blue-700">{getCredentialsHelp(provider)}</div>
+              {provider === 'wechat' ? <WeChatCredentialsGuide /> : null}
               {provider === 'whatsapp' ? (
                 <div className="rounded-xl border border-green-200 bg-green-50 p-4">
                   <div className="flex items-start gap-3">
