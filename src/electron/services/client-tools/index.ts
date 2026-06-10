@@ -13,6 +13,7 @@ import { bashTool } from "./runners/bash.js";
 import { lettaCodeTools } from "./runners/letta_tools/index.js";
 import { listSkillsTool, skillTool } from "./runners/skill.js";
 import { productivityTools } from "./runners/productivity.js";
+import { emitExtensionToolStart } from "../extensions/extension-events.js";
 import type {
     ClientToolDefinition,
     ClientToolWireDef,
@@ -78,7 +79,21 @@ export async function runClientTool(
         };
     }
     try {
-        return await def.run(args, ctx);
+        const toolStartResult = await emitExtensionToolStart({
+            agentId: ctx.agentId,
+            conversationId: ctx.conversationId,
+            toolName: name,
+            args,
+            context: ctx,
+        });
+        if (toolStartResult.deny) {
+            return {
+                output: toolStartResult.reason || `Client tool '${name}' was denied by an extension.`,
+                isError: true,
+            };
+        }
+
+        return await def.run(toolStartResult.args ?? args, ctx);
     } catch (err) {
         return {
             output: `Client tool '${name}' threw: ${

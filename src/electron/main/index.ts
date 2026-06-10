@@ -70,11 +70,15 @@ import { expressServer } from "../emails/express/index.js";
 import { initializeApiIpcHandlers, setupApiStatusBridge } from "../ipc/handlers/api-handlers.js";
 import { installRequiredSkills } from "../services/skillInstaller.js";
 import { initializeRemoteAccessService } from "../services/remote-access/remoteAccessService.js";
+import { initializeCoworkExtensions } from "../services/extensions/extension-loader.js";
 
 /**
  * Initialize the application when ready
  */
 app.on("ready", () => {
+    // Load trusted runtime extensions before sessions expose client tools.
+    void initializeCoworkExtensions();
+
     // Install required skills on startup
     void installRequiredSkills();
 

@@ -134,6 +134,50 @@ The email server runs as a local OAuth callback handler for Zoho Mail. It provid
 | **odoo** | Odoo ERP operations | [skills/odoo/SKILL.md](skills/odoo/SKILL.md) |
 | **pdf-reader** | PDF document processing | [skills/pdf-reader/SKILL.md](skills/pdf-reader/SKILL.md) |
 
+### Runtime Extensions
+
+Cowork runtime extensions are trusted local JavaScript plugins that run in Electron's main process. They are disabled by default because extension code has local machine access.
+
+Enable them with:
+
+```env
+COWORK_EXTENSIONS_ENABLED=true
+# Optional; defaults to ~/.letta/extensions
+COWORK_EXTENSIONS_DIR=
+```
+
+If `COWORK_EXTENSIONS_DIR` is empty, Cowork loads extensions from `~/.letta/extensions`, matching Letta Code's local extension convention. Supported extension files are `.js`, `.mjs`, and `.cjs` files directly inside the directory. Each file should export `activate(api)` or a default function.
+
+Example:
+
+```js
+exports.activate = (cowork) => {
+  cowork.tools.register({
+    name: 'HelloCoworkExtension',
+    description: 'Example Cowork extension tool.',
+    parameters: {
+      type: 'object',
+      properties: { name: { type: 'string' } },
+      required: ['name'],
+    },
+    run: async ({ args }) => `Hello ${args.name}`,
+  });
+
+  cowork.events.on('tool_start', (event) => {
+    if (event.toolName === 'Bash' && event.args.command?.includes('rm -rf')) {
+      return { deny: true, reason: 'Blocked by Cowork extension policy.' };
+    }
+  });
+};
+```
+
+Current extension capabilities:
+
+- register agent client tools
+- listen to `tool_start`
+- modify tool args from `tool_start`
+- deny tool calls from `tool_start`
+
 ---
 
 ## Prerequisites
