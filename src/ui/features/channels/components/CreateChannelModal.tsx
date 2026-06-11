@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
 import {
   Channel,
@@ -83,7 +83,7 @@ function WeChatCredentialsGuide() {
       <ol className="mt-2 list-decimal space-y-1 pl-5 text-emerald-800">
         <li>Click <span className="font-medium">Generate QR code</span>.</li>
         <li>Scan the QR code with WeChat and confirm authorization on your phone.</li>
-        <li>Click <span className="font-medium">Check login status</span> if the form does not fill automatically.</li>
+        <li>Vera checks the login status automatically every 20 seconds. You can also click <span className="font-medium">Check now</span>.</li>
         <li>Vera stores the returned <span className="font-medium">Account ID</span> and <span className="font-medium">Bot token</span> as channel credentials.</li>
         <li>Leave <span className="font-medium">Base URL</span> empty unless iLink gives you a custom API host. The default is <code className="rounded bg-white/70 px-1">https://ilinkai.weixin.qq.com</code>.</li>
         <li>After creating the channel, start it and send a test message to the iLink bot.</li>
@@ -173,7 +173,7 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
         baseUrl: result.baseUrl,
       });
       setWechatQrStatus('wait');
-      setWechatQrMessage('Scan the QR code in WeChat, confirm on your phone, then check login status.');
+      setWechatQrMessage('Scan the QR code in WeChat and confirm on your phone. Vera will check automatically every 20 seconds.');
     } catch (err) {
       setWechatQr(null);
       setWechatQrStatus(null);
@@ -183,9 +183,9 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
     }
   };
 
-  const checkWeChatQrStatus = async () => {
+  const checkWeChatQrStatus = useCallback(async (silent = false) => {
     if (!wechatQr?.qrcode) return;
-    setWechatQrLoading(true);
+    if (!silent) setWechatQrLoading(true);
     setError(null);
     try {
       const api = getApi();
@@ -196,13 +196,13 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
 
       setWechatQrStatus(result.status || 'unknown');
       if (result.accountId && result.botToken) {
-        setCredentials({
-          ...credentials,
+        setCredentials((currentCredentials) => ({
+          ...currentCredentials,
           accountId: result.accountId,
           botToken: result.botToken,
           baseUrl: result.baseUrl || wechatQr.baseUrl,
-        });
-        setConfigData({ ...configData, baseUrl: result.baseUrl || wechatQr.baseUrl });
+        }));
+        setConfigData((currentConfig) => ({ ...currentConfig, baseUrl: result.baseUrl || wechatQr.baseUrl }));
         setWechatQrMessage('WeChat login confirmed. Credentials filled automatically.');
       } else if (result.status === 'scanned') {
         setWechatQrMessage('QR scanned. Confirm authorization on your phone.');
@@ -214,9 +214,21 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
     } catch (err) {
       setWechatQrMessage(err instanceof Error ? err.message : 'Failed to check WeChat login status');
     } finally {
-      setWechatQrLoading(false);
+      if (!silent) setWechatQrLoading(false);
     }
-  };
+  }, [wechatQr]);
+
+  useEffect(() => {
+    if (provider !== 'wechat' || step !== 'credentials' || !wechatQr?.qrcode) return;
+    if (credentials.accountId?.trim() && credentials.botToken?.trim()) return;
+    if (wechatQrStatus === 'expired' || wechatQrStatus === 'confirmed') return;
+
+    const interval = window.setInterval(() => {
+      void checkWeChatQrStatus(true);
+    }, 20_000);
+
+    return () => window.clearInterval(interval);
+  }, [checkWeChatQrStatus, credentials.accountId, credentials.botToken, provider, step, wechatQr, wechatQrStatus]);
 
   const handleFinish = async () => {
     if (!canContinueDetails || !canContinueCredentials) {
@@ -387,7 +399,7 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <div className="font-medium text-slate-900">WeChat QR login</div>
-                      <p className="mt-1 text-sm text-slate-500">Generate a QR code from Tencent iLink and authorize this bot from WeChat.</p>
+                      <p className="mt-1 text-sm text-slate-500">Generate a QR code from Tencent iLink and authorize this bot from WeChat. Vera checks status every 20 seconds.</p>
                     </div>
                     <div className="flex gap-2">
                       <button
@@ -401,11 +413,11 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
                       {wechatQr ? (
                         <button
                           type="button"
-                          onClick={checkWeChatQrStatus}
+                          onClick={() => void checkWeChatQrStatus(false)}
                           disabled={wechatQrLoading}
                           className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
                         >
-                          {wechatQrLoading ? 'Checking...' : 'Check login status'}
+                          {wechatQrLoading ? 'Checking...' : 'Check now'}
                         </button>
                       ) : null}
                     </div>
@@ -433,7 +445,7 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
                           <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 p-3 text-blue-700">{wechatQrMessage}</div>
                         ) : null}
                         <p className="mt-3 text-xs text-slate-500">
-                          If the image is not rendered, copy the QR token from the box and regenerate. The status endpoint returns the Account ID and Bot token after confirmation.
+                          Keep this dialog open after scanning. Vera polls iLink every 20 seconds and fills Account ID + Bot token after confirmation.
                         </p>
                       </div>
                     </div>
