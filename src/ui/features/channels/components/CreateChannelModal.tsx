@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import QRCode from 'qrcode';
 import {
   Channel,
   ConfigDataState,
@@ -107,6 +108,7 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
     qrcode: string;
     qrcodeImageUrl?: string | null;
     qrcodeImageContent?: string | null;
+    renderedImageDataUrl?: string | null;
     baseUrl: string;
   } | null>(null);
   const [wechatQrLoading, setWechatQrLoading] = useState(false);
@@ -159,10 +161,15 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
       if (!result.success || !result.qrcode || !result.baseUrl) {
         throw new Error(result.error || 'Failed to generate WeChat QR code');
       }
+      const renderedImageDataUrl = await QRCode.toDataURL(result.qrcode, {
+        margin: 1,
+        width: 320,
+      });
       setWechatQr({
         qrcode: result.qrcode,
         qrcodeImageUrl: result.qrcodeImageUrl,
         qrcodeImageContent: result.qrcodeImageContent,
+        renderedImageDataUrl,
         baseUrl: result.baseUrl,
       });
       setWechatQrStatus('wait');
@@ -407,9 +414,9 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
                   {wechatQr ? (
                     <div className="mt-4 flex flex-col gap-4 sm:flex-row">
                       <div className="flex h-48 w-48 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 p-2">
-                        {wechatQr.qrcodeImageContent || wechatQr.qrcodeImageUrl ? (
+                        {wechatQr.renderedImageDataUrl || wechatQr.qrcodeImageContent || wechatQr.qrcodeImageUrl ? (
                           <img
-                            src={wechatQr.qrcodeImageContent || wechatQr.qrcodeImageUrl || undefined}
+                            src={wechatQr.renderedImageDataUrl || wechatQr.qrcodeImageContent || wechatQr.qrcodeImageUrl || undefined}
                             alt="WeChat iLink login QR code"
                             className="max-h-full max-w-full rounded-lg"
                           />
