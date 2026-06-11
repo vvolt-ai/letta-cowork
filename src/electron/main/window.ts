@@ -1,4 +1,4 @@
-import { BrowserWindow, nativeImage } from "electron";
+import { app, BrowserWindow, nativeImage } from "electron";
 import { getPreloadPath, getUIPath, getIconPath } from "../utils/path-resolver.js";
 import { isDev, DEV_PORT } from "../utils/index.js";
 
@@ -7,7 +7,7 @@ let mainWindow: BrowserWindow | null = null;
 /**
  * Create the main application window
  */
-export function createMainWindow(): BrowserWindow {
+export function createMainWindow(options: { show?: boolean } = {}): BrowserWindow {
     const iconPath = getIconPath();
     const appIcon = nativeImage.createFromPath(iconPath);
 
@@ -28,7 +28,20 @@ export function createMainWindow(): BrowserWindow {
         icon: appIcon.isEmpty() ? undefined : appIcon,
         titleBarStyle: "hiddenInset",
         backgroundColor: "#FAF9F6",
-        trafficLightPosition: { x: 15, y: 18 }
+        trafficLightPosition: { x: 15, y: 18 },
+        show: options.show ?? true,
+    });
+
+    mainWindow.on("close", (event) => {
+        if ((app as unknown as { isQuitting?: boolean }).isQuitting) return;
+        event.preventDefault();
+        mainWindow?.hide();
+    });
+
+    mainWindow.on("ready-to-show", () => {
+        if (options.show ?? true) {
+            mainWindow?.show();
+        }
     });
 
     // Load the UI

@@ -41,6 +41,7 @@ export async function cleanup(): Promise<void> {
  * Handle termination signals
  */
 export function handleSignal(): void {
+    (app as unknown as { isQuitting?: boolean }).isQuitting = true;
     cleanup();
     app.quit();
 }
@@ -49,11 +50,15 @@ export function handleSignal(): void {
  * Setup app lifecycle event handlers
  */
 export function setupLifecycleHandlers(): void {
-    app.on("before-quit", cleanup);
+    app.on("before-quit", () => {
+        (app as unknown as { isQuitting?: boolean }).isQuitting = true;
+        void cleanup();
+    });
     app.on("will-quit", cleanup);
     app.on("window-all-closed", () => {
-        cleanup();
-        app.quit();
+        // Keep the process alive by default so background services, bridges,
+        // schedulers, and the tray/menu-bar entry continue running.
+        if (process.platform !== "darwin") return;
     });
 
     process.on("SIGTERM", handleSignal);
@@ -66,6 +71,7 @@ export function setupLifecycleHandlers(): void {
  */
 export function registerGlobalShortcuts(): void {
     globalShortcut.register('CommandOrControl+Q', () => {
+        (app as unknown as { isQuitting?: boolean }).isQuitting = true;
         cleanup();
         app.quit();
     });

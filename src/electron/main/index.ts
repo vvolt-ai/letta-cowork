@@ -62,9 +62,10 @@ try {
 }
 
 // Import modular components
-import { createMainWindow, setMainWindow } from "./window.js";
+import { createMainWindow, getMainWindow, setMainWindow } from "./window.js";
 import { setupLifecycleHandlers, registerGlobalShortcuts } from "./lifecycle.js";
 import { setupMenu } from "./menu.js";
+import { setupTray } from "./tray.js";
 import { registerAllIpcHandlers, startResourcePolling, initializeBridges } from "../ipc/index.js";
 import { expressServer } from "../emails/express/index.js";
 import { initializeApiIpcHandlers, setupApiStatusBridge } from "../ipc/handlers/api-handlers.js";
@@ -76,6 +77,17 @@ import { initializeCoworkExtensions } from "../services/extensions/extension-loa
  * Initialize the application when ready
  */
 app.on("ready", () => {
+    const launchHidden = process.argv.includes("--hidden") || app.getLoginItemSettings().wasOpenedAsHidden;
+
+    if (app.isPackaged) {
+        app.setLoginItemSettings({
+            openAtLogin: true,
+            openAsHidden: true,
+            path: app.getPath("exe"),
+            args: ["--hidden"],
+        });
+    }
+
     // Load trusted runtime extensions before sessions expose client tools.
     void initializeCoworkExtensions();
 
@@ -88,9 +100,10 @@ app.on("ready", () => {
     // Setup lifecycle event handlers
     setupLifecycleHandlers();
 
-    // Create main window
-    const mainWindow = createMainWindow();
+    // Create main window. Login-start launches hidden so Cowork can run in the background.
+    const mainWindow = createMainWindow({ show: !launchHidden });
     setMainWindow(mainWindow);
+    setupTray();
 
     // Register global shortcuts
     registerGlobalShortcuts();
@@ -113,4 +126,17 @@ app.on("ready", () => {
 
     // Initialize remote access runner for server-routed tool execution
     initializeRemoteAccessService(mainWindow);
+});
+
+app.on("activate", () => {
+    const existingWindow = getMainWindow();
+    if (existingWindow && !existingWindow.isDestroyed()) {
+        existingWindow.show();
+        existingWindow.focus();
+        return;
+    }
+
+    const mainWindow = createMainWindow({ show: true });
+    setMainWindow(mainWindow);
+    setupTray();
 });
