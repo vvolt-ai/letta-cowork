@@ -5,7 +5,15 @@
  */
 
 import type { BaseHttpClient } from "../client/base-client.js";
-import type { Channel, ChannelRuntimeStatus, ChannelCredentials, MessageLog, ConversationContext } from "../types.js";
+import type {
+  Channel,
+  ChannelRuntimeStatus,
+  ChannelCredentials,
+  MessageLog,
+  ConversationContext,
+  WeChatIlinkQrCodeResponse,
+  WeChatIlinkQrStatusResponse,
+} from "../types.js";
 
 /**
  * Channel Endpoints Mixin
@@ -129,6 +137,31 @@ export class ChannelEndpoints {
     count: number;
   }> {
     return client.request("/channels/runtime/status");
+  }
+
+  static async getWeChatIlinkQrCode(
+    client: BaseHttpClient,
+    options?: { baseUrl?: string }
+  ): Promise<WeChatIlinkQrCodeResponse> {
+    const params = new URLSearchParams();
+    if (options?.baseUrl?.trim()) params.append("baseUrl", options.baseUrl.trim());
+
+    return client.request<WeChatIlinkQrCodeResponse>(
+      `/channels/wechat/ilink/qrcode${params.toString() ? `?${params.toString()}` : ""}`
+    );
+  }
+
+  static async getWeChatIlinkQrCodeStatus(
+    client: BaseHttpClient,
+    qrcode: string,
+    options?: { baseUrl?: string }
+  ): Promise<WeChatIlinkQrStatusResponse> {
+    const params = new URLSearchParams({ qrcode });
+    if (options?.baseUrl?.trim()) params.append("baseUrl", options.baseUrl.trim());
+
+    return client.request<WeChatIlinkQrStatusResponse>(
+      `/channels/wechat/ilink/qrcode-status?${params.toString()}`
+    );
   }
 
   // ============================================

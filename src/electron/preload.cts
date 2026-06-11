@@ -277,6 +277,10 @@ electron.contextBridge.exposeInMainWorld("electron", {
         electron.ipcRenderer.invoke("api:get-channel-status", channelId),
     apiGetAllRuntimeStatus: () =>
         electron.ipcRenderer.invoke("api:get-all-runtime-status"),
+    apiGetWeChatIlinkQrCode: (options?: { baseUrl?: string }) =>
+        electron.ipcRenderer.invoke("api:get-wechat-ilink-qrcode", options),
+    apiGetWeChatIlinkQrCodeStatus: (qrcode: string, options?: { baseUrl?: string }) =>
+        electron.ipcRenderer.invoke("api:get-wechat-ilink-qrcode-status", qrcode, options),
     
     // Messages
     apiGetMessageLogs: (channelId: string, options?: { direction?: string; limit?: number; offset?: number }) =>

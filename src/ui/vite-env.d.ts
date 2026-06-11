@@ -254,6 +254,23 @@ interface Window {
       count?: number;
       error?: string;
     }>;
+    apiGetWeChatIlinkQrCode: (options?: { baseUrl?: string }) => Promise<{
+      success: boolean;
+      qrcode?: string;
+      qrcodeImageUrl?: string | null;
+      qrcodeImageContent?: string | null;
+      baseUrl?: string;
+      error?: string;
+    }>;
+    apiGetWeChatIlinkQrCodeStatus: (qrcode: string, options?: { baseUrl?: string }) => Promise<{
+      success: boolean;
+      status?: string;
+      accountId?: string | null;
+      botToken?: string | null;
+      userId?: string | null;
+      baseUrl?: string;
+      error?: string;
+    }>;
 
     // Messages
     apiGetMessageLogs: (channelId: string, options?: {

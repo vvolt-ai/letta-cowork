@@ -25,7 +25,9 @@ import type {
   ChannelRuntimeStatus, 
   ChannelCredentials,
   MessageLog,
-  ConversationContext
+  ConversationContext,
+  WeChatIlinkQrCodeResponse,
+  WeChatIlinkQrStatusResponse
 } from "../types.js";
 
 /**
@@ -313,6 +315,17 @@ export class VeraCoworkApiClient extends BaseHttpClient {
     count: number;
   }> {
     return ChannelEndpoints.getAllRuntimeStatus(this);
+  }
+
+  async getWeChatIlinkQrCode(options?: { baseUrl?: string }): Promise<WeChatIlinkQrCodeResponse> {
+    return ChannelEndpoints.getWeChatIlinkQrCode(this, options);
+  }
+
+  async getWeChatIlinkQrCodeStatus(
+    qrcode: string,
+    options?: { baseUrl?: string }
+  ): Promise<WeChatIlinkQrStatusResponse> {
+    return ChannelEndpoints.getWeChatIlinkQrCodeStatus(this, qrcode, options);
   }
 
   // ============================================

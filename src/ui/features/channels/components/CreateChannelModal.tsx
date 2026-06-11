@@ -69,7 +69,7 @@ function getCredentialsHelp(provider: string): string {
     case 'slack':
       return 'Create a Slack app, enable Socket Mode, then paste both the bot token and app token.';
     case 'wechat':
-      return 'Connect a WeChat iLink Bot using its Account ID and Bot token. This MVP uses iLink Bot API credentials; QR login/personal-WeChat login is not supported yet.';
+      return 'Generate a WeChat iLink QR code, scan it in WeChat, then Vera will fill the Account ID and Bot token automatically. You can also paste existing iLink credentials manually.';
     default:
       return 'Paste the provider credentials required to connect this channel.';
   }
@@ -80,15 +80,15 @@ function WeChatCredentialsGuide() {
     <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
       <div className="font-semibold">How to get WeChat iLink credentials</div>
       <ol className="mt-2 list-decimal space-y-1 pl-5 text-emerald-800">
-        <li>Open the WeChat iLink / iLink AI bot console for the account you want Vera to use.</li>
-        <li>Create a new bot, or open an existing bot that should receive and send messages.</li>
-        <li>Copy the bot/account identifier into <span className="font-medium">Account ID</span>.</li>
-        <li>Create or reveal the iLink bot access token and paste it into <span className="font-medium">Bot token</span>.</li>
+        <li>Click <span className="font-medium">Generate QR code</span>.</li>
+        <li>Scan the QR code with WeChat and confirm authorization on your phone.</li>
+        <li>Click <span className="font-medium">Check login status</span> if the form does not fill automatically.</li>
+        <li>Vera stores the returned <span className="font-medium">Account ID</span> and <span className="font-medium">Bot token</span> as channel credentials.</li>
         <li>Leave <span className="font-medium">Base URL</span> empty unless iLink gives you a custom API host. The default is <code className="rounded bg-white/70 px-1">https://ilinkai.weixin.qq.com</code>.</li>
         <li>After creating the channel, start it and send a test message to the iLink bot.</li>
       </ol>
       <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
-        Do not paste a WeChat Official Account app secret, personal WeChat password, or QR-login session here. This channel only accepts iLink Bot API credentials.
+        Do not paste a WeChat Official Account app secret or personal WeChat password here. The QR login only exchanges authorization for iLink Bot API credentials.
       </div>
     </div>
   );
@@ -103,6 +103,15 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
   const [configData, setConfigData] = useState<ConfigDataState>({ typingIndicator: true });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [wechatQr, setWechatQr] = useState<{
+    qrcode: string;
+    qrcodeImageUrl?: string | null;
+    qrcodeImageContent?: string | null;
+    baseUrl: string;
+  } | null>(null);
+  const [wechatQrLoading, setWechatQrLoading] = useState(false);
+  const [wechatQrStatus, setWechatQrStatus] = useState<string | null>(null);
+  const [wechatQrMessage, setWechatQrMessage] = useState<string | null>(null);
 
   const currentStepIndex = STEPS.findIndex((candidate) => candidate.id === step);
   const credentialFields = useMemo(() => getCredentialFields(provider), [provider]);
@@ -137,6 +146,69 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
     setError(null);
     if (step === 'credentials') setStep('details');
     if (step === 'behavior') setStep('credentials');
+  };
+
+  const generateWeChatQrCode = async () => {
+    setWechatQrLoading(true);
+    setWechatQrStatus(null);
+    setWechatQrMessage(null);
+    setError(null);
+    try {
+      const api = getApi();
+      const result = await api.apiGetWeChatIlinkQrCode({ baseUrl: credentials.baseUrl || (configData as WeChatConfig).baseUrl });
+      if (!result.success || !result.qrcode || !result.baseUrl) {
+        throw new Error(result.error || 'Failed to generate WeChat QR code');
+      }
+      setWechatQr({
+        qrcode: result.qrcode,
+        qrcodeImageUrl: result.qrcodeImageUrl,
+        qrcodeImageContent: result.qrcodeImageContent,
+        baseUrl: result.baseUrl,
+      });
+      setWechatQrStatus('wait');
+      setWechatQrMessage('Scan the QR code in WeChat, confirm on your phone, then check login status.');
+    } catch (err) {
+      setWechatQr(null);
+      setWechatQrStatus(null);
+      setWechatQrMessage(err instanceof Error ? err.message : 'Failed to generate WeChat QR code');
+    } finally {
+      setWechatQrLoading(false);
+    }
+  };
+
+  const checkWeChatQrStatus = async () => {
+    if (!wechatQr?.qrcode) return;
+    setWechatQrLoading(true);
+    setError(null);
+    try {
+      const api = getApi();
+      const result = await api.apiGetWeChatIlinkQrCodeStatus(wechatQr.qrcode, { baseUrl: wechatQr.baseUrl });
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to check WeChat login status');
+      }
+
+      setWechatQrStatus(result.status || 'unknown');
+      if (result.accountId && result.botToken) {
+        setCredentials({
+          ...credentials,
+          accountId: result.accountId,
+          botToken: result.botToken,
+          baseUrl: result.baseUrl || wechatQr.baseUrl,
+        });
+        setConfigData({ ...configData, baseUrl: result.baseUrl || wechatQr.baseUrl });
+        setWechatQrMessage('WeChat login confirmed. Credentials filled automatically.');
+      } else if (result.status === 'scanned') {
+        setWechatQrMessage('QR scanned. Confirm authorization on your phone.');
+      } else if (result.status === 'expired') {
+        setWechatQrMessage('QR code expired. Generate a new QR code.');
+      } else {
+        setWechatQrMessage('Waiting for scan/confirmation.');
+      }
+    } catch (err) {
+      setWechatQrMessage(err instanceof Error ? err.message : 'Failed to check WeChat login status');
+    } finally {
+      setWechatQrLoading(false);
+    }
   };
 
   const handleFinish = async () => {
@@ -256,6 +328,9 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
                     const nextProvider = event.target.value;
                     setProvider(nextProvider);
                     setCredentials({});
+                    setWechatQr(null);
+                    setWechatQrStatus(null);
+                    setWechatQrMessage(null);
                     setStartAfterCreate(nextProvider === 'whatsapp');
                     setConfigData({ typingIndicator: true });
                   }}
@@ -300,6 +375,64 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
             <div className="space-y-4">
               <div className="rounded-lg bg-blue-50 p-3 text-sm text-blue-700">{getCredentialsHelp(provider)}</div>
               {provider === 'wechat' ? <WeChatCredentialsGuide /> : null}
+              {provider === 'wechat' ? (
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="font-medium text-slate-900">WeChat QR login</div>
+                      <p className="mt-1 text-sm text-slate-500">Generate a QR code from Tencent iLink and authorize this bot from WeChat.</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={generateWeChatQrCode}
+                        disabled={wechatQrLoading}
+                        className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                      >
+                        {wechatQrLoading && !wechatQr ? 'Generating...' : 'Generate QR code'}
+                      </button>
+                      {wechatQr ? (
+                        <button
+                          type="button"
+                          onClick={checkWeChatQrStatus}
+                          disabled={wechatQrLoading}
+                          className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+                        >
+                          {wechatQrLoading ? 'Checking...' : 'Check login status'}
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  {wechatQr ? (
+                    <div className="mt-4 flex flex-col gap-4 sm:flex-row">
+                      <div className="flex h-48 w-48 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 p-2">
+                        {wechatQr.qrcodeImageContent || wechatQr.qrcodeImageUrl ? (
+                          <img
+                            src={wechatQr.qrcodeImageContent || wechatQr.qrcodeImageUrl || undefined}
+                            alt="WeChat iLink login QR code"
+                            className="max-h-full max-w-full rounded-lg"
+                          />
+                        ) : (
+                          <div className="break-all text-xs text-slate-500">{wechatQr.qrcode}</div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1 text-sm">
+                        <div className="rounded-lg bg-slate-50 p-3 text-slate-600">
+                          <div><span className="font-medium">Status:</span> {wechatQrStatus || 'waiting'}</div>
+                          <div className="mt-1"><span className="font-medium">Base URL:</span> {wechatQr.baseUrl}</div>
+                        </div>
+                        {wechatQrMessage ? (
+                          <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 p-3 text-blue-700">{wechatQrMessage}</div>
+                        ) : null}
+                        <p className="mt-3 text-xs text-slate-500">
+                          If the image is not rendered, copy the QR token from the box and regenerate. The status endpoint returns the Account ID and Bot token after confirmation.
+                        </p>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               {provider === 'whatsapp' ? (
                 <div className="rounded-xl border border-green-200 bg-green-50 p-4">
                   <div className="flex items-start gap-3">

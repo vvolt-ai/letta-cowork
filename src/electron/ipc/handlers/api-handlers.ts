@@ -350,6 +350,27 @@ export function initializeApiIpcHandlers(): void {
     }
   });
 
+  ipcMain.handle("api:get-wechat-ilink-qrcode", async (_, options?: { baseUrl?: string }) => {
+    console.log('[API IPC] get-wechat-ilink-qrcode');
+    try {
+      const result = await api.getWeChatIlinkQrCode(options);
+      return { success: true, ...result };
+    } catch (error) {
+      console.error('[API IPC] get-wechat-ilink-qrcode failed:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle("api:get-wechat-ilink-qrcode-status", async (_, qrcode: string, options?: { baseUrl?: string }) => {
+    try {
+      const result = await api.getWeChatIlinkQrCodeStatus(qrcode, options);
+      return { success: true, ...result };
+    } catch (error) {
+      console.error('[API IPC] get-wechat-ilink-qrcode-status failed:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
   // ============================================
   // Messages
   // ============================================

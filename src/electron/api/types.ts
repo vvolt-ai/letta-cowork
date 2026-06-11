@@ -62,6 +62,21 @@ export interface ChannelCredentials {
   secureConfig?: Record<string, unknown>;
 }
 
+export interface WeChatIlinkQrCodeResponse {
+  qrcode: string;
+  qrcodeImageUrl: string | null;
+  qrcodeImageContent: string | null;
+  baseUrl: string;
+}
+
+export interface WeChatIlinkQrStatusResponse {
+  status: 'wait' | 'scanned' | 'confirmed' | 'expired' | string;
+  accountId: string | null;
+  botToken: string | null;
+  userId: string | null;
+  baseUrl: string;
+}
+
 
 // ============================================
 // Message Types
