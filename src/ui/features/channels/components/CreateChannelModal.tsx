@@ -23,6 +23,23 @@ const STEPS: { id: StepId; label: string; description: string }[] = [
   { id: 'behavior', label: 'Behavior', description: 'Message routing rules' },
 ];
 
+function resolveWeChatQrScanContent(result: {
+  qrcode: string;
+  qrcodeImageUrl?: string | null;
+  qrcodeImageContent?: string | null;
+}): { scanContent: string; imageDataUrl?: string } {
+  const content = result.qrcodeImageContent?.trim() || '';
+  const imageUrl = result.qrcodeImageUrl?.trim() || '';
+
+  if (content.startsWith('data:image/') && !content.includes('base64,http')) {
+    return { scanContent: imageUrl || result.qrcode, imageDataUrl: content };
+  }
+
+  const legacyDataUrlPayload = content.match(/^data:image\/[^,]+,(https?:\/\/.*)$/)?.[1];
+  const scanContent = imageUrl || legacyDataUrlPayload || (content.startsWith('http') ? content : result.qrcode);
+  return { scanContent };
+}
+
 interface CreateChannelModalProps {
   agents: LettaAgent[];
   onClose: () => void;
@@ -161,10 +178,8 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
       if (!result.success || !result.qrcode || !result.baseUrl) {
         throw new Error(result.error || 'Failed to generate WeChat QR code');
       }
-      const scanContent = result.qrcodeImageContent || result.qrcodeImageUrl || result.qrcode;
-      const renderedImageDataUrl = scanContent.startsWith('data:image/')
-        ? scanContent
-        : await QRCode.toDataURL(scanContent, {
+      const { scanContent, imageDataUrl } = resolveWeChatQrScanContent(result);
+      const renderedImageDataUrl = imageDataUrl || await QRCode.toDataURL(scanContent, {
           margin: 1,
           width: 320,
         });
