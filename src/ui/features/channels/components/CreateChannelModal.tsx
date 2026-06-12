@@ -161,10 +161,13 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
       if (!result.success || !result.qrcode || !result.baseUrl) {
         throw new Error(result.error || 'Failed to generate WeChat QR code');
       }
-      const renderedImageDataUrl = await QRCode.toDataURL(result.qrcode, {
-        margin: 1,
-        width: 320,
-      });
+      const scanContent = result.qrcodeImageContent || result.qrcodeImageUrl || result.qrcode;
+      const renderedImageDataUrl = scanContent.startsWith('data:image/')
+        ? scanContent
+        : await QRCode.toDataURL(scanContent, {
+          margin: 1,
+          width: 320,
+        });
       setWechatQr({
         qrcode: result.qrcode,
         qrcodeImageUrl: result.qrcodeImageUrl,
