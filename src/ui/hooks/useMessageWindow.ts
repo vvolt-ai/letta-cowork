@@ -119,6 +119,19 @@ export function useMessageWindow(
 
   const handlePartialMessages = useCallback(
     (partialEvent: ServerEvent) => {
+      if (partialEvent.type === "stream.user_prompt" && partialEvent.payload.sessionId === sessionId) {
+        if (partialResetTimeoutRef.current) {
+          window.clearTimeout(partialResetTimeoutRef.current);
+          partialResetTimeoutRef.current = null;
+        }
+        partialMessageRef.current = "";
+        partialReasoningRef.current = "";
+        setPartialMessage("");
+        setPartialReasoning("");
+        setShowPartialMessage(false);
+        return;
+      }
+
       if (partialEvent.type !== "stream.message" || partialEvent.payload.sessionId !== sessionId) {
         return;
       }
@@ -130,9 +143,7 @@ export function useMessageWindow(
         }
         partialResetTimeoutRef.current = window.setTimeout(() => {
           partialMessageRef.current = "";
-          partialReasoningRef.current = "";
           setPartialMessage("");
-          setPartialReasoning("");
           partialResetTimeoutRef.current = null;
         }, PARTIAL_MESSAGE_RESET_DELAY_MS);
         return;
@@ -173,9 +184,7 @@ export function useMessageWindow(
           partialResetTimeoutRef.current = null;
         }
         partialMessageRef.current = "";
-        partialReasoningRef.current = "";
         setPartialMessage("");
-        setPartialReasoning("");
         setShowPartialMessage(true);
         performAutoScroll("auto");
       }
