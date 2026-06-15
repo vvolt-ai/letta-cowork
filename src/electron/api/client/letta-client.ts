@@ -10,6 +10,7 @@ import { ChannelEndpoints } from "../endpoints/channels.js";
 import { EmailEndpoints } from "../endpoints/emails.js";
 import { SchedulerEndpoints } from "../endpoints/scheduler.js";
 import { McpEndpoints } from "../endpoints/mcp.js";
+import { ConnectorEndpoints } from "../endpoints/connectors.js";
 import type {
   McpServer,
   McpServerWithTools,
@@ -19,6 +20,7 @@ import type {
   UpdateMcpServerInput,
 } from "../endpoints/mcp.js";
 import type { ScheduledTask, ScheduleRun, CreateScheduledTaskDto, CreateScheduleRunDto } from "../endpoints/scheduler.js";
+import type { InstallConnectorPluginInput } from "../endpoints/connectors.js";
 import type { 
   AuthTokens, 
   Channel, 
@@ -223,6 +225,26 @@ export class VeraCoworkApiClient extends BaseHttpClient {
     } catch (error) {
       return false;
     }
+  }
+
+  // ============================================
+  // Connectors - provider/plugin metadata
+  // ============================================
+
+  async listConnectorProviders() {
+    return ConnectorEndpoints.listConnectorProviders(this);
+  }
+
+  async listConnectorMarketplace() {
+    return ConnectorEndpoints.listConnectorMarketplace(this);
+  }
+
+  async listConnectorPlugins() {
+    return ConnectorEndpoints.listConnectorPlugins(this);
+  }
+
+  async installConnectorPlugin(input: InstallConnectorPluginInput) {
+    return ConnectorEndpoints.installConnectorPlugin(this, input);
   }
 
   // ============================================

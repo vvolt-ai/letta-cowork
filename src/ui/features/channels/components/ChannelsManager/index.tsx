@@ -6,6 +6,7 @@ import { ChannelList } from '../ChannelList';
 import { CreateChannelModal } from '../CreateChannelModal';
 import { CredentialsModal } from '../CredentialsModal';
 import { ConfigModal } from '../ConfigModal';
+import { ConnectorMarketplace } from '../ConnectorMarketplace';
 
 export function ChannelsManager({ onAuthError }: ChannelsManagerProps) {
   const {
@@ -88,6 +89,8 @@ export function ChannelsManager({ onAuthError }: ChannelsManagerProps) {
           + Add Channel
         </button>
       </div>
+
+      <ConnectorMarketplace onAddChannel={() => setShowCreateModal(true)} />
 
       {error && (
         <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">

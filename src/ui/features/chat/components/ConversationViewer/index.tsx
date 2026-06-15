@@ -65,7 +65,7 @@ export const ConversationViewer = memo(function ConversationViewer({
         ? session.ephemeral.assistantDraft.content 
         : "")
     : "";
-  const showPartialMessage = agentStatus === "generating" && partialMessage.length > 0;
+  const showPartialMessage = partialMessage.length > 0 && agentStatus !== "completed" && agentStatus !== "idle";
   const reasoningSteps = session?.ephemeral?.reasoning || [];
   const toolExecutions = session?.ephemeral?.tools || [];
   const errorMessage = session?.ephemeral?.errorMessage;

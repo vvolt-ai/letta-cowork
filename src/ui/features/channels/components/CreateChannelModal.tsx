@@ -74,6 +74,8 @@ function getCredentialFields(provider: string): CredentialField[] {
       return [
         { key: 'sessionPath', label: 'Session path (optional)', placeholder: './data/whatsapp-session', type: 'text', required: false },
       ];
+    case 'gmail':
+      return [];
     default:
       return [];
   }
@@ -91,6 +93,8 @@ function getCredentialsHelp(provider: string): string {
       return 'Create a Slack app, enable Socket Mode, then paste both the bot token and app token.';
     case 'wechat':
       return 'Generate a WeChat iLink QR code, scan it in WeChat, then Vera will fill the Account ID and Bot token automatically. You can also paste existing iLink credentials manually.';
+    case 'gmail':
+      return 'Gmail connector records can be created for testing now. OAuth/runtime connection will be added next; do not start this connector yet.';
     default:
       return 'Paste the provider credentials required to connect this channel.';
   }
@@ -161,6 +165,18 @@ export function CreateChannelModal({ agents, channels, organizationChannels, onC
 
   const updateConfig = (nextConfig: Record<string, unknown>) => {
     setConfigData(nextConfig as ConfigDataState);
+  };
+
+  const handleProviderChange = (nextProvider: string) => {
+    setProvider(nextProvider);
+    setError(null);
+    if (nextProvider === 'gmail') {
+      setConfigData({ autoStart: false, syncMode: 'unread_only', pollIntervalSeconds: 60 });
+      setStartAfterCreate(false);
+    } else if (provider === 'gmail') {
+      setConfigData({ typingIndicator: true });
+      setStartAfterCreate(true);
+    }
   };
 
   const getUserLabel = (user: OrganizationUser) => {
@@ -436,14 +452,12 @@ export function CreateChannelModal({ agents, channels, organizationChannels, onC
                   value={provider}
                   onChange={(event) => {
                     const nextProvider = event.target.value;
-                    setProvider(nextProvider);
                     setCredentials({});
                     setWechatQr(null);
                     setWechatQrStatus(null);
                     setWechatQrMessage(null);
-                    setStartAfterCreate(nextProvider === 'whatsapp');
                     setWhatsappSetupMode('account');
-                    setConfigData({ typingIndicator: true });
+                    handleProviderChange(nextProvider);
                   }}
                   className="w-full rounded-lg border border-slate-200 px-3 py-2"
                 >

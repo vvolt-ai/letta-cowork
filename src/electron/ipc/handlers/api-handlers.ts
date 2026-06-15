@@ -41,7 +41,7 @@ export interface UpdateProfileData {
 }
 
 export interface CreateChannelData {
-  provider: "whatsapp" | "telegram" | "discord" | "slack" | "email" | "custom";
+  provider: "whatsapp" | "telegram" | "discord" | "slack" | "wechat" | "email" | "gmail" | "custom";
   name: string;
   externalId?: string;
   config?: Record<string, unknown>;
@@ -196,6 +196,54 @@ export function initializeApiIpcHandlers(): void {
       return { success: true };
     } finally {
       teardownScheduler();
+    }
+  });
+
+  // ============================================
+  // Connectors
+  // ============================================
+
+  ipcMain.handle("api:list-connector-providers", async () => {
+    console.log('[API IPC] list-connector-providers');
+    try {
+      const result = await api.listConnectorProviders();
+      return { success: true, ...result };
+    } catch (error) {
+      console.error('[API IPC] list-connector-providers failed:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle("api:list-connector-marketplace", async () => {
+    console.log('[API IPC] list-connector-marketplace');
+    try {
+      const result = await api.listConnectorMarketplace();
+      return { success: true, ...result };
+    } catch (error) {
+      console.error('[API IPC] list-connector-marketplace failed:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle("api:list-connector-plugins", async () => {
+    console.log('[API IPC] list-connector-plugins');
+    try {
+      const result = await api.listConnectorPlugins();
+      return { success: true, ...result };
+    } catch (error) {
+      console.error('[API IPC] list-connector-plugins failed:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle("api:install-connector-plugin", async (_, data: { pluginId: string; version?: string; source?: Record<string, unknown> }) => {
+    console.log('[API IPC] install-connector-plugin:', data.pluginId);
+    try {
+      const result = await api.installConnectorPlugin(data as any);
+      return { success: true, result };
+    } catch (error) {
+      console.error('[API IPC] install-connector-plugin failed:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   });
 

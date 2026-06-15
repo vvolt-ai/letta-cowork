@@ -41,7 +41,7 @@ export interface Channel {
   id: string;
   organizationId: string;
   createdByUserId: string;
-  provider: 'whatsapp' | 'telegram' | 'discord' | 'slack' | 'wechat' | 'email' | 'custom';
+  provider: 'whatsapp' | 'telegram' | 'discord' | 'slack' | 'wechat' | 'email' | 'gmail' | 'custom';
   name: string;
   externalId: string | null;
   config: Record<string, unknown> | null;

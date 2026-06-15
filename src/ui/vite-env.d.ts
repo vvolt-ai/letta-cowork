@@ -184,6 +184,33 @@ interface Window {
     }>;
     apiLogout: () => Promise<void>;
 
+    // Connectors
+    apiListConnectorProviders: () => Promise<{
+      success: boolean;
+      providers?: any[];
+      error?: string;
+    }>;
+    apiListConnectorMarketplace: () => Promise<{
+      success: boolean;
+      plugins?: any[];
+      error?: string;
+    }>;
+    apiListConnectorPlugins: () => Promise<{
+      success: boolean;
+      providers?: any[];
+      plugins?: any[];
+      error?: string;
+    }>;
+    apiInstallConnectorPlugin: (data: {
+      pluginId: string;
+      version?: string;
+      source?: any;
+    }) => Promise<{
+      success: boolean;
+      result?: any;
+      error?: string;
+    }>;
+
     // Channels
     apiListChannels: () => Promise<{
       success: boolean;

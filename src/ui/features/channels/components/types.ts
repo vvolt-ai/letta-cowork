@@ -52,7 +52,16 @@ export interface WeChatConfig {
   baseUrl?: string;
 }
 
-export type ChannelConfig = WhatsAppConfig | TelegramConfig | DiscordConfig | SlackConfig | WeChatConfig;
+export interface GmailConfig {
+  autoStart?: boolean;
+  allowedUsers?: string[];
+  defaultAgentId?: string;
+  syncMode?: 'unread_only' | 'all_since_date' | 'label';
+  pollIntervalSeconds?: number;
+  labelIds?: string[];
+}
+
+export type ChannelConfig = WhatsAppConfig | TelegramConfig | DiscordConfig | SlackConfig | WeChatConfig | GmailConfig;
 
 // Extended config type for state management
 export type ConfigDataState = {
@@ -65,6 +74,9 @@ export type ConfigDataState = {
   selfChatMode?: boolean;
   sessionPath?: string;
   baseUrl?: string;
+  syncMode?: 'unread_only' | 'all_since_date' | 'label';
+  pollIntervalSeconds?: number;
+  labelIds?: string[];
   dmPolicy?: 'pairing' | 'allowlist' | 'open';
   whatsappMode?: 'account' | 'agent_route';
   parentChannelId?: string;
@@ -78,7 +90,7 @@ export type ConfigDataState = {
 
 export interface Channel {
   id: string;
-  provider: 'whatsapp' | 'telegram' | 'discord' | 'slack' | 'wechat' | 'email';
+  provider: 'whatsapp' | 'telegram' | 'discord' | 'slack' | 'wechat' | 'email' | 'gmail';
   name: string;
   hasCredentials: boolean;
   isActive: boolean;
@@ -121,6 +133,7 @@ export const PROVIDERS: readonly { id: string; name: string; icon: string }[] = 
   { id: 'telegram', name: 'Telegram', icon: '📱' },
   { id: 'whatsapp', name: 'WhatsApp', icon: '💬' },
   { id: 'wechat', name: 'WeChat', icon: '💚' },
+  { id: 'gmail', name: 'Gmail', icon: '📧' },
   { id: 'discord', name: 'Discord', icon: '🎮' },
   { id: 'slack', name: 'Slack', icon: '💼' },
 ];

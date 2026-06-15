@@ -10,6 +10,12 @@ type StreamEventMessage = {
   event: { type: string; delta?: { text?: string; reasoning?: string } };
 };
 
+type AssistantDeltaMessage = {
+  type: "assistant";
+  content?: string;
+  uuid?: string;
+};
+
 const getMessageTimestamp = (message: StreamMessage): number => {
   const candidate = (message as { createdAt?: number }).createdAt;
   return typeof candidate === "number" && Number.isFinite(candidate) ? candidate : 0;
@@ -113,11 +119,48 @@ export function useMessageWindow(
 
   const handlePartialMessages = useCallback(
     (partialEvent: ServerEvent) => {
-      if (
-        partialEvent.type !== "stream.message" ||
-        partialEvent.payload.sessionId !== sessionId ||
-        partialEvent.payload.message.type !== "stream_event"
-      ) {
+      if (partialEvent.type !== "stream.message" || partialEvent.payload.sessionId !== sessionId) {
+        return;
+      }
+
+      if (partialEvent.payload.message.type === "result") {
+        setShowPartialMessage(false);
+        if (partialResetTimeoutRef.current) {
+          window.clearTimeout(partialResetTimeoutRef.current);
+        }
+        partialResetTimeoutRef.current = window.setTimeout(() => {
+          partialMessageRef.current = "";
+          partialReasoningRef.current = "";
+          setPartialMessage("");
+          setPartialReasoning("");
+          partialResetTimeoutRef.current = null;
+        }, PARTIAL_MESSAGE_RESET_DELAY_MS);
+        return;
+      }
+
+      if (partialEvent.payload.message.type === "assistant") {
+        const message = partialEvent.payload.message as AssistantDeltaMessage;
+        const deltaText = typeof message.content === "string" ? message.content : "";
+        if (!deltaText) return;
+
+        if (partialResetTimeoutRef.current) {
+          window.clearTimeout(partialResetTimeoutRef.current);
+          partialResetTimeoutRef.current = null;
+        }
+
+        partialMessageRef.current += deltaText;
+        setPartialMessage(partialMessageRef.current);
+        setShowPartialMessage(true);
+
+        if (shouldAutoScroll) {
+          performAutoScroll("auto");
+        } else if (onNewMessage) {
+          onNewMessage();
+        }
+        return;
+      }
+
+      if (partialEvent.payload.message.type !== "stream_event") {
         return;
       }
 

@@ -247,6 +247,16 @@ electron.contextBridge.exposeInMainWorld("electron", {
         electron.ipcRenderer.invoke("api:list-workspaces"),
     apiLogout: () =>
         electron.ipcRenderer.invoke("api:logout"),
+
+    // Connectors
+    apiListConnectorProviders: () =>
+        electron.ipcRenderer.invoke("api:list-connector-providers"),
+    apiListConnectorMarketplace: () =>
+        electron.ipcRenderer.invoke("api:list-connector-marketplace"),
+    apiListConnectorPlugins: () =>
+        electron.ipcRenderer.invoke("api:list-connector-plugins"),
+    apiInstallConnectorPlugin: (data: { pluginId: string; version?: string; source?: any }) =>
+        electron.ipcRenderer.invoke("api:install-connector-plugin", data),
     
     // Channels
     apiListChannels: () =>

@@ -51,6 +51,7 @@ export { ChannelEndpoints } from "./endpoints/channels.js";
 export { EmailEndpoints } from "./endpoints/emails.js";
 export { ProcessedEmailEndpoints } from "./endpoints/processed-emails.js";
 export { McpEndpoints } from "./endpoints/mcp.js";
+export { ConnectorEndpoints } from "./endpoints/connectors.js";
 export type {
   McpServer,
   McpServerWithTools,
@@ -60,3 +61,9 @@ export type {
   UpdateMcpServerInput,
   McpTransport,
 } from "./endpoints/mcp.js";
+export type {
+  ConnectorCapabilities,
+  ConnectorProviderSummary,
+  ConnectorMarketplacePlugin,
+  InstallConnectorPluginInput,
+} from "./endpoints/connectors.js";
