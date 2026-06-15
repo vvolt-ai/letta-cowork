@@ -114,6 +114,7 @@ export function ChannelsManager({ onAuthError }: ChannelsManagerProps) {
       {showCreateModal && (
         <CreateChannelModal
           agents={agents}
+          channels={channels}
           onClose={() => setShowCreateModal(false)}
           onComplete={async () => {
             setShowCreateModal(false);

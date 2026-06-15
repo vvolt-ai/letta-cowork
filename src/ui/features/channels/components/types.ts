@@ -1,5 +1,13 @@
 // Channel config types matching server
 export interface WhatsAppConfig {
+  whatsappMode?: 'account' | 'agent_route';
+  parentChannelId?: string;
+  routeType?: 'dm_sender' | 'group_sender' | 'mention' | 'fallback';
+  senderJid?: string;
+  groupJid?: string;
+  mentionAliases?: string[];
+  replyAllowed?: boolean;
+  routeUserId?: string;
   selfChatMode?: boolean;
   autoStart?: boolean;
   respondToGroups?: boolean;
@@ -58,6 +66,14 @@ export type ConfigDataState = {
   sessionPath?: string;
   baseUrl?: string;
   dmPolicy?: 'pairing' | 'allowlist' | 'open';
+  whatsappMode?: 'account' | 'agent_route';
+  parentChannelId?: string;
+  routeType?: 'dm_sender' | 'group_sender' | 'mention' | 'fallback';
+  senderJid?: string;
+  groupJid?: string;
+  mentionAliases?: string[];
+  replyAllowed?: boolean;
+  routeUserId?: string;
 };
 
 export interface Channel {

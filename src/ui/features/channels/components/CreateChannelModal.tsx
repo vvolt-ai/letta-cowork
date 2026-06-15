@@ -42,6 +42,7 @@ function resolveWeChatQrScanContent(result: {
 
 interface CreateChannelModalProps {
   agents: LettaAgent[];
+  channels: Channel[];
   onClose: () => void;
   onComplete: (channel: Channel) => void | Promise<void>;
 }
@@ -112,12 +113,19 @@ function WeChatCredentialsGuide() {
   );
 }
 
-export function CreateChannelModal({ agents, onClose, onComplete }: CreateChannelModalProps) {
+function isWhatsAppAccountChannel(channel: Channel): boolean {
+  if (channel.provider !== 'whatsapp') return false;
+  const config = channel.config as WhatsAppConfig | undefined;
+  return !config?.whatsappMode || config.whatsappMode === 'account';
+}
+
+export function CreateChannelModal({ agents, channels, onClose, onComplete }: CreateChannelModalProps) {
   const [step, setStep] = useState<StepId>('details');
   const [provider, setProvider] = useState('telegram');
   const [name, setName] = useState('');
   const [credentials, setCredentials] = useState<Record<string, string>>({});
   const [startAfterCreate, setStartAfterCreate] = useState(true);
+  const [whatsappSetupMode, setWhatsappSetupMode] = useState<'account' | 'agent_route'>('account');
   const [configData, setConfigData] = useState<ConfigDataState>({ typingIndicator: true });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -133,9 +141,11 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
   const [wechatQrMessage, setWechatQrMessage] = useState<string | null>(null);
 
   const currentStepIndex = STEPS.findIndex((candidate) => candidate.id === step);
-  const credentialFields = useMemo(() => getCredentialFields(provider), [provider]);
+  const whatsappAccountChannels = useMemo(() => channels.filter(isWhatsAppAccountChannel), [channels]);
+  const isWhatsAppRoute = provider === 'whatsapp' && whatsappSetupMode === 'agent_route';
+  const credentialFields = useMemo(() => isWhatsAppRoute ? [] : getCredentialFields(provider), [isWhatsAppRoute, provider]);
   const missingCredentials = credentialFields.filter((field) => field.required && !credentials[field.key]?.trim());
-  const canContinueDetails = name.trim().length > 0;
+  const canContinueDetails = name.trim().length > 0 && (!isWhatsAppRoute || Boolean(configData.parentChannelId));
   const canContinueCredentials = missingCredentials.length === 0;
 
   const updateConfig = (nextConfig: Record<string, unknown>) => {
@@ -261,8 +271,17 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
       const baseConfig = provider === 'wechat' && credentials.baseUrl?.trim()
         ? { ...configData, baseUrl: credentials.baseUrl.trim() }
         : configData;
+      const channelConfig = provider === 'whatsapp'
+        ? {
+            ...baseConfig,
+            whatsappMode: whatsappSetupMode,
+            ...(whatsappSetupMode === 'agent_route'
+              ? { autoStart: false, typingIndicator: false }
+              : {}),
+          }
+        : baseConfig;
       const cleanedConfig = Object.fromEntries(
-        Object.entries(baseConfig).filter(([, value]) => value !== '' && value !== undefined)
+        Object.entries(channelConfig).filter(([, value]) => value !== '' && value !== undefined)
       );
 
       const createResult = await api.apiCreateChannel({
@@ -292,7 +311,7 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
         throw new Error(configResult.error || 'Channel created, but configuration failed to save');
       }
 
-      if (provider === 'whatsapp' && startAfterCreate) {
+      if (provider === 'whatsapp' && whatsappSetupMode === 'account' && startAfterCreate) {
         const startResult = await api.apiStartChannel(channel.id);
         if (!startResult.success) {
           throw new Error(startResult.error || 'Channel created, but QR generation failed. Start the channel from the list to retry.');
@@ -369,6 +388,7 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
                     setWechatQrStatus(null);
                     setWechatQrMessage(null);
                     setStartAfterCreate(nextProvider === 'whatsapp');
+                    setWhatsappSetupMode('account');
                     setConfigData({ typingIndicator: true });
                   }}
                   className="w-full rounded-lg border border-slate-200 px-3 py-2"
@@ -378,6 +398,67 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
                   ))}
                 </select>
               </div>
+
+              {provider === 'whatsapp' ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-sm font-medium text-slate-800">WhatsApp number</div>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <label className={`cursor-pointer rounded-lg border p-3 text-sm ${whatsappSetupMode === 'account' ? 'border-blue-400 bg-blue-50 text-blue-800' : 'border-slate-200 bg-white text-slate-700'}`}>
+                      <input
+                        type="radio"
+                        name="whatsappSetupMode"
+                        value="account"
+                        checked={whatsappSetupMode === 'account'}
+                        onChange={() => {
+                          setWhatsappSetupMode('account');
+                          setConfigData({ ...configData, whatsappMode: 'account', parentChannelId: undefined, routeType: undefined, senderJid: undefined, groupJid: undefined, mentionAliases: undefined, replyAllowed: true });
+                          setStartAfterCreate(true);
+                        }}
+                        className="mr-2"
+                      />
+                      Add new WhatsApp number
+                      <div className="mt-1 text-xs opacity-75">Creates a real account/bridge row with QR login.</div>
+                    </label>
+                    <label className={`cursor-pointer rounded-lg border p-3 text-sm ${whatsappSetupMode === 'agent_route' ? 'border-blue-400 bg-blue-50 text-blue-800' : 'border-slate-200 bg-white text-slate-700'}`}>
+                      <input
+                        type="radio"
+                        name="whatsappSetupMode"
+                        value="agent_route"
+                        checked={whatsappSetupMode === 'agent_route'}
+                        onChange={() => {
+                          setWhatsappSetupMode('agent_route');
+                          setConfigData({ ...configData, whatsappMode: 'agent_route', autoStart: false, typingIndicator: false, replyAllowed: true, routeType: 'dm_sender' });
+                          setStartAfterCreate(false);
+                        }}
+                        className="mr-2"
+                      />
+                      Use existing WhatsApp number
+                      <div className="mt-1 text-xs opacity-75">Creates an agent route using an existing account.</div>
+                    </label>
+                  </div>
+
+                  {whatsappSetupMode === 'agent_route' ? (
+                    <div className="mt-4 space-y-3">
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-slate-700">Existing WhatsApp account</label>
+                        <select
+                          value={configData.parentChannelId || ''}
+                          onChange={(event) => setConfigData({ ...configData, parentChannelId: event.target.value || undefined })}
+                          className="w-full rounded-lg border border-slate-200 px-3 py-2"
+                        >
+                          <option value="">Select WhatsApp account...</option>
+                          {whatsappAccountChannels.map((channel) => (
+                            <option key={channel.id} value={channel.id}>{channel.name}</option>
+                          ))}
+                        </select>
+                        {whatsappAccountChannels.length === 0 ? (
+                          <p className="mt-1 text-xs text-amber-600">No existing WhatsApp account channels found. Add a new WhatsApp number first.</p>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
 
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Channel name</label>
@@ -472,6 +553,12 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
               ) : null}
               {provider === 'whatsapp' ? (
                 <div className="rounded-xl border border-green-200 bg-green-50 p-4">
+                  {isWhatsAppRoute ? (
+                    <div className="text-sm text-green-900">
+                      <span className="block font-medium">No QR scan needed</span>
+                      <span className="mt-1 block text-green-700">This channel reuses the selected WhatsApp account. Only the account channel owns the bridge/session.</span>
+                    </div>
+                  ) : (
                   <div className="flex items-start gap-3">
                     <input
                       id="startAfterCreate"
@@ -487,6 +574,7 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
                       </span>
                     </label>
                   </div>
+                  )}
                 </div>
               ) : null}
               {credentialFields.map((field) => (
@@ -512,7 +600,78 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
                 These settings control when the channel starts, who can talk to it, and how it behaves in groups.
               </div>
 
-              <label className="flex items-center gap-2 text-sm text-slate-700">
+              {isWhatsAppRoute ? (
+                <div className="space-y-3 rounded-xl border border-blue-100 bg-blue-50 p-4">
+                  <div className="font-medium text-blue-900">WhatsApp route rule</div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">Route type</label>
+                    <select
+                      value={configData.routeType || 'dm_sender'}
+                      onChange={(event) => setConfigData({ ...configData, routeType: event.target.value as ConfigDataState['routeType'] })}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2"
+                    >
+                      <option value="dm_sender">Direct message from sender</option>
+                      <option value="group_sender">Group message from sender</option>
+                      <option value="mention">Mention alias</option>
+                      <option value="fallback">Fallback for this WhatsApp account</option>
+                    </select>
+                  </div>
+
+                  {configData.routeType !== 'mention' && configData.routeType !== 'fallback' ? (
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">Sender WhatsApp JID or phone</label>
+                      <input
+                        type="text"
+                        value={configData.senderJid || ''}
+                        onChange={(event) => setConfigData({ ...configData, senderJid: event.target.value || undefined })}
+                        placeholder="919999999999@s.whatsapp.net or 919999999999"
+                        className="w-full rounded-lg border border-slate-200 px-3 py-2"
+                      />
+                    </div>
+                  ) : null}
+
+                  {(configData.routeType === 'group_sender' || configData.routeType === 'fallback') ? (
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">Group JID (optional)</label>
+                      <input
+                        type="text"
+                        value={configData.groupJid || ''}
+                        onChange={(event) => setConfigData({ ...configData, groupJid: event.target.value || undefined })}
+                        placeholder="120363...@g.us"
+                        className="w-full rounded-lg border border-slate-200 px-3 py-2"
+                      />
+                    </div>
+                  ) : null}
+
+                  {configData.routeType === 'mention' ? (
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">Mention aliases</label>
+                      <input
+                        type="text"
+                        value={(configData.mentionAliases || []).join(', ')}
+                        onChange={(event) => setConfigData({
+                          ...configData,
+                          mentionAliases: event.target.value.split(',').map((value) => value.trim().replace(/^@+/, '')).filter(Boolean),
+                        })}
+                        placeholder="shelly, bhavy"
+                        className="w-full rounded-lg border border-slate-200 px-3 py-2"
+                      />
+                    </div>
+                  ) : null}
+
+                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={configData.replyAllowed !== false}
+                      onChange={(event) => setConfigData({ ...configData, replyAllowed: event.target.checked })}
+                      className="rounded border-slate-300"
+                    />
+                    Allow this route's agent to reply
+                  </label>
+                </div>
+              ) : null}
+
+              {!isWhatsAppRoute ? <label className="flex items-center gap-2 text-sm text-slate-700">
                 <input
                   type="checkbox"
                   checked={Boolean(configData.autoStart)}
@@ -520,9 +679,9 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
                   className="rounded border-slate-300"
                 />
                 Auto-start when server starts
-              </label>
+              </label> : null}
 
-              <label className="flex items-center gap-2 text-sm text-slate-700">
+              {!isWhatsAppRoute ? <label className="flex items-center gap-2 text-sm text-slate-700">
                 <input
                   type="checkbox"
                   checked={configData.typingIndicator !== false}
@@ -530,9 +689,9 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
                   className="rounded border-slate-300"
                 />
                 Show typing indicator while processing
-              </label>
+              </label> : null}
 
-              <div>
+              {!isWhatsAppRoute ? <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Allowed users</label>
                 <input
                   type="text"
@@ -547,9 +706,9 @@ export function CreateChannelModal({ agents, onClose, onComplete }: CreateChanne
                 <p className="mt-1 text-xs text-slate-500">
                   {provider === 'whatsapp' ? 'Phone numbers with country code, without + sign.' : 'Leave empty to allow all users.'}
                 </p>
-              </div>
+              </div> : null}
 
-              {provider === 'whatsapp' ? (
+              {provider === 'whatsapp' && !isWhatsAppRoute ? (
                 <WhatsAppConfigFields configData={configData as WhatsAppConfig} setConfigData={updateConfig} />
               ) : null}
               {provider === 'telegram' ? (
