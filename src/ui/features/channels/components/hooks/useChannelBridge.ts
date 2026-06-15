@@ -5,6 +5,7 @@ const getApi = () => (window as any).electron;
 
 export function useChannelBridge(onAuthError?: ChannelsManagerProps['onAuthError']) {
   const [channels, setChannels] = useState<Channel[]>([]);
+  const [organizationChannels, setOrganizationChannels] = useState<Channel[]>([]);
   const [statuses, setStatuses] = useState<Record<string, ChannelStatus>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -14,10 +15,18 @@ export function useChannelBridge(onAuthError?: ChannelsManagerProps['onAuthError
     try {
       const api = getApi();
       console.log('[useChannelBridge] Loading channels...');
-      const result = await api.apiListChannels();
+      const [result, organizationResult] = await Promise.all([
+        api.apiListChannels(),
+        typeof api.apiListOrganizationChannels === 'function'
+          ? api.apiListOrganizationChannels()
+          : api.apiListChannels(),
+      ]);
       console.log('[useChannelBridge] Load result:', result);
+      console.log('[useChannelBridge] Organization load result:', organizationResult);
       if (result.success) {
-        setChannels(result.channels || []);
+        const userChannels = result.channels || [];
+        setChannels(userChannels);
+        setOrganizationChannels(organizationResult.success ? (organizationResult.channels || []) : userChannels);
       } else {
         // Check for auth errors
         if (result.error?.includes('401') || result.error?.includes('Unauthorized') || result.error?.includes('Authentication expired')) {
@@ -82,6 +91,7 @@ export function useChannelBridge(onAuthError?: ChannelsManagerProps['onAuthError
 
   return {
     channels,
+    organizationChannels,
     statuses,
     loading,
     error,

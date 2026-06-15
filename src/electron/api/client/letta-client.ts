@@ -241,6 +241,10 @@ export class VeraCoworkApiClient extends BaseHttpClient {
     return ChannelEndpoints.listChannels(this);
   }
 
+  async listOrganizationChannels(): Promise<Channel[]> {
+    return ChannelEndpoints.listOrganizationChannels(this);
+  }
+
   async createChannel(data: {
     provider: Channel["provider"];
     name: string;

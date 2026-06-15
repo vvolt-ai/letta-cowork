@@ -43,6 +43,7 @@ function resolveWeChatQrScanContent(result: {
 interface CreateChannelModalProps {
   agents: LettaAgent[];
   channels: Channel[];
+  organizationChannels?: Channel[];
   onClose: () => void;
   onComplete: (channel: Channel) => void | Promise<void>;
 }
@@ -119,7 +120,7 @@ function isWhatsAppAccountChannel(channel: Channel): boolean {
   return !config?.whatsappMode || config.whatsappMode === 'account';
 }
 
-export function CreateChannelModal({ agents, channels, onClose, onComplete }: CreateChannelModalProps) {
+export function CreateChannelModal({ agents, channels, organizationChannels, onClose, onComplete }: CreateChannelModalProps) {
   const [step, setStep] = useState<StepId>('details');
   const [provider, setProvider] = useState('telegram');
   const [name, setName] = useState('');
@@ -141,7 +142,10 @@ export function CreateChannelModal({ agents, channels, onClose, onComplete }: Cr
   const [wechatQrMessage, setWechatQrMessage] = useState<string | null>(null);
 
   const currentStepIndex = STEPS.findIndex((candidate) => candidate.id === step);
-  const whatsappAccountChannels = useMemo(() => channels.filter(isWhatsAppAccountChannel), [channels]);
+  const whatsappAccountChannels = useMemo(
+    () => (organizationChannels ?? channels).filter(isWhatsAppAccountChannel),
+    [channels, organizationChannels]
+  );
   const isWhatsAppRoute = provider === 'whatsapp' && whatsappSetupMode === 'agent_route';
   const credentialFields = useMemo(() => isWhatsAppRoute ? [] : getCredentialFields(provider), [isWhatsAppRoute, provider]);
   const missingCredentials = credentialFields.filter((field) => field.required && !credentials[field.key]?.trim());

@@ -190,6 +190,11 @@ interface Window {
       channels?: any[];
       error?: string;
     }>;
+    apiListOrganizationChannels: () => Promise<{
+      success: boolean;
+      channels?: any[];
+      error?: string;
+    }>;
     apiCreateChannel: (data: {
       provider: string;
       name: string;

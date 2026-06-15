@@ -42,6 +42,10 @@ export class ChannelEndpoints {
     return client.request<Channel[]>("/channels");
   }
 
+  static async listOrganizationChannels(client: BaseHttpClient): Promise<Channel[]> {
+    return client.request<Channel[]>("/channels/organization");
+  }
+
   static async createChannel(
     client: BaseHttpClient,
     data: {

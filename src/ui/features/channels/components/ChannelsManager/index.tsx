@@ -10,6 +10,7 @@ import { ConfigModal } from '../ConfigModal';
 export function ChannelsManager({ onAuthError }: ChannelsManagerProps) {
   const {
     channels,
+    organizationChannels,
     statuses,
     loading,
     error,
@@ -115,6 +116,7 @@ export function ChannelsManager({ onAuthError }: ChannelsManagerProps) {
         <CreateChannelModal
           agents={agents}
           channels={channels}
+          organizationChannels={organizationChannels}
           onClose={() => setShowCreateModal(false)}
           onComplete={async () => {
             setShowCreateModal(false);
