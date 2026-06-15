@@ -30,7 +30,14 @@ async function proxyOdooRequest(
     res.json(data);
   } catch (error) {
     console.error(`Failed to proxy Odoo request to ${path}:`, error);
-    res.status(500).send(error instanceof Error ? error.message : 'Failed to execute Odoo request');
+    const message = error instanceof Error ? error.message : 'Failed to execute Odoo request';
+    res.status(500).json({
+      ok: false,
+      error: 'ODOO_PROXY_ERROR',
+      message,
+      path,
+      method,
+    });
   }
 }
 
@@ -49,7 +56,7 @@ export const odooListModelsHandler: ExpressHandler = async (_req, res) => {
 export const odooSearchHandler: ExpressHandler = async (req: Request, res: Response) => {
   const body = req.body as OdooSearchBody;
   if (!body?.model) {
-    res.status(400).send('Missing required field: model');
+    res.status(400).json({ ok: false, error: 'VALIDATION_ERROR', message: 'Missing required field: model' });
     return;
   }
   await proxyOdooRequest('/odoo/models/search', 'POST', body, res);
@@ -62,7 +69,7 @@ export const odooSearchHandler: ExpressHandler = async (req: Request, res: Respo
 export const odooCountHandler: ExpressHandler = async (req: Request, res: Response) => {
   const body = req.body as OdooCountBody;
   if (!body?.model) {
-    res.status(400).send('Missing required field: model');
+    res.status(400).json({ ok: false, error: 'VALIDATION_ERROR', message: 'Missing required field: model' });
     return;
   }
   await proxyOdooRequest('/odoo/models/count', 'POST', body, res);
@@ -75,7 +82,7 @@ export const odooCountHandler: ExpressHandler = async (req: Request, res: Respon
 export const odooReadHandler: ExpressHandler = async (req: Request, res: Response) => {
   const body = req.body as OdooReadBody;
   if (!body?.model || !Array.isArray(body?.ids)) {
-    res.status(400).send('Missing required fields: model, ids');
+    res.status(400).json({ ok: false, error: 'VALIDATION_ERROR', message: 'Missing required fields: model, ids' });
     return;
   }
   await proxyOdooRequest('/odoo/models/read', 'POST', body, res);
@@ -88,7 +95,7 @@ export const odooReadHandler: ExpressHandler = async (req: Request, res: Respons
 export const odooFieldsHandler: ExpressHandler = async (req: Request, res: Response) => {
   const body = req.body as OdooFieldsBody;
   if (!body?.model) {
-    res.status(400).send('Missing required field: model');
+    res.status(400).json({ ok: false, error: 'VALIDATION_ERROR', message: 'Missing required field: model' });
     return;
   }
   await proxyOdooRequest('/odoo/models/fields', 'POST', body, res);
@@ -101,7 +108,7 @@ export const odooFieldsHandler: ExpressHandler = async (req: Request, res: Respo
 export const odooRunToolHandler: ExpressHandler = async (req: Request, res: Response) => {
   const body = req.body as OdooRunToolBody;
   if (!body?.toolName) {
-    res.status(400).send('Missing required field: toolName');
+    res.status(400).json({ ok: false, error: 'VALIDATION_ERROR', message: 'Missing required field: toolName' });
     return;
   }
   await proxyOdooRequest('/odoo/run-read-tool', 'POST', { toolName: body.toolName, args: body.args ?? {} }, res);

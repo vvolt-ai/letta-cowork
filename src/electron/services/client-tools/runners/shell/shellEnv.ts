@@ -53,5 +53,16 @@ export function getShellEnv(): NodeJS.ProcessEnv {
     env.MANPAGER = "cat";
     if (!env.TERM) env.TERM = "xterm-256color";
 
+    // Force UTF-8 for Python and locale-sensitive CLIs on Windows. Without
+    // this, Python tools that print symbols/non-ASCII text can fail with
+    // `UnicodeEncodeError: 'charmap' codec can't encode ...`, which then
+    // breaks JSON-producing tool workflows.
+    env.PYTHONIOENCODING = env.PYTHONIOENCODING || "utf-8";
+    env.PYTHONUTF8 = env.PYTHONUTF8 || "1";
+    if (process.platform === "win32") {
+        env.LC_ALL = env.LC_ALL || "C.UTF-8";
+        env.LANG = env.LANG || "C.UTF-8";
+    }
+
     return env;
 }

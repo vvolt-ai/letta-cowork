@@ -109,6 +109,7 @@ export {
     cloneMemoryRepo,
     pullMemory,
     ensureCheckout,
+    ensureCheckoutForSession,
     commitAndPush,
     getMemoryGitStatus,
     listFiles as listMemoryFiles,

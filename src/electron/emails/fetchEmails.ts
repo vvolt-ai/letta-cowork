@@ -18,6 +18,26 @@ import type {
 } from "./types.js";
 
 
+async function resolveZohoAccountId(accountId?: string): Promise<string> {
+  const fromArg = accountId?.trim();
+  if (fromArg) return fromArg;
+
+  const stored = await getAccountId();
+  if (stored?.trim()) return stored.trim();
+
+  const accounts = await zohoApiRequest(`/accounts`) as AccountsResponse;
+  const list = Array.isArray(accounts?.data) ? accounts.data : [];
+  if (list.length === 1 && list[0]?.accountId) {
+    await saveAccountId(list[0].accountId);
+    return list[0].accountId;
+  }
+
+  throw new Error(
+    "ZOHO_ACCOUNT_ID_MISSING: Email is connected but no Zoho accountId is stored. Open email accounts/folders or reconnect Zoho Mail.",
+  );
+}
+
+
 export const fetchFolders = async () => {
   const data = await serverApiRequest("/folders");
   console.log("Fetched folders:", data);
@@ -38,10 +58,7 @@ export const fetchEmails = async (
   params?: EmailListParams
 ) => {
   // use provided accountId or fetch from electron-store
-  const resolvedAccountId = accountId || (await getAccountId());
-  if (!resolvedAccountId) {
-    throw new Error("No account ID provided and none found in electron-store");
-  }
+  const resolvedAccountId = await resolveZohoAccountId(accountId);
 
   // use provided params or empty object (typed so TS knows possible properties)
   const resolvedParams: Partial<EmailListParams> = params || {};
@@ -162,10 +179,7 @@ export interface EmailComposePayload {
 
 export const fetchEmailDetails = async (messageId: string, accountId?: string, folderId?: string) => {
   // resolve accountId from parameter or electron-store
-  const resolvedAccountId = accountId || (await getAccountId());
-  if (!resolvedAccountId) {
-    throw new Error("No account ID provided and none found in electron-store");
-  }
+  const resolvedAccountId = await resolveZohoAccountId(accountId);
 
   // resolve folderId from parameter or electron-store (inbox)
   const resolvedFolderId = folderId || (await getInboxFolderId());
@@ -184,10 +198,7 @@ export const fetchEmailDetails = async (messageId: string, accountId?: string, f
 
 export const fetchEmailById = async (messageId: string, accountId?: string, folderId?: string): Promise<EmailWithAttachments> => {
   // resolve accountId from parameter or electron-store
-  const resolvedAccountId = accountId || (await getAccountId());
-  if (!resolvedAccountId) {
-    throw new Error("No account ID provided and none found in electron-store");
-  }
+  const resolvedAccountId = await resolveZohoAccountId(accountId);
 
   // resolve folderId from parameter or electron-store (inbox)
   const resolvedFolderId = folderId || (await getInboxFolderId());
@@ -287,10 +298,7 @@ export const disconnectEmail = async () => {
 
 export const downloadEmailAttachment = async (folderId?: string, messageId?: string, accountId?: string, agentId?: string) => {
   // resolve accountId
-  const resolvedAccountId = accountId || (await getAccountId());
-  if (!resolvedAccountId) {
-    throw new Error("No account ID provided and none found in electron-store");
-  }
+  const resolvedAccountId = await resolveZohoAccountId(accountId);
 
   // resolve folderId
   const resolvedFolderId = folderId || (await getInboxFolderId());
@@ -521,10 +529,7 @@ async function buildMaildataFromPayload(accountId: string, payload: EmailCompose
 }
 
 export async function createEmailDraft(payload: EmailComposePayload) {
-  const accountId = await getAccountId();
-  if (!accountId) {
-    throw new Error('Email account is not connected. Please connect Zoho Mail first.');
-  }
+  const accountId = await resolveZohoAccountId();
 
   const maildata = await buildMaildataFromPayload(accountId, payload);
   return zohoApiRequest(`/accounts/${accountId}/drafts`, {
@@ -534,10 +539,7 @@ export async function createEmailDraft(payload: EmailComposePayload) {
 }
 
 export async function sendComposedEmail(payload: EmailComposePayload) {
-  const accountId = await getAccountId();
-  if (!accountId) {
-    throw new Error('Email account is not connected. Please connect Zoho Mail first.');
-  }
+  const accountId = await resolveZohoAccountId();
 
   const maildata = await buildMaildataFromPayload(accountId, payload);
   console.log('[EmailCompose] Built maildata', maildata);
@@ -573,10 +575,7 @@ export const updateMessages = async (
   body?: UpdateMessageRequest
 ) => {
   // resolve accountId
-  const resolvedAccountId = accountId || (await getAccountId());
-  if (!resolvedAccountId) {
-    throw new Error("No account ID provided and none found in electron-store");
-  }
+  const resolvedAccountId = await resolveZohoAccountId(accountId);
 
   if (!body) {
     throw new Error("Request body is required");
@@ -597,10 +596,7 @@ export const searchEmails = async (
   params?: SearchEmailParams
 ) => {
   // resolve accountId
-  const resolvedAccountId = accountId || (await getAccountId());
-  if (!resolvedAccountId) {
-    throw new Error("No account ID provided and none found in electron-store");
-  }
+  const resolvedAccountId = await resolveZohoAccountId(accountId);
 
   const resolvedParams: SearchEmailParams = params || { searchKey: "" };
   const query = new URLSearchParams();

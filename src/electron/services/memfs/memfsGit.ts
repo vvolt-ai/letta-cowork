@@ -155,6 +155,11 @@ export function isGitRepo(agentId: string): boolean {
   return existsSync(join(getMemoryRepoDir(agentId), ".git"));
 }
 
+async function isRepoDirty(dir: string): Promise<boolean> {
+  const { stdout } = await runGit(dir, ["status", "--porcelain"]);
+  return stdout.trim().length > 0;
+}
+
 function safeJoin(root: string, rel: string): string {
   const normalized = rel.replace(/\\/g, "/").replace(/^\/+/, "");
   if (normalized.split("/").includes("..")) {
@@ -380,6 +385,13 @@ export async function pullMemory(
   await configureLocalCredentialHelper(dir, token);
   await installPreCommitHook(dir);
 
+  if (await isRepoDirty(dir)) {
+    return {
+      updated: false,
+      summary: "Skipped pull: memory repo has uncommitted local changes",
+    };
+  }
+
   try {
     const { stdout, stderr } = await runGitWithRetry(dir, ["pull", "--ff-only"], token, {
       operation: "pull --ff-only",
@@ -426,6 +438,26 @@ export async function ensureCheckout(agentId: string): Promise<string> {
     await pullMemory(agentId);
   }
   return getMemoryRepoDir(agentId);
+}
+
+/**
+ * Ensure the memory checkout exists for latency-sensitive agent/session work.
+ * Existing checkouts are returned immediately; remote sync happens in the
+ * background and dirty repos skip pull. Use ensureCheckout() when the caller
+ * explicitly needs a fresh view before reading.
+ */
+export async function ensureCheckoutForSession(agentId: string): Promise<string> {
+  if (!isGitRepo(agentId)) {
+    await cloneMemoryRepo(agentId);
+    return getMemoryRepoDir(agentId);
+  }
+
+  const dir = getMemoryRepoDir(agentId);
+  void pullMemory(agentId).catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[memfsGit] Background memory pull failed for ${agentId}: ${message}`);
+  });
+  return dir;
 }
 
 /** Stage, commit (if anything to commit), and push. Returns true if pushed. */
