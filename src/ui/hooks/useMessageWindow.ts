@@ -217,9 +217,7 @@ export function useMessageWindow(
         }
         partialResetTimeoutRef.current = window.setTimeout(() => {
           partialMessageRef.current = "";
-          partialReasoningRef.current = "";
           setPartialMessage("");
-          setPartialReasoning("");
           partialResetTimeoutRef.current = null;
         }, PARTIAL_MESSAGE_RESET_DELAY_MS);
       }

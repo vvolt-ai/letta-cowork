@@ -299,13 +299,29 @@ function shouldIgnoreToolCallFragment(rawMessage: any, _formattedInput: string |
 }
 
 function updateReasoning(ephemeral: EphemeralState, message: StreamMessage): EphemeralState {
-  if (message.type !== "reasoning" || !("uuid" in message)) {
+  if (message.type !== "reasoning") {
     return ephemeral;
   }
 
-  const id = message.uuid;
+  const rawMessage = message as any;
+  const id = String(
+    rawMessage.uuid
+      ?? rawMessage.id
+      ?? rawMessage.messageId
+      ?? rawMessage.message_id
+      ?? rawMessage.runId
+      ?? rawMessage.run_id
+      ?? "active-reasoning"
+  );
   const existingIndex = ephemeral.reasoning.findIndex((step) => step.id === id);
-  const delta = typeof (message as any).content === "string" ? (message as any).content : "";
+  const delta =
+    typeof rawMessage.content === "string" ? rawMessage.content
+      : typeof rawMessage.reasoning === "string" ? rawMessage.reasoning
+        : typeof rawMessage.text === "string" ? rawMessage.text
+          : "";
+  if (!delta) {
+    return ephemeral;
+  }
   const previousContent = existingIndex >= 0 ? ephemeral.reasoning[existingIndex].content : "";
   const updatedStep: ReasoningStep = {
     id,
