@@ -1,5 +1,5 @@
 
-import { Channel, ChannelStatus } from './types';
+import { Channel, ChannelStatus, WhatsAppConfig } from './types';
 
 interface ChannelActionsProps {
   channel: Channel;
@@ -11,6 +11,10 @@ interface ChannelActionsProps {
   onDelete: (channelId: string) => void;
 }
 
+function isWhatsAppRouteChannel(channel: Channel): boolean {
+  return channel.provider === 'whatsapp' && (channel.config as WhatsAppConfig | undefined)?.whatsappMode === 'agent_route';
+}
+
 export function ChannelActions({
   channel,
   status,
@@ -20,9 +24,11 @@ export function ChannelActions({
   onOpenConfig,
   onDelete,
 }: ChannelActionsProps) {
+  const isRouteChannel = isWhatsAppRouteChannel(channel);
+
   return (
     <div className="mt-3 flex items-center gap-2 flex-wrap">
-      {!channel.hasCredentials && channel.provider !== 'whatsapp' ? (
+      {isRouteChannel ? null : !channel.hasCredentials && channel.provider !== 'whatsapp' ? (
         <button
           onClick={() => onOpenCredentials(channel)}
           className="px-3 py-1 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600"

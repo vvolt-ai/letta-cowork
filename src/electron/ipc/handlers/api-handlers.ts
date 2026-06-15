@@ -227,6 +227,18 @@ export function initializeApiIpcHandlers(): void {
     }
   });
 
+  ipcMain.handle("api:list-organization-users", async () => {
+    console.log('[API IPC] list-organization-users');
+    try {
+      const users = await api.listOrganizationUsers();
+      console.log('[API IPC] list-organization-users result:', users?.length, 'users');
+      return { success: true, users };
+    } catch (error) {
+      console.error('[API IPC] list-organization-users failed:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
   ipcMain.handle("api:create-channel", async (_, data: CreateChannelData) => {
     console.log('[API IPC] create-channel:', data.provider, data.name);
     try {

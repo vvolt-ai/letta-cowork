@@ -6,6 +6,7 @@ import {
   CredentialField,
   DiscordConfig,
   LettaAgent,
+  OrganizationUser,
   PROVIDERS,
   TelegramConfig,
   WeChatConfig,
@@ -140,6 +141,8 @@ export function CreateChannelModal({ agents, channels, organizationChannels, onC
   const [wechatQrLoading, setWechatQrLoading] = useState(false);
   const [wechatQrStatus, setWechatQrStatus] = useState<string | null>(null);
   const [wechatQrMessage, setWechatQrMessage] = useState<string | null>(null);
+  const [organizationUsers, setOrganizationUsers] = useState<OrganizationUser[]>([]);
+  const [organizationUsersLoading, setOrganizationUsersLoading] = useState(false);
 
   const currentStepIndex = STEPS.findIndex((candidate) => candidate.id === step);
   const whatsappAccountChannels = useMemo(
@@ -147,6 +150,10 @@ export function CreateChannelModal({ agents, channels, organizationChannels, onC
     [channels, organizationChannels]
   );
   const isWhatsAppRoute = provider === 'whatsapp' && whatsappSetupMode === 'agent_route';
+  const whatsappRouteUsers = useMemo(
+    () => organizationUsers.filter((user) => user.isActive && Boolean(user.phoneNumber?.trim())),
+    [organizationUsers]
+  );
   const credentialFields = useMemo(() => isWhatsAppRoute ? [] : getCredentialFields(provider), [isWhatsAppRoute, provider]);
   const missingCredentials = credentialFields.filter((field) => field.required && !credentials[field.key]?.trim());
   const canContinueDetails = name.trim().length > 0 && (!isWhatsAppRoute || Boolean(configData.parentChannelId));
@@ -155,6 +162,39 @@ export function CreateChannelModal({ agents, channels, organizationChannels, onC
   const updateConfig = (nextConfig: Record<string, unknown>) => {
     setConfigData(nextConfig as ConfigDataState);
   };
+
+  const getUserLabel = (user: OrganizationUser) => {
+    const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
+    return `${fullName || user.email}${user.phoneNumber ? ` (${user.phoneNumber})` : ''}`;
+  };
+
+  useEffect(() => {
+    if (!isWhatsAppRoute) return;
+    const api = getApi();
+    if (typeof api.apiListOrganizationUsers !== 'function') return;
+
+    let cancelled = false;
+    setOrganizationUsersLoading(true);
+    api.apiListOrganizationUsers()
+      .then((result: { success: boolean; users?: OrganizationUser[]; error?: string }) => {
+        if (cancelled) return;
+        if (result.success) {
+          setOrganizationUsers(result.users || []);
+        } else {
+          setError(result.error || 'Failed to load organization users');
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (!cancelled) setOrganizationUsersLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isWhatsAppRoute]);
 
   const goNext = () => {
     setError(null);
@@ -265,6 +305,16 @@ export function CreateChannelModal({ agents, channels, organizationChannels, onC
   const handleFinish = async () => {
     if (!canContinueDetails || !canContinueCredentials) {
       setError('Complete the required fields before creating the channel.');
+      return;
+    }
+
+    if (
+      isWhatsAppRoute &&
+      configData.routeType !== 'mention' &&
+      configData.routeType !== 'fallback' &&
+      !configData.routeUserId
+    ) {
+      setError('Select a registered Vera profile for this WhatsApp sender route.');
       return;
     }
 
@@ -601,7 +651,9 @@ export function CreateChannelModal({ agents, channels, organizationChannels, onC
           {step === 'behavior' ? (
             <div className="space-y-4">
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
-                These settings control when the channel starts, who can talk to it, and how it behaves in groups.
+                {isWhatsAppRoute
+                  ? 'This route chooses which agent handles messages from an existing WhatsApp account. Sender routes match registered Vera profiles by their profile phone number.'
+                  : 'These settings control when the channel starts, who can talk to it, and how it behaves in groups.'}
               </div>
 
               {isWhatsAppRoute ? (
@@ -623,14 +675,35 @@ export function CreateChannelModal({ agents, channels, organizationChannels, onC
 
                   {configData.routeType !== 'mention' && configData.routeType !== 'fallback' ? (
                     <div>
-                      <label className="mb-1 block text-sm font-medium text-slate-700">Sender WhatsApp JID or phone</label>
-                      <input
-                        type="text"
-                        value={configData.senderJid || ''}
-                        onChange={(event) => setConfigData({ ...configData, senderJid: event.target.value || undefined })}
-                        placeholder="919999999999@s.whatsapp.net or 919999999999"
+                      <label className="mb-1 block text-sm font-medium text-slate-700">Sender Vera profile</label>
+                      <select
+                        value={configData.routeUserId || ''}
+                        onChange={(event) => {
+                          const selectedUser = whatsappRouteUsers.find((user) => user.id === event.target.value);
+                          setConfigData({
+                            ...configData,
+                            routeUserId: selectedUser?.id || undefined,
+                            senderJid: selectedUser?.phoneNumber || undefined,
+                          });
+                        }}
                         className="w-full rounded-lg border border-slate-200 px-3 py-2"
-                      />
+                      >
+                        <option value="">
+                          {organizationUsersLoading ? 'Loading profiles...' : 'Select registered Vera profile'}
+                        </option>
+                        {whatsappRouteUsers.map((user) => (
+                          <option key={user.id} value={user.id}>{getUserLabel(user)}</option>
+                        ))}
+                      </select>
+                      {whatsappRouteUsers.length === 0 && !organizationUsersLoading ? (
+                        <p className="mt-1 text-xs text-amber-700">
+                          No active organization profiles with phone numbers found. Add a phone number to the Vera profile first.
+                        </p>
+                      ) : (
+                        <p className="mt-1 text-xs text-slate-500">
+                          Incoming WhatsApp sender must match this Vera profile's phone number.
+                        </p>
+                      )}
                     </div>
                   ) : null}
 

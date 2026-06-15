@@ -27,7 +27,8 @@ import type {
   MessageLog,
   ConversationContext,
   WeChatIlinkQrCodeResponse,
-  WeChatIlinkQrStatusResponse
+  WeChatIlinkQrStatusResponse,
+  OrganizationUser
 } from "../types.js";
 
 /**
@@ -243,6 +244,10 @@ export class VeraCoworkApiClient extends BaseHttpClient {
 
   async listOrganizationChannels(): Promise<Channel[]> {
     return ChannelEndpoints.listOrganizationChannels(this);
+  }
+
+  async listOrganizationUsers(): Promise<OrganizationUser[]> {
+    return this.request<OrganizationUser[]>("/users/organization");
   }
 
   async createChannel(data: {

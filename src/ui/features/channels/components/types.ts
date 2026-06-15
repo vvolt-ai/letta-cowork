@@ -103,6 +103,16 @@ export interface LettaAgent {
   name: string;
 }
 
+export interface OrganizationUser {
+  id: string;
+  email: string;
+  firstName?: string;
+  lastName?: string | null;
+  phoneNumber?: string | null;
+  isActive: boolean;
+  role?: string;
+}
+
 export interface ChannelsManagerProps {
   onAuthError?: (error: Error) => void;
 }

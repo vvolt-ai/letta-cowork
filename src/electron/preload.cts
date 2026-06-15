@@ -253,6 +253,8 @@ electron.contextBridge.exposeInMainWorld("electron", {
         electron.ipcRenderer.invoke("api:list-channels"),
     apiListOrganizationChannels: () =>
         electron.ipcRenderer.invoke("api:list-organization-channels"),
+    apiListOrganizationUsers: () =>
+        electron.ipcRenderer.invoke("api:list-organization-users"),
     apiCreateChannel: (data: { provider: string; name: string; externalId?: string; config?: any }) =>
         electron.ipcRenderer.invoke("api:create-channel", data),
     apiGetChannel: (channelId: string) =>

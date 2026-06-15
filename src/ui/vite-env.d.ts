@@ -195,6 +195,11 @@ interface Window {
       channels?: any[];
       error?: string;
     }>;
+    apiListOrganizationUsers: () => Promise<{
+      success: boolean;
+      users?: any[];
+      error?: string;
+    }>;
     apiCreateChannel: (data: {
       provider: string;
       name: string;

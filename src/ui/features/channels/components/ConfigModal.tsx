@@ -21,6 +21,8 @@ export function ConfigModal({
   onClose,
   onSave,
 }: ConfigModalProps) {
+  const isWhatsAppRoute = channel.provider === 'whatsapp' && configData.whatsappMode === 'agent_route';
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white rounded-xl p-6 w-full max-w-lg max-h-[80vh] overflow-y-auto">
@@ -58,74 +60,100 @@ export function ConfigModal({
             )}
           </div>
 
-          {/* Auto Start - All providers */}
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="configAutoStart"
-              checked={Boolean(configData.autoStart)}
-              onChange={(e) =>
-                setConfigData({ ...configData, autoStart: e.target.checked })
-              }
-              className="rounded border-slate-300"
-            />
-            <label htmlFor="configAutoStart" className="text-sm text-slate-700">
-              Auto-start when server starts
-            </label>
-          </div>
+          {!isWhatsAppRoute && (
+            <>
+              {/* Auto Start - Runtime channels only */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="configAutoStart"
+                  checked={Boolean(configData.autoStart)}
+                  onChange={(e) =>
+                    setConfigData({ ...configData, autoStart: e.target.checked })
+                  }
+                  className="rounded border-slate-300"
+                />
+                <label htmlFor="configAutoStart" className="text-sm text-slate-700">
+                  Auto-start when server starts
+                </label>
+              </div>
 
-          {/* Typing Indicator - All providers */}
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="configTypingIndicator"
-              checked={configData.typingIndicator !== false}
-              onChange={(e) =>
-                setConfigData({ ...configData, typingIndicator: e.target.checked })
-              }
-              className="rounded border-slate-300"
-            />
-            <label
-              htmlFor="configTypingIndicator"
-              className="text-sm text-slate-700"
-            >
-              Show typing indicator while processing
-            </label>
-          </div>
+              {/* Typing Indicator - Runtime channels only */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="configTypingIndicator"
+                  checked={configData.typingIndicator !== false}
+                  onChange={(e) =>
+                    setConfigData({ ...configData, typingIndicator: e.target.checked })
+                  }
+                  className="rounded border-slate-300"
+                />
+                <label
+                  htmlFor="configTypingIndicator"
+                  className="text-sm text-slate-700"
+                >
+                  Show typing indicator while processing
+                </label>
+              </div>
+            </>
+          )}
 
-          {/* Allowed Users - All providers */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Allowed Users
-            </label>
-            <input
-              type="text"
-              value={((configData.allowedUsers as string[]) || []).join(', ')}
-              onChange={(e) =>
-                setConfigData({
-                  ...configData,
-                  allowedUsers: e.target.value
-                    .split(',')
-                    .map((s) => s.trim())
-                    .filter(Boolean),
-                })
-              }
-              placeholder={
-                channel.provider === 'whatsapp'
-                  ? '1234567890, 0987654321'
-                  : 'user_id_1, user_id_2'
-              }
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg"
-            />
-            <p className="text-xs text-slate-500 mt-1">
-              {channel.provider === 'whatsapp'
-                ? 'Phone numbers with country code (no + sign)'
-                : 'Leave empty to allow all users'}
-            </p>
-          </div>
+          {!isWhatsAppRoute && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Allowed Users
+              </label>
+              <input
+                type="text"
+                value={((configData.allowedUsers as string[]) || []).join(', ')}
+                onChange={(e) =>
+                  setConfigData({
+                    ...configData,
+                    allowedUsers: e.target.value
+                      .split(',')
+                      .map((s) => s.trim())
+                      .filter(Boolean),
+                  })
+                }
+                placeholder={
+                  channel.provider === 'whatsapp'
+                    ? '1234567890, 0987654321'
+                    : 'user_id_1, user_id_2'
+                }
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg"
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                {channel.provider === 'whatsapp'
+                  ? 'Phone numbers with country code (no + sign)'
+                  : 'Leave empty to allow all users'}
+              </p>
+            </div>
+          )}
+
+          {isWhatsAppRoute && (
+            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm text-blue-900 space-y-2">
+              <div className="font-medium">WhatsApp agent route</div>
+              <div>Uses account: {String(configData.parentChannelId || '').slice(0, 8)}...</div>
+              <div>Route type: {String(configData.routeType || 'fallback')}</div>
+              <label className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  checked={configData.replyAllowed !== false}
+                  onChange={(e) => setConfigData({ ...configData, replyAllowed: e.target.checked })}
+                  className="rounded border-blue-300"
+                />
+                Allow this route to send replies
+              </label>
+              <p className="text-xs text-blue-700">
+                The parent WhatsApp account still controls QR/session, start/stop,
+                allowed users, group replies, and mention-only policy.
+              </p>
+            </div>
+          )}
 
           {/* WhatsApp specific options */}
-          {channel.provider === 'whatsapp' && (
+          {channel.provider === 'whatsapp' && !isWhatsAppRoute && (
             <WhatsAppConfigFields
               configData={configData as WhatsAppConfig}
               setConfigData={setConfigData}

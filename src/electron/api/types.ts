@@ -23,6 +23,16 @@ export interface AuthTokens {
   };
 }
 
+export interface OrganizationUser {
+  id: string;
+  email: string;
+  firstName?: string;
+  lastName?: string | null;
+  phoneNumber?: string | null;
+  isActive: boolean;
+  role?: string;
+}
+
 // ============================================
 // Channel Types
 // ============================================

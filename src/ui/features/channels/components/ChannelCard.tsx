@@ -1,5 +1,5 @@
 
-import { Channel, ChannelStatus as ChannelStatusType, PROVIDERS } from './types';
+import { Channel, ChannelStatus as ChannelStatusType, PROVIDERS, WhatsAppConfig } from './types';
 import { ChannelStatus } from './ChannelStatus';
 import { ChannelActions } from './ChannelActions';
 
@@ -18,6 +18,10 @@ export function getProviderIcon(provider: string): string {
   return found?.icon || '📡';
 }
 
+function isWhatsAppRouteChannel(channel: Channel): boolean {
+  return channel.provider === 'whatsapp' && (channel.config as WhatsAppConfig | undefined)?.whatsappMode === 'agent_route';
+}
+
 export function ChannelCard({
   channel,
   status,
@@ -27,6 +31,9 @@ export function ChannelCard({
   onOpenConfig,
   onDelete,
 }: ChannelCardProps) {
+  const isRouteChannel = isWhatsAppRouteChannel(channel);
+  const whatsappConfig = channel.config as WhatsAppConfig | undefined;
+
   return (
     <div className="p-4 bg-white rounded-lg border border-slate-200">
       <div className="flex items-center justify-between">
@@ -34,11 +41,19 @@ export function ChannelCard({
           <span className="text-2xl">{getProviderIcon(channel.provider)}</span>
           <div>
             <h3 className="font-medium text-slate-900">{channel.name}</h3>
-            <p className="text-sm text-slate-500 capitalize">{channel.provider}</p>
+            <p className="text-sm text-slate-500 capitalize">
+              {isRouteChannel ? 'WhatsApp agent route' : channel.provider}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <ChannelStatus status={status} />
+          {isRouteChannel ? (
+            <span className="px-2 py-1 rounded text-sm bg-blue-50 text-blue-700">
+              Route
+            </span>
+          ) : (
+            <ChannelStatus status={status} />
+          )}
         </div>
       </div>
 
@@ -48,8 +63,11 @@ export function ChannelCard({
           {channel.config.defaultAgentId && (
             <span>Agent: {String(channel.config.defaultAgentId)}</span>
           )}
-          {Boolean(channel.config.autoStart) && (
+          {Boolean(channel.config.autoStart) && !isRouteChannel && (
             <span className="ml-2">• Auto-start</span>
+          )}
+          {isRouteChannel && whatsappConfig?.parentChannelId && (
+            <span className="ml-2">• Uses account {String(whatsappConfig.parentChannelId).slice(0, 8)}...</span>
           )}
         </div>
       )}
