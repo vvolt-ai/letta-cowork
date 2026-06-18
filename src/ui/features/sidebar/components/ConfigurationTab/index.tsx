@@ -105,6 +105,7 @@ function Panel({ children, className = "" }: { children: React.ReactNode; classN
 }
 
 export const ConfigurationTab = memo(function ConfigurationTab({
+  coworkSettings,
   lettaEnvOpen,
   onLettaEnvOpenChange,
   onOpenChannels,
@@ -139,6 +140,16 @@ export const ConfigurationTab = memo(function ConfigurationTab({
   const [remoteDirsText, setRemoteDirsText] = useState("");
   const [remoteSaving, setRemoteSaving] = useState(false);
   const [secretManagerOpen, setSecretManagerOpen] = useState(false);
+
+  const enabledSurfaces = [
+    coworkSettings.showWhatsApp,
+    coworkSettings.showTelegram,
+    coworkSettings.showSlack,
+    coworkSettings.showDiscord,
+    coworkSettings.showEmailAutomation,
+    coworkSettings.showLettaEnv,
+  ].filter(Boolean).length;
+  const setupProgress = Math.round(((verifiedPhoneNumber ? 1 : 0) + (isEmailConnected ? 1 : 0) + (enabledSurfaces > 0 ? 1 : 0) + (remoteState?.settings.enabled ? 1 : 0)) / 4 * 100);
 
 
   useEffect(() => {
@@ -312,7 +323,52 @@ export const ConfigurationTab = memo(function ConfigurationTab({
   );
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5">
+    <div className="grid min-h-full grid-cols-[220px_minmax(0,1fr)] overflow-hidden rounded-2xl border border-[var(--color-border)] bg-slate-50">
+      <aside className="border-r border-[var(--color-border)] bg-white p-5">
+        <div className="mb-8 flex items-center gap-2 text-blue-600">
+          <span className="grid h-8 w-8 place-items-center rounded-xl bg-blue-600 text-sm font-black text-white">V</span>
+          <strong className="text-sm tracking-wide">COWORK CONFIG</strong>
+        </div>
+        <nav className="grid gap-2">
+          <button className="rounded-xl bg-blue-50 px-3 py-2.5 text-left text-sm font-semibold text-blue-700">▣ Console</button>
+          <button className="rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50">👤 Profile</button>
+          <button className="rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50">💬 Communication</button>
+          <button className="rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50">🤖 Agent tools</button>
+          <button className="rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50">🔐 Remote access</button>
+        </nav>
+        <div className="mt-8 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <p className="font-semibold text-slate-900">Need help?</p>
+          <p className="mt-1 text-xs leading-5 text-slate-500">Configure identity, channels, tools, secrets, and remote runner access from this console.</p>
+        </div>
+      </aside>
+
+      <main className="space-y-5 overflow-auto p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.22em] text-blue-600">Vera Cowork</p>
+            <h2 className="mt-1 text-2xl font-bold text-slate-950">Cowork Configuration</h2>
+            <p className="mt-1 text-sm text-slate-500">Manage your profile, communication channels, agent tools, secrets, and remote runtime access.</p>
+          </div>
+          <div className="min-w-40 rounded-2xl border border-slate-200 bg-white p-4 text-center shadow-sm">
+            <strong className="text-3xl text-blue-600">{setupProgress}%</strong>
+            <p className="text-xs font-semibold text-slate-500">Complete</p>
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-blue-600" style={{ width: `${setupProgress}%` }} /></div>
+          </div>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-4">
+          <Panel><p className="text-sm font-semibold text-slate-500">Profile</p><strong className="mt-1 block text-2xl text-slate-950">{verifiedPhoneNumber ? 'Verified' : 'Pending'}</strong><span className="text-xs font-semibold text-emerald-600">phone identity</span></Panel>
+          <Panel><p className="text-sm font-semibold text-slate-500">Email</p><strong className="mt-1 block text-2xl text-slate-950">{isEmailConnected ? 'On' : 'Off'}</strong><span className="text-xs font-semibold text-blue-600">{unreadLabel}</span></Panel>
+          <Panel><p className="text-sm font-semibold text-slate-500">Surfaces</p><strong className="mt-1 block text-2xl text-slate-950">{enabledSurfaces}</strong><span className="text-xs font-semibold text-violet-600">enabled</span></Panel>
+          <Panel><p className="text-sm font-semibold text-slate-500">Remote runner</p><strong className="mt-1 block text-2xl text-slate-950">{remoteState?.status ?? 'loading'}</strong><span className="text-xs font-semibold text-amber-600">{remoteState?.settings.enabled ? 'enabled' : 'disabled'}</span></Panel>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-4">
+          <ActionCard icon="💬" label="Open Channels" description="Configure chat and app entry points." onClick={onOpenChannels} />
+          <ActionCard icon="🔐" label="Runtime Secrets" description="Add encrypted env secrets." onClick={() => setSecretManagerOpen(true)} />
+          <ActionCard icon="🧩" label="MCP Servers" description="Connect external tool providers." onClick={onOpenMcpServers} />
+          <ActionCard icon="🤖" label="Add Agents" description="Add or route agents." onClick={onOpenAddAgentsModal} />
+        </div>
       <Section
         title="Your profile"
         description="Keep your Cowork identity up to date. Phone number helps match external channel messages to your account."
@@ -611,6 +667,7 @@ export const ConfigurationTab = memo(function ConfigurationTab({
         </Panel>
       </Section>
 
+      </main>
     </div>
   );
 });
