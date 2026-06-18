@@ -16,9 +16,9 @@ export function CoworkSettingsDialog({ open, onOpenChange, onAuthError }: Cowork
         onClick={() => onOpenChange(false)}
       />
 
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-7xl mx-4 max-h-[92vh] flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b bg-white">
-          <div><p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-600">Vera Cowork</p><h2 className="text-xl font-semibold text-gray-900">Cowork Configuration</h2></div>
+      <div className="relative bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between p-4 border-b">
+          <h2 className="text-xl font-semibold text-gray-900">Channels</h2>
 
           <button
             onClick={() => onOpenChange(false)}
