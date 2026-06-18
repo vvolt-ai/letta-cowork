@@ -46,6 +46,8 @@ interface RemoteAccessState {
   serverUrl?: string;
 }
 
+type ConfigPage = "console" | "profile" | "communication" | "tools" | "remote";
+
 function Section({
   title,
   description,
@@ -140,6 +142,7 @@ export const ConfigurationTab = memo(function ConfigurationTab({
   const [remoteDirsText, setRemoteDirsText] = useState("");
   const [remoteSaving, setRemoteSaving] = useState(false);
   const [secretManagerOpen, setSecretManagerOpen] = useState(false);
+  const [activePage, setActivePage] = useState<ConfigPage>("console");
 
   const enabledSurfaces = [
     coworkSettings.showWhatsApp,
@@ -330,11 +333,11 @@ export const ConfigurationTab = memo(function ConfigurationTab({
           <strong className="text-sm tracking-wide">COWORK CONFIG</strong>
         </div>
         <nav className="grid gap-2">
-          <button className="rounded-xl bg-blue-50 px-3 py-2.5 text-left text-sm font-semibold text-blue-700">▣ Console</button>
-          <button className="rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50">👤 Profile</button>
-          <button className="rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50">💬 Communication</button>
-          <button className="rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50">🤖 Agent tools</button>
-          <button className="rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50">🔐 Remote access</button>
+          <button onClick={() => setActivePage("console")} className={`rounded-xl px-3 py-2.5 text-left text-sm font-semibold ${activePage === "console" ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"}`}>▣ Console</button>
+          <button onClick={() => setActivePage("profile")} className={`rounded-xl px-3 py-2.5 text-left text-sm font-semibold ${activePage === "profile" ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"}`}>👤 Profile</button>
+          <button onClick={() => setActivePage("communication")} className={`rounded-xl px-3 py-2.5 text-left text-sm font-semibold ${activePage === "communication" ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"}`}>💬 Communication</button>
+          <button onClick={() => setActivePage("tools")} className={`rounded-xl px-3 py-2.5 text-left text-sm font-semibold ${activePage === "tools" ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"}`}>🤖 Agent tools</button>
+          <button onClick={() => setActivePage("remote")} className={`rounded-xl px-3 py-2.5 text-left text-sm font-semibold ${activePage === "remote" ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"}`}>🔐 Remote access</button>
         </nav>
         <div className="mt-8 rounded-2xl border border-slate-200 bg-slate-50 p-4">
           <p className="font-semibold text-slate-900">Need help?</p>
@@ -356,6 +359,7 @@ export const ConfigurationTab = memo(function ConfigurationTab({
           </div>
         </div>
 
+        {activePage === "console" ? <>
         <div className="grid gap-3 md:grid-cols-4">
           <Panel><p className="text-sm font-semibold text-slate-500">Profile</p><strong className="mt-1 block text-2xl text-slate-950">{verifiedPhoneNumber ? 'Verified' : 'Pending'}</strong><span className="text-xs font-semibold text-emerald-600">phone identity</span></Panel>
           <Panel><p className="text-sm font-semibold text-slate-500">Email</p><strong className="mt-1 block text-2xl text-slate-950">{isEmailConnected ? 'On' : 'Off'}</strong><span className="text-xs font-semibold text-blue-600">{unreadLabel}</span></Panel>
@@ -369,7 +373,9 @@ export const ConfigurationTab = memo(function ConfigurationTab({
           <ActionCard icon="🧩" label="MCP Servers" description="Connect external tool providers." onClick={onOpenMcpServers} />
           <ActionCard icon="🤖" label="Add Agents" description="Add or route agents." onClick={onOpenAddAgentsModal} />
         </div>
-      <Section
+        </> : null}
+
+      {activePage === "profile" ? <Section
         title="Your profile"
         description="Keep your Cowork identity up to date. Phone number helps match external channel messages to your account."
       >
@@ -475,9 +481,9 @@ export const ConfigurationTab = memo(function ConfigurationTab({
             ) : null}
           </div>
         </Panel>
-      </Section>
+      </Section> : null}
 
-      <Section
+      {activePage === "communication" ? <Section
         title="Communication"
         description="Connect where Cowork should listen and respond. Channels are for chat platforms; email automation handles mailbox workflows."
       >
@@ -506,9 +512,9 @@ export const ConfigurationTab = memo(function ConfigurationTab({
             />
           </Panel>
         </div>
-      </Section>
+      </Section> : null}
 
-      <Section
+      {activePage === "tools" ? <Section
         title="Agent tools"
         description="Install skills, connect external MCP providers, or open the Letta CLI for advanced agent work."
       >
@@ -573,7 +579,7 @@ export const ConfigurationTab = memo(function ConfigurationTab({
             onClick={() => onLettaEnvOpenChange(!lettaEnvOpen)}
           />
         </div>
-      </Section>
+      </Section> : null}
 
       {secretManagerOpen ? (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center">
@@ -600,7 +606,7 @@ export const ConfigurationTab = memo(function ConfigurationTab({
         </div>
       ) : null}
 
-      <Section
+      {activePage === "remote" ? <Section
         title="Remote access"
         description="Expose this desktop as an online tool runner for server-routed conversations such as WhatsApp. Phase 1 uses auto-approval plus path guardrails."
       >
@@ -665,7 +671,7 @@ export const ConfigurationTab = memo(function ConfigurationTab({
             </div>
           </div>
         </Panel>
-      </Section>
+      </Section> : null}
 
       </main>
     </div>
