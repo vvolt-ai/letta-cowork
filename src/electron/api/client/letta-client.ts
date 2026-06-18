@@ -30,7 +30,9 @@ import type {
   ConversationContext,
   WeChatIlinkQrCodeResponse,
   WeChatIlinkQrStatusResponse,
-  OrganizationUser
+  OrganizationUser,
+  AgentSecret,
+  UpsertAgentSecretInput
 } from "../types.js";
 
 /**
@@ -120,6 +122,7 @@ export class VeraCoworkApiClient extends BaseHttpClient {
     password: string;
     firstName?: string;
     lastName?: string;
+    phoneNumber?: string;
     organizationId?: string;
   }): Promise<AuthTokens> {
     const response = await fetch(`${this.baseUrl}/auth/register`, {
@@ -270,6 +273,23 @@ export class VeraCoworkApiClient extends BaseHttpClient {
 
   async listOrganizationUsers(): Promise<OrganizationUser[]> {
     return this.request<OrganizationUser[]>("/users/organization");
+  }
+
+  async listAgentSecrets(): Promise<AgentSecret[]> {
+    return this.request<AgentSecret[]>("/agent-secrets");
+  }
+
+  async upsertAgentSecret(input: UpsertAgentSecretInput): Promise<AgentSecret> {
+    return this.request<AgentSecret>("/agent-secrets", {
+      method: "POST",
+      body: input,
+    });
+  }
+
+  async deleteAgentSecret(id: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/agent-secrets/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
   }
 
   async createChannel(data: {

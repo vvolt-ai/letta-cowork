@@ -20,6 +20,8 @@ export type {
   AutoSyncEmailConfig,
   ProcessedEmailRecord,
   RequestOptions,
+  AgentSecret,
+  UpsertAgentSecretInput,
 } from "./types.js";
 
 // Client

@@ -52,6 +52,11 @@ export interface ChannelCredentialsData {
   secureConfig?: Record<string, unknown>;
 }
 
+export interface UpsertAgentSecretData {
+  name: string;
+  value: string;
+}
+
 // Store current API URL
 let currentApiUrl = process.env.VERA_COWORK_API_URL || "https://vera-cowork-server.ngrok.app";
 
@@ -283,6 +288,40 @@ export function initializeApiIpcHandlers(): void {
       return { success: true, users };
     } catch (error) {
       console.error('[API IPC] list-organization-users failed:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle("api:list-agent-secrets", async () => {
+    console.log('[API IPC] list-agent-secrets');
+    try {
+      const secrets = await api.listAgentSecrets();
+      console.log('[API IPC] list-agent-secrets result:', secrets?.length, 'secrets');
+      return { success: true, secrets };
+    } catch (error) {
+      console.error('[API IPC] list-agent-secrets failed:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle("api:upsert-agent-secret", async (_, data: UpsertAgentSecretData) => {
+    console.log('[API IPC] upsert-agent-secret:', data.name);
+    try {
+      const secret = await api.upsertAgentSecret(data);
+      return { success: true, secret };
+    } catch (error) {
+      console.error('[API IPC] upsert-agent-secret failed:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle("api:delete-agent-secret", async (_, id: string) => {
+    console.log('[API IPC] delete-agent-secret:', id.slice(0, 8));
+    try {
+      await api.deleteAgentSecret(id);
+      return { success: true };
+    } catch (error) {
+      console.error('[API IPC] delete-agent-secret failed:', error);
       return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   });

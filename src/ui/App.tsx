@@ -429,14 +429,18 @@ function App() {
   useEffect(() => {
     const loadAutoSyncConfig = async () => {
       try {
-        const storedConfig = await window.electron.getAutoSyncUnreadConfig();
+        const storedConfig = window.electron?.getAutoSyncUnreadConfig
+          ? await window.electron.getAutoSyncUnreadConfig()
+          : readLegacyAutoSyncConfig();
         const legacyConfig = readLegacyAutoSyncConfig();
         const nextConfig = hasCustomAutoSyncConfig(storedConfig) || !hasCustomAutoSyncConfig(legacyConfig)
           ? storedConfig
           : legacyConfig;
 
         if (!hasCustomAutoSyncConfig(storedConfig) && hasCustomAutoSyncConfig(legacyConfig)) {
-          await window.electron.updateAutoSyncUnreadConfig(legacyConfig);
+          if (window.electron?.updateAutoSyncUnreadConfig) {
+            await window.electron.updateAutoSyncUnreadConfig(legacyConfig);
+          }
         }
 
         setAutoSyncEnabled(nextConfig.enabled);
@@ -465,10 +469,10 @@ function App() {
 
   // Listen for auth-expired event from main process
   useEffect(() => {
-    const unsubscribe = window.electron.onAuthExpired(() => {
+    const unsubscribe = window.electron?.onAuthExpired?.(() => {
       console.log('[App] Auth expired event received, logging out');
       logout();
-    });
+    }) ?? (() => {});
     return unsubscribe;
   }, [logout]);
 
@@ -484,6 +488,7 @@ function App() {
 
     const persistAutoSyncConfig = async () => {
       try {
+        if (!window.electron?.updateAutoSyncUnreadConfig) return;
         await window.electron.updateAutoSyncUnreadConfig({
           enabled: autoSyncEnabled,
           agentIds: selectedAutoSyncAgentIds,
@@ -504,6 +509,7 @@ function App() {
   useEffect(() => {
     const loadSettings = async () => {
       try {
+        if (!window.electron?.getCoworkSettings) return;
         const settings = await window.electron.getCoworkSettings();
         updateCoworkSettings(settings);
       } catch (err) {

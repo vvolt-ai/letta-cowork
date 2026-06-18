@@ -189,6 +189,10 @@ export function useZohoEmail() {
 
   const checkAlreadyConnected = useCallback(async () => {
     try {
+      if (!window.electron?.checkAlreadyConnected) {
+        setIsMailConnected(false);
+        return false;
+      }
       const alreadyConnected = await window.electron.checkAlreadyConnected();
       setIsMailConnected(alreadyConnected);
       console.log("Is email already connected?", alreadyConnected);
@@ -262,12 +266,12 @@ export function useZohoEmail() {
 
     initializeEmailCheck();
 
-    const unsubscribe = window.electron.onEmailConnected((data) => {
+    const unsubscribe = window.electron?.onEmailConnected?.((data) => {
       if (data.success && isMounted) {
         console.log("Email connected. Fetching folders...");
         checkAlreadyConnected();
       }
-    });
+    }) ?? (() => {});
 
     return () => {
       isMounted = false;

@@ -13,6 +13,7 @@ import { bashTool } from "./runners/bash.js";
 import { lettaCodeTools } from "./runners/letta_tools/index.js";
 import { listSkillsTool, skillTool } from "./runners/skill.js";
 import { productivityTools } from "./runners/productivity.js";
+import { odooMcpTools } from "./runners/odooMcp.js";
 import { emitExtensionToolStart } from "../extensions/extension-events.js";
 import type {
     ClientToolDefinition,
@@ -49,6 +50,7 @@ for (const tool of lettaCodeTools) register(tool);
 register(skillTool);
 register(listSkillsTool);
 for (const tool of productivityTools) register(tool);
+for (const tool of odooMcpTools) register(tool);
 
 export function registerClientTool(def: ClientToolDefinition): void {
     register(def);

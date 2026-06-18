@@ -227,6 +227,20 @@ interface Window {
       users?: any[];
       error?: string;
     }>;
+    apiListAgentSecrets: () => Promise<{
+      success: boolean;
+      secrets?: Array<{ id: string; name: string; keyVersion?: string; createdAt?: string; updatedAt?: string }>;
+      error?: string;
+    }>;
+    apiUpsertAgentSecret: (data: { name: string; value: string }) => Promise<{
+      success: boolean;
+      secret?: { id: string; name: string; keyVersion?: string; createdAt?: string; updatedAt?: string };
+      error?: string;
+    }>;
+    apiDeleteAgentSecret: (id: string) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
     apiCreateChannel: (data: {
       provider: string;
       name: string;

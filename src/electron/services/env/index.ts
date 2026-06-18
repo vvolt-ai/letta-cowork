@@ -12,6 +12,7 @@ export type LettaEnvConfig = {
 };
 
 const USER_ENV_PATH = join(homedir(), ".letta-cowork.env");
+const DEFAULT_EMAIL_SERVER_BASE_URL = "https://zoho.ngrok.app";
 
 function quoteEnvValue(value: string): string {
   if (/^[A-Za-z0-9_./:-]+$/.test(value)) return value;
@@ -93,6 +94,10 @@ function updateSystemEnvironment(values: LettaEnvConfig): void {
 export function initializeLettaEnv(): void {
   dotenvConfig({ path: USER_ENV_PATH });
   dotenvConfig({ path: join(process.cwd(), ".env") });
+
+  if (!process.env.EMAIL_SERVER_BASE_URL?.trim()) {
+    process.env.EMAIL_SERVER_BASE_URL = DEFAULT_EMAIL_SERVER_BASE_URL;
+  }
 
   if (!process.env.LETTA_BASE_URL || process.env.IS_ADMIN != 'true') {
     process.env.LETTA_BASE_URL = "https://api.letta.com";

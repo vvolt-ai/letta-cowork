@@ -167,7 +167,7 @@ export function useProcessEmailToAgent(onConversationCreated?: (messageId: strin
 
   // Listen for session.status events to update processed email records with conversation ID
   useEffect(() => {
-    const unsubscribe = window.electron.onServerEvent(async (event: any) => {
+    const unsubscribe = window.electron?.onServerEvent?.(async (event: any) => {
       console.log(`[useProcessEmailToAgent] Received event:`, event.type, event.payload);
 
       if (event.type === "session.status") {
@@ -220,7 +220,7 @@ export function useProcessEmailToAgent(onConversationCreated?: (messageId: strin
           console.warn(`[useProcessEmailToAgent] Missing emailInfo or conversationId`, { emailInfo, conversationId });
         }
       }
-    });
+    }) ?? (() => {});
     return unsubscribe;
   }, [clearAwaitingTimeout]);
   

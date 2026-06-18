@@ -25,10 +25,11 @@ export function ChannelActions({
   onDelete,
 }: ChannelActionsProps) {
   const isRouteChannel = isWhatsAppRouteChannel(channel);
+  const isEmailChannel = channel.provider === 'email';
 
   return (
     <div className="mt-3 flex items-center gap-2 flex-wrap">
-      {isRouteChannel ? null : !channel.hasCredentials && channel.provider !== 'whatsapp' ? (
+      {isRouteChannel ? null : !channel.hasCredentials && channel.provider !== 'whatsapp' && !isEmailChannel ? (
         <button
           onClick={() => onOpenCredentials(channel)}
           className="px-3 py-1 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600"
@@ -52,26 +53,32 @@ export function ChannelActions({
               Start
             </button>
           )}
-          <button
-            onClick={() => onOpenCredentials(channel)}
-            className="px-3 py-1 text-sm bg-slate-100 text-slate-700 rounded hover:bg-slate-200"
-          >
-            {channel.provider === 'whatsapp' ? 'Session' : 'Edit Credentials'}
-          </button>
+          {!isEmailChannel ? (
+            <button
+              onClick={() => onOpenCredentials(channel)}
+              className="px-3 py-1 text-sm bg-slate-100 text-slate-700 rounded hover:bg-slate-200"
+            >
+              {channel.provider === 'whatsapp' ? 'Session' : 'Edit Credentials'}
+            </button>
+          ) : null}
         </>
       )}
-      <button
-        onClick={() => onOpenConfig(channel)}
-        className="px-3 py-1 text-sm bg-slate-100 text-slate-700 rounded hover:bg-slate-200"
-      >
-        Config
-      </button>
-      <button
-        onClick={() => onDelete(channel.id)}
-        className="px-3 py-1 text-sm text-red-600 hover:bg-red-50 rounded"
-      >
-        Delete
-      </button>
+      {!isEmailChannel ? (
+        <>
+          <button
+            onClick={() => onOpenConfig(channel)}
+            className="px-3 py-1 text-sm bg-slate-100 text-slate-700 rounded hover:bg-slate-200"
+          >
+            Config
+          </button>
+          <button
+            onClick={() => onDelete(channel.id)}
+            className="px-3 py-1 text-sm text-red-600 hover:bg-red-50 rounded"
+          >
+            Delete
+          </button>
+        </>
+      ) : null}
     </div>
   );
 }

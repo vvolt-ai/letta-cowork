@@ -29,6 +29,11 @@ export function useAuth(): UseAuthResult {
   const checkAuth = useCallback(async () => {
     try {
       const api = getApi();
+      if (!api?.apiIsAuthenticated) {
+        setIsAuthenticated(false);
+        setUser(null);
+        return;
+      }
       const authStatus = await api.apiIsAuthenticated();
       setIsAuthenticated(authStatus);
 
@@ -64,6 +69,9 @@ export function useAuth(): UseAuthResult {
   const login = useCallback(async (email: string, password: string) => {
     try {
       const api = getApi();
+      if (!api?.apiLogin) {
+        return { success: false, error: "Electron auth API is unavailable in this browser context" };
+      }
       const result = await api.apiLogin(email, password);
       if (result.success) {
         setIsAuthenticated(true);
@@ -80,6 +88,9 @@ export function useAuth(): UseAuthResult {
   const register = useCallback(async (data: { email: string; password: string; name?: string; organizationName?: string }) => {
     try {
       const api = getApi();
+      if (!api?.apiRegister) {
+        return { success: false, error: "Electron auth API is unavailable in this browser context" };
+      }
       const result = await api.apiRegister(data);
       if (result.success) {
         setIsAuthenticated(true);
@@ -96,7 +107,9 @@ export function useAuth(): UseAuthResult {
   const logout = useCallback(async () => {
     try {
       const api = getApi();
-      await api.apiLogout();
+      if (api?.apiLogout) {
+        await api.apiLogout();
+      }
     } finally {
       setIsAuthenticated(false);
       setUser(null);

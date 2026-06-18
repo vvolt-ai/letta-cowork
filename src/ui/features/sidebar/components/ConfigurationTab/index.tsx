@@ -1,6 +1,6 @@
 import { memo, useEffect, useState } from "react";
+import { SecretManager } from "../../../settings/components/SecretManager/SecretManager";
 import { IntegrationList } from "../IntegrationList";
-import { useCoworkSettings } from "../../../../hooks/useCoworkSettings";
 
 interface ConfigurationTabProps {
   coworkSettings: CoworkSettings;
@@ -56,10 +56,10 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="space-y-3">
+    <section className="space-y-2">
       <div>
         <h3 className="text-[13px] font-semibold text-ink-900">{title}</h3>
-        {description ? <p className="mt-1 text-[12px] leading-5 text-muted">{description}</p> : null}
+        {description ? <p className="mt-0.5 text-[12px] leading-4 text-muted">{description}</p> : null}
       </div>
       {children}
     </section>
@@ -80,14 +80,14 @@ function ActionCard({
   return (
     <button
       onClick={onClick}
-      className="group flex min-h-[92px] w-full items-start gap-3 rounded-2xl border border-[var(--color-border)] bg-white p-4 text-left transition hover:border-[var(--color-accent)]/50 hover:bg-gray-50 hover:shadow-sm"
+      className="group flex min-h-[72px] w-full items-start gap-3 rounded-xl border border-[var(--color-border)] bg-white p-3 text-left transition hover:border-[var(--color-accent)]/50 hover:bg-gray-50 hover:shadow-sm"
     >
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 transition group-hover:bg-blue-100">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 transition group-hover:bg-blue-100">
         {icon}
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-[13.5px] font-semibold text-ink-900">{label}</span>
-        <span className="mt-1 block text-[12px] leading-5 text-muted">{description}</span>
+        <span className="mt-0.5 block text-[12px] leading-4 text-muted">{description}</span>
       </span>
       <svg className="mt-1 h-4 w-4 shrink-0 text-ink-300 transition group-hover:translate-x-0.5 group-hover:text-ink-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <path d="m9 6 6 6-6 6" />
@@ -98,14 +98,13 @@ function ActionCard({
 
 function Panel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`rounded-2xl border border-[var(--color-border)] bg-white p-4 shadow-sm ${className}`}>
+    <div className={`rounded-xl border border-[var(--color-border)] bg-white p-3 shadow-sm ${className}`}>
       {children}
     </div>
   );
 }
 
 export const ConfigurationTab = memo(function ConfigurationTab({
-  coworkSettings,
   lettaEnvOpen,
   onLettaEnvOpenChange,
   onOpenChannels,
@@ -122,9 +121,6 @@ export const ConfigurationTab = memo(function ConfigurationTab({
   onRefreshEmails,
   onOpenAddAgentsModal,
 }: ConfigurationTabProps) {
-  const { updateCoworkSettings } = useCoworkSettings();
-  const [settings, setSettings] = useState<CoworkSettings>(coworkSettings);
-  const [settingsLoading, setSettingsLoading] = useState(false);
   const [profile, setProfile] = useState({
     firstName: '',
     lastName: '',
@@ -142,10 +138,8 @@ export const ConfigurationTab = memo(function ConfigurationTab({
   const [remoteState, setRemoteState] = useState<RemoteAccessState | null>(null);
   const [remoteDirsText, setRemoteDirsText] = useState("");
   const [remoteSaving, setRemoteSaving] = useState(false);
+  const [secretManagerOpen, setSecretManagerOpen] = useState(false);
 
-  useEffect(() => {
-    setSettings(coworkSettings);
-  }, [coworkSettings]);
 
   useEffect(() => {
     const loadRemoteAccessState = async () => {
@@ -282,21 +276,6 @@ export const ConfigurationTab = memo(function ConfigurationTab({
     }
   };
 
-  const handleToggle = async (key: keyof CoworkSettings) => {
-    const previousValue = settings[key];
-    const nextValue = !previousValue;
-
-    setSettings((prev) => ({ ...prev, [key]: nextValue }));
-    updateCoworkSettings({ [key]: nextValue } as Partial<CoworkSettings>);
-
-    try {
-      await window.electron.updateCoworkSettings({ [key]: nextValue });
-    } catch (error) {
-      console.error("Failed to update settings:", error);
-      setSettings((prev) => ({ ...prev, [key]: previousValue }));
-      updateCoworkSettings({ [key]: previousValue } as Partial<CoworkSettings>);
-    }
-  };
 
   const handleSaveRemoteAccess = async (updates: Partial<RemoteAccessSettings> = {}) => {
     if (!remoteState) return;
@@ -326,18 +305,6 @@ export const ConfigurationTab = memo(function ConfigurationTab({
     setRemoteDirsText((prev) => Array.from(new Set([...prev.split('\n').filter(Boolean), dir])).join('\n'));
   };
 
-  const handleReset = async () => {
-    setSettingsLoading(true);
-    try {
-      const defaultSettings = await window.electron.resetCoworkSettings();
-      setSettings(defaultSettings);
-      updateCoworkSettings(defaultSettings);
-    } catch (error) {
-      console.error("Failed to reset settings:", error);
-    } finally {
-      setSettingsLoading(false);
-    }
-  };
 
   const phoneNumberChanged = profile.phoneNumber.trim() !== verifiedPhoneNumber.trim();
   const canVerifyRequestedPhone = Boolean(
@@ -345,27 +312,19 @@ export const ConfigurationTab = memo(function ConfigurationTab({
   );
 
   return (
-    <div className="mx-auto max-w-4xl space-y-8">
-      <div className="rounded-3xl border border-[var(--color-border)] bg-gradient-to-br from-white to-blue-50/40 p-5 shadow-sm">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-600">Configuration</p>
-        <h2 className="mt-2 text-xl font-semibold text-ink-900">Set up your workspace</h2>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
-          Manage your identity, communication channels, integrations, and advanced developer options from one place.
-        </p>
-      </div>
-
+    <div className="mx-auto max-w-4xl space-y-5">
       <Section
         title="Your profile"
         description="Keep your Cowork identity up to date. Phone number helps match external channel messages to your account."
       >
         <Panel>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-3 md:grid-cols-4">
             <label className="block md:col-span-2">
               <span className="text-sm font-medium text-gray-700">Email</span>
               <input
                 value={profile.email}
                 disabled
-                className="mt-1 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500"
+                className="mt-1 h-9 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm text-gray-500"
               />
             </label>
 
@@ -374,7 +333,7 @@ export const ConfigurationTab = memo(function ConfigurationTab({
               <input
                 value={profile.firstName}
                 onChange={(event) => setProfile((prev) => ({ ...prev, firstName: event.target.value }))}
-                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="mt-1 h-9 w-full rounded-lg border border-gray-300 px-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </label>
 
@@ -383,11 +342,11 @@ export const ConfigurationTab = memo(function ConfigurationTab({
               <input
                 value={profile.lastName}
                 onChange={(event) => setProfile((prev) => ({ ...prev, lastName: event.target.value }))}
-                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="mt-1 h-9 w-full rounded-lg border border-gray-300 px-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </label>
 
-            <div className="block md:col-span-2">
+            <div className="block md:col-span-4">
               <label className="block">
                 <span className="text-sm font-medium text-gray-700">Phone number</span>
                 <input
@@ -401,41 +360,42 @@ export const ConfigurationTab = memo(function ConfigurationTab({
                     }
                   }}
                   placeholder="+918849286808"
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="mt-1 h-9 w-full rounded-lg border border-gray-300 px-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
               </label>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleRequestMobileOtp}
-                  disabled={mobileOtpSending || !profile.phoneNumber.trim() || !phoneNumberChanged}
-                  className="rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400"
-                >
-                  {mobileOtpSending ? 'Sending...' : 'Send OTP'}
-                </button>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                <span className="text-gray-500">Include country code.</span>
+                {!phoneNumberChanged && verifiedPhoneNumber ? (
+                  <span className="font-medium text-green-600">Verified</span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleRequestMobileOtp}
+                    disabled={mobileOtpSending || !profile.phoneNumber.trim() || !phoneNumberChanged}
+                    className="rounded-md border border-blue-200 px-2.5 py-1 font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400"
+                  >
+                    {mobileOtpSending ? 'Sending...' : 'Send OTP'}
+                  </button>
+                )}
                 {canVerifyRequestedPhone ? (
                   <>
                     <input
                       value={mobileOtp}
                       onChange={(event) => setMobileOtp(event.target.value)}
                       placeholder="Enter OTP"
-                      className="w-32 rounded-lg border border-gray-300 px-3 py-1.5 text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="h-7 w-28 rounded-md border border-gray-300 px-2 text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
                     <button
                       type="button"
                       onClick={handleVerifyMobileOtp}
                       disabled={mobileOtpVerifying || !mobileOtp.trim()}
-                      className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+                      className="rounded-md bg-blue-600 px-2.5 py-1 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
                     >
-                      {mobileOtpVerifying ? 'Verifying...' : 'Verify & save'}
+                      {mobileOtpVerifying ? 'Verifying...' : 'Verify'}
                     </button>
                   </>
                 ) : null}
-                {!phoneNumberChanged && verifiedPhoneNumber ? (
-                  <span className="text-xs font-medium text-green-600">Verified</span>
-                ) : null}
               </div>
-              <p className="mt-1 text-xs text-gray-500">Include country code. Changed phone numbers are saved only after OTP verification.</p>
               {mobileOtpMessage ? (
                 <p className={`mt-1 text-xs ${mobileOtpMessage.includes('sent') || mobileOtpMessage.includes('verified') ? 'text-green-600' : 'text-red-600'}`}>
                   {mobileOtpMessage}
@@ -444,11 +404,11 @@ export const ConfigurationTab = memo(function ConfigurationTab({
             </div>
           </div>
 
-          <div className="mt-4 flex items-center gap-3 border-t border-gray-100 pt-4">
+          <div className="mt-3 flex items-center gap-3 border-t border-gray-100 pt-3">
             <button
               onClick={handleSaveProfile}
               disabled={profileSaving || !profile.firstName.trim()}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+              className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
             >
               {profileSaving ? 'Saving...' : 'Save profile'}
             </button>
@@ -476,25 +436,19 @@ export const ConfigurationTab = memo(function ConfigurationTab({
             description="Configure Discord, Telegram, Slack, WhatsApp, and other chat entry points."
             onClick={onOpenChannels}
           />
-          {settings.showEmailAutomation ? (
-            <Panel className="md:col-span-2">
-              <IntegrationList
-                isEmailConnected={isEmailConnected}
-                unreadLabel={unreadLabel}
-                autoSyncEnabled={autoSyncEnabled}
-                onToggleAutoSync={onToggleAutoSync}
-                onConnect={onConnectEmail}
-                onDisconnect={onDisconnectEmail}
-                onOpenInbox={onOpenEmailView}
-                onRefresh={onRefreshEmails}
-                onManageRules={onOpenAddAgentsModal}
-              />
-            </Panel>
-          ) : (
-            <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600">
-              Email automation is hidden. Enable it under Feature visibility below to configure mailbox workflows.
-            </div>
-          )}
+          <Panel className="md:col-span-2">
+            <IntegrationList
+              isEmailConnected={isEmailConnected}
+              unreadLabel={unreadLabel}
+              autoSyncEnabled={autoSyncEnabled}
+              onToggleAutoSync={onToggleAutoSync}
+              onConnect={onConnectEmail}
+              onDisconnect={onDisconnectEmail}
+              onOpenInbox={onOpenEmailView}
+              onRefresh={onRefreshEmails}
+              onManageRules={onOpenAddAgentsModal}
+            />
+          </Panel>
         </div>
       </Section>
 
@@ -531,6 +485,18 @@ export const ConfigurationTab = memo(function ConfigurationTab({
           <ActionCard
             icon={
               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="11" width="18" height="10" rx="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                <circle cx="12" cy="16" r="1" />
+              </svg>
+            }
+            label="Runtime secrets"
+            description="Add encrypted account secrets for agents and tools, exposed as environment variables."
+            onClick={() => setSecretManagerOpen(true)}
+          />
+          <ActionCard
+            icon={
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
                 <polyline points="4 17 10 11 4 5" />
                 <line x1="12" y1="19" x2="20" y2="19" />
               </svg>
@@ -539,21 +505,44 @@ export const ConfigurationTab = memo(function ConfigurationTab({
             description="Open a command-line interface for direct runtime operations."
             onClick={onOpenLettaCli}
           />
-          {settings.showLettaEnv ? (
-            <ActionCard
-              icon={
-                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="3" />
-                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14" />
-                </svg>
-              }
-              label="Environment variables"
-              description="Manage advanced Letta and Vera environment configuration."
-              onClick={() => onLettaEnvOpenChange(!lettaEnvOpen)}
-            />
-          ) : null}
+          <ActionCard
+            icon={
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14" />
+              </svg>
+            }
+            label="Environment variables"
+            description="Manage advanced Letta and Vera environment configuration."
+            onClick={() => onLettaEnvOpenChange(!lettaEnvOpen)}
+          />
         </div>
       </Section>
+
+      {secretManagerOpen ? (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setSecretManagerOpen(false)}
+          />
+          <div className="relative mx-4 flex max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b p-4">
+              <h2 className="text-xl font-semibold text-gray-900">Runtime secrets</h2>
+              <button
+                onClick={() => setSecretManagerOpen(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="overflow-auto">
+              <SecretManager />
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <Section
         title="Remote access"
@@ -622,68 +611,9 @@ export const ConfigurationTab = memo(function ConfigurationTab({
         </Panel>
       </Section>
 
-      <Section
-        title="Feature visibility"
-        description="Control which configuration areas are visible in the app. These toggles take effect immediately."
-      >
-        <Panel>
-          <div className="divide-y divide-gray-100">
-            <SettingToggle
-              label="Email automation"
-              description="Show mailbox connection, auto-sync, and email workflow controls."
-              enabled={settings.showEmailAutomation}
-              onToggle={() => handleToggle('showEmailAutomation')}
-            />
-            <SettingToggle
-              label="Environment variables"
-              description="Show advanced Vera and Letta environment controls."
-              enabled={settings.showLettaEnv}
-              onToggle={() => handleToggle('showLettaEnv')}
-            />
-          </div>
-          <div className="mt-4 border-t border-gray-100 pt-4 text-right">
-            <button
-              onClick={handleReset}
-              disabled={settingsLoading}
-              className="text-sm text-gray-500 hover:text-gray-700 disabled:opacity-50"
-            >
-              {settingsLoading ? 'Resetting...' : 'Reset visibility defaults'}
-            </button>
-          </div>
-        </Panel>
-      </Section>
     </div>
   );
 });
 
-interface SettingToggleProps {
-  label: string;
-  description: string;
-  enabled: boolean;
-  onToggle: () => void;
-}
-
-function SettingToggle({ label, description, enabled, onToggle }: SettingToggleProps) {
-  return (
-    <div className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
-      <div>
-        <p className="text-sm font-medium text-gray-900">{label}</p>
-        <p className="mt-0.5 text-xs leading-5 text-gray-500">{description}</p>
-      </div>
-      <button
-        onClick={onToggle}
-        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-          enabled ? 'bg-blue-500' : 'bg-gray-200'
-        }`}
-      >
-        <span
-          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-            enabled ? 'translate-x-6' : 'translate-x-1'
-          }`}
-        />
-      </button>
-    </div>
-  );
-}
 
 export default ConfigurationTab;

@@ -33,6 +33,19 @@ export interface OrganizationUser {
   role?: string;
 }
 
+export interface AgentSecret {
+  id: string;
+  name: string;
+  keyVersion?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface UpsertAgentSecretInput {
+  name: string;
+  value: string;
+}
+
 // ============================================
 // Channel Types
 // ============================================

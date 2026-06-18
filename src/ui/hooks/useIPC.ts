@@ -6,13 +6,14 @@ export function useIPC(onEvent: (event: ServerEvent) => void) {
   const unsubscribeRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    // Subscribe to server events
-    const unsubscribe = window.electron.onServerEvent((event: ServerEvent) => {
+    // Subscribe to server events when running inside Electron.
+    // Browser-only shells do not expose window.electron.
+    const unsubscribe = window.electron?.onServerEvent?.((event: ServerEvent) => {
       onEvent(event);
-    });
+    }) ?? (() => {});
     
     unsubscribeRef.current = unsubscribe;
-    setConnected(true);
+    setConnected(Boolean(window.electron?.onServerEvent));
 
     return () => {
       if (unsubscribeRef.current) {
@@ -24,6 +25,10 @@ export function useIPC(onEvent: (event: ServerEvent) => void) {
   }, [onEvent]);
 
   const sendEvent = useCallback((event: ClientEvent) => {
+    if (!window.electron?.sendClientEvent) {
+      console.warn('[useIPC] sendClientEvent unavailable outside Electron', event);
+      return;
+    }
     window.electron.sendClientEvent(event);
   }, []);
 

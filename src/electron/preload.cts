@@ -241,7 +241,7 @@ electron.contextBridge.exposeInMainWorld("electron", {
         electron.ipcRenderer.invoke("api:request-email-otp", email),
     apiVerifyEmailOtp: (email: string, otp: string) =>
         electron.ipcRenderer.invoke("api:verify-email-otp", { email, otp }),
-    apiRegister: (data: { email: string; password: string; firstName?: string; lastName?: string; organizationId?: string }) =>
+    apiRegister: (data: { email: string; password: string; firstName?: string; lastName?: string; phoneNumber?: string; organizationId?: string }) =>
         electron.ipcRenderer.invoke("api:register", data),
     apiListWorkspaces: () =>
         electron.ipcRenderer.invoke("api:list-workspaces"),
@@ -265,6 +265,12 @@ electron.contextBridge.exposeInMainWorld("electron", {
         electron.ipcRenderer.invoke("api:list-organization-channels"),
     apiListOrganizationUsers: () =>
         electron.ipcRenderer.invoke("api:list-organization-users"),
+    apiListAgentSecrets: () =>
+        electron.ipcRenderer.invoke("api:list-agent-secrets"),
+    apiUpsertAgentSecret: (data: { name: string; value: string }) =>
+        electron.ipcRenderer.invoke("api:upsert-agent-secret", data),
+    apiDeleteAgentSecret: (id: string) =>
+        electron.ipcRenderer.invoke("api:delete-agent-secret", id),
     apiCreateChannel: (data: { provider: string; name: string; externalId?: string; config?: any }) =>
         electron.ipcRenderer.invoke("api:create-channel", data),
     apiGetChannel: (channelId: string) =>

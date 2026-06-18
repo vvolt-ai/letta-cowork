@@ -20,6 +20,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   const [otpSent, setOtpSent] = useState(false);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [workspaceMode, setWorkspaceMode] = useState<"new" | "existing">("new");
   const [organizationId, setOrganizationId] = useState("");
   const [workspaces, setWorkspaces] = useState<WorkspaceOption[]>([]);
@@ -108,12 +109,14 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
           setError(result.error || "Login failed");
         }
       } else {
+        const normalizedPhoneNumber = phoneNumber.trim();
         console.log('[LoginScreen] Calling apiRegister...');
         const result = await api.apiRegister({
           email,
           password,
           firstName: firstName || undefined,
           lastName: lastName || undefined,
+          phoneNumber: normalizedPhoneNumber,
           organizationId: workspaceMode === "existing" ? organizationId.trim() || undefined : undefined,
         });
         console.log('[LoginScreen] Register result:', result);
@@ -213,6 +216,22 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                     className="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                     placeholder="Doe"
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Phone Number <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    required
+                    className="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                    placeholder="+918849286808"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    Include country code. A phone number can only be registered once.
+                  </p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -350,7 +369,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
 
             <button
               type="submit"
-              disabled={loading || workspacesLoading || !email || (mode === "login" && otpSent && otp.length !== 6) || (mode === "register" && (!password || !firstName || password.length < 12 || (workspaceMode === "existing" && !organizationId)))}
+              disabled={loading || workspacesLoading || !email || (mode === "login" && otpSent && otp.length !== 6) || (mode === "register" && (!password || !firstName || !phoneNumber.trim() || password.length < 12 || (workspaceMode === "existing" && !organizationId)))}
               className="w-full py-2.5 px-4 rounded-lg bg-gradient-to-r from-blue-500 to-purple-600 text-white font-medium hover:from-blue-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               {loading ? (

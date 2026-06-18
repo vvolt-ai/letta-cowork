@@ -103,7 +103,7 @@ export const odooFieldsHandler: ExpressHandler = async (req: Request, res: Respo
 
 /**
  * POST /odoo/run-tool
- * Run any allowlisted read-only Odoo MCP tool by name
+ * Run any allowlisted Odoo MCP tool by name through Vera Cowork server.
  */
 export const odooRunToolHandler: ExpressHandler = async (req: Request, res: Response) => {
   const body = req.body as OdooRunToolBody;
@@ -111,5 +111,5 @@ export const odooRunToolHandler: ExpressHandler = async (req: Request, res: Resp
     res.status(400).json({ ok: false, error: 'VALIDATION_ERROR', message: 'Missing required field: toolName' });
     return;
   }
-  await proxyOdooRequest('/odoo/run-read-tool', 'POST', { toolName: body.toolName, args: body.args ?? {} }, res);
+  await proxyOdooRequest('/odoo/run-tool', 'POST', { toolName: body.toolName, args: body.args ?? {} }, res);
 };

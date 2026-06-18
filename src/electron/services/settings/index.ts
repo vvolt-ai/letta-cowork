@@ -112,14 +112,14 @@ const PROCESSED_UNREAD_RETENTION_DAYS = 30;
 const PROCESSED_UNREAD_RETENTION_MS = PROCESSED_UNREAD_RETENTION_DAYS * 24 * 60 * 60 * 1000;
 const PROCESSED_UNREAD_MAX_ENTRIES = 5000;
 
-// Default settings - all disabled
+// Default settings - visible by default
 const defaultSettings: CoworkSettings = {
-  showWhatsApp: false,
-  showTelegram: false,
-  showSlack: false,
-  showDiscord: false,
-  showEmailAutomation: false,
-  showLettaEnv: false,
+  showWhatsApp: true,
+  showTelegram: true,
+  showSlack: true,
+  showDiscord: true,
+  showEmailAutomation: true,
+  showLettaEnv: true,
 };
 
 const defaultAutoSyncUnreadConfig: AutoSyncUnreadConfig = {
