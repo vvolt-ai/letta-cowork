@@ -1127,6 +1127,7 @@ export class WsSession {
                 return;
             }
             case "letta_ping":
+            case "ping":
                 return;
             case "response_state":
                 // Letta Code v0.27.4 streams response-state cache markers for
