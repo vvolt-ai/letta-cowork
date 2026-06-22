@@ -316,6 +316,19 @@ export class WsSession {
             );
         };
 
+        // Detect Letta's transient per-conversation single-flight guard.
+        // This is not a bad tool result and not a stuck approval: it means a
+        // previous background run is still finalizing server-side. Retrying a
+        // little later is correct; surfacing this as a terminal session error
+        // makes the UI look like the agent stopped whenever a user sends the
+        // next message a few seconds too early.
+        const isConversationBusyConflictError = (msg: string): boolean => {
+            return (
+                /\b409\b|CONFLICT/i.test(msg) &&
+                /(another request|currently being processed|please wait for it to complete|run_id=run-|"run_id"\s*:)/i.test(msg)
+            );
+        };
+
         // Detect transient network/socket failures mid-stream. Letta cloud's
         // SSE stream can be killed by intermediate proxies, idle timeouts, or
         // brief WAN blips — all recoverable by reconnecting. Covers undici
@@ -353,6 +366,8 @@ export class WsSession {
             // are recoverable by reconnecting the SSE stream.
             const MAX_NETWORK_RETRIES = 4;
             let networkRetries = 0;
+            const MAX_BUSY_RETRIES = 12;
+            let busyRetries = 0;
 
             // eslint-disable-next-line no-constant-condition
             while (true) {
@@ -672,6 +687,30 @@ export class WsSession {
                         );
                     }
                     // Loop back and retry the pump from scratch.
+                    continue;
+                }
+
+                if (
+                    isConversationBusyConflictError(errMessage) &&
+                    busyRetries < MAX_BUSY_RETRIES
+                ) {
+                    busyRetries++;
+                    const backoffMs = Math.min(10_000, 1000 + busyRetries * 1000);
+                    console.warn(
+                        `[WsSession] conversation busy conflict (retry ${busyRetries}/${MAX_BUSY_RETRIES} in ${backoffMs}ms):`,
+                        errMessage
+                    );
+                    await new Promise<void>((resolve) => {
+                        const t = setTimeout(resolve, backoffMs);
+                        if (ctrl.signal.aborted) {
+                            clearTimeout(t);
+                            resolve();
+                        }
+                    });
+                    if (ctrl.signal.aborted) {
+                        this.activePumps.delete(ctrl);
+                        return;
+                    }
                     continue;
                 }
 
