@@ -25,13 +25,19 @@ const PERMISSION_MODE_DESCRIPTIONS: Record<PermissionMode, string> = {
     unrestricted: "All tools auto-approved. Bias toward action.",
 };
 
+const ODOO_OPERATIONS_REMINDER = `${SYSTEM_REMINDER_OPEN}
+Odoo/ERP operations routing: for Odoo read/search/count/group/report operations, always use direct mounted Odoo tools when available: odoo_search, odoo_count, odoo_group, odoo_get_models, or odoo_get_fields. Do not use Bash, Python scripts, Task/subagents, or legacy Odoo skills for normal Odoo lookups. Use Odoo skills only as documentation fallback when direct Odoo tools are unavailable, or when explicitly requested.
+${SYSTEM_REMINDER_CLOSE}`;
+
 export interface ReminderState {
     /** Last permission mode we told the agent about, so we only emit on changes. */
     lastNotifiedPermissionMode: PermissionMode | null;
+    /** Odoo routing guard only needs to be injected once per session. */
+    odooRoutingReminderSent: boolean;
 }
 
 export function createReminderState(): ReminderState {
-    return { lastNotifiedPermissionMode: null };
+    return { lastNotifiedPermissionMode: null, odooRoutingReminderSent: false };
 }
 
 /**
@@ -125,6 +131,11 @@ export function buildTurnReminders(args: {
     workingDirectory: string;
 }): string {
     const parts: string[] = [];
+
+    if (!args.state.odooRoutingReminderSent) {
+        parts.push(ODOO_OPERATIONS_REMINDER);
+        args.state.odooRoutingReminderSent = true;
+    }
 
     const permReminder = buildPermissionModeReminder(args.planMode.getMode(), args.state);
     if (permReminder) parts.push(permReminder);

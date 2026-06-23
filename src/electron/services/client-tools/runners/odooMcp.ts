@@ -86,17 +86,17 @@ const callMethodParameters = {
 const mountedTools: MountedOdooTool[] = [
   {
     name: "odoo_search",
-    description: "Direct mounted Odoo MCP tool: search/read Odoo records. Use this instead of Bash, Skill, or Task for normal Odoo lookups.",
+    description: "Direct mounted Odoo MCP tool: search/read Odoo records. Always use this instead of Bash, Python skill scripts, Skill, or Task for normal Odoo lookups.",
     parameters: searchParameters,
   },
   {
     name: "odoo_count",
-    description: "Direct mounted Odoo MCP tool: count Odoo records matching a domain. Use this instead of Bash, Skill, or Task.",
+    description: "Direct mounted Odoo MCP tool: count Odoo records matching a domain. Always use this instead of Bash, Python skill scripts, Skill, or Task.",
     parameters: { ...searchParameters, properties: { model: searchParameters.properties.model, domain: searchParameters.properties.domain }, required: ["model"] },
   },
   {
     name: "odoo_group",
-    description: "Direct mounted Odoo MCP tool: grouped Odoo aggregation/reporting. Use for totals by customer, state, owner, etc.",
+    description: "Direct mounted Odoo MCP tool: grouped Odoo aggregation/reporting. Use for totals by customer, state, owner, etc. Prefer this direct tool over Bash, Python skill scripts, Skill, or Task.",
     parameters: {
       type: "object",
       properties: {
@@ -114,12 +114,12 @@ const mountedTools: MountedOdooTool[] = [
   },
   {
     name: "odoo_get_models",
-    description: "Direct mounted Odoo MCP tool: list/discover available Odoo models. Use when model choice is unclear.",
+    description: "Direct mounted Odoo MCP tool: list/discover available Odoo models. Use when model choice is unclear. Prefer this direct tool over legacy Odoo skills/scripts.",
     parameters: modelParameters,
   },
   {
     name: "odoo_get_fields",
-    description: "Direct mounted Odoo MCP tool: inspect fields for one Odoo model before complex reads/writes.",
+    description: "Direct mounted Odoo MCP tool: inspect fields for one Odoo model before complex reads/writes. Prefer this direct tool over legacy Odoo skills/scripts.",
     parameters: fieldsParameters,
   },
   {
