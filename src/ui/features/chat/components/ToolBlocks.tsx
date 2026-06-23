@@ -59,6 +59,28 @@ function summarizeToolInput(name: string, input?: string | null): string | null 
     return fileMatch ? `Wrote (${fileMatch[1]})` : "Wrote file contents";
   }
 
+  if (name === "LiveProposePatch") {
+    try {
+      const parsed = JSON.parse(trimmed);
+      return parsed?.title ? `Proposed patch: ${parsed.title}` : "Proposed live patch";
+    } catch {
+      return "Proposed live patch";
+    }
+  }
+
+  if (name === "LiveApplyPatch") return "Applied live patch";
+  if (name === "LiveRejectPatch") return "Rejected live patch";
+  if (name === "ProjectRunScript") {
+    try {
+      const parsed = JSON.parse(trimmed);
+      return parsed?.script ? `Run script: ${parsed.script}` : "Run project script";
+    } catch {
+      return "Run project script";
+    }
+  }
+  if (name.startsWith("ProjectMemory")) return "Project memory";
+  if (name.startsWith("Code")) return "Code intelligence";
+
   return trimmed.length > 140 ? `${trimmed.slice(0, 137)}…` : trimmed;
 }
 

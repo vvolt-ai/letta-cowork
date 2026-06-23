@@ -13,6 +13,7 @@ import { bashTool } from "./runners/bash.js";
 import { lettaCodeTools } from "./runners/letta_tools/index.js";
 import { listSkillsTool, skillTool } from "./runners/skill.js";
 import { productivityTools } from "./runners/productivity.js";
+import { codingTools } from "./runners/coding.js";
 import { odooMcpTools } from "./runners/odooMcp.js";
 import { emitExtensionToolStart } from "../extensions/extension-events.js";
 import type {
@@ -40,6 +41,7 @@ function register(def: ClientToolDefinition): void {
 //   • TodoWrite, AskUserQuestion — workflow
 //   • Skill, list_skills — kept from our earlier impl
 //   • ProjectContext, Git, LogTail, WebFetch, MemoryNotes, UserPreferences, Reminders — Cowork productivity tools
+//   • ProjectDetect, ProjectMap, ProjectRunScript, ProjectMemory*, LivePatch*, GitChangedByAgent, GitDiffSummary, LogSearch — Cowork coding workflow tools
 //
 // Deferred (need agent runtime / memory subsystem / UI hooks):
 //   BashOutput, KillBash, EnterPlanMode, ExitPlanMode,
@@ -50,6 +52,7 @@ for (const tool of lettaCodeTools) register(tool);
 register(skillTool);
 register(listSkillsTool);
 for (const tool of productivityTools) register(tool);
+for (const tool of codingTools) register(tool);
 for (const tool of odooMcpTools) register(tool);
 
 export function registerClientTool(def: ClientToolDefinition): void {

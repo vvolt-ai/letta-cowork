@@ -18,6 +18,7 @@ import type {
     ClientToolDefinition,
     ToolRunResult,
 } from "../../types.js";
+import { noteToolTouchedFiles } from "../coding.js";
 
 import ApplyPatchSchema from "../_shared/schemas/ApplyPatch.json" with { type: "json" };
 import AskUserQuestionSchema from "../_shared/schemas/AskUserQuestion.json" with { type: "json" };
@@ -164,6 +165,23 @@ function adaptResult(raw: unknown): ToolRunResult {
     return { output: String(raw ?? ""), isError: false };
 }
 
+function touchedFilesForTool(name: string, args: Record<string, unknown>): string[] {
+    if (["Edit", "MultiEdit", "Write"].includes(name) && typeof args.file_path === "string") {
+        return [args.file_path];
+    }
+    if (name === "ApplyPatch" && typeof args.input === "string") {
+        const files = new Set<string>();
+        const marker = /\*\*\* (?:Add File|Update File|Delete File):\s+(.+)$/gm;
+        let match: RegExpExecArray | null;
+        while ((match = marker.exec(args.input)) !== null) {
+            const file = match[1]?.trim();
+            if (file && !file.includes("..") && !file.startsWith("/")) files.add(file);
+        }
+        return Array.from(files);
+    }
+    return [];
+}
+
 function makeTool(
     name: string,
     description: string,
@@ -187,7 +205,17 @@ function makeTool(
                     _runtime_conversation_id: ctx.conversationId,
                     _runtime_plan_mode: ctx.planMode,
                 });
-                return adaptResult(out);
+                const result = adaptResult(out);
+                if (!result.isError) {
+                    const touched = touchedFilesForTool(name, args);
+                    if (touched.length > 0) {
+                        await noteToolTouchedFiles(process.env.USER_CWD || process.cwd(), touched, name, {
+                            agentId: ctx.agentId,
+                            conversationId: ctx.conversationId,
+                        });
+                    }
+                }
+                return result;
             } catch (err) {
                 return {
                     output:
