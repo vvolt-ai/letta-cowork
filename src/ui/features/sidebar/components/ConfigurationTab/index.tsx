@@ -1,6 +1,4 @@
 import { memo, useEffect, useState } from "react";
-import { SecretManager } from "../../../settings/components/SecretManager/SecretManager";
-import { IntegrationList } from "../IntegrationList";
 
 interface ConfigurationTabProps {
   coworkSettings: CoworkSettings;
@@ -64,36 +62,6 @@ function Section({
       </div>
       {children}
     </section>
-  );
-}
-
-function ActionCard({
-  icon,
-  label,
-  description,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  description: string;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="group flex min-h-[72px] w-full items-start gap-3 rounded-xl border border-[var(--color-border)] bg-white p-3 text-left transition hover:border-[var(--color-accent)]/50 hover:bg-gray-50 hover:shadow-sm"
-    >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 transition group-hover:bg-blue-100">
-        {icon}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-[13.5px] font-semibold text-ink-900">{label}</span>
-        <span className="mt-0.5 block text-[12px] leading-4 text-muted">{description}</span>
-      </span>
-      <svg className="mt-1 h-4 w-4 shrink-0 text-ink-300 transition group-hover:translate-x-0.5 group-hover:text-ink-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="m9 6 6 6-6 6" />
-      </svg>
-    </button>
   );
 }
 
@@ -355,20 +323,13 @@ export const ConfigurationTab = memo(function ConfigurationTab({
                 <span className="text-sm font-medium text-gray-700">Phone number</span>
                 <input
                   value={profile.phoneNumber}
-                  onChange={(event) => {
-                    setProfile((prev) => ({ ...prev, phoneNumber: event.target.value }));
-                    setMobileOtpMessage(null);
-                    if (mobileOtpRequestedFor && event.target.value.trim() !== mobileOtpRequestedFor) {
-                      setMobileOtpRequestedFor(null);
-                      setMobileOtp('');
-                    }
-                  }}
+                  readOnly
                   placeholder="+918849286808"
-                  className="mt-1 h-9 w-full rounded-lg border border-gray-300 px-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="mt-1 h-9 w-full cursor-not-allowed rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm text-gray-600"
                 />
               </label>
               <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                <span className="text-gray-500">Include country code.</span>
+                <span className="text-gray-500">Phone number is managed from your account and cannot be edited here.</span>
                 {!phoneNumberChanged && verifiedPhoneNumber ? (
                   <span className="font-medium text-green-600">Verified</span>
                 ) : (
@@ -442,129 +403,6 @@ export const ConfigurationTab = memo(function ConfigurationTab({
             onClick={onOpenSuperAdmin}
           />
         </Section>
-      ) : null}
-
-      <Section
-        title="Communication"
-        description="Connect where Cowork should listen and respond. Channels are for chat platforms; email automation handles mailbox workflows."
-      >
-        <div className="grid gap-3 md:grid-cols-2">
-          <ActionCard
-            icon={
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
-            }
-            label="Channels"
-            description="Configure Discord, Telegram, Slack, WhatsApp, and other chat entry points."
-            onClick={onOpenChannels}
-          />
-          <Panel className="md:col-span-2">
-            <IntegrationList
-              isEmailConnected={isEmailConnected}
-              unreadLabel={unreadLabel}
-              autoSyncEnabled={autoSyncEnabled}
-              onToggleAutoSync={onToggleAutoSync}
-              onConnect={onConnectEmail}
-              onDisconnect={onDisconnectEmail}
-              onOpenInbox={onOpenEmailView}
-              onRefresh={onRefreshEmails}
-              onManageRules={onOpenAddAgentsModal}
-            />
-          </Panel>
-        </div>
-      </Section>
-
-      <Section
-        title="Agent tools"
-        description="Install skills, connect external MCP providers, or open the Letta CLI for advanced agent work."
-      >
-        <div className="grid gap-3 md:grid-cols-2">
-          <ActionCard
-            icon={
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-            }
-            label="Download skill"
-            description="Install a reusable skill from a URL."
-            onClick={onOpenSkillDownload}
-          />
-          <ActionCard
-            icon={
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="4" width="18" height="6" rx="1.5" />
-                <rect x="3" y="14" width="18" height="6" rx="1.5" />
-                <circle cx="7" cy="7" r="0.5" fill="currentColor" />
-                <circle cx="7" cy="17" r="0.5" fill="currentColor" />
-              </svg>
-            }
-            label="MCP servers"
-            description="Connect external tool providers like Ryze, Composio, or custom MCP endpoints."
-            onClick={onOpenMcpServers}
-          />
-          <ActionCard
-            icon={
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="11" width="18" height="10" rx="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                <circle cx="12" cy="16" r="1" />
-              </svg>
-            }
-            label="Runtime secrets"
-            description="Add encrypted account secrets for agents and tools, exposed as environment variables."
-            onClick={() => setSecretManagerOpen(true)}
-          />
-          <ActionCard
-            icon={
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="4 17 10 11 4 5" />
-                <line x1="12" y1="19" x2="20" y2="19" />
-              </svg>
-            }
-            label="Letta CLI"
-            description="Open a command-line interface for direct runtime operations."
-            onClick={onOpenLettaCli}
-          />
-          <ActionCard
-            icon={
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="3" />
-                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14" />
-              </svg>
-            }
-            label="Environment variables"
-            description="Manage advanced Letta and Vera environment configuration."
-            onClick={() => onLettaEnvOpenChange(!lettaEnvOpen)}
-          />
-        </div>
-      </Section>
-
-      {secretManagerOpen ? (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setSecretManagerOpen(false)}
-          />
-          <div className="relative mx-4 flex max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b p-4">
-              <h2 className="text-xl font-semibold text-gray-900">Runtime secrets</h2>
-              <button
-                onClick={() => setSecretManagerOpen(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="overflow-auto">
-              <SecretManager />
-            </div>
-          </div>
-        </div>
       ) : null}
 
       <Section

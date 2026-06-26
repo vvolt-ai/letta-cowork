@@ -4,22 +4,15 @@ import { useAutoRecoverStuckRuns } from "./hooks/useAutoRecoverStuckRuns";
 import { useMessageWindow } from "./hooks/useMessageWindow";
 import { useAppStore } from "./store/useAppStore";
 import type { ServerEvent } from "./types";
-import { Sidebar } from "./features/sidebar/components/Sidebar";
 import { StartSessionModal } from "./features/chat/components/StartSessionModal";
 import { useZohoEmail } from "./hooks/useZohoEmail";
 import { useEmailAsInput } from "./hooks/useEmailAsInput";
 import { useEmailSelection } from "./hooks/useEmailSelection";
-import { WorkspaceLayout } from "./features/layout/components/WorkspaceLayout";
-import { ChatWorkspace } from "./features/chat/components/ChatWorkspace";
 import { ConfigurationTab } from "./features/sidebar/components/ConfigurationTab";
-import { SkillsPanel } from "./features/skills/SkillsPanel";
-import { SchedulesPanel } from "./features/scheduler/SchedulesPanel";
-import { RunsDebuggerPanel } from "./features/runs-debugger";
 import { SkillDownloadDialog } from "./features/settings/components/SkillDownloadDialog";
 import { LettaTerminal } from "./features/settings/components/LettaTerminal";
 import { useDownloadSkill } from "./hooks/useDownloadSkill";
 import * as Dialog from "@radix-ui/react-dialog";
-import { ActivityPanel } from "./features/activity/components/ActivityPanel";
 import { GlobalErrorToast } from "./features/system/components/GlobalErrorToast";
 import { EmailDetailsDialog } from "./features/email/components/EmailDetailsDialog";
 import { CoworkSettingsDialog } from "./features/settings/components/CoworkSettingsDialog";
@@ -666,6 +659,49 @@ function App() {
       });
     }
   }, [agentStatus]);
+
+  // Config-only home keeps the existing app/session/email hooks initialized for dialogs,
+  // but does not render the chat workspace, sidebar, activity panel, or email inbox.
+  void user;
+  void hasNewMessages;
+  void isActivityOpen;
+  void showConfiguration;
+  void showSkills;
+  void showRuns;
+  void runsPresetConversationId;
+  void setRunsPresetConversationId;
+  void scheduleAgents;
+  void isFetchingEmailContent;
+  void processEmailToAgent;
+  void processingEmailId;
+  void awaitingConversationEmailId;
+  void errorEmailId;
+  void setEmailAsInput;
+  void isProcessingEmailInput;
+  void emails;
+  void handleLoadMoreEmails;
+  void handleAddAutoSyncAgent;
+  void handleRemoveAutoSyncAgent;
+  void handleAddAutoSyncRoutingRule;
+  void handleRemoveAutoSyncRoutingRule;
+  void activeSession;
+  void permissionRequests;
+  void handleDeleteSession;
+  void handlePermissionResult;
+  void visibleMessages;
+  void partialMessage;
+  void showPartialMessage;
+  void partialReasoning;
+  void handleStartSessionClickWithEnv;
+  void runAutoSyncNow;
+  void handleScroll;
+  void handleLoadMoreHistory;
+  void handleToggleActivityPanel;
+  void handleSidebarWidthChange;
+  void scrollToBottom;
+  void handleSendMessage;
+  void reasoningSteps;
+  void toolExecutions;
 
   // Show loading while checking auth
   if (isAuthLoading) {
