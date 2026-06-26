@@ -358,20 +358,13 @@ export const ConfigurationTab = memo(function ConfigurationTab({
                 <span className="text-sm font-medium text-ink-700">Phone number</span>
                 <input
                   value={profile.phoneNumber}
-                  onChange={(event) => {
-                    setProfile((prev) => ({ ...prev, phoneNumber: event.target.value }));
-                    setMobileOtpMessage(null);
-                    if (mobileOtpRequestedFor && event.target.value.trim() !== mobileOtpRequestedFor) {
-                      setMobileOtpRequestedFor(null);
-                      setMobileOtp('');
-                    }
-                  }}
+                  readOnly
                   placeholder="+918849286808"
-                  className="mt-1 h-9 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-sm text-ink-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="mt-1 h-9 w-full cursor-not-allowed rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm text-gray-600"
                 />
               </label>
               <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                <span className="text-muted">Include country code.</span>
+                <span className="text-gray-500">Phone number is managed from your account and cannot be edited here.</span>
                 {!phoneNumberChanged && verifiedPhoneNumber ? (
                   <span className="font-medium text-success">Verified</span>
                 ) : (
