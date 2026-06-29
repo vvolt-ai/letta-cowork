@@ -232,6 +232,11 @@ interface Window {
       channels?: any[];
       error?: string;
     }>;
+    apiListAccessibleChannels: () => Promise<{
+      success: boolean;
+      channels?: any[];
+      error?: string;
+    }>;
     apiListOrganizationUsers: () => Promise<{
       success: boolean;
       users?: any[];
@@ -268,6 +273,21 @@ interface Window {
     }>;
     apiDeleteChannel: (channelId: string) => Promise<{
       success: boolean;
+      error?: string;
+    }>;
+    apiListChannelShares: (channelId: string) => Promise<{
+      success: boolean;
+      shares?: any[];
+      error?: string;
+    }>;
+    apiShareChannel: (channelId: string, data: { userId: string; permission?: "read" | "write" | "admin" }) => Promise<{
+      success: boolean;
+      share?: any;
+      error?: string;
+    }>;
+    apiRevokeChannelShare: (channelId: string, shareId: string) => Promise<{
+      success: boolean;
+      share?: any;
       error?: string;
     }>;
 

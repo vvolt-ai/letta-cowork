@@ -9,6 +9,7 @@ interface ChannelListProps {
   onStop: (channelId: string) => void;
   onOpenCredentials: (channel: Channel) => void;
   onOpenConfig: (channel: Channel) => void;
+  onOpenSharing: (channel: Channel) => void;
   onDelete: (channelId: string) => void;
 }
 
@@ -19,6 +20,7 @@ export function ChannelList({
   onStop,
   onOpenCredentials,
   onOpenConfig,
+  onOpenSharing,
   onDelete,
 }: ChannelListProps) {
   if (channels.length === 0) {
@@ -43,6 +45,7 @@ export function ChannelList({
             onStop={onStop}
             onOpenCredentials={onOpenCredentials}
             onOpenConfig={onOpenConfig}
+            onOpenSharing={onOpenSharing}
             onDelete={onDelete}
           />
         );

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { ChannelsManagerProps } from '../types';
 import { useChannelBridge } from '../hooks/useChannelBridge';
 import { useChannelManager } from '../hooks/useChannelManager';
@@ -7,8 +7,11 @@ import { CreateChannelModal } from '../CreateChannelModal';
 import { CredentialsModal } from '../CredentialsModal';
 import { ConfigModal } from '../ConfigModal';
 import { ConnectorMarketplace } from '../ConnectorMarketplace';
+import { ChannelSharingModal } from '../ChannelSharingModal';
+import type { Channel } from '../types';
 
 export function ChannelsManager({ onAuthError }: ChannelsManagerProps) {
+  const [sharingChannel, setSharingChannel] = useState<Channel | null>(null);
   const {
     channels,
     organizationChannels,
@@ -111,6 +114,7 @@ export function ChannelsManager({ onAuthError }: ChannelsManagerProps) {
         onStop={onStop}
         onOpenCredentials={handleOpenCredentials}
         onOpenConfig={handleOpenConfig}
+        onOpenSharing={setSharingChannel}
         onDelete={handleDeleteChannel}
       />
 
@@ -151,6 +155,14 @@ export function ChannelsManager({ onAuthError }: ChannelsManagerProps) {
           saving={savingConfig}
           onClose={() => setShowConfigModal(false)}
           onSave={handleSaveConfig}
+        />
+      )}
+
+      {sharingChannel && (
+        <ChannelSharingModal
+          channel={sharingChannel}
+          onClose={() => setSharingChannel(null)}
+          onChanged={loadChannels}
         />
       )}
     </div>

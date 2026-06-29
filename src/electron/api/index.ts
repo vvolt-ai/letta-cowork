@@ -8,6 +8,7 @@
 export type {
   AuthTokens,
   Channel,
+  ChannelShare,
   ChannelRuntimeStatus,
   ChannelCredentials,
   MessageLog,

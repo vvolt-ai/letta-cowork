@@ -16,7 +16,9 @@ export function useChannelBridge(onAuthError?: ChannelsManagerProps['onAuthError
       const api = getApi();
       console.log('[useChannelBridge] Loading channels...');
       const [result, organizationResult] = await Promise.all([
-        api.apiListChannels(),
+        typeof api.apiListAccessibleChannels === 'function'
+          ? api.apiListAccessibleChannels()
+          : api.apiListChannels(),
         typeof api.apiListOrganizationChannels === 'function'
           ? api.apiListOrganizationChannels()
           : api.apiListChannels(),

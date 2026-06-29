@@ -8,6 +8,7 @@ interface ChannelActionsProps {
   onStop: (channelId: string) => void;
   onOpenCredentials: (channel: Channel) => void;
   onOpenConfig: (channel: Channel) => void;
+  onOpenSharing: (channel: Channel) => void;
   onDelete: (channelId: string) => void;
 }
 
@@ -22,14 +23,20 @@ export function ChannelActions({
   onStop,
   onOpenCredentials,
   onOpenConfig,
+  onOpenSharing,
   onDelete,
 }: ChannelActionsProps) {
   const isRouteChannel = isWhatsAppRouteChannel(channel);
   const isEmailChannel = channel.provider === 'email';
+  const isOwner = channel.access?.owner !== false;
 
   return (
     <div className="mt-3 flex items-center gap-2 flex-wrap">
-      {isRouteChannel ? null : !channel.hasCredentials && channel.provider !== 'whatsapp' && !isEmailChannel ? (
+      {!isOwner ? (
+        <span className="rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
+          Shared {channel.access?.permission || 'read'} access
+        </span>
+      ) : isRouteChannel ? null : !channel.hasCredentials && channel.provider !== 'whatsapp' && !isEmailChannel ? (
         <button
           onClick={() => onOpenCredentials(channel)}
           className="px-3 py-1 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600"
@@ -63,7 +70,15 @@ export function ChannelActions({
           ) : null}
         </>
       )}
-      {!isEmailChannel ? (
+      {isOwner ? (
+        <button
+          onClick={() => onOpenSharing(channel)}
+          className="px-3 py-1 text-sm bg-slate-100 text-slate-700 rounded hover:bg-slate-200"
+        >
+          Share
+        </button>
+      ) : null}
+      {isOwner && !isEmailChannel ? (
         <>
           <button
             onClick={() => onOpenConfig(channel)}

@@ -412,6 +412,18 @@ export function initializeApiIpcHandlers(): void {
     }
   });
 
+  ipcMain.handle("api:list-accessible-channels", async () => {
+    console.log('[API IPC] list-accessible-channels');
+    try {
+      const channels = await api.listAccessibleChannels();
+      console.log('[API IPC] list-accessible-channels result:', channels?.length, 'channels');
+      return { success: true, channels };
+    } catch (error) {
+      console.error('[API IPC] list-accessible-channels failed:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
   ipcMain.handle("api:list-organization-users", async () => {
     console.log('[API IPC] list-organization-users');
     try {
@@ -489,6 +501,39 @@ export function initializeApiIpcHandlers(): void {
       return { success: true };
     } catch (error) {
       console.error('[API IPC] delete-channel failed:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle("api:list-channel-shares", async (_, channelId: string) => {
+    console.log('[API IPC] list-channel-shares:', channelId.slice(0, 8));
+    try {
+      const shares = await api.listChannelShares(channelId);
+      return { success: true, shares };
+    } catch (error) {
+      console.error('[API IPC] list-channel-shares failed:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle("api:share-channel", async (_, channelId: string, data: { userId: string; permission?: "read" | "write" | "admin" }) => {
+    console.log('[API IPC] share-channel:', channelId.slice(0, 8), data.userId);
+    try {
+      const share = await api.shareChannel(channelId, data);
+      return { success: true, share };
+    } catch (error) {
+      console.error('[API IPC] share-channel failed:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle("api:revoke-channel-share", async (_, channelId: string, shareId: string) => {
+    console.log('[API IPC] revoke-channel-share:', channelId.slice(0, 8), shareId.slice(0, 8));
+    try {
+      const share = await api.revokeChannelShare(channelId, shareId);
+      return { success: true, share };
+    } catch (error) {
+      console.error('[API IPC] revoke-channel-share failed:', error);
       return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   });

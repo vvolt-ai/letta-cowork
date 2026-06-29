@@ -279,6 +279,10 @@ export class VeraCoworkApiClient extends BaseHttpClient {
     return ChannelEndpoints.listOrganizationChannels(this);
   }
 
+  async listAccessibleChannels(): Promise<Channel[]> {
+    return ChannelEndpoints.listAccessibleChannels(this);
+  }
+
   async listOrganizationUsers(): Promise<OrganizationUser[]> {
     return this.request<OrganizationUser[]>("/users/organization");
   }
@@ -406,6 +410,21 @@ export class VeraCoworkApiClient extends BaseHttpClient {
 
   async deleteChannel(channelId: string): Promise<void> {
     return ChannelEndpoints.deleteChannel(this, channelId);
+  }
+
+  async listChannelShares(channelId: string) {
+    return ChannelEndpoints.listChannelShares(this, channelId);
+  }
+
+  async shareChannel(
+    channelId: string,
+    data: { userId: string; permission?: "read" | "write" | "admin" }
+  ) {
+    return ChannelEndpoints.shareChannel(this, channelId, data);
+  }
+
+  async revokeChannelShare(channelId: string, shareId: string) {
+    return ChannelEndpoints.revokeChannelShare(this, channelId, shareId);
   }
 
   // ============================================

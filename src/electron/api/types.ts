@@ -149,6 +149,27 @@ export interface Channel {
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
+  access?: {
+    owner: boolean;
+    permission: 'owner' | 'read' | 'write' | 'admin';
+    sharedByUserId?: string;
+    sharedAt?: Date | string;
+  };
+}
+
+export interface ChannelShare {
+  id: string;
+  channelId: string;
+  organizationId: string;
+  sharedWithUserId: string;
+  sharedWithUserEmail?: string;
+  sharedByUserId: string;
+  sharedByUserEmail?: string;
+  permission: 'read' | 'write' | 'admin';
+  isActive: boolean;
+  revokedAt: Date | string | null;
+  createdAt: Date | string;
+  updatedAt: Date | string;
 }
 
 export interface ChannelRuntimeStatus {
