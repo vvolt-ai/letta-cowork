@@ -7,6 +7,7 @@
 import type { BaseHttpClient } from "../client/base-client.js";
 import type {
   Channel,
+  ChannelShare,
   ChannelRuntimeStatus,
   ChannelCredentials,
   MessageLog,
@@ -46,6 +47,10 @@ export class ChannelEndpoints {
     return client.request<Channel[]>("/channels/organization");
   }
 
+  static async listAccessibleChannels(client: BaseHttpClient): Promise<Channel[]> {
+    return client.request<Channel[]>("/channels/accessible");
+  }
+
   static async createChannel(
     client: BaseHttpClient,
     data: {
@@ -67,6 +72,25 @@ export class ChannelEndpoints {
 
   static async deleteChannel(client: BaseHttpClient, channelId: string): Promise<void> {
     await client.request(`/channels/${channelId}`, { method: "DELETE" });
+  }
+
+  static async listChannelShares(client: BaseHttpClient, channelId: string): Promise<ChannelShare[]> {
+    return client.request<ChannelShare[]>(`/channels/${channelId}/shares`);
+  }
+
+  static async shareChannel(
+    client: BaseHttpClient,
+    channelId: string,
+    data: { userId: string; permission?: "read" | "write" | "admin" }
+  ): Promise<ChannelShare> {
+    return client.request<ChannelShare>(`/channels/${channelId}/shares`, {
+      method: "POST",
+      body: data,
+    });
+  }
+
+  static async revokeChannelShare(client: BaseHttpClient, channelId: string, shareId: string): Promise<ChannelShare> {
+    return client.request<ChannelShare>(`/channels/${channelId}/shares/${shareId}`, { method: "DELETE" });
   }
 
   // ============================================

@@ -1,15 +1,17 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import { ChannelList } from '../ChannelList';
+import { ChannelSharingModal } from '../ChannelSharingModal';
 import { ConfigModal } from '../ConfigModal';
 import { ConnectorMarketplace } from '../ConnectorMarketplace';
 import { CreateChannelModal } from '../CreateChannelModal';
 import { CredentialsModal } from '../CredentialsModal';
 import { useChannelBridge } from '../hooks/useChannelBridge';
 import { useChannelManager } from '../hooks/useChannelManager';
-import { type ChannelsManagerProps } from '../types';
+import type { Channel, ChannelsManagerProps } from '../types';
 
 export function ChannelsManager({ onAuthError, embedded = false }: ChannelsManagerProps) {
+  const [sharingChannel, setSharingChannel] = useState<Channel | null>(null);
   const {
     channels,
     organizationChannels,
@@ -115,6 +117,7 @@ export function ChannelsManager({ onAuthError, embedded = false }: ChannelsManag
         onStop={onStop}
         onOpenCredentials={handleOpenCredentials}
         onOpenConfig={handleOpenConfig}
+        onOpenSharing={setSharingChannel}
         onDelete={handleDeleteChannel}
       />
 
@@ -155,6 +158,14 @@ export function ChannelsManager({ onAuthError, embedded = false }: ChannelsManag
           saving={savingConfig}
           onClose={() => setShowConfigModal(false)}
           onSave={handleSaveConfig}
+        />
+      )}
+
+      {sharingChannel && (
+        <ChannelSharingModal
+          channel={sharingChannel}
+          onClose={() => setSharingChannel(null)}
+          onChanged={loadChannels}
         />
       )}
     </div>

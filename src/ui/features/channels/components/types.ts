@@ -90,12 +90,34 @@ export type ConfigDataState = {
 
 export interface Channel {
   id: string;
+  organizationId?: string;
+  createdByUserId?: string;
   provider: 'whatsapp' | 'telegram' | 'discord' | 'slack' | 'wechat' | 'email' | 'gmail';
   name: string;
   hasCredentials: boolean;
   isActive: boolean;
   config?: ChannelConfig;
   createdAt: string;
+  access?: {
+    owner: boolean;
+    permission: 'owner' | 'read' | 'write' | 'admin';
+    sharedByUserId?: string;
+    sharedAt?: string;
+  };
+}
+
+export interface ChannelShare {
+  id: string;
+  channelId: string;
+  sharedWithUserId: string;
+  sharedWithUserEmail?: string;
+  sharedByUserId: string;
+  sharedByUserEmail?: string;
+  permission: 'read' | 'write' | 'admin';
+  isActive: boolean;
+  revokedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ChannelStatus {

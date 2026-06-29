@@ -285,6 +285,8 @@ electron.contextBridge.exposeInMainWorld("electron", {
     electron.ipcRenderer.invoke("api:list-channels"),
   apiListOrganizationChannels: () =>
     electron.ipcRenderer.invoke("api:list-organization-channels"),
+  apiListAccessibleChannels: () =>
+    electron.ipcRenderer.invoke("api:list-accessible-channels"),
   apiListOrganizationUsers: () =>
     electron.ipcRenderer.invoke("api:list-organization-users"),
   apiListAgentSecrets: () =>
@@ -299,6 +301,12 @@ electron.contextBridge.exposeInMainWorld("electron", {
     electron.ipcRenderer.invoke("api:get-channel", channelId),
   apiDeleteChannel: (channelId: string) =>
     electron.ipcRenderer.invoke("api:delete-channel", channelId),
+  apiListChannelShares: (channelId: string) =>
+    electron.ipcRenderer.invoke("api:list-channel-shares", channelId),
+  apiShareChannel: (channelId: string, data: { userId: string; permission?: "read" | "write" | "admin"; }) =>
+    electron.ipcRenderer.invoke("api:share-channel", channelId, data),
+  apiRevokeChannelShare: (channelId: string, shareId: string) =>
+    electron.ipcRenderer.invoke("api:revoke-channel-share", channelId, shareId),
 
   // Channel Credentials
   apiGetChannelCredentials: (channelId: string) =>

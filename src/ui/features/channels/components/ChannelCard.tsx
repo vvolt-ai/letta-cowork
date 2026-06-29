@@ -10,6 +10,7 @@ interface ChannelCardProps {
   onStop: (channelId: string) => void;
   onOpenCredentials: (channel: Channel) => void;
   onOpenConfig: (channel: Channel) => void;
+  onOpenSharing: (channel: Channel) => void;
   onDelete: (channelId: string) => void;
 }
 
@@ -29,10 +30,12 @@ export function ChannelCard({
   onStop,
   onOpenCredentials,
   onOpenConfig,
+  onOpenSharing,
   onDelete,
 }: ChannelCardProps) {
   const isRouteChannel = isWhatsAppRouteChannel(channel);
   const whatsappConfig = channel.config as WhatsAppConfig | undefined;
+  const isOwner = channel.access?.owner !== false;
 
   return (
     <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-soft)] transition hover:border-[var(--color-border-strong)]">
@@ -40,7 +43,14 @@ export function ChannelCard({
         <div className="flex items-center gap-3">
           <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--color-accent-subtle)] text-xl">{getProviderIcon(channel.provider)}</span>
           <div>
-            <h3 className="text-sm font-semibold text-ink-900">{channel.name}</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-ink-900">{channel.name}</h3>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                isOwner ? 'bg-blue-50 text-blue-700' : 'bg-emerald-50 text-emerald-700'
+              }`}>
+                {isOwner ? 'Owned' : 'Shared'}
+              </span>
+            </div>
             <p className="mt-0.5 text-xs capitalize text-muted">
               {isRouteChannel ? 'WhatsApp agent route' : channel.provider}
             </p>
@@ -101,6 +111,7 @@ export function ChannelCard({
         onStop={onStop}
         onOpenCredentials={onOpenCredentials}
         onOpenConfig={onOpenConfig}
+        onOpenSharing={onOpenSharing}
         onDelete={onDelete}
       />
     </div>
