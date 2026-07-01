@@ -1,5 +1,5 @@
 import { promises as fs } from "node:fs";
-import * as path from "node:path";
+import { expandFilePath } from "../_shared/filePath.js";
 import { getCurrentWorkingDirectory } from "../_shared/runtime-context.js";
 import { validateRequiredParams } from "../_shared/validation.js";
 
@@ -29,9 +29,7 @@ export async function multi_edit(
   validateRequiredParams(args, ["file_path", "edits"], "MultiEdit");
   const { file_path, edits } = args;
   const userCwd = getCurrentWorkingDirectory();
-  const resolvedPath = path.isAbsolute(file_path)
-    ? file_path
-    : path.resolve(userCwd, file_path);
+  const resolvedPath = expandFilePath(file_path, userCwd);
   if (!edits || edits.length === 0) throw new Error("No edits provided");
   for (let i = 0; i < edits.length; i++) {
     const edit = edits[i];

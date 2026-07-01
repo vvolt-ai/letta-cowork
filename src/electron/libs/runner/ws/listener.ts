@@ -33,9 +33,19 @@ const MAX_RETRY_DURATION_MS = 5 * 60 * 1000;
 const INITIAL_RETRY_DELAY_MS = 1_000;
 const MAX_RETRY_DELAY_MS = 30_000;
 const HEARTBEAT_INTERVAL_MS = 30_000;
+const LISTENER_PONG_TIMEOUT_MS = 90_000;
 const REGISTER_INITIAL_DELAY_MS = 1_000;
 const REGISTER_MAX_DELAY_MS = 30_000;
 const REGISTER_MAX_DURATION_MS = 2 * 60 * 1_000;
+
+function isListenerPongStale(
+    lastPongAt: number | null,
+    now: number,
+    timeoutMs: number
+): boolean {
+    if (lastPongAt === null) return false;
+    return now - lastPongAt > timeoutMs;
+}
 
 // ─────────────────────────────────────────────────────────────────────
 // Module-level state
@@ -47,6 +57,8 @@ interface ListenerRuntime {
     everConnected: boolean;
     heartbeatInterval: NodeJS.Timeout | null;
     reconnectTimeout: NodeJS.Timeout | null;
+    /** Last relay `pong` epoch ms, used to reap half-open sockets. */
+    lastPongAt: number | null;
     connectionId: string | null;
     deviceId: string;
     connectionName: string;
@@ -80,6 +92,7 @@ function getRuntime(): ListenerRuntime {
             everConnected: false,
             heartbeatInterval: null,
             reconnectTimeout: null,
+            lastPongAt: null,
             connectionId: null,
             deviceId: getOrCreateDeviceId(),
             connectionName: `Cowork on ${os.hostname()}`,
@@ -293,8 +306,22 @@ async function connectWithRetry(
 
         socket.on("open", () => {
             r.everConnected = true;
+            r.lastPongAt = Date.now();
             console.log(`[ws-listener] WS OPEN — connectionId=${connectionId}`);
             r.heartbeatInterval = setInterval(() => {
+                if (
+                    isListenerPongStale(
+                        r.lastPongAt,
+                        Date.now(),
+                        LISTENER_PONG_TIMEOUT_MS
+                    )
+                ) {
+                    console.warn(
+                        `[ws-listener] no relay pong within ${LISTENER_PONG_TIMEOUT_MS}ms; terminating half-open socket to reconnect`
+                    );
+                    socket.terminate();
+                    return;
+                }
                 try {
                     if (socket.readyState === WebSocket.OPEN) {
                         socket.send(JSON.stringify({ type: "ping" }));
@@ -303,6 +330,7 @@ async function connectWithRetry(
                     // ignore
                 }
             }, HEARTBEAT_INTERVAL_MS);
+            r.heartbeatInterval.unref?.();
             // Flush buffered sends
             while (r.sendQueue.length) {
                 const msg = r.sendQueue.shift();
@@ -330,6 +358,9 @@ async function connectWithRetry(
                 return;
             }
             if (!frame || typeof frame !== "object") return;
+            if (frame.type === "pong") {
+                r.lastPongAt = Date.now();
+            }
             // Log every frame so we can see what the server is actually
             // sending. Truncate large delta payloads.
             const peek = JSON.stringify(frame).slice(0, 220);

@@ -6,6 +6,7 @@ import type {
 } from "@letta-ai/letta-client/resources/agents/messages";
 import { resizeImageIfNeeded } from "../_shared/imageResize.js";
 import { SYSTEM_REMINDER_CLOSE, SYSTEM_REMINDER_OPEN } from "../_shared/constants.js";
+import { expandFilePath } from "../_shared/filePath.js";
 import { getCurrentWorkingDirectory } from "../_shared/runtime-context.js";
 import { debugLog } from "../_shared/debug.js";
 import { OVERFLOW_CONFIG, writeOverflowFile } from "../_shared/overflow.js";
@@ -208,9 +209,7 @@ export async function read(args: ReadArgs): Promise<ReadResult> {
   validateRequiredParams(args, ["file_path"], "Read");
   const { file_path, offset, limit } = args;
   const userCwd = getCurrentWorkingDirectory();
-  const resolvedPath = path.isAbsolute(file_path)
-    ? file_path
-    : path.resolve(userCwd, file_path);
+  const resolvedPath = expandFilePath(file_path, userCwd);
   try {
     const stats = await fs.stat(resolvedPath);
     if (stats.isDirectory())
