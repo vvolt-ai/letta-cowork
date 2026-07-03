@@ -356,6 +356,34 @@ export class WsSession {
             return false;
         };
 
+        // Letta streams may emit stop_reason=error/llm_api_error and then the
+        // SDK throws a generic APIError. The actionable fields are usually on
+        // err.error.{error_type,detail}. Provider-side internal LLM errors are
+        // transient; retry the stream instead of stopping the whole session.
+        const isTransientLlmInternalError = (err: unknown, msg: string): boolean => {
+            const parts = [msg];
+            let cur: unknown = err;
+            for (let depth = 0; depth < 4 && cur && typeof cur === "object"; depth++) {
+                const e = cur as {
+                    message?: unknown;
+                    detail?: unknown;
+                    error_type?: unknown;
+                    stop_reason?: unknown;
+                    error?: unknown;
+                    cause?: unknown;
+                };
+                for (const value of [e.message, e.detail, e.error_type, e.stop_reason]) {
+                    if (typeof value === "string") parts.push(value);
+                }
+                cur = e.error ?? e.cause;
+            }
+            const text = parts.join("\n");
+            return (
+                /\b(internal_error|llm_api_error)\b/i.test(text) ||
+                /ChatGPT API error|error occurred during agent execution|error occurred while processing your request/i.test(text)
+            );
+        };
+
         // Background pump — multi-turn loop, fire-and-forget.
         // Wrapped in an outer retry loop so we can recover once from approval
         // conflicts that race past the pre-flight recoverStuckApprovals call.
@@ -368,6 +396,8 @@ export class WsSession {
             let networkRetries = 0;
             const MAX_BUSY_RETRIES = 12;
             let busyRetries = 0;
+            const MAX_LLM_INTERNAL_RETRIES = 3;
+            let llmInternalRetries = 0;
 
             // eslint-disable-next-line no-constant-condition
             while (true) {
@@ -698,6 +728,34 @@ export class WsSession {
                     const backoffMs = Math.min(10_000, 1000 + busyRetries * 1000);
                     console.warn(
                         `[WsSession] conversation busy conflict (retry ${busyRetries}/${MAX_BUSY_RETRIES} in ${backoffMs}ms):`,
+                        errMessage
+                    );
+                    await new Promise<void>((resolve) => {
+                        const t = setTimeout(resolve, backoffMs);
+                        if (ctrl.signal.aborted) {
+                            clearTimeout(t);
+                            resolve();
+                        }
+                    });
+                    if (ctrl.signal.aborted) {
+                        this.activePumps.delete(ctrl);
+                        return;
+                    }
+                    continue;
+                }
+
+                // Provider-side internal LLM failure — reconnect with a
+                // bounded exponential backoff. This covers Letta APIError
+                // payloads like error_type=internal_error and stream
+                // stop_reason=llm_api_error.
+                if (
+                    isTransientLlmInternalError(err, errMessage) &&
+                    llmInternalRetries < MAX_LLM_INTERNAL_RETRIES
+                ) {
+                    llmInternalRetries++;
+                    const backoffMs = Math.min(30_000, 5_000 * 2 ** (llmInternalRetries - 1));
+                    console.warn(
+                        `[WsSession] transient LLM internal error (retry ${llmInternalRetries}/${MAX_LLM_INTERNAL_RETRIES} in ${backoffMs}ms):`,
                         errMessage
                     );
                     await new Promise<void>((resolve) => {
