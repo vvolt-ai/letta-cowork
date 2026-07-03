@@ -149,6 +149,35 @@ export async function discoverPendingApprovals(
 // ── Clearance ──────────────────────────────────────────────────────
 
 const MAX_CLEAR_ITERATIONS = 5;
+const APPROVAL_DRAIN_TIMEOUT_MS = 15_000;
+const APPROVAL_DRAIN_TIMEOUT = Symbol("approval-drain-timeout");
+
+async function drainApprovalStreamWithTimeout(
+    stream: AsyncIterable<unknown>,
+    timeoutMs = APPROVAL_DRAIN_TIMEOUT_MS
+): Promise<"completed" | "timed_out"> {
+    const iterator = stream[Symbol.asyncIterator]();
+    const deadline = Date.now() + timeoutMs;
+
+    while (true) {
+        const remainingMs = deadline - Date.now();
+        if (remainingMs <= 0) {
+            void Promise.resolve(iterator.return?.()).catch(() => undefined);
+            return "timed_out";
+        }
+
+        const timeout = new Promise<typeof APPROVAL_DRAIN_TIMEOUT>((resolve) => {
+            setTimeout(() => resolve(APPROVAL_DRAIN_TIMEOUT), remainingMs);
+        });
+
+        const next = await Promise.race([iterator.next(), timeout]);
+        if (next === APPROVAL_DRAIN_TIMEOUT) {
+            void Promise.resolve(iterator.return?.()).catch(() => undefined);
+            return "timed_out";
+        }
+        if (next.done) return "completed";
+    }
+}
 
 /**
  * Loop until the conversation has zero pending approvals (or the
@@ -248,12 +277,23 @@ export async function clearPendingApprovals(
             // Drain. The agent may emit a follow-up turn after the
             // denial lands (assistant ack, end_turn). We discard it —
             // recovery only needs the rejection to commit server-side.
+            // Bound the wait: stale-approval recovery is pre-flight and
+            // must never hold the user's next turn hostage if the SSE
+            // drain hangs after the denial has been accepted.
             try {
-                for await (const _evt of stream) {
-                    void _evt;
+                const drainResult = await drainApprovalStreamWithTimeout(stream);
+                if (drainResult === "timed_out") {
+                    debug("clearPendingApprovals: drain timed out (non-fatal)", {
+                        conversationId,
+                        iteration: iterations,
+                        timeoutMs: APPROVAL_DRAIN_TIMEOUT_MS,
+                        toolCallIds: pending.map((p) => p.toolCallId),
+                    });
                 }
             } catch (drainErr) {
                 debug("clearPendingApprovals: drain error (non-fatal)", {
+                    conversationId,
+                    iteration: iterations,
                     error:
                         drainErr instanceof Error
                             ? drainErr.message
