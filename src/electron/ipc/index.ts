@@ -12,6 +12,7 @@ import { getLettaEnvConfig, updateLettaEnvConfig, type LettaEnvConfig } from "..
 import {
     listLettaAgents,
     listLettaModels,
+    listLettaConversations,
     getLettaAgent,
     retrieveAgentRunById,
     listAgentRuns,
@@ -140,6 +141,15 @@ export function registerAllIpcHandlers(mainWindow: BrowserWindow): void {
             return await getLettaAgent(agentId);
         } catch (error) {
             console.error("Failed to get agent:", error);
+            throw error;
+        }
+    });
+
+    ipcMain.handle("list-letta-conversations", async (_, agentId: string) => {
+        try {
+            return await listLettaConversations(agentId);
+        } catch (error) {
+            console.error("Failed to list conversations:", error);
             throw error;
         }
     });

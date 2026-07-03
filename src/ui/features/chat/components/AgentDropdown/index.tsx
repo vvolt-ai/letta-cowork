@@ -68,20 +68,20 @@ export function AgentDropdown({ value, onChange, disabled = false }: AgentDropdo
   const selectedAgent = agents.find((a) => a.id === value);
 
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className="relative w-full min-w-0" ref={dropdownRef}>
       <label className="text-xs text-ink-700">
         Agent
         <button
           type="button"
-          className="mt-1 flex w-full items-center justify-between rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink-800 outline-none focus:border-accent/40 disabled:opacity-60"
+          className="mt-1 flex w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink-800 outline-none focus:border-accent/40 disabled:opacity-60"
           onClick={(e) => openDropdown(e)}
           disabled={disabled}
         >
-          <span className={selectedAgent ? "text-ink-800" : "text-ink-500"}>
+          <span className={`min-w-0 truncate ${selectedAgent ? "text-ink-800" : "text-ink-500"}`}>
             {loading ? "Loading..." : selectedAgent ? selectedAgent.name : "Select an agent"}
           </span>
           <svg
-            className={`h-4 w-4 text-ink-500 transition-transform ${isOpen ? "rotate-180" : ""}`}
+            className={`h-4 w-4 shrink-0 text-ink-500 transition-transform ${isOpen ? "rotate-180" : ""}`}
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -92,7 +92,7 @@ export function AgentDropdown({ value, onChange, disabled = false }: AgentDropdo
       </label>
 
       {isOpen && (
-        <div className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-border bg-surface shadow-lg">
+        <div className="absolute z-50 mt-1 max-h-60 w-full min-w-0 overflow-auto rounded-lg border border-border bg-surface shadow-lg">
           <div className="flex items-center justify-between border-b border-border bg-surface-tertiary px-3 py-2">
             <span className="text-xs font-medium text-ink-600">Available Agents</span>
             <button
@@ -146,14 +146,14 @@ export function AgentDropdown({ value, onChange, disabled = false }: AgentDropdo
                       setIsOpen(false);
                     }}
                   >
-                    <div className="flex flex-col">
-                      <span className="font-medium">{agent.name}</span>
+                    <div className="flex min-w-0 flex-col">
+                      <span className="truncate font-medium">{agent.name}</span>
                       {agent.description && (
                         <span className="text-xs text-ink-500 line-clamp-1">
                           {agent.description}
                         </span>
                       )}
-                      <span className="text-xs text-ink-400">{agent.id}</span>
+                      <span className="truncate text-xs text-ink-400">{agent.id}</span>
                     </div>
                   </button>
                 </li>

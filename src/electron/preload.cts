@@ -86,6 +86,8 @@ electron.contextBridge.exposeInMainWorld("electron", {
         electron.ipcRenderer.invoke("list-letta-models"),
     getLettaAgent: (agentId: string) =>
         electron.ipcRenderer.invoke("get-letta-agent", agentId),
+    listLettaConversations: (agentId: string) =>
+        electron.ipcRenderer.invoke("list-letta-conversations", agentId),
     recoverPendingApprovals: (sessionId: string, agentId?: string) =>
         electron.ipcRenderer.invoke("recover-pending-approvals", sessionId, agentId),
     cancelStuckRun: (runId: string) =>

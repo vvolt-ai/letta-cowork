@@ -20,6 +20,17 @@ export interface LettaModel {
   model_type?: string;
 }
 
+export interface LettaConversation {
+  id: string;
+  agentId: string;
+  summary?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  lastMessageAt?: string | null;
+  model?: string | null;
+  archived?: boolean;
+}
+
 export interface ApprovalCandidate {
   runId: string;
   conversationId?: string;
@@ -131,6 +142,40 @@ export async function listLettaModels(): Promise<LettaModel[]> {
   } catch (error) {
     console.error("Failed to list models:", error);
     throw new Error("Failed to fetch models from Letta");
+  }
+}
+
+export async function listLettaConversations(agentId: string): Promise<LettaConversation[]> {
+  const client = createLettaClient();
+
+  try {
+    const response = await client.conversations.list({
+      agent_id: agentId,
+      archive_status: "unarchived",
+      limit: 100,
+      order: "desc",
+      order_by: "last_message_at",
+    });
+    const conversations = await response;
+    const items = Array.isArray((conversations as any).items)
+      ? (conversations as any).items
+      : Array.isArray(conversations)
+        ? conversations
+        : [];
+
+    return items.map((conversation: any) => ({
+      id: conversation.id,
+      agentId: conversation.agent_id ?? conversation.agentId ?? agentId,
+      summary: conversation.summary ?? null,
+      createdAt: conversation.created_at ?? conversation.createdAt ?? null,
+      updatedAt: conversation.updated_at ?? conversation.updatedAt ?? null,
+      lastMessageAt: conversation.last_message_at ?? conversation.lastMessageAt ?? null,
+      model: conversation.model ?? null,
+      archived: conversation.archived ?? false,
+    } satisfies LettaConversation));
+  } catch (error) {
+    console.error("Failed to list conversations:", error);
+    throw new Error("Failed to fetch conversations from Letta");
   }
 }
 

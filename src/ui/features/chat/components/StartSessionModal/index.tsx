@@ -8,6 +8,33 @@ interface Model {
   provider_type: string;
 }
 
+interface LettaConversationOption {
+  id: string;
+  agentId: string;
+  summary?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  lastMessageAt?: string | null;
+  model?: string | null;
+  archived?: boolean;
+}
+
+const NEW_CONVERSATION_VALUE = "__new_conversation__";
+
+function formatConversationDate(timestamp?: number | string | null): string {
+  if (!timestamp) return "";
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(new Date(timestamp));
+  } catch {
+    return "";
+  }
+}
+
 const MODEL_KEY_REGEX = /model/i;
 
 function collectModelStrings(value: unknown, set: Set<string>, force = false): void {
@@ -95,7 +122,7 @@ interface StartSessionModalProps {
   pendingStart: boolean;
   onCwdChange: (value: string) => void;
   onPromptChange: (value: string) => void;
-  onStart: (agentId: string, model?: string) => void;
+  onStart: (agentId: string, model?: string, conversationId?: string) => void;
   onClose: () => void;
 }
 
@@ -109,7 +136,12 @@ export function StartSessionModal({
   onClose
 }: StartSessionModalProps) {
   const [recentCwds, setRecentCwds] = useState<string[]>([]);
+  const sessions = useAppStore((state) => state.sessions);
   const [selectedAgentId, setSelectedAgentId] = useState<string>("");
+  const [selectedConversationId, setSelectedConversationId] = useState<string>(NEW_CONVERSATION_VALUE);
+  const [conversations, setConversations] = useState<LettaConversationOption[]>([]);
+  const [conversationsLoading, setConversationsLoading] = useState(false);
+  const [conversationsError, setConversationsError] = useState<string | null>(null);
   const storeSelectedModel = useAppStore((state) => state.selectedModel);
   const setSelectedModelStore = useAppStore((state) => state.setSelectedModel);
   const [selectedModel, setSelectedModel] = useState<string>(storeSelectedModel);
@@ -121,6 +153,10 @@ export function StartSessionModal({
   const hasSelectedModelOption = selectedModel
     ? !models.some((model) => model.name === selectedModel)
     : false;
+
+  const conversationOptions = conversations;
+  const isCreatingNewConversation = selectedConversationId === NEW_CONVERSATION_VALUE;
+  const selectedConversationRunning = !isCreatingNewConversation && sessions[selectedConversationId]?.status === "running";
 
   useEffect(() => {
     window.electron.getRecentCwds().then(setRecentCwds).catch(console.error);
@@ -144,6 +180,45 @@ export function StartSessionModal({
 
   useEffect(() => {
     setModelTouched(false);
+    setSelectedConversationId(NEW_CONVERSATION_VALUE);
+  }, [selectedAgentId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadConversations = async () => {
+      const agentId = selectedAgentId.trim();
+      setSelectedConversationId(NEW_CONVERSATION_VALUE);
+      setConversations([]);
+      setConversationsError(null);
+
+      if (!agentId) {
+        setConversationsLoading(false);
+        return;
+      }
+
+      setConversationsLoading(true);
+      try {
+        const fetched = await window.electron.listLettaConversations(agentId);
+        if (cancelled) return;
+        setConversations(fetched ?? []);
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Failed to load conversations:", error);
+          setConversationsError("Could not load conversations for this agent.");
+        }
+      } finally {
+        if (!cancelled) {
+          setConversationsLoading(false);
+        }
+      }
+    };
+
+    loadConversations();
+
+    return () => {
+      cancelled = true;
+    };
   }, [selectedAgentId]);
 
   useEffect(() => {
@@ -266,7 +341,7 @@ export function StartSessionModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/20 px-4 py-8 backdrop-blur-sm">
-      <div className="w-full max-w-lg rounded-2xl border border-ink-900/5 bg-surface p-6 shadow-elevated">
+      <div className="w-full max-w-lg min-w-0 rounded-2xl border border-ink-900/5 bg-surface p-6 shadow-elevated">
         <div className="flex items-center justify-between">
           <div className="text-base font-semibold text-ink-800">Start Session</div>
           <button className="rounded-full p-1.5 text-muted hover:bg-surface-tertiary hover:text-ink-700 transition-colors" onClick={onClose} aria-label="Close">
@@ -279,9 +354,9 @@ export function StartSessionModal({
         <div className="mt-5 grid gap-4">
           <label className="grid gap-1.5">
             <span className="text-xs font-medium text-muted">Working Directory</span>
-            <div className="flex gap-2">
+            <div className="flex min-w-0 gap-2">
               <input
-                className="flex-1 rounded-xl border border-ink-900/10 bg-surface-secondary px-4 py-2.5 text-sm text-ink-800 placeholder:text-muted-light focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20 transition-colors"
+                className="min-w-0 flex-1 rounded-xl border border-ink-900/10 bg-surface-secondary px-4 py-2.5 text-sm text-ink-800 placeholder:text-muted-light focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20 transition-colors"
                 placeholder="/path/to/project"
                 value={cwd}
                 onChange={(e) => onCwdChange(e.target.value)}
@@ -303,7 +378,7 @@ export function StartSessionModal({
                     <button
                       key={path}
                       type="button"
-                      className={`truncate rounded-full border px-3 py-1.5 text-xs transition-colors whitespace-nowrap ${cwd === path ? "border-accent/60 bg-accent/10 text-ink-800" : "border-ink-900/10 bg-surface text-muted hover:border-ink-900/20 hover:text-ink-700"}`}
+                      className={`max-w-full truncate rounded-full border px-3 py-1.5 text-xs transition-colors whitespace-nowrap ${cwd === path ? "border-accent/60 bg-accent/10 text-ink-800" : "border-ink-900/10 bg-surface text-muted hover:border-ink-900/20 hover:text-ink-700"}`}
                       onClick={() => onCwdChange(path)}
                       title={path}
                     >
@@ -322,11 +397,48 @@ export function StartSessionModal({
               disabled={pendingStart}
             />
           </label>
-          {(modelsLoading || models.length > 0) && (
+          <label className="grid min-w-0 gap-1.5">
+            <span className="text-xs font-medium text-muted">Conversation</span>
+            <select
+              className="w-full min-w-0 max-w-full rounded-xl border border-ink-900/10 bg-surface-secondary px-4 py-2.5 text-sm text-ink-800 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20 transition-colors"
+              value={selectedConversationId}
+              onChange={(e) => setSelectedConversationId(e.target.value)}
+              disabled={pendingStart || !selectedAgentId.trim() || conversationsLoading}
+            >
+              <option value={NEW_CONVERSATION_VALUE}>
+                {selectedAgentId.trim() ? "Create new conversation" : "Select an agent first"}
+              </option>
+              {conversationOptions.map((conversation) => {
+                const label = conversation.summary?.trim() || conversation.id;
+                const meta = [formatConversationDate(conversation.lastMessageAt ?? conversation.updatedAt ?? conversation.createdAt), conversation.model]
+                  .filter(Boolean)
+                  .join(" • ");
+                return (
+                  <option key={conversation.id} value={conversation.id}>
+                    {meta ? `${label} — ${meta}` : label}
+                  </option>
+                );
+              })}
+            </select>
+            {conversationsLoading ? (
+              <span className="text-[11px] text-muted">Loading conversations for selected agent…</span>
+            ) : conversationsError ? (
+              <span className="text-[11px] text-error">{conversationsError}</span>
+            ) : !selectedAgentId.trim() ? (
+              <span className="text-[11px] text-muted">Select an agent to load its Letta conversations.</span>
+            ) : !isCreatingNewConversation ? (
+              <span className="text-[11px] text-muted">
+                {selectedConversationRunning
+                  ? "This conversation is currently running locally. Wait for it to finish before sending another prompt."
+                  : "The prompt will be sent into the selected existing Letta conversation."}
+              </span>
+            ) : null}
+          </label>
+          {isCreatingNewConversation && (modelsLoading || models.length > 0) && (
             <label className="grid gap-1.5">
               <span className="text-xs font-medium text-muted">Model (Optional)</span>
               <select
-                className="rounded-xl border border-ink-900/10 bg-surface-secondary px-4 py-2.5 text-sm text-ink-800 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20 transition-colors"
+                className="w-full min-w-0 max-w-full rounded-xl border border-ink-900/10 bg-surface-secondary px-4 py-2.5 text-sm text-ink-800 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20 transition-colors"
                 value={selectedModel}
                 onChange={(e) => {
                   const value = e.target.value;
@@ -361,17 +473,23 @@ export function StartSessionModal({
           <button
             className="flex flex-col items-center rounded-full bg-accent px-5 py-3 text-sm font-medium text-white shadow-soft hover:bg-accent-hover transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             onClick={() => {
-              setSelectedModelStore(selectedModel);
-              onStart(selectedAgentId, selectedModel);
+              if (isCreatingNewConversation) {
+                setSelectedModelStore(selectedModel);
+              }
+              onStart(
+                selectedAgentId,
+                isCreatingNewConversation ? selectedModel : undefined,
+                isCreatingNewConversation ? undefined : selectedConversationId,
+              );
             }}
-            disabled={pendingStart || !cwd.trim() || !prompt.trim()}
+            disabled={pendingStart || !cwd.trim() || !prompt.trim() || selectedConversationRunning || (isCreatingNewConversation && !selectedAgentId.trim())}
           >
             {pendingStart ? (
               <svg aria-hidden="true" className="w-5 h-5 animate-spin" viewBox="0 0 100 101" fill="none">
                 <path d="M100 50.5908C100 78.2051 77.6142 100.591 50 100.591C22.3858 100.591 0 78.2051 0 50.5908C0 22.9766 22.3858 0.59082 50 0.59082C77.6142 0.59082 100 22.9766 100 50.5908ZM9.08144 50.5908C9.08144 73.1895 27.4013 91.5094 50 91.5094C72.5987 91.5094 90.9186 73.1895 90.9186 50.5908C90.9186 27.9921 72.5987 9.67226 50 9.67226C27.4013 9.67226 9.08144 27.9921 9.08144 50.5908Z" fill="currentColor" opacity="0.3" />
                 <path d="M93.9676 39.0409C96.393 38.4038 97.8624 35.9116 97.0079 33.5539C95.2932 28.8227 92.871 24.3692 89.8167 20.348C85.8452 15.1192 80.8826 10.7238 75.2124 7.41289C69.5422 4.10194 63.2754 1.94025 56.7698 1.05124C51.7666 0.367541 46.6976 0.446843 41.7345 1.27873C39.2613 1.69328 37.813 4.19778 38.4501 6.62326C39.0873 9.04874 41.5694 10.4717 44.0505 10.1071C47.8511 9.54855 51.7191 9.52689 55.5402 10.0491C60.8642 10.7766 65.9928 12.5457 70.6331 15.2552C75.2735 17.9648 79.3347 21.5619 82.5849 25.841C84.9175 28.9121 86.7997 32.2913 88.1811 35.8758C89.083 38.2158 91.5421 39.6781 93.9676 39.0409Z" fill="white" />
               </svg>
-            ) : "Start Session"}
+            ) : isCreatingNewConversation ? "Start Session" : "Continue Conversation"}
           </button>
         </div>
       </div>

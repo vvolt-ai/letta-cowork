@@ -100,8 +100,24 @@ export function useSessionController({ connected, sendEvent }: UseSessionControl
     handleNewSession();
   }, [handleNewSession, isLettaEnvConfigured, setShowStartModal]);
 
-  // Handle starting session with a specific agent - updates env first, then starts
-  const handleStartWithAgent = useCallback(async (agentId: string, model?: string) => {
+  // Handle starting a new session with a specific agent, or continuing an existing conversation.
+  const handleStartWithAgent = useCallback(async (agentId: string, model?: string, conversationId?: string) => {
+    const trimmedConversationId = conversationId?.trim();
+    if (trimmedConversationId) {
+      setActiveSessionId(trimmedConversationId);
+      sendEvent({
+        type: "session.continue",
+        payload: {
+          sessionId: trimmedConversationId,
+          prompt,
+          cwd: cwd.trim() || undefined,
+          model: model || undefined,
+        }
+      });
+      setPrompt("");
+      return;
+    }
+
     if (agentId) {
       try {
         const currentEnv = await window.electron.getLettaEnv();
@@ -122,10 +138,11 @@ export function useSessionController({ connected, sendEvent }: UseSessionControl
         prompt, 
         cwd: cwd.trim() || undefined, 
         allowedTools: "Read,Edit,Bash",
+        agentId: agentId || undefined,
         model: model || undefined
       }
     });
-  }, [cwd, prompt, sendEvent, setPendingStart]);
+  }, [cwd, prompt, sendEvent, setActiveSessionId, setPendingStart, setPrompt]);
 
   return {
     activeSessionId,

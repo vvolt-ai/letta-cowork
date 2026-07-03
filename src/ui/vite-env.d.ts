@@ -54,6 +54,16 @@ interface Window {
     >;
     listLettaModels: () => Promise<any>;
     getLettaAgent: (agentId: string) => Promise<any>;
+    listLettaConversations: (agentId: string) => Promise<Array<{
+      id: string;
+      agentId: string;
+      summary?: string | null;
+      createdAt?: string | null;
+      updatedAt?: string | null;
+      lastMessageAt?: string | null;
+      model?: string | null;
+      archived?: boolean;
+    }>>;
     recoverPendingApprovals: (sessionId: string, agentId?: string) => Promise<any[]>;
     cancelStuckRun: (runId: string) => Promise<any>;
     getRunStatus: (runId: string) => Promise<any>;
