@@ -805,6 +805,8 @@ function App() {
               reasoningSteps={reasoningSteps}
               toolExecutions={toolExecutions}
               cliResults={ephemeralState?.cliResults ?? []}
+              permissionRequests={permissionRequests}
+              onPermissionResult={handlePermissionResult}
               onScroll={handleScroll}
               onScrollToBottom={scrollToBottom}
               onSendMessage={handleSendMessage}

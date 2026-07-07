@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useMemo, useState, type ReactNode } from "react";
 
 interface ToolExecutionBlockProps {
   name: string;
@@ -123,20 +123,295 @@ function TodoListView({ todos }: { todos: TodoItem[] }) {
   );
 }
 
+
+type JsonRecord = Record<string, unknown>;
+
+type Tone = "neutral" | "success" | "error" | "running";
+
+function isRecord(value: unknown): value is JsonRecord {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function parseJsonRecord(text?: string | null): JsonRecord | null {
+  if (!text?.trim()) return null;
+  try {
+    const parsed = JSON.parse(text);
+    return isRecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function asText(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return JSON.stringify(value, null, 2);
+}
+
+function labelFor(key: string): string {
+  return key
+    .replace(/_/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/^./, (char) => char.toUpperCase());
+}
+
+function toneClasses(tone: Tone): string {
+  if (tone === "error") return "border-red-200 bg-red-50 text-red-950";
+  if (tone === "running") return "border-blue-200 bg-blue-50 text-blue-950";
+  if (tone === "success") return "border-emerald-200 bg-emerald-50 text-emerald-950";
+  return "border-gray-200 bg-gray-50 text-ink-900";
+}
+
+function ToolCard({ title, tone = "neutral", children }: { title: string; tone?: Tone; children: ReactNode }) {
+  return (
+    <div className={`space-y-2 rounded-xl border p-3 shadow-[0_1px_0_rgba(15,23,42,0.03)] ${toneClasses(tone)}`}>
+      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] opacity-80">{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function InlineField({ label, value, mono = true }: { label: string; value: unknown; mono?: boolean }) {
+  const text = asText(value);
+  if (!text) return null;
+  return (
+    <div className="min-w-0 rounded-lg border border-white/70 bg-white/80 px-3 py-2">
+      <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted">{label}</div>
+      <div className={`mt-1 break-words text-[12px] leading-5 text-ink-800 ${mono ? "font-mono" : ""}`}>{text}</div>
+    </div>
+  );
+}
+
+function Pill({ children }: { children: ReactNode }) {
+  return <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-medium text-ink-600">{children}</span>;
+}
+
+function CodeBlock({ text, max = "max-h-80" }: { text: string; max?: string }) {
+  return (
+    <pre className={`${max} overflow-auto whitespace-pre-wrap break-words rounded-lg border border-gray-200 bg-white px-3 py-2 font-mono text-[11px] leading-5 text-ink-900`}>
+      {text}
+    </pre>
+  );
+}
+
+function DiffLine({ line }: { line: string }) {
+  const color = line.startsWith("+") && !line.startsWith("+++")
+    ? "text-emerald-800 bg-emerald-50"
+    : line.startsWith("-") && !line.startsWith("---")
+      ? "text-red-800 bg-red-50"
+      : line.startsWith("@@")
+        ? "text-blue-800 bg-blue-50"
+        : line.startsWith("diff --git") || line.startsWith("index ") || line.startsWith("+++") || line.startsWith("---")
+          ? "text-purple-800 bg-purple-50"
+          : "text-ink-800";
+  return <div className={`min-w-max px-2 ${color}`}>{line || " "}</div>;
+}
+
+function DiffBlock({ diff }: { diff: string }) {
+  return (
+    <details className="overflow-hidden rounded-lg border border-gray-200 bg-white" open>
+      <summary className="cursor-pointer px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted hover:text-ink-700">Diff</summary>
+      <div className="max-h-96 overflow-auto border-t border-gray-200 bg-gray-50 py-2 font-mono text-[11px] leading-5">
+        {diff.split("\n").map((line, index) => <DiffLine key={`${index}-${line.slice(0, 24)}`} line={line} />)}
+      </div>
+    </details>
+  );
+}
+
+function AdvancedDetails({ data, omit }: { data: JsonRecord; omit: string[] }) {
+  const entries = Object.entries(data).filter(([key, value]) => !omit.includes(key) && asText(value).length > 0);
+  if (entries.length === 0) return null;
+  return (
+    <details className="rounded-lg border border-gray-200 bg-white/70">
+      <summary className="cursor-pointer px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted hover:text-ink-700">Advanced</summary>
+      <div className="grid gap-2 border-t border-gray-200 p-2 sm:grid-cols-2">
+        {entries.map(([key, value]) => <InlineField key={key} label={labelFor(key)} value={value} />)}
+      </div>
+    </details>
+  );
+}
+
+function GrepInputCard({ data }: { data: JsonRecord }) {
+  const contextBits = ["-B", "-A", "-C", "context", "head_limit", "offset", "type"]
+    .map((key) => [key, data[key]] as const)
+    .filter(([, value]) => asText(value).length > 0 && asText(value) !== "0");
+  return (
+    <ToolCard title="Search" tone="neutral">
+      <div className="grid gap-2 sm:grid-cols-2">
+        <InlineField label="Pattern" value={data.pattern ?? data.query} />
+        <InlineField label="Path" value={data.path} />
+        <InlineField label="Glob" value={data.glob} />
+        <InlineField label="Mode" value={data.output_mode ?? data.mode} mono={false} />
+      </div>
+      {contextBits.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5">
+          {contextBits.map(([key, value]) => <Pill key={key}>{key}: {asText(value)}</Pill>)}
+        </div>
+      ) : null}
+      <AdvancedDetails data={data} omit={["pattern", "query", "path", "glob", "output_mode", "mode", ...contextBits.map(([key]) => key)]} />
+    </ToolCard>
+  );
+}
+
+function ReadInputCard({ name, data }: { name: string; data: JsonRecord }) {
+  return (
+    <ToolCard title={name === "ReadLSP" ? "Read with diagnostics" : "Read file"} tone="neutral">
+      <InlineField label="File" value={data.file_path} />
+      <div className="flex flex-wrap gap-1.5">
+        {asText(data.offset) ? <Pill>offset: {asText(data.offset)}</Pill> : null}
+        {asText(data.limit) ? <Pill>limit: {asText(data.limit)}</Pill> : null}
+        {"include_types" in data ? <Pill>types: {asText(data.include_types)}</Pill> : null}
+      </div>
+    </ToolCard>
+  );
+}
+
+function EditInputCard({ data }: { data: JsonRecord }) {
+  return (
+    <ToolCard title="Edit file" tone="neutral">
+      <InlineField label="File" value={data.file_path} />
+      {"replace_all" in data ? <Pill>replace all: {asText(data.replace_all)}</Pill> : null}
+      <div className="grid gap-2 lg:grid-cols-2">
+        <details className="rounded-lg border border-red-100 bg-white">
+          <summary className="cursor-pointer px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-red-600">Old string</summary>
+          <CodeBlock text={asText(data.old_string)} />
+        </details>
+        <details className="rounded-lg border border-emerald-100 bg-white" open>
+          <summary className="cursor-pointer px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-700">New string</summary>
+          <CodeBlock text={asText(data.new_string)} />
+        </details>
+      </div>
+    </ToolCard>
+  );
+}
+
+function ProjectRunInputCard({ data }: { data: JsonRecord }) {
+  return (
+    <ToolCard title="Run script" tone="running">
+      <div className="grid gap-2 sm:grid-cols-2">
+        <InlineField label="Script" value={data.script} mono={false} />
+        <InlineField label="Path" value={data.path} />
+      </div>
+      {Array.isArray(data.args) && data.args.length > 0 ? <InlineField label="Args" value={data.args.join(" ")} /> : null}
+    </ToolCard>
+  );
+}
+
+function GenericInputCard({ name, data }: { name: string; data: JsonRecord }) {
+  const priority = ["file_path", "path", "query", "pattern", "command", "script", "url", "repoPath", "model"];
+  const visible = priority.filter((key) => key in data && asText(data[key]).length > 0);
+  return (
+    <ToolCard title={`${name} input`} tone="neutral">
+      <div className="grid gap-2 sm:grid-cols-2">
+        {visible.map((key) => <InlineField key={key} label={labelFor(key)} value={data[key]} />)}
+      </div>
+      <AdvancedDetails data={data} omit={visible} />
+    </ToolCard>
+  );
+}
+
+function GrepOutputCard({ data, tone }: { data: JsonRecord; tone: Tone }) {
+  const output = asText(data.output ?? data.message);
+  return (
+    <ToolCard title="Search results" tone={tone}>
+      <div className="flex flex-wrap gap-1.5">
+        {"matches" in data ? <Pill>{asText(data.matches)} matches</Pill> : null}
+        {"status" in data ? <Pill>{asText(data.status)}</Pill> : null}
+      </div>
+      {output ? <CodeBlock text={output} max="max-h-96" /> : null}
+      <AdvancedDetails data={data} omit={["output", "message", "matches", "status"]} />
+    </ToolCard>
+  );
+}
+
+function ReadOutputCard({ output, tone }: { output: string; tone: Tone }) {
+  return (
+    <ToolCard title="File preview" tone={tone}>
+      <CodeBlock text={output} max="max-h-[520px]" />
+    </ToolCard>
+  );
+}
+
+function EditOutputCard({ output, tone }: { output: string; tone: Tone }) {
+  return (
+    <ToolCard title="Edit result" tone={tone}>
+      <div className="text-[13px] leading-6 text-ink-800">{output}</div>
+    </ToolCard>
+  );
+}
+
+function GitDiffOutputCard({ data, tone }: { data: JsonRecord; tone: Tone }) {
+  return (
+    <ToolCard title="Git diff" tone={tone}>
+      <InlineField label="Repository" value={data.repoRoot} />
+      {asText(data.files) ? <CodeBlock text={asText(data.files)} /> : null}
+      {asText(data.stat) ? <CodeBlock text={asText(data.stat)} /> : null}
+      {asText(data.diff) ? <DiffBlock diff={asText(data.diff)} /> : null}
+    </ToolCard>
+  );
+}
+
+function ProjectRunOutputCard({ data, tone }: { data: JsonRecord; tone: Tone }) {
+  return (
+    <ToolCard title="Script result" tone={tone}>
+      <div className="flex flex-wrap gap-1.5">
+        {"command" in data ? <Pill>{asText(data.command)}</Pill> : null}
+        {"status" in data ? <Pill>{asText(data.status)}</Pill> : null}
+        {"durationMs" in data ? <Pill>{asText(data.durationMs)}ms</Pill> : null}
+      </div>
+      {asText(data.output) ? <CodeBlock text={asText(data.output)} max="max-h-[520px]" /> : null}
+      <AdvancedDetails data={data} omit={["command", "status", "durationMs", "output"]} />
+    </ToolCard>
+  );
+}
+
+function GenericOutputCard({ data, tone }: { data: JsonRecord; tone: Tone }) {
+  const output = asText(data.output ?? data.message ?? data.diff ?? data.content);
+  const visibleKeys = ["status", "matches", "repoRoot", "durationMs"].filter((key) => key in data && asText(data[key]).length > 0);
+  return (
+    <ToolCard title="Tool output" tone={tone}>
+      {visibleKeys.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5">
+          {visibleKeys.map((key) => <Pill key={key}>{labelFor(key)}: {asText(data[key])}</Pill>)}
+        </div>
+      ) : null}
+      {data.diff ? <DiffBlock diff={asText(data.diff)} /> : output ? <CodeBlock text={output} max="max-h-96" /> : null}
+      <AdvancedDetails data={data} omit={[...visibleKeys, "output", "message", "diff", "content"]} />
+    </ToolCard>
+  );
+}
+
+function ToolInputView({ name, input }: { name: string; input: string }) {
+  const parsed = parseJsonRecord(input);
+  if (!parsed) return <CodeBlock text={input} />;
+  if (name === "Grep" || name === "CodeSearch") return <GrepInputCard data={parsed} />;
+  if (name === "Read" || name === "ReadLSP") return <ReadInputCard name={name} data={parsed} />;
+  if (name === "Edit") return <EditInputCard data={parsed} />;
+  if (name === "ProjectRunScript") return <ProjectRunInputCard data={parsed} />;
+  return <GenericInputCard name={name} data={parsed} />;
+}
+
+function ToolOutputView({ name, output, tone }: { name: string; output: string; tone: Tone }) {
+  const parsed = parseJsonRecord(output);
+  if (!parsed) {
+    if (name === "Read" || name === "ReadLSP") return <ReadOutputCard output={output} tone={tone} />;
+    if (name === "Edit" || name === "Write") return <EditOutputCard output={output} tone={tone} />;
+    return <ToolCard title="Output" tone={tone}><CodeBlock text={output} max="max-h-96" /></ToolCard>;
+  }
+  if (name === "Grep" || name === "CodeSearch") return <GrepOutputCard data={parsed} tone={tone} />;
+  if (name === "GitDiffSummary") return <GitDiffOutputCard data={parsed} tone={tone} />;
+  if (name === "ProjectRunScript") return <ProjectRunOutputCard data={parsed} tone={tone} />;
+  return <GenericOutputCard data={parsed} tone={tone} />;
+}
+
 export const ToolExecutionBlock = memo(function ToolExecutionBlock({ name, status, input, output, logs = [] }: ToolExecutionBlockProps) {
   const isRunning = status === "running";
   const isError = status === "failed";
   const isTodoWrite = name === "TodoWrite";
   const [expanded, setExpanded] = useState(isTodoWrite);
-  const outputRef = useRef<HTMLPreElement | null>(null);
   const todos = useMemo(() => (isTodoWrite ? parseTodoInput(input ?? null) : null), [isTodoWrite, input]);
 
-  useEffect(() => {
-    if (!isRunning || !expanded) return;
-    if (outputRef.current) {
-      outputRef.current.scrollTop = outputRef.current.scrollHeight;
-    }
-  }, [expanded, isRunning, output, logs]);
 
   const safeInput = useMemo(() => {
     const trimmed = input?.trim();
@@ -152,17 +427,6 @@ export const ToolExecutionBlock = memo(function ToolExecutionBlock({ name, statu
   }, [isRunning, logs, output]);
 
   const statusToneClass = isError ? "text-red-700" : isRunning ? "text-blue-700" : "text-green-700";
-  const outputContainerClass = isError
-    ? "mt-1.5 overflow-hidden rounded-lg border border-red-200 bg-red-50"
-    : isRunning
-      ? "mt-1.5 overflow-hidden rounded-lg border border-blue-200 bg-blue-50"
-      : "mt-1.5 overflow-hidden rounded-lg border border-green-200 bg-green-50";
-  const outputTextClass = isError
-    ? "max-h-60 overflow-auto whitespace-pre-wrap px-3 py-2 font-mono text-[11px] leading-5 text-red-900"
-    : isRunning
-      ? "max-h-60 overflow-auto whitespace-pre-wrap px-3 py-2 font-mono text-[11px] leading-5 text-blue-900"
-      : "max-h-60 overflow-auto whitespace-pre-wrap px-3 py-2 font-mono text-[11px] leading-5 text-green-900";
-
   return (
     <section className="max-w-4xl px-1 py-0.5">
       <button
@@ -203,14 +467,10 @@ export const ToolExecutionBlock = memo(function ToolExecutionBlock({ name, statu
           {isTodoWrite && todos ? (
             <TodoListView todos={todos} />
           ) : safeInput ? (
-            <div className="overflow-hidden rounded-md border border-[var(--color-border)] bg-gray-50 px-2.5 py-1.5 font-mono text-[11px] text-ink-700">
-              <div className="overflow-auto whitespace-pre-wrap">{safeInput}</div>
-            </div>
+            <ToolInputView name={name} input={safeInput} />
           ) : null}
           {!isTodoWrite && transcript ? (
-            <div className={outputContainerClass}>
-              <pre ref={outputRef} className={outputTextClass}>{transcript}</pre>
-            </div>
+            <ToolOutputView name={name} output={transcript} tone={isError ? "error" : isRunning ? "running" : "success"} />
           ) : null}
         </div>
       ) : null}

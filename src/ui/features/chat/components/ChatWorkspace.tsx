@@ -1,12 +1,13 @@
 import { memo, useMemo, useState } from "react";
-import type { ClientEvent } from "../../../types";
+import type { CanUseToolResponse, ClientEvent } from "../../../types";
 import { useAppStore } from "../../../store/useAppStore";
-import type { AgentDisplayStatus, ReasoningStep, ToolExecution } from "../../../store/useAppStore";
+import type { AgentDisplayStatus, PermissionRequest, ReasoningStep, ToolExecution } from "../../../store/useAppStore";
 import type { IndexedMessage } from "../../../hooks/useMessageWindow";
 import { PromptInput } from "./PromptInput";
 import { ConversationHeader } from "./ConversationHeader";
 import { ChatTimeline } from "./ChatTimeline";
 import { PlanModePanel } from "./PlanModePanel";
+import { DecisionPanel } from "../../system/components/DecisionPanel";
 
 interface ChatWorkspaceProps {
   title?: string;
@@ -25,6 +26,8 @@ interface ChatWorkspaceProps {
   reasoningSteps: ReasoningStep[];
   toolExecutions: ToolExecution[];
   cliResults: any[];
+  permissionRequests?: PermissionRequest[];
+  onPermissionResult?: (toolUseId: string, result: CanUseToolResponse) => void;
   onScroll: () => void;
   onScrollToBottom: () => void;
   onSendMessage: () => void;
@@ -55,6 +58,8 @@ export const ChatWorkspace = memo(function ChatWorkspace({
   reasoningSteps,
   toolExecutions,
   cliResults,
+  permissionRequests: permissionRequestsProp,
+  onPermissionResult,
   onScroll,
   onScrollToBottom,
   onSendMessage,
@@ -76,7 +81,11 @@ export const ChatWorkspace = memo(function ChatWorkspace({
   const [isCancellingRecoveredRun, setIsCancellingRecoveredRun] = useState(false);
   const [isResolvingApprovals, setIsResolvingApprovals] = useState(false);
 
-  const permissionRequests = activeSession?.permissionRequests ?? [];
+  const permissionRequests = permissionRequestsProp ?? activeSession?.permissionRequests ?? [];
+  const questionRequests = useMemo(
+    () => permissionRequests.filter((request) => request.toolName === "AskUserQuestion" && request.source !== "recovered"),
+    [permissionRequests]
+  );
   const recoveredRequests = useMemo(
     () => permissionRequests.filter((request) => request.source === "recovered"),
     [permissionRequests]
@@ -225,6 +234,18 @@ export const ChatWorkspace = memo(function ChatWorkspace({
               >
                 {isHistoryLoading ? "Loading earlier messages…" : "Load more messages"}
               </button>
+            </div>
+          ) : null}
+
+          {questionRequests.length > 0 && onPermissionResult ? (
+            <div className="mb-4 space-y-3">
+              {questionRequests.map((request) => (
+                <DecisionPanel
+                  key={request.toolUseId}
+                  request={request}
+                  onSubmit={(result) => onPermissionResult(request.toolUseId, result)}
+                />
+              ))}
             </div>
           ) : null}
 
