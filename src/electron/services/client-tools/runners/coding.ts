@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { promises as fs } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, extname, join, relative, resolve } from "node:path";
@@ -350,7 +350,7 @@ async function fallbackSearch(root: string, pattern: string, options: { glob?: s
   for (const file of files) {
     if (lines.length >= max) break;
     const full = join(root, file);
-    if (!existsSync(full) || !/[.](ts|tsx|js|jsx|json|md|css|scss|html|txt)$/i.test(file)) continue;
+    if (!existsSync(full) || !/[.](ts|tsx|cts|mts|js|jsx|cjs|mjs|json|md|mdx|css|scss|html|txt|yaml|yml)$/i.test(file)) continue;
     const content = await fs.readFile(full, "utf-8").catch(() => "");
     content.split(/\r?\n/).forEach((line, index) => {
       if (lines.length < max && matcher.test(line)) lines.push(`${file}:${index + 1}:1:${line.trim()}`);
@@ -421,28 +421,37 @@ const codeSearchTool: ClientToolDefinition = {
     additionalProperties: false,
   },
   run: async (args) => {
-    const root = resolve(asString(args.path, cwd()));
+    const start = resolve(asString(args.path, cwd()));
+    const searchStart = existsSync(start) && statSync(start).isFile() ? dirname(start) : start;
+    const root = await gitRoot(searchStart);
     const query = asString(args.query);
     const mode = asString(args.mode, "hybrid");
+    const glob = typeof args.glob === "string" && args.glob.trim() ? args.glob.trim() : undefined;
+    const outputLimit = Math.min(Math.max(Number(args.limit) || 16000, 1000), 50000);
+
+    async function runFallback(): Promise<ToolRunResult> {
+      const fallback = await fallbackSearch(root, query, {
+        glob,
+        symbol: mode === "symbol",
+        limit: Number(args.limit) || 200,
+      });
+      return ok(truncate(fallback, outputLimit));
+    }
+
     try {
       if (!query.trim()) return fail("query is required");
       const pattern = mode === "symbol" ? `\\b${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b` : query;
       const rgArgs = ["--line-number", "--column", "--no-heading", "--color", "never", "--max-count", "20"];
-      if (typeof args.glob === "string" && args.glob.trim()) rgArgs.push("--glob", args.glob.trim());
-      rgArgs.push(pattern, ".");
+      if (glob) rgArgs.push("--glob", glob);
+      rgArgs.push("--regexp", pattern, ".");
       const output = await run("rg", rgArgs, { cwd: root, timeout: 60_000 });
-      return ok(truncate(output, Math.min(Math.max(Number(args.limit) || 16000, 1000), 50000)));
+      const trimmed = output === "(no output)" ? "" : output.trim();
+      if (!trimmed) return runFallback();
+      return ok(truncate(trimmed, outputLimit));
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      if (/ENOENT|spawn rg/.test(message)) {
-        const fallback = await fallbackSearch(root, query, {
-          glob: typeof args.glob === "string" ? args.glob : undefined,
-          symbol: mode === "symbol",
-          limit: Number(args.limit) || 200,
-        });
-        return ok(truncate(fallback, Math.min(Math.max(Number(args.limit) || 16000, 1000), 50000)));
-      }
-      if (/exit code 1|Command failed/.test(message)) return ok("No matches");
+      if (/ENOENT|spawn rg/.test(message)) return runFallback();
+      if (/exit code 1|Command failed/.test(message)) return runFallback();
       return fail(e);
     }
   },
