@@ -67,7 +67,7 @@ export function ConfigModal({
                 <input
                   type="checkbox"
                   id="configAutoStart"
-                  checked={Boolean(configData.autoStart)}
+                  checked={configData.autoStart !== false}
                   onChange={(e) =>
                     setConfigData({ ...configData, autoStart: e.target.checked })
                   }

@@ -132,7 +132,7 @@ export function CreateChannelModal({ agents, channels, organizationChannels, onC
   const [credentials, setCredentials] = useState<Record<string, string>>({});
   const [startAfterCreate, setStartAfterCreate] = useState(true);
   const [whatsappSetupMode, setWhatsappSetupMode] = useState<'account' | 'agent_route'>('account');
-  const [configData, setConfigData] = useState<ConfigDataState>({ typingIndicator: true });
+  const [configData, setConfigData] = useState<ConfigDataState>({ autoStart: true, typingIndicator: true });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [wechatQr, setWechatQr] = useState<{
@@ -765,7 +765,7 @@ export function CreateChannelModal({ agents, channels, organizationChannels, onC
               {!isWhatsAppRoute ? <label className="flex items-center gap-2 text-sm text-slate-700">
                 <input
                   type="checkbox"
-                  checked={Boolean(configData.autoStart)}
+                  checked={configData.autoStart !== false}
                   onChange={(event) => setConfigData({ ...configData, autoStart: event.target.checked })}
                   className="rounded border-slate-300"
                 />
