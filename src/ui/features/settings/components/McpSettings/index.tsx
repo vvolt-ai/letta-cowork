@@ -64,7 +64,7 @@ export function McpSettings() {
             servers individually and pick which tools they expose.
           </p>
         </div>
-        <div className="flex gap-2">
+        {!showForm ? <div className="flex gap-2">
           <button
             onClick={refresh}
             className="px-3 py-1.5 text-sm border rounded-lg text-slate-700 hover:bg-slate-50"
@@ -79,10 +79,17 @@ export function McpSettings() {
           >
             + Add server
           </button>
-        </div>
+        </div> : null}
       </div>
 
-      {loading ? (
+      {showForm ? (
+        <McpServerFormDialog
+          open={showForm}
+          editing={editing}
+          onClose={() => setShowForm(false)}
+          onSubmit={handleSubmit}
+        />
+      ) : loading ? (
         <LoadingRow />
       ) : error ? (
         <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-3">
@@ -173,12 +180,6 @@ export function McpSettings() {
         </div>
       )}
 
-      <McpServerFormDialog
-        open={showForm}
-        editing={editing}
-        onClose={() => setShowForm(false)}
-        onSubmit={handleSubmit}
-      />
     </div>
   );
 }

@@ -102,10 +102,8 @@ export function McpServerFormDialog({ open, editing, onClose, onSubmit }: Props)
   };
 
   return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg mx-4">
-        <form onSubmit={handleSubmit}>
+    <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+      <form onSubmit={handleSubmit}>
           <div className="flex items-center justify-between p-4 border-b">
             <h3 className="text-lg font-semibold text-gray-900">
               {editing ? "Edit MCP server" : "Add MCP server"}
@@ -231,8 +229,7 @@ export function McpServerFormDialog({ open, editing, onClose, onSubmit }: Props)
               {submitting ? "Saving…" : editing ? "Save changes" : "Add server"}
             </button>
           </div>
-        </form>
-      </div>
+      </form>
     </div>
   );
 }
