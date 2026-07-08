@@ -176,7 +176,7 @@ export function McpServerFormDialog({ open, editing, onClose, onSubmit }: Props)
               />
             </Field>
 
-            <div className="flex items-center justify-between py-2">
+            <div className="flex items-center justify-between gap-4 py-2">
               <div>
                 <p className="font-medium text-gray-900 text-sm">Share with organization</p>
                 <p className="text-xs text-gray-500">
@@ -184,17 +184,27 @@ export function McpServerFormDialog({ open, editing, onClose, onSubmit }: Props)
                   team should be able to attach it too.
                 </p>
               </div>
-              <Toggle enabled={shareOrgWide} onToggle={() => setShareOrgWide((v) => !v)} />
+              <CheckboxToggle
+                id="mcp-share-org-wide"
+                checked={shareOrgWide}
+                onChange={setShareOrgWide}
+                ariaLabel="Share MCP server with organization"
+              />
             </div>
 
-            <div className="flex items-center justify-between py-2">
+            <div className="flex items-center justify-between gap-4 py-2">
               <div>
                 <p className="font-medium text-gray-900 text-sm">Enabled</p>
                 <p className="text-xs text-gray-500">
                   Disable to keep the config but stop the server from being used by agents.
                 </p>
               </div>
-              <Toggle enabled={enabled} onToggle={() => setEnabled((v) => !v)} />
+              <CheckboxToggle
+                id="mcp-enabled"
+                checked={enabled}
+                onChange={setEnabled}
+                ariaLabel="Enable MCP server"
+              />
             </div>
 
             {error && (
@@ -360,20 +370,34 @@ function Field({ label, hint, children }: FieldProps) {
   );
 }
 
-function Toggle({ enabled, onToggle }: { enabled: boolean; onToggle: () => void }) {
+function CheckboxToggle({
+  id,
+  checked,
+  onChange,
+  ariaLabel,
+}: {
+  id: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  ariaLabel: string;
+}) {
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-        enabled ? "bg-blue-500" : "bg-gray-200"
-      }`}
+    <label
+      htmlFor={id}
+      className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full"
     >
-      <span
-        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-          enabled ? "translate-x-6" : "translate-x-1"
-        }`}
+      <input
+        id={id}
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+        className="peer sr-only"
+        aria-label={ariaLabel}
       />
-    </button>
+      <span className="absolute inset-0 rounded-full bg-gray-200 transition-colors peer-checked:bg-blue-500 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-blue-500" />
+      <span
+        className="relative inline-block h-4 w-4 translate-x-1 rounded-full bg-white transition-transform peer-checked:translate-x-6"
+      />
+    </label>
   );
 }
