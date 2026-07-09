@@ -51,20 +51,18 @@ export function usePromptActions(
   const setActiveSessionId = useAppStore((state) => state.setActiveSessionId);
   const startTimeoutRef = useRef<number | null>(null);
 
-  // Check if the agent is actively processing.
-  // Prefer ephemeral.status over top-level session.status: session.status can
-  // remain stale "running" after a stream has already delivered a terminal
-  // result, which leaves the input stuck on the red stop button.
+  // Check if the current UI turn is actively processing.
+  // Do not use top-level session.status here: session.list/history can report
+  // stale backend "running" after the visible turn is done, which leaves the
+  // input stuck on the red stop button. stream.user_prompt/init/result drive
+  // ephemeral.status for the live turn.
   const agentStatus = activeSession?.ephemeral?.status;
-  const isEphemeralProcessing =
+  const isRunning =
+    pendingStart ||
     agentStatus === "thinking" ||
     agentStatus === "running_tool" ||
     agentStatus === "generating" ||
     agentStatus === "waiting_approval";
-  const isRunning =
-    isEphemeralProcessing ||
-    (activeSession?.status === "running" &&
-      (agentStatus === undefined || agentStatus === "idle"));
 
   const handleSend = useCallback(
     async (options?: SendMessageOptions) => {
