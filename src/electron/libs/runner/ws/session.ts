@@ -333,6 +333,29 @@ export class WsSession {
             );
         };
 
+        const extractBusyRunId = (msg: string): string | null => {
+            const quoted = /"run_id"\s*:\s*"(run-[^"]+)"/i.exec(msg)?.[1];
+            if (quoted) return quoted;
+            return /run_id=(run-[a-z0-9-]+)/i.exec(msg)?.[1] ?? null;
+        };
+
+        const cancelBlockingRun = async (runId: string): Promise<void> => {
+            const client = getClient() as unknown as {
+                runs?: {
+                    retrieve?: (id: string) => Promise<{ status?: string }>;
+                    cancel?: (id: string) => Promise<unknown>;
+                };
+            };
+            const status = await client.runs?.retrieve?.(runId).catch(() => undefined);
+            const normalizedStatus = String(status?.status ?? "unknown").toLowerCase();
+            if (["completed", "failed", "cancelled", "canceled"].includes(normalizedStatus)) {
+                console.warn(`[WsSession] busy blocker ${runId} is already ${normalizedStatus}; retrying send`);
+                return;
+            }
+            console.warn(`[WsSession] cancelling stale busy blocker ${runId} (status=${normalizedStatus})`);
+            await client.runs?.cancel?.(runId);
+        };
+
         // Detect transient network/socket failures mid-stream. Letta cloud's
         // SSE stream can be killed by intermediate proxies, idle timeouts, or
         // brief WAN blips — all recoverable by reconnecting. Covers undici
@@ -398,8 +421,12 @@ export class WsSession {
             // are recoverable by reconnecting the SSE stream.
             const MAX_NETWORK_RETRIES = 4;
             let networkRetries = 0;
-            const MAX_BUSY_RETRIES = 12;
+            const MAX_BUSY_RETRIES = 8;
+            const BUSY_CANCEL_AFTER_SAME_RUN_RETRIES = 3;
             let busyRetries = 0;
+            let lastBusyRunId: string | null = null;
+            let sameBusyRunRetries = 0;
+            let didPreflightApprovalRecovery = false;
             const MAX_LLM_INTERNAL_RETRIES = 3;
             let llmInternalRetries = 0;
 
@@ -425,7 +452,8 @@ export class WsSession {
                     // Mid-pump turns are driven by our own tool returns —
                     // anything pending there is live, not stale, so we
                     // must not deny it.
-                    if (turnCount === 1) {
+                    if (turnCount === 1 && !didPreflightApprovalRecovery) {
+                        didPreflightApprovalRecovery = true;
                         await this.recoverStuckApprovals({ fast: true });
                     }
                     if (ctrl.signal.aborted) break;
@@ -730,9 +758,39 @@ export class WsSession {
                     busyRetries < MAX_BUSY_RETRIES
                 ) {
                     busyRetries++;
-                    const backoffMs = Math.min(10_000, 1000 + busyRetries * 1000);
+                    const busyRunId = extractBusyRunId(errMessage);
+                    if (busyRunId && busyRunId === lastBusyRunId) {
+                        sameBusyRunRetries++;
+                    } else {
+                        lastBusyRunId = busyRunId;
+                        sameBusyRunRetries = busyRunId ? 1 : 0;
+                    }
+
+                    if (busyRunId && sameBusyRunRetries >= BUSY_CANCEL_AFTER_SAME_RUN_RETRIES) {
+                        try {
+                            await cancelBlockingRun(busyRunId);
+                            sameBusyRunRetries = 0;
+                            const settleMs = 1_000;
+                            console.warn(
+                                `[WsSession] cancelled busy blocker ${busyRunId}; retrying in ${settleMs}ms`
+                            );
+                            await new Promise<void>((resolve) => setTimeout(resolve, settleMs));
+                        } catch (cancelErr) {
+                            console.warn(
+                                `[WsSession] failed to cancel busy blocker ${busyRunId}:`,
+                                cancelErr instanceof Error ? cancelErr.message : String(cancelErr)
+                            );
+                        }
+                        if (ctrl.signal.aborted) {
+                            this.activePumps.delete(ctrl);
+                            return;
+                        }
+                        continue;
+                    }
+
+                    const backoffMs = Math.min(5_000, 1000 + busyRetries * 1000);
                     console.warn(
-                        `[WsSession] conversation busy conflict (retry ${busyRetries}/${MAX_BUSY_RETRIES} in ${backoffMs}ms):`,
+                        `[WsSession] conversation busy conflict (retry ${busyRetries}/${MAX_BUSY_RETRIES} in ${backoffMs}ms, blocker=${busyRunId ?? "unknown"}, same=${sameBusyRunRetries}):`,
                         errMessage
                     );
                     await new Promise<void>((resolve) => {
