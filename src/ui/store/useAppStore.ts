@@ -503,6 +503,12 @@ function extractRunId(message: StreamMessage): string | undefined {
   return undefined;
 }
 
+function extractClientRunId(message: StreamMessage): string | undefined {
+  const raw = message as Record<string, unknown>;
+  const value = raw.clientRunId ?? raw.client_run_id;
+  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+}
+
 const TERMINAL_RUN_STATUSES = new Set(["completed", "failed", "cancelled"]);
 
 function delay(ms: number): Promise<void> {
@@ -551,6 +557,7 @@ export type SessionView = {
   agentName?: string;
   agentId?: string;
   latestRunId?: string;
+  latestClientRunId?: string;
   messages: StreamMessage[];
   permissionRequests: PermissionRequest[];
   lastPrompt?: string;
@@ -1215,6 +1222,20 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
           const existing = state.sessions[sessionId] ?? createSession(sessionId);
           const currentEphemeral = existing.ephemeral ?? initialEphemeralState();
           const messageRunId = extractRunId(message);
+          const messageClientRunId = extractClientRunId(message);
+          const isStaleTerminalEvent =
+            message.type === "result" &&
+            typeof messageClientRunId === "string" &&
+            typeof existing.latestClientRunId === "string" &&
+            messageClientRunId !== existing.latestClientRunId;
+          if (isStaleTerminalEvent) {
+            console.debug("[useAppStore] ignoring stale result event", {
+              sessionId,
+              messageClientRunId,
+              latestClientRunId: existing.latestClientRunId,
+            });
+            return state;
+          }
           let messages = existing.messages;
           let ephemeral = currentEphemeral;
           let status: AgentDisplayStatus = currentEphemeral.status;
@@ -1392,6 +1413,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
               [sessionId]: {
                 ...existing,
                 latestRunId: messageRunId ?? existing.latestRunId,
+                latestClientRunId: messageClientRunId ?? existing.latestClientRunId,
                 messages,
                 ephemeral: {
                   ...ephemeral,
@@ -1443,6 +1465,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
                 messages: newMessages,
                 lastPrompt: prompt,
                 latestRunId: undefined,
+                latestClientRunId: undefined,
                 ephemeral: nextEphemeral,
               },
             },

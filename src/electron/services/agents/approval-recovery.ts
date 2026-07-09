@@ -150,6 +150,7 @@ export async function discoverPendingApprovals(
 
 const MAX_CLEAR_ITERATIONS = 5;
 const APPROVAL_DRAIN_TIMEOUT_MS = 15_000;
+const FAST_APPROVAL_DRAIN_TIMEOUT_MS = 2_000;
 const APPROVAL_DRAIN_TIMEOUT = Symbol("approval-drain-timeout");
 
 async function drainApprovalStreamWithTimeout(
@@ -196,7 +197,8 @@ async function drainApprovalStreamWithTimeout(
  */
 export async function clearPendingApprovals(
     client: Letta,
-    conversationId: string
+    conversationId: string,
+    options: { drainTimeoutMs?: number } = {}
 ): Promise<{ iterations: number; cleared: number }> {
     let iterations = 0;
     let cleared = 0;
@@ -209,6 +211,7 @@ export async function clearPendingApprovals(
     // denied. Bounding by this snapshot prevents the recovery loop
     // from trampling fresh tool calls.
     let staleSnapshot: Set<string> | null = null;
+    const drainTimeoutMs = options.drainTimeoutMs ?? FAST_APPROVAL_DRAIN_TIMEOUT_MS;
 
     while (iterations < MAX_CLEAR_ITERATIONS) {
         iterations += 1;
@@ -281,12 +284,12 @@ export async function clearPendingApprovals(
             // must never hold the user's next turn hostage if the SSE
             // drain hangs after the denial has been accepted.
             try {
-                const drainResult = await drainApprovalStreamWithTimeout(stream);
+                const drainResult = await drainApprovalStreamWithTimeout(stream, drainTimeoutMs);
                 if (drainResult === "timed_out") {
                     debug("clearPendingApprovals: drain timed out (non-fatal)", {
                         conversationId,
                         iteration: iterations,
-                        timeoutMs: APPROVAL_DRAIN_TIMEOUT_MS,
+                        timeoutMs: drainTimeoutMs,
                         toolCallIds: pending.map((p) => p.toolCallId),
                     });
                 }

@@ -145,6 +145,9 @@ export class WsSession {
     /** Active background pumps — keyed by run/turn id for clean teardown. */
     private activePumps = new Set<AbortController>();
     private startedAt: number = Date.now();
+    /** Local monotonic turn id used to ignore stale terminal events in the UI. */
+    private turnSeq = 0;
+    private activeClientRunId: string | null = null;
     /** Last server response-state id for auto approval continuations. */
     private responseStateId: string | null = null;
 
@@ -305,6 +308,7 @@ export class WsSession {
         const ctrl = new AbortController();
         this.activePumps.add(ctrl);
         this.startedAt = Date.now();
+        this.activeClientRunId = `client-${this.startedAt}-${++this.turnSeq}`;
 
         // Detect the Letta CONFLICT response that fires when the conversation
         // has a pending tool approval. Recoverable: cancel the stuck runs and
@@ -422,7 +426,7 @@ export class WsSession {
                     // anything pending there is live, not stale, so we
                     // must not deny it.
                     if (turnCount === 1) {
-                        await this.recoverStuckApprovals();
+                        await this.recoverStuckApprovals({ fast: true });
                     }
                     if (ctrl.signal.aborted) break;
 
@@ -589,7 +593,7 @@ export class WsSession {
                         console.warn(
                             "[WsSession] stream ended with requires_approval — cancelling stuck run via REST"
                         );
-                        await this.recoverStuckApprovals();
+                        await this.recoverStuckApprovals({ fast: false });
                         // Surface a friendly notice in the chat so the
                         // user knows what happened.
                         this.enqueue({
@@ -682,7 +686,8 @@ export class WsSession {
                     success: true,
                     durationMs: Date.now() - this.startedAt,
                     conversationId: this._conversationId,
-                } as SDKResultMessage);
+                    clientRunId: this.activeClientRunId ?? undefined,
+                } as SDKResultMessage & { clientRunId?: string });
                 // Successful pump — break the retry loop.
                 break;
             } catch (err) {
@@ -707,7 +712,7 @@ export class WsSession {
                         errMessage
                     );
                     try {
-                        await this.recoverStuckApprovals();
+                        await this.recoverStuckApprovals({ fast: false });
                     } catch (recoverErr) {
                         console.warn(
                             "[WsSession] recoverStuckApprovals during retry failed:",
@@ -811,7 +816,8 @@ export class WsSession {
                     error: errMessage,
                     durationMs: Date.now() - this.startedAt,
                     conversationId: this._conversationId,
-                } as SDKResultMessage);
+                    clientRunId: this.activeClientRunId ?? undefined,
+                } as SDKResultMessage & { clientRunId?: string });
                 break;
             }
             } // end retry while-loop
@@ -839,10 +845,14 @@ export class WsSession {
      * Best-effort. Failures are logged and we continue — the actual
      * send will surface a clearer error if the conflict persists.
      */
-    private async recoverStuckApprovals(): Promise<void> {
+    private async recoverStuckApprovals(options: { fast?: boolean } = {}): Promise<void> {
         if (!this._agentId || !this._conversationId) return;
         try {
-            await clearPendingApprovals(getClient(), this._conversationId);
+            await clearPendingApprovals(
+                getClient(),
+                this._conversationId,
+                options.fast === false ? { drainTimeoutMs: 15_000 } : { drainTimeoutMs: 2_000 }
+            );
         } catch (err) {
             console.warn(
                 "[WsSession] recoverStuckApprovals failed:",
@@ -1102,14 +1112,17 @@ export class WsSession {
     }
 
     private enqueue(msg: SDKMessage): void {
+        const stamped = this.activeClientRunId
+            ? ({ ...((msg as unknown) as Record<string, unknown>), clientRunId: this.activeClientRunId } as unknown as SDKMessage)
+            : msg;
         if (this.streamResolvers.length > 0) {
             const resolve = this.streamResolvers.shift();
             if (resolve) {
-                resolve(msg);
+                resolve(stamped);
                 return;
             }
         }
-        this.streamQueue.push(msg);
+        this.streamQueue.push(stamped);
     }
 
     private handleStreamingEvent(event: LettaStreamingResponse): void {

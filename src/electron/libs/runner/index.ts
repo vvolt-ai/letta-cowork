@@ -206,8 +206,11 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
           // Send message directly to frontend
           sendMessageWithId(message);
 
-          // Check for result to update session status
-          if (message.type === "result") {
+          // Error/approval-conflict results may need backend recovery.
+          // Successful result messages already drive the UI via stream.message;
+          // sending a second session.status=completed here can race with a newer
+          // user turn and make a busy/retrying conversation look completed.
+          if (message.type === "result" && !(message as { success?: boolean }).success) {
             handleResultMessage(
               message as Parameters<typeof handleResultMessage>[0],
               currentSessionId,
@@ -229,11 +232,9 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
       }
       debug("stream ended", { totalMessages: messageCount });
 
-      // Query completed normally
-      if (session.status === "running") {
-        debug("query completed normally");
-        sendSessionStatus(currentSessionId, "completed", onEvent, agentName);
-      }
+      // Normal completion is emitted as a stamped stream.message result by
+      // WsSession. Do not send an additional unstamped session.status=completed;
+      // it can arrive after the next prompt starts and overwrite the live state.
     } catch (error) {
       // Check if this was an abort
       if (signal.aborted || (error as Error).name === "AbortError") {
