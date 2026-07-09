@@ -1395,11 +1395,17 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
             }
           }
 
+          const sessionStatus: SessionStatus =
+            message.type === "result"
+              ? (status === "error" ? "error" : status === "waiting_approval" ? existing.status : "completed")
+              : existing.status;
+
           return {
             sessions: {
               ...state.sessions,
               [sessionId]: {
                 ...existing,
+                status: sessionStatus,
                 latestRunId: messageRunId ?? existing.latestRunId,
                 latestClientRunId: messageClientRunId ?? existing.latestClientRunId,
                 messages,
