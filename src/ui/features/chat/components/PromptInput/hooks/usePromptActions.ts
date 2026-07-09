@@ -51,14 +51,20 @@ export function usePromptActions(
   const setActiveSessionId = useAppStore((state) => state.setActiveSessionId);
   const startTimeoutRef = useRef<number | null>(null);
 
-  // Check if the agent is actively processing
+  // Check if the agent is actively processing.
+  // Prefer ephemeral.status over top-level session.status: session.status can
+  // remain stale "running" after a stream has already delivered a terminal
+  // result, which leaves the input stuck on the red stop button.
   const agentStatus = activeSession?.ephemeral?.status;
-  const isRunning =
-    activeSession?.status === "running" ||
+  const isEphemeralProcessing =
     agentStatus === "thinking" ||
     agentStatus === "running_tool" ||
     agentStatus === "generating" ||
     agentStatus === "waiting_approval";
+  const isRunning =
+    isEphemeralProcessing ||
+    (activeSession?.status === "running" &&
+      (agentStatus === undefined || agentStatus === "idle"));
 
   const handleSend = useCallback(
     async (options?: SendMessageOptions) => {
@@ -89,7 +95,7 @@ export function usePromptActions(
           setPrompt("");
         }
       } else {
-        if (activeSession?.status === "running") {
+        if (isRunning) {
           setGlobalError("Session is still running. Please wait for it to finish.");
           return;
         }
@@ -111,6 +117,7 @@ export function usePromptActions(
       activeSession,
       activeSessionId,
       cwd,
+      isRunning,
       overrideSessionId,
       prompt,
       selectedModel,
