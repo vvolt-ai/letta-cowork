@@ -1356,22 +1356,10 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
                 }
               }
 
-              const hasRunningTools = currentEphemeral.tools.some((tool) => tool.status === "running");
               const hasPendingPermissions = (existing.permissionRequests?.length ?? 0) > 0;
 
               if (hasPendingPermissions) {
                 status = "waiting_approval";
-                ephemeral = {
-                  ...currentEphemeral,
-                  assistantDraft: undefined,
-                  pendingResultStatus: message.success ? "completed" : "error",
-                  pendingResultError: message.success ? undefined : (message.error ?? "Assistant failed to respond"),
-                };
-                break;
-              }
-
-              if (hasRunningTools) {
-                status = "running_tool";
                 ephemeral = {
                   ...currentEphemeral,
                   assistantDraft: undefined,
