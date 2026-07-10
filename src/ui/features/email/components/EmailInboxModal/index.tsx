@@ -19,6 +19,9 @@ export function EmailInboxModal({
   open,
   onOpenChange,
   emails,
+  isServerConnected = true,
+  isEmailConnected = true,
+  isFetching,
   isProcessingEmailInput: _isProcessingEmailInput,
   selectedAgentId,
   onProcessEmailToAgent,
@@ -238,8 +241,33 @@ export function EmailInboxModal({
   const hasSendError = Boolean(activeMessageId && String(errorEmailId) === activeMessageId);
   const isSendBusy = isFetchingThread || isFetchingActiveEmail || isProcessing || isAwaitingConversation;
 
-  const canSendToAgent = Boolean(activeEmail && selectedAgentId) && !isSendBusy;
+  const canSendToAgent = Boolean(isServerConnected && isEmailConnected && activeEmail) && !isSendBusy;
   const canViewConversation = Boolean(activeConversationId);
+
+  const sendDisabledReason = (() => {
+    if (hasSendError) return null;
+    if (!isServerConnected) return "Cowork server is disconnected. Reconnect Cowork first.";
+    if (!isEmailConnected) return "Email is not connected. Connect Zoho Mail first.";
+    if (isFetching) return "Loading mailbox from Zoho.";
+    if (isFetchingActiveEmail) return "Fetching the current email from Zoho.";
+    if (isFetchingThread) return "Fetching the latest email in this Zoho thread.";
+    if (isProcessing) return "This email is already being sent to an agent.";
+    if (isAwaitingConversation) return "Waiting for the agent conversation to be created.";
+    if (!activeZohoMailId) return "Open an email in Zoho first.";
+    if (!activeEmail) return "Still loading details for the open email.";
+    return null;
+  })();
+
+  const viewConversationDisabledReason = (() => {
+    if (canViewConversation) return null;
+    if (!isServerConnected) return "Cowork server is disconnected. Reconnect Cowork first.";
+    if (!isEmailConnected) return "Email is not connected. Connect Zoho Mail first.";
+    if (isFetching) return "Loading mailbox from Zoho.";
+    if (isProcessing || isAwaitingConversation) return "Conversation will be available after the agent run starts.";
+    if (!activeZohoMailId) return "Open an email in Zoho first.";
+    if (!activeEmail) return "Still loading details for the open email.";
+    return "No conversation exists for this email yet. Use Send to Agent first.";
+  })();
 
   const [showConfirmSend, setShowConfirmSend] = useState(false);
 
@@ -298,52 +326,47 @@ export function EmailInboxModal({
                 </button>
               )}
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={onClickSendToAgent}
-                disabled={!canSendToAgent && !hasSendError}
-                className={`rounded-lg px-3 py-1.5 text-xs font-medium min-w-[140px] disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 disabled:border disabled:border-slate-200 disabled:hover:bg-slate-100 ${sendButtonClass}`}
-                title={
-                  isFetchingActiveEmail
-                    ? "Fetching current email details from Zoho..."
-                    : isFetchingThread
-                    ? "Fetching latest email from this Zoho thread..."
-                    : !selectedAgentId
-                    ? "Pick an agent first"
-                    : activeEmail
-                    ? `Send "${activeEmail.subject || activeEmail.messageId}" to agent`
-                    : "Open an email inside Zoho first"
-                }
-              >
-                <span className="flex items-center justify-center gap-1">
-                  {(isFetchingThread || isFetchingActiveEmail || isProcessing || isAwaitingConversation) && (
-                    <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                  )}
-                  {hasSendError && (
-                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="12" cy="12" r="10" />
-                      <line x1="15" y1="9" x2="9" y2="15" />
-                      <line x1="9" y1="9" x2="15" y2="15" />
-                    </svg>
-                  )}
-                  {sendButtonLabel}
-                </span>
-              </button>
-              <button
-                onClick={onClickViewConversation}
-                disabled={!canViewConversation}
-                className="rounded-lg border border-[var(--color-border)] bg-white px-3 py-1.5 text-xs font-medium text-ink-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200 disabled:hover:bg-slate-100"
-                title={
-                  canViewConversation
-                    ? "View conversation for this email"
-                    : "No conversation yet for this email"
-                }
-              >
-                View Conversation
-              </button>
+            <div className="flex flex-col items-end gap-1">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={onClickSendToAgent}
+                  disabled={!canSendToAgent && !hasSendError}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-medium min-w-[140px] disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 disabled:border disabled:border-slate-200 disabled:hover:bg-slate-100 ${sendButtonClass}`}
+                  title={sendDisabledReason || (activeEmail ? `Send "${activeEmail.subject || activeEmail.messageId}" to agent` : "Send this email to an agent")}
+                >
+                  <span className="flex items-center justify-center gap-1">
+                    {(isFetchingThread || isFetchingActiveEmail || isProcessing || isAwaitingConversation) && (
+                      <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                    )}
+                    {hasSendError && (
+                      <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="15" y1="9" x2="9" y2="15" />
+                        <line x1="9" y1="9" x2="15" y2="15" />
+                      </svg>
+                    )}
+                    {sendButtonLabel}
+                  </span>
+                </button>
+                <button
+                  onClick={onClickViewConversation}
+                  disabled={!canViewConversation}
+                  className="rounded-lg border border-[var(--color-border)] bg-white px-3 py-1.5 text-xs font-medium text-ink-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200 disabled:hover:bg-slate-100"
+                  title={viewConversationDisabledReason || "View conversation for this email"}
+                >
+                  View Conversation
+                </button>
+              </div>
+              {(sendDisabledReason || viewConversationDisabledReason) && (
+                <p className="max-w-[520px] text-right text-[11px] leading-4 text-slate-500">
+                  {sendDisabledReason ? <span><strong>Send disabled:</strong> {sendDisabledReason}</span> : null}
+                  {sendDisabledReason && viewConversationDisabledReason ? <span> · </span> : null}
+                  {viewConversationDisabledReason ? <span><strong>View disabled:</strong> {viewConversationDisabledReason}</span> : null}
+                </p>
+              )}
             </div>
             <Dialog.Close asChild>
               <button className="rounded-full p-1.5 text-ink-500 hover:bg-ink-900/10" aria-label="Close inbox">

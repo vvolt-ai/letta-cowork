@@ -18,6 +18,7 @@ import type {
   McpAttachment,
   CreateMcpServerInput,
   UpdateMcpServerInput,
+  McpToolRunResult,
 } from "../endpoints/mcp.js";
 import type { ScheduledTask, ScheduleRun, CreateScheduledTaskDto, CreateScheduleRunDto } from "../endpoints/scheduler.js";
 import type { InstallConnectorPluginInput } from "../endpoints/connectors.js";
@@ -32,7 +33,14 @@ import type {
   WeChatIlinkQrStatusResponse,
   OrganizationUser,
   AgentSecret,
-  UpsertAgentSecretInput
+  UpsertAgentSecretInput,
+  AdminOverview,
+  AdminUser,
+  AdminOrganization,
+  AdminMembership,
+  AdminChannel,
+  AdminChannelShare,
+  AdminChannelInput,
 } from "../types.js";
 
 /**
@@ -290,6 +298,97 @@ export class VeraCoworkApiClient extends BaseHttpClient {
     return this.request<{ success: boolean }>(`/agent-secrets/${encodeURIComponent(id)}`, {
       method: "DELETE",
     });
+  }
+
+  // ============================================
+  // Super-admin - global management surface
+  // ============================================
+
+  async adminOverview(): Promise<AdminOverview> {
+    return this.request<AdminOverview>("/admin/overview", { suppressAuthExpired: false });
+  }
+
+  async adminListUsers(): Promise<AdminUser[]> {
+    return this.request<AdminUser[]>("/admin/users", { suppressAuthExpired: false });
+  }
+
+  async adminUpdateUser(userId: string, input: Partial<AdminUser>): Promise<AdminUser> {
+    return this.request<AdminUser>(`/admin/users/${encodeURIComponent(userId)}`, {
+      method: "PATCH",
+      body: input,
+      suppressAuthExpired: false,
+    });
+  }
+
+  async adminListOrganizations(): Promise<AdminOrganization[]> {
+    return this.request<AdminOrganization[]>("/admin/organizations", { suppressAuthExpired: false });
+  }
+
+  async adminCreateOrganization(input: { name: string; isActive?: boolean }): Promise<AdminOrganization> {
+    return this.request<AdminOrganization>("/admin/organizations", {
+      method: "POST",
+      body: input,
+      suppressAuthExpired: false,
+    });
+  }
+
+  async adminUpdateOrganization(organizationId: string, input: Partial<AdminOrganization>): Promise<AdminOrganization> {
+    return this.request<AdminOrganization>(`/admin/organizations/${encodeURIComponent(organizationId)}`, {
+      method: "PATCH",
+      body: input,
+      suppressAuthExpired: false,
+    });
+  }
+
+  async adminListMemberships(): Promise<AdminMembership[]> {
+    return this.request<AdminMembership[]>("/admin/memberships", { suppressAuthExpired: false });
+  }
+
+  async adminUpsertMembership(input: { userId: string; organizationId: string; role?: string; isActive?: boolean }): Promise<AdminMembership> {
+    return this.request<AdminMembership>("/admin/memberships", {
+      method: "POST",
+      body: input,
+      suppressAuthExpired: false,
+    });
+  }
+
+  async adminUpdateMembership(membershipId: string, input: Partial<AdminMembership>): Promise<AdminMembership> {
+    return this.request<AdminMembership>(`/admin/memberships/${encodeURIComponent(membershipId)}`, {
+      method: "PATCH",
+      body: input,
+      suppressAuthExpired: false,
+    });
+  }
+
+  async adminListChannels(): Promise<AdminChannel[]> {
+    return this.request<AdminChannel[]>("/admin/channels", { suppressAuthExpired: false });
+  }
+
+  async adminCreateChannel(input: AdminChannelInput): Promise<AdminChannel> {
+    return this.request<AdminChannel>("/admin/channels", {
+      method: "POST",
+      body: input,
+      suppressAuthExpired: false,
+    });
+  }
+
+  async adminUpdateChannel(channelId: string, input: Partial<AdminChannelInput>): Promise<AdminChannel> {
+    return this.request<AdminChannel>(`/admin/channels/${encodeURIComponent(channelId)}`, {
+      method: "PATCH",
+      body: input,
+      suppressAuthExpired: false,
+    });
+  }
+
+  async adminDeleteChannel(channelId: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/admin/channels/${encodeURIComponent(channelId)}`, {
+      method: "DELETE",
+      suppressAuthExpired: false,
+    });
+  }
+
+  async adminListChannelShares(): Promise<AdminChannelShare[]> {
+    return this.request<AdminChannelShare[]>("/admin/channel-shares", { suppressAuthExpired: false });
   }
 
   async createChannel(data: {
@@ -686,5 +785,13 @@ export class VeraCoworkApiClient extends BaseHttpClient {
 
   async mcpListEnvKeysForAgent(agentId: string): Promise<{ agentId: string; keys: string[] }> {
     return McpEndpoints.listEnvKeysForAgent(this, agentId);
+  }
+
+  async mcpRunToolForAgent(
+    agentId: string,
+    toolName: string,
+    args: Record<string, unknown>,
+  ): Promise<McpToolRunResult> {
+    return McpEndpoints.runToolForAgent(this, agentId, toolName, args);
   }
 }

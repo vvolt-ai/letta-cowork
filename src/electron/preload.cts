@@ -316,6 +316,36 @@ electron.contextBridge.exposeInMainWorld("electron", {
     apiGetGroupConversationContext: (channelId: string, groupId: string, options?: { limit?: number; since?: string }) =>
         electron.ipcRenderer.invoke("api:get-group-conversation-context", channelId, groupId, options),
 
+    // Super-admin
+    apiAdminOverview: () =>
+        electron.ipcRenderer.invoke("api:admin:overview"),
+    apiAdminListUsers: () =>
+        electron.ipcRenderer.invoke("api:admin:list-users"),
+    apiAdminUpdateUser: (userId: string, data: any) =>
+        electron.ipcRenderer.invoke("api:admin:update-user", userId, data),
+    apiAdminListOrganizations: () =>
+        electron.ipcRenderer.invoke("api:admin:list-organizations"),
+    apiAdminCreateOrganization: (data: { name: string; isActive?: boolean }) =>
+        electron.ipcRenderer.invoke("api:admin:create-organization", data),
+    apiAdminUpdateOrganization: (organizationId: string, data: any) =>
+        electron.ipcRenderer.invoke("api:admin:update-organization", organizationId, data),
+    apiAdminListMemberships: () =>
+        electron.ipcRenderer.invoke("api:admin:list-memberships"),
+    apiAdminUpsertMembership: (data: { userId: string; organizationId: string; role?: string; isActive?: boolean }) =>
+        electron.ipcRenderer.invoke("api:admin:upsert-membership", data),
+    apiAdminUpdateMembership: (membershipId: string, data: any) =>
+        electron.ipcRenderer.invoke("api:admin:update-membership", membershipId, data),
+    apiAdminListChannels: () =>
+        electron.ipcRenderer.invoke("api:admin:list-channels"),
+    apiAdminCreateChannel: (data: any) =>
+        electron.ipcRenderer.invoke("api:admin:create-channel", data),
+    apiAdminUpdateChannel: (channelId: string, data: any) =>
+        electron.ipcRenderer.invoke("api:admin:update-channel", channelId, data),
+    apiAdminDeleteChannel: (channelId: string) =>
+        electron.ipcRenderer.invoke("api:admin:delete-channel", channelId),
+    apiAdminListChannelShares: () =>
+        electron.ipcRenderer.invoke("api:admin:list-channel-shares"),
+
     // ── Scheduler ────────────────────────────────────────────────────────────
     schedulerList: () =>
         electron.ipcRenderer.invoke("scheduler:list"),

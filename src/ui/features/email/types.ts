@@ -52,6 +52,8 @@ export interface EmailInboxModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   emails: ZohoEmail[];
+  isServerConnected?: boolean;
+  isEmailConnected?: boolean;
   isFetching: boolean;
   onUseEmailAsInput: (email: ZohoEmail) => void;
   isProcessingEmailInput?: boolean;

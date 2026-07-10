@@ -47,6 +47,93 @@ export interface UpsertAgentSecretInput {
 }
 
 // ============================================
+// Super-admin Types
+// ============================================
+
+export interface AdminOverview {
+  users: number;
+  organizations: number;
+  activeMemberships: number;
+  channels: number;
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  firstName?: string;
+  lastName?: string | null;
+  phoneNumber?: string | null;
+  isActive: boolean;
+  role: 'super_admin' | 'organization_admin' | 'user' | string;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+  memberships?: AdminMembership[];
+}
+
+export interface AdminOrganization {
+  id: string;
+  name: string;
+  isActive: boolean;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+  members?: Array<AdminMembership & { user?: AdminUser | null }>;
+}
+
+export interface AdminMembership {
+  id: string;
+  userId: string;
+  organizationId: string;
+  role: 'owner' | 'admin' | 'member' | string;
+  isActive: boolean;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+  user?: AdminUser | null;
+  organization?: AdminOrganization | null;
+}
+
+export interface AdminChannel {
+  id: string;
+  organizationId: string;
+  organizationName?: string;
+  createdByUserId: string;
+  createdByUserEmail?: string;
+  provider: Channel['provider'];
+  name: string;
+  externalId: string | null;
+  config: Record<string, unknown> | null;
+  hasCredentials: boolean;
+  isActive: boolean;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+}
+
+export interface AdminChannelShare {
+  id: string;
+  channelId: string;
+  organizationId: string;
+  sharedWithUserId: string;
+  sharedWithUserEmail?: string;
+  sharedByUserId: string;
+  sharedByUserEmail?: string;
+  permission: string;
+  isActive: boolean;
+  revokedAt?: string | Date | null;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+}
+
+export interface AdminChannelInput {
+  organizationId: string;
+  createdByUserId: string;
+  provider: Channel['provider'];
+  name: string;
+  externalId?: string | null;
+  config?: Record<string, unknown> | null;
+  credentials?: Record<string, string>;
+  isActive?: boolean;
+}
+
+// ============================================
 // Channel Types
 // ============================================
 

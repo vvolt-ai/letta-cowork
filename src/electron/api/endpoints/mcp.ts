@@ -60,6 +60,11 @@ export interface McpAttachment {
   server: McpServer | null;
 }
 
+export interface McpToolRunResult {
+  output: string;
+  isError: boolean;
+}
+
 export interface CreateMcpServerInput {
   name: string;
   transport: McpTransport;
@@ -230,6 +235,22 @@ export class McpEndpoints {
   ): Promise<{ agentId: string; keys: string[] }> {
     return client.request<{ agentId: string; keys: string[] }>(
       `/mcp/agents/${agentId}/env-keys`,
+    );
+  }
+
+  /** Execute a Vera-stored MCP tool and return the client_tools-shaped result. */
+  static async runToolForAgent(
+    client: BaseHttpClient,
+    agentId: string,
+    toolName: string,
+    args: Record<string, unknown>,
+  ): Promise<McpToolRunResult> {
+    return client.request<McpToolRunResult>(
+      `/mcp/agents/${agentId}/tools/run`,
+      {
+        method: "POST",
+        body: { toolName, args },
+      },
     );
   }
 }

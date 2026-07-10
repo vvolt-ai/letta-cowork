@@ -40,6 +40,16 @@ export interface McpServerWithTools extends McpServer {
   tools: McpTool[];
 }
 
+export interface McpAttachment {
+  id: string;
+  agentId: string;
+  mcpServerId: string;
+  /** null means all tools from the server are enabled. */
+  toolNames: string[] | null;
+  createdAt: string;
+  server: McpServer | null;
+}
+
 export interface CreateMcpServerInput {
   name: string;
   transport: McpTransport;

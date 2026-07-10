@@ -157,16 +157,16 @@ function labelFor(key: string): string {
 }
 
 function toneClasses(tone: Tone): string {
-  if (tone === "error") return "border-red-200 bg-red-50 text-red-950";
-  if (tone === "running") return "border-blue-200 bg-blue-50 text-blue-950";
-  if (tone === "success") return "border-emerald-200 bg-emerald-50 text-emerald-950";
-  return "border-gray-200 bg-gray-50 text-ink-900";
+  if (tone === "error") return "border-red-200 bg-red-50/70 text-red-950";
+  if (tone === "running") return "border-blue-200 bg-blue-50/70 text-blue-950";
+  if (tone === "success") return "border-emerald-200 bg-emerald-50/60 text-emerald-950";
+  return "border-gray-200 bg-white text-ink-900";
 }
 
 function ToolCard({ title, tone = "neutral", children }: { title: string; tone?: Tone; children: ReactNode }) {
   return (
-    <div className={`space-y-2 rounded-xl border p-3 shadow-[0_1px_0_rgba(15,23,42,0.03)] ${toneClasses(tone)}`}>
-      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] opacity-80">{title}</div>
+    <div className={`space-y-3 rounded-xl border px-3 py-2.5 shadow-sm ${toneClasses(tone)}`}>
+      <div className="text-[11px] font-semibold text-ink-700">{title}</div>
       {children}
     </div>
   );
@@ -176,22 +176,31 @@ function InlineField({ label, value, mono = true }: { label: string; value: unkn
   const text = asText(value);
   if (!text) return null;
   return (
-    <div className="min-w-0 rounded-lg border border-white/70 bg-white/80 px-3 py-2">
-      <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted">{label}</div>
-      <div className={`mt-1 break-words text-[12px] leading-5 text-ink-800 ${mono ? "font-mono" : ""}`}>{text}</div>
+    <div className="min-w-0">
+      <span className="text-[11px] font-medium text-muted">{label}: </span>
+      <span className={`break-words text-[12px] leading-5 text-ink-800 ${mono ? "font-mono" : ""}`}>{text}</span>
     </div>
   );
 }
 
 function Pill({ children }: { children: ReactNode }) {
-  return <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-medium text-ink-600">{children}</span>;
+  return <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[11px] font-medium text-ink-600">{children}</span>;
 }
 
 function CodeBlock({ text, max = "max-h-80" }: { text: string; max?: string }) {
   return (
-    <pre className={`${max} overflow-auto whitespace-pre-wrap break-words rounded-lg border border-gray-200 bg-white px-3 py-2 font-mono text-[11px] leading-5 text-ink-900`}>
+    <pre className={`${max} overflow-auto whitespace-pre-wrap break-words rounded-lg border border-gray-200 bg-white/90 px-3 py-2 font-mono text-[11px] leading-5 text-ink-900`}>
       {text}
     </pre>
+  );
+}
+
+function CompactDetails({ label = "Parameters", children }: { label?: string; children: ReactNode }) {
+  return (
+    <details className="rounded-lg border border-gray-200 bg-white/80">
+      <summary className="cursor-pointer px-3 py-2 text-[11px] font-medium text-muted hover:text-ink-700">{label}</summary>
+      <div className="space-y-2 border-t border-gray-100 p-3">{children}</div>
+    </details>
   );
 }
 
@@ -237,7 +246,7 @@ function GrepInputCard({ data }: { data: JsonRecord }) {
     .map((key) => [key, data[key]] as const)
     .filter(([, value]) => asText(value).length > 0 && asText(value) !== "0");
   return (
-    <ToolCard title="Search" tone="neutral">
+    <CompactDetails label="Search parameters">
       <div className="grid gap-2 sm:grid-cols-2">
         <InlineField label="Pattern" value={data.pattern ?? data.query} />
         <InlineField label="Path" value={data.path} />
@@ -250,26 +259,26 @@ function GrepInputCard({ data }: { data: JsonRecord }) {
         </div>
       ) : null}
       <AdvancedDetails data={data} omit={["pattern", "query", "path", "glob", "output_mode", "mode", ...contextBits.map(([key]) => key)]} />
-    </ToolCard>
+    </CompactDetails>
   );
 }
 
 function ReadInputCard({ name, data }: { name: string; data: JsonRecord }) {
   return (
-    <ToolCard title={name === "ReadLSP" ? "Read with diagnostics" : "Read file"} tone="neutral">
+    <CompactDetails label={name === "ReadLSP" ? "Read parameters" : "Read parameters"}>
       <InlineField label="File" value={data.file_path} />
       <div className="flex flex-wrap gap-1.5">
         {asText(data.offset) ? <Pill>offset: {asText(data.offset)}</Pill> : null}
         {asText(data.limit) ? <Pill>limit: {asText(data.limit)}</Pill> : null}
         {"include_types" in data ? <Pill>types: {asText(data.include_types)}</Pill> : null}
       </div>
-    </ToolCard>
+    </CompactDetails>
   );
 }
 
 function EditInputCard({ data }: { data: JsonRecord }) {
   return (
-    <ToolCard title="Edit file" tone="neutral">
+    <CompactDetails label="Edit parameters">
       <InlineField label="File" value={data.file_path} />
       {"replace_all" in data ? <Pill>replace all: {asText(data.replace_all)}</Pill> : null}
       <div className="grid gap-2 lg:grid-cols-2">
@@ -282,31 +291,191 @@ function EditInputCard({ data }: { data: JsonRecord }) {
           <CodeBlock text={asText(data.new_string)} />
         </details>
       </div>
-    </ToolCard>
+    </CompactDetails>
+  );
+}
+
+function WriteInputCard({ data }: { data: JsonRecord }) {
+  const content = asText(data.content);
+  return (
+    <CompactDetails label="Write parameters">
+      <InlineField label="File" value={data.file_path} />
+      {content ? (
+        <div className="flex flex-wrap gap-1.5">
+          <Pill>{lineCount(content)} lines</Pill>
+          <Pill>{byteLabel(content)}</Pill>
+          <Pill>overwrites file</Pill>
+        </div>
+      ) : null}
+      {content ? <CodeBlock text={content} max="max-h-72" /> : null}
+      <AdvancedDetails data={data} omit={["file_path", "content"]} />
+    </CompactDetails>
+  );
+}
+
+function MultiEditInputCard({ data }: { data: JsonRecord }) {
+  const edits = Array.isArray(data.edits) ? data.edits.filter(isRecord) : [];
+  return (
+    <CompactDetails label="Multi-edit parameters">
+      <InlineField label="File" value={data.file_path} />
+      <div className="flex flex-wrap gap-1.5"><Pill>{edits.length} edits</Pill></div>
+      <div className="space-y-2">
+        {edits.map((edit, index) => (
+          <details key={index} className="rounded-lg border border-gray-200 bg-white">
+            <summary className="cursor-pointer px-3 py-2 text-[11px] font-medium text-ink-700">
+              Edit {index + 1}{edit.replace_all ? " · replace all" : ""}
+            </summary>
+            <div className="grid gap-2 border-t border-gray-100 p-2 lg:grid-cols-2">
+              <div>
+                <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-red-600">Old</div>
+                <CodeBlock text={asText(edit.old_string)} max="max-h-48" />
+              </div>
+              <div>
+                <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-700">New</div>
+                <CodeBlock text={asText(edit.new_string)} max="max-h-48" />
+              </div>
+            </div>
+          </details>
+        ))}
+      </div>
+      <AdvancedDetails data={data} omit={["file_path", "edits"]} />
+    </CompactDetails>
+  );
+}
+
+function BashInputCard({ data }: { data: JsonRecord }) {
+  return (
+    <CompactDetails label="Command parameters">
+      <InlineField label="Command" value={data.command} />
+      <div className="flex flex-wrap gap-1.5">
+        {asText(data.description) ? <Pill>{asText(data.description)}</Pill> : null}
+        {"timeout" in data ? <Pill>timeout: {asText(data.timeout)}ms</Pill> : null}
+        {"run_in_background" in data ? <Pill>background: {asText(data.run_in_background)}</Pill> : null}
+      </div>
+      <AdvancedDetails data={data} omit={["command", "description", "timeout", "run_in_background"]} />
+    </CompactDetails>
+  );
+}
+
+function GitInputCard({ data }: { data: JsonRecord }) {
+  return (
+    <CompactDetails label="Git parameters">
+      <div className="flex flex-wrap gap-1.5">
+        {asText(data.operation) ? <Pill>{asText(data.operation)}</Pill> : null}
+        {asText(data.path) ? <Pill>{asText(data.path).split("/").pop()}</Pill> : null}
+        {asText(data.file) ? <Pill>{asText(data.file)}</Pill> : null}
+      </div>
+      <AdvancedDetails data={data} omit={["operation", "path", "file"]} />
+    </CompactDetails>
+  );
+}
+
+function AskUserQuestionInputCard({ data }: { data: JsonRecord }) {
+  const questions = Array.isArray(data.questions) ? data.questions.filter(isRecord) : [];
+  return (
+    <CompactDetails label="Question details">
+      <div className="space-y-2">
+        {questions.map((question, index) => (
+          <div key={index} className="rounded-lg border border-gray-200 bg-white p-3">
+            <div className="text-[12px] font-medium text-ink-800">{asText(question.question)}</div>
+            {Array.isArray(question.options) ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {question.options.filter(isRecord).map((option, optionIndex) => <Pill key={optionIndex}>{asText(option.label)}</Pill>)}
+              </div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </CompactDetails>
   );
 }
 
 function ProjectRunInputCard({ data }: { data: JsonRecord }) {
   return (
-    <ToolCard title="Run script" tone="running">
+    <CompactDetails label="Script parameters">
       <div className="grid gap-2 sm:grid-cols-2">
         <InlineField label="Script" value={data.script} mono={false} />
         <InlineField label="Path" value={data.path} />
       </div>
       {Array.isArray(data.args) && data.args.length > 0 ? <InlineField label="Args" value={data.args.join(" ")} /> : null}
-    </ToolCard>
+    </CompactDetails>
   );
 }
 
-function GenericInputCard({ name, data }: { name: string; data: JsonRecord }) {
+function GenericInputCard({ data }: { name: string; data: JsonRecord }) {
   const priority = ["file_path", "path", "query", "pattern", "command", "script", "url", "repoPath", "model"];
   const visible = priority.filter((key) => key in data && asText(data[key]).length > 0);
   return (
-    <ToolCard title={`${name} input`} tone="neutral">
+    <CompactDetails label="Parameters">
       <div className="grid gap-2 sm:grid-cols-2">
         {visible.map((key) => <InlineField key={key} label={labelFor(key)} value={data[key]} />)}
       </div>
       <AdvancedDetails data={data} omit={visible} />
+    </CompactDetails>
+  );
+}
+
+
+function asStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.map((item) => asText(item)).filter(Boolean) : [];
+}
+
+function lineCount(text: string): number {
+  return text.length === 0 ? 0 : text.split("\n").length;
+}
+
+function byteLabel(text: string): string {
+  const bytes = new TextEncoder().encode(text).length;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function firstNonEmptyLine(text: string): string {
+  return text.split("\n").find((line) => line.trim().length > 0)?.trim() ?? "";
+}
+
+function FileList({ title, files, tone = "neutral" }: { title: string; files: string[]; tone?: Tone }) {
+  if (files.length === 0) return null;
+  const dot = tone === "error" ? "bg-red-500" : tone === "success" ? "bg-emerald-500" : "bg-gray-400";
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white/90">
+      <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2">
+        <div className="flex items-center gap-2 text-[12px] font-medium text-ink-800">
+          <span className={`h-2 w-2 rounded-full ${dot}`} />
+          {title}
+        </div>
+        <Pill>{files.length}</Pill>
+      </div>
+      <div className="max-h-56 overflow-auto py-1">
+        {files.map((file) => (
+          <div key={file} className="truncate px-3 py-1.5 font-mono text-[12px] leading-5 text-ink-800 hover:bg-gray-50" title={file}>
+            {file}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function GitChangedOutputCard({ data, tone }: { data: JsonRecord; tone: Tone }) {
+  const agentTouched = asStringArray(data.agentTouched);
+  const dirty = asStringArray(data.dirty);
+  const unrelatedDirty = asStringArray(data.unrelatedDirty);
+  const agentDirty = dirty.filter((file) => agentTouched.includes(file));
+  return (
+    <ToolCard title="Working tree changes" tone={tone}>
+      <div className="flex flex-wrap gap-1.5">
+        {asText(data.repoRoot) ? <Pill>repo: {asText(data.repoRoot).split("/").pop()}</Pill> : null}
+        <Pill>{dirty.length} dirty</Pill>
+        <Pill>{agentTouched.length} agent-touched</Pill>
+        {unrelatedDirty.length > 0 ? <Pill>{unrelatedDirty.length} unrelated</Pill> : null}
+      </div>
+      <div className="grid gap-2 lg:grid-cols-2">
+        <FileList title="Agent-touched dirty files" files={agentDirty.length > 0 ? agentDirty : agentTouched} tone="success" />
+        <FileList title="Unrelated dirty files" files={unrelatedDirty} tone="error" />
+      </div>
+      {dirty.length > 0 && agentDirty.length === 0 ? <FileList title="Dirty files" files={dirty} /> : null}
     </ToolCard>
   );
 }
@@ -352,6 +521,71 @@ function GitDiffOutputCard({ data, tone }: { data: JsonRecord; tone: Tone }) {
   );
 }
 
+function GitOutputCard({ output, tone }: { output: string; tone: Tone }) {
+  const isClean = /working tree clean|nothing to commit/i.test(output);
+  return (
+    <ToolCard title="Git result" tone={tone}>
+      <div className="flex flex-wrap gap-1.5">
+        {isClean ? <Pill>clean</Pill> : null}
+        <Pill>{lineCount(output)} lines</Pill>
+      </div>
+      <CodeBlock text={output} max="max-h-80" />
+    </ToolCard>
+  );
+}
+
+function BashOutputCard({ output, tone }: { output: string; tone: Tone }) {
+  const first = firstNonEmptyLine(output);
+  return (
+    <ToolCard title="Command output" tone={tone}>
+      <div className="flex flex-wrap gap-1.5">
+        {first ? <Pill>{first.slice(0, 80)}</Pill> : null}
+        <Pill>{lineCount(output)} lines</Pill>
+      </div>
+      <CodeBlock text={output} max="max-h-[520px]" />
+    </ToolCard>
+  );
+}
+
+function DiagnosticsOutputCard({ data, tone }: { data: JsonRecord; tone: Tone }) {
+  const message = asText(data.message ?? data.output ?? data.error);
+  const status = asText(data.status);
+  const errorHints = message.match(/error TS\d+|error:|failed|Failed/gi) ?? [];
+  return (
+    <ToolCard title="Diagnostics" tone={tone === "success" && errorHints.length > 0 ? "error" : tone}>
+      <div className="flex flex-wrap gap-1.5">
+        {status ? <Pill>{status}</Pill> : null}
+        {errorHints.length > 0 ? <Pill>{errorHints.length} errors</Pill> : <Pill>no parsed errors</Pill>}
+      </div>
+      {message ? <CodeBlock text={message} max="max-h-[520px]" /> : null}
+      <AdvancedDetails data={data} omit={["message", "output", "error", "status"]} />
+    </ToolCard>
+  );
+}
+
+function CodeSearchOutputCard({ data, tone }: { data: JsonRecord; tone: Tone }) {
+  const message = asText(data.message ?? data.output);
+  const matches = asText(data.matches);
+  return (
+    <ToolCard title="Code search results" tone={tone}>
+      <div className="flex flex-wrap gap-1.5">
+        {asText(data.status) ? <Pill>{asText(data.status)}</Pill> : null}
+        {matches ? <Pill>{matches} matches</Pill> : null}
+      </div>
+      {message ? <CodeBlock text={message} max="max-h-[520px]" /> : null}
+      <AdvancedDetails data={data} omit={["message", "output", "matches", "status"]} />
+    </ToolCard>
+  );
+}
+
+function WriteOutputCard({ output, tone }: { output: string; tone: Tone }) {
+  return (
+    <ToolCard title="Write result" tone={tone}>
+      <div className="text-[13px] leading-6 text-ink-800">{output}</div>
+    </ToolCard>
+  );
+}
+
 function ProjectRunOutputCard({ data, tone }: { data: JsonRecord; tone: Tone }) {
   return (
     <ToolCard title="Script result" tone={tone}>
@@ -388,19 +622,61 @@ function ToolInputView({ name, input }: { name: string; input: string }) {
   if (name === "Grep" || name === "CodeSearch") return <GrepInputCard data={parsed} />;
   if (name === "Read" || name === "ReadLSP") return <ReadInputCard name={name} data={parsed} />;
   if (name === "Edit") return <EditInputCard data={parsed} />;
+  if (name === "MultiEdit") return <MultiEditInputCard data={parsed} />;
+  if (name === "Write") return <WriteInputCard data={parsed} />;
+  if (name === "Bash") return <BashInputCard data={parsed} />;
+  if (name === "Git") return <GitInputCard data={parsed} />;
+  if (name === "AskUserQuestion") return <AskUserQuestionInputCard data={parsed} />;
   if (name === "ProjectRunScript") return <ProjectRunInputCard data={parsed} />;
   return <GenericInputCard name={name} data={parsed} />;
+}
+
+function toolDisplayLabel(name: string, summary: string | null): string {
+  if (name === "Grep" || name === "CodeSearch") return "searched code";
+  if (name === "Read" || name === "ReadLSP") return "read file";
+  if (name === "Edit") return "edited file";
+  if (name === "MultiEdit") return "edited file";
+  if (name === "Write") return "wrote file";
+  if (name === "GitChangedByAgent") return "checked changes";
+  if (name === "GitDiffSummary") return "checked diff";
+  if (name === "Git") return "checked git";
+  if (name === "Bash") return "ran command";
+  if (name === "ProjectRunScript") return "ran script";
+  if (name === "CodeDiagnostics") return "checked diagnostics";
+  if (name === "CodeGetDefinition") return "found definitions";
+  if (name === "CodeFindReferences") return "found references";
+  if (name === "CodeFileOutline") return "outlined file";
+  if (name === "TodoWrite") return "updated tasks";
+  if (name === "AskUserQuestion") return "asked question";
+  if (name.toLowerCase() === "tool") return summary ? summary : "used tool";
+  return name;
+}
+
+function toolStatusGlyph(isRunning: boolean, isError: boolean) {
+  if (isRunning) {
+    return <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-400" />;
+  }
+  if (isError) {
+    return <span className="text-[11px] leading-none text-red-500">!</span>;
+  }
+  return <span className="text-[11px] leading-none text-ink-300">✓</span>;
 }
 
 function ToolOutputView({ name, output, tone }: { name: string; output: string; tone: Tone }) {
   const parsed = parseJsonRecord(output);
   if (!parsed) {
     if (name === "Read" || name === "ReadLSP") return <ReadOutputCard output={output} tone={tone} />;
-    if (name === "Edit" || name === "Write") return <EditOutputCard output={output} tone={tone} />;
+    if (name === "Edit" || name === "MultiEdit") return <EditOutputCard output={output} tone={tone} />;
+    if (name === "Write") return <WriteOutputCard output={output} tone={tone} />;
+    if (name === "Git") return <GitOutputCard output={output} tone={tone} />;
+    if (name === "Bash" || name === "BashOutput") return <BashOutputCard output={output} tone={tone} />;
     return <ToolCard title="Output" tone={tone}><CodeBlock text={output} max="max-h-96" /></ToolCard>;
   }
-  if (name === "Grep" || name === "CodeSearch") return <GrepOutputCard data={parsed} tone={tone} />;
+  if (name === "Grep") return <GrepOutputCard data={parsed} tone={tone} />;
+  if (name === "CodeSearch" || name === "CodeGetDefinition" || name === "CodeFindReferences" || name === "CodeFileOutline") return <CodeSearchOutputCard data={parsed} tone={tone} />;
+  if (name === "CodeDiagnostics") return <DiagnosticsOutputCard data={parsed} tone={tone} />;
   if (name === "GitDiffSummary") return <GitDiffOutputCard data={parsed} tone={tone} />;
+  if (name === "GitChangedByAgent") return <GitChangedOutputCard data={parsed} tone={tone} />;
   if (name === "ProjectRunScript") return <ProjectRunOutputCard data={parsed} tone={tone} />;
   return <GenericOutputCard data={parsed} tone={tone} />;
 }
@@ -426,44 +702,34 @@ export const ToolExecutionBlock = memo(function ToolExecutionBlock({ name, statu
     return isRunning ? null : "No output captured.";
   }, [isRunning, logs, output]);
 
-  const statusToneClass = isError ? "text-red-700" : isRunning ? "text-blue-700" : "text-green-700";
+  const label = toolDisplayLabel(name, summary);
+  const rowToneClass = isError
+    ? "text-red-600 hover:bg-red-50"
+    : isRunning
+      ? "text-blue-600 hover:bg-blue-50"
+      : "text-ink-400 hover:bg-gray-50 hover:text-ink-600";
   return (
-    <section className="max-w-4xl px-1 py-0.5">
+    <section className="max-w-4xl px-1 py-[1px]">
       <button
         type="button"
         onClick={() => setExpanded((value) => !value)}
-        className="flex w-full items-center gap-2 text-left"
+        className={`group inline-flex max-w-full items-center gap-1.5 rounded-md px-1.5 py-0.5 text-left text-[12px] leading-5 transition ${rowToneClass}`}
+        title={summary ? `${name}: ${summary}` : name}
       >
-        <span className={`inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center ${
-          isError ? "text-red-500" : isRunning ? "text-blue-500" : "text-green-500"
-        }`}>
-          {isRunning ? (
-            <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M12 2v4m0 12v4m-8-8H2m20 0h-4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83" />
-            </svg>
-          ) : isError ? (
-            <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          ) : (
-            <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M5 13l4 4L19 7" />
-            </svg>
-          )}
+        <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center opacity-80">
+          {toolStatusGlyph(isRunning, isError)}
         </span>
-        <div className="flex-1 min-w-0 flex items-center gap-1.5">
-          <span className={`text-[12px] font-medium ${statusToneClass}`}>{name}</span>
-          {summary && !expanded ? <span className="text-[12px] text-muted truncate">— {summary}</span> : null}
-        </div>
-        <span className="text-ink-300 shrink-0">
-          <svg viewBox="0 0 24 24" className={`h-3 w-3 transition-transform ${expanded ? "rotate-90" : ""}`} fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="m9 6 6 6-6 6" />
-          </svg>
-        </span>
+        <span className="truncate font-medium">{label}</span>
+        {summary && !expanded && name.toLowerCase() !== "tool" ? (
+          <span className="hidden truncate text-ink-300 sm:inline">· {summary}</span>
+        ) : null}
+        <svg viewBox="0 0 24 24" className={`h-3 w-3 shrink-0 text-ink-300 opacity-0 transition group-hover:opacity-100 ${expanded ? "rotate-90 opacity-100" : ""}`} fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="m9 6 6 6-6 6" />
+        </svg>
       </button>
 
       {expanded ? (
-        <div className="mt-1.5 ml-5">
+        <div className="mt-1.5 ml-5 space-y-2">
           {isTodoWrite && todos ? (
             <TodoListView todos={todos} />
           ) : safeInput ? (

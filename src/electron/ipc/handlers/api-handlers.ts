@@ -65,6 +65,7 @@ let currentApiUrl = process.env.VERA_COWORK_API_URL || "https://vera-cowork-serv
  */
 export function initializeApiIpcHandlers(): void {
   const api = getVeraCoworkApiClient();
+  const toErrorMessage = (error: unknown) => error instanceof Error ? error.message : String(error);
 
   // ============================================
   // Configuration
@@ -201,6 +202,137 @@ export function initializeApiIpcHandlers(): void {
       return { success: true };
     } finally {
       teardownScheduler();
+    }
+  });
+
+  // ============================================
+  // Super-admin
+  // ============================================
+
+  ipcMain.handle("api:admin:overview", async () => {
+    try {
+      return { success: true, overview: await api.adminOverview() };
+    } catch (error) {
+      console.error('[API IPC] admin overview failed:', error);
+      return { success: false, error: toErrorMessage(error) };
+    }
+  });
+
+  ipcMain.handle("api:admin:list-users", async () => {
+    try {
+      return { success: true, users: await api.adminListUsers() };
+    } catch (error) {
+      console.error('[API IPC] admin list-users failed:', error);
+      return { success: false, error: toErrorMessage(error) };
+    }
+  });
+
+  ipcMain.handle("api:admin:update-user", async (_, userId: string, data: Record<string, unknown>) => {
+    try {
+      return { success: true, user: await api.adminUpdateUser(userId, data as any) };
+    } catch (error) {
+      console.error('[API IPC] admin update-user failed:', error);
+      return { success: false, error: toErrorMessage(error) };
+    }
+  });
+
+  ipcMain.handle("api:admin:list-organizations", async () => {
+    try {
+      return { success: true, organizations: await api.adminListOrganizations() };
+    } catch (error) {
+      console.error('[API IPC] admin list-organizations failed:', error);
+      return { success: false, error: toErrorMessage(error) };
+    }
+  });
+
+  ipcMain.handle("api:admin:create-organization", async (_, data: { name: string; isActive?: boolean }) => {
+    try {
+      return { success: true, organization: await api.adminCreateOrganization(data) };
+    } catch (error) {
+      console.error('[API IPC] admin create-organization failed:', error);
+      return { success: false, error: toErrorMessage(error) };
+    }
+  });
+
+  ipcMain.handle("api:admin:update-organization", async (_, organizationId: string, data: Record<string, unknown>) => {
+    try {
+      return { success: true, organization: await api.adminUpdateOrganization(organizationId, data as any) };
+    } catch (error) {
+      console.error('[API IPC] admin update-organization failed:', error);
+      return { success: false, error: toErrorMessage(error) };
+    }
+  });
+
+  ipcMain.handle("api:admin:list-memberships", async () => {
+    try {
+      return { success: true, memberships: await api.adminListMemberships() };
+    } catch (error) {
+      console.error('[API IPC] admin list-memberships failed:', error);
+      return { success: false, error: toErrorMessage(error) };
+    }
+  });
+
+  ipcMain.handle("api:admin:upsert-membership", async (_, data: { userId: string; organizationId: string; role?: string; isActive?: boolean }) => {
+    try {
+      return { success: true, membership: await api.adminUpsertMembership(data) };
+    } catch (error) {
+      console.error('[API IPC] admin upsert-membership failed:', error);
+      return { success: false, error: toErrorMessage(error) };
+    }
+  });
+
+  ipcMain.handle("api:admin:update-membership", async (_, membershipId: string, data: Record<string, unknown>) => {
+    try {
+      return { success: true, membership: await api.adminUpdateMembership(membershipId, data as any) };
+    } catch (error) {
+      console.error('[API IPC] admin update-membership failed:', error);
+      return { success: false, error: toErrorMessage(error) };
+    }
+  });
+
+  ipcMain.handle("api:admin:list-channels", async () => {
+    try {
+      return { success: true, channels: await api.adminListChannels() };
+    } catch (error) {
+      console.error('[API IPC] admin list-channels failed:', error);
+      return { success: false, error: toErrorMessage(error) };
+    }
+  });
+
+  ipcMain.handle("api:admin:create-channel", async (_, data: Record<string, unknown>) => {
+    try {
+      return { success: true, channel: await api.adminCreateChannel(data as any) };
+    } catch (error) {
+      console.error('[API IPC] admin create-channel failed:', error);
+      return { success: false, error: toErrorMessage(error) };
+    }
+  });
+
+  ipcMain.handle("api:admin:update-channel", async (_, channelId: string, data: Record<string, unknown>) => {
+    try {
+      return { success: true, channel: await api.adminUpdateChannel(channelId, data as any) };
+    } catch (error) {
+      console.error('[API IPC] admin update-channel failed:', error);
+      return { success: false, error: toErrorMessage(error) };
+    }
+  });
+
+  ipcMain.handle("api:admin:delete-channel", async (_, channelId: string) => {
+    try {
+      await api.adminDeleteChannel(channelId);
+      return { success: true };
+    } catch (error) {
+      console.error('[API IPC] admin delete-channel failed:', error);
+      return { success: false, error: toErrorMessage(error) };
+    }
+  });
+
+  ipcMain.handle("api:admin:list-channel-shares", async () => {
+    try {
+      return { success: true, channelShares: await api.adminListChannelShares() };
+    } catch (error) {
+      console.error('[API IPC] admin list-channel-shares failed:', error);
+      return { success: false, error: toErrorMessage(error) };
     }
   });
 

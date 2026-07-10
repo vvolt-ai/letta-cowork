@@ -1,5 +1,80 @@
 # Letta Code Runtime Migration Notes
 
+## 2026-07-07 — Letta Code v0.27.27+ review
+
+**Upstream source:** `letta-ai/letta-code` `main` commit `f414ef28` (latest tag pulled: `v0.27.27` / `99707e63`)
+**Previous local reference:** v0.27.20 migration notes / commit `31293df3`
+**Local target:** `letta-cowork` Electron runtime on branch `vera-remote-access`
+
+### What was pulled upstream
+
+Local `letta-code` was fast-forwarded from `31293df3` to `f414ef28`. The upstream range includes tags `v0.27.21` through `v0.27.27` plus one post-tag `main` commit.
+
+Notable upstream areas reviewed:
+
+- MemFS/listener hardening:
+  - make MemFS mandatory upstream and centralize startup enablement;
+  - include image assets in `list_memory` responses;
+  - send a stable `listenerInstanceId` when registering environments;
+  - await MemFS push before emitting `memory_updated` / write-delete responses;
+  - isolate reflection MemFS writes in worktrees.
+- Listener/runtime protocol changes:
+  - app-server approval control requests;
+  - environment registration and headless-message routing through environments;
+  - acting-user echo on listener conversation create/fork;
+  - listener protocol ergonomics and recovery updates.
+- Tooling changes:
+  - remove built-in `CreateGoal` / `GetGoal` / `UpdateGoal` goal mode;
+  - add optional `description` to upstream `ExecCommand`;
+  - default upstream `Task` subagents to background execution;
+  - update `Task.run_in_background` schema wording.
+- Sandbox/subagent changes:
+  - make cross-agent shell sandbox opt-in while keeping memory-subagent sandbox default-on;
+  - subagent sandbox and parent-id propagation fixes.
+- CLI/channel/provider changes:
+  - `letta dream` / `letta dream --to`;
+  - skill-name frontmatter enforcement and MemFS sync after skill install;
+  - Slack media/thread fixes;
+  - model/favorites/provider UX changes.
+
+### Ported into Cowork
+
+No direct code ports were applied in this pass.
+
+Reason: the new upstream changes were either already covered by Cowork-specific runtime design, not present in the forked Electron runtime, or too broad to port safely without a separate design pass. Cowork does not currently carry upstream `ExecCommand`, built-in goal tools, upstream first-party Slack/Telegram/Discord adapters, upstream local-backend MemFS control flow, or the upstream app-server listener command set.
+
+### Reviewed but not ported
+
+These upstream areas were intentionally not ported in this pass:
+
+- **MemFS mandatory/startup changes** — Cowork's runtime uses its own Electron/remote-runner memory projection path; upstream local-backend flags do not map 1:1.
+- **MemFS write/push ordering in upstream listener commands** — Cowork's Electron WS runner does not implement the upstream `memory_updated` command flow.
+- **Memory worktree reflection isolation** — important future candidate, but it is a large subagent/reflection architecture change and needs a dedicated Cowork design pass.
+- **Stable `listenerInstanceId` environment registration and headless environment routing** — upstream app-server/environment protocol is not currently implemented in Cowork's Electron runner.
+- **App-server approval control requests** — no matching approval-control plumbing exists in Cowork's current runner.
+- **Goal tool removal** — Cowork does not expose the removed upstream `CreateGoal`, `GetGoal`, or `UpdateGoal` tools.
+- **`ExecCommand.description`** — Cowork does not expose upstream `ExecCommand`; its `Bash` tool already has a required user-facing `description` field.
+- **Upstream `Task` default-background change** — not ported because Cowork's `Task` implementation is intentionally synchronous and returns an explicit error when `run_in_background` is requested.
+- **Cross-agent shell sandbox opt-in/default changes** — Cowork shell execution has separate Electron/runner boundaries; this should not be copied piecemeal.
+- **Skill frontmatter enforcement / skill MemFS install sync** — no matching Cowork skill installer surface was found in the Electron runtime.
+- **Slack/Telegram/Discord channel fixes** — upstream first-party channel adapters are not part of Cowork's forked runtime surface.
+- **Model/favorites/provider/CLI UX changes** — upstream CLI-only behavior, not relevant to Cowork Electron runtime migration.
+
+### Validation
+
+```bash
+cd /Users/niralsakariya/Desktop/vv/new/letta-cowork
+bun run build
+```
+
+Result: not run in this pass because the repository already contains unrelated local changes outside the migration note. No Cowork source code was changed.
+
+### Future migration checklist additions
+
+- Revisit memory-worktree reflection isolation if Cowork enables autonomous reflection/background subagents.
+- Revisit upstream environment registration/headless routing only if Cowork adopts the upstream app-server environment protocol.
+- Keep Cowork `Task` schema/description aligned with its synchronous implementation rather than blindly following upstream's background-default wording.
+
 ## 2026-07-01 — Letta Code v0.27.20 review
 
 **Upstream source:** `letta-ai/letta-code` `v0.27.20` / commit `31293df3`

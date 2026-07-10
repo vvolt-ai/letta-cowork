@@ -73,6 +73,20 @@ import { installRequiredSkills } from "../services/skillInstaller.js";
 import { initializeRemoteAccessService } from "../services/remote-access/remoteAccessService.js";
 import { initializeCoworkExtensions } from "../services/extensions/extension-loader.js";
 
+const singleInstanceLock = app.requestSingleInstanceLock();
+
+if (!singleInstanceLock) {
+    app.quit();
+} else {
+    app.on("second-instance", () => {
+        const existingWindow = getMainWindow();
+        if (!existingWindow || existingWindow.isDestroyed()) return;
+        if (existingWindow.isMinimized()) existingWindow.restore();
+        existingWindow.show();
+        existingWindow.focus();
+    });
+}
+
 /**
  * Initialize the application when ready
  */

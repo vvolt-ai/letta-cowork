@@ -15,6 +15,7 @@ import { listSkillsTool, skillTool } from "./runners/skill.js";
 import { productivityTools } from "./runners/productivity.js";
 import { codingTools } from "./runners/coding.js";
 import { odooMcpTools } from "./runners/odooMcp.js";
+import { veraMcpTools } from "./runners/veraMcp.js";
 import { emitExtensionToolStart } from "../extensions/extension-events.js";
 import type {
     ClientToolDefinition,
@@ -54,6 +55,7 @@ register(listSkillsTool);
 for (const tool of productivityTools) register(tool);
 for (const tool of codingTools) register(tool);
 for (const tool of odooMcpTools) register(tool);
+for (const tool of veraMcpTools) register(tool);
 
 export function registerClientTool(def: ClientToolDefinition): void {
     register(def);

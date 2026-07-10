@@ -22,6 +22,13 @@ export type {
   RequestOptions,
   AgentSecret,
   UpsertAgentSecretInput,
+  AdminOverview,
+  AdminUser,
+  AdminOrganization,
+  AdminMembership,
+  AdminChannel,
+  AdminChannelShare,
+  AdminChannelInput,
 } from "./types.js";
 
 // Client

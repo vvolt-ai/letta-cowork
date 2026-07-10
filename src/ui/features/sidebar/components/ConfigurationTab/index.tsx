@@ -10,6 +10,7 @@ interface ConfigurationTabProps {
   onOpenSkillDownload: () => void;
   onOpenLettaCli: () => void;
   onOpenMcpServers: () => void;
+  onOpenSuperAdmin?: () => void;
   isEmailConnected: boolean;
   unreadLabel: string;
   autoSyncEnabled: boolean;
@@ -111,6 +112,7 @@ export const ConfigurationTab = memo(function ConfigurationTab({
   onOpenSkillDownload,
   onOpenLettaCli,
   onOpenMcpServers,
+  onOpenSuperAdmin,
   isEmailConnected,
   unreadLabel,
   autoSyncEnabled,
@@ -139,6 +141,7 @@ export const ConfigurationTab = memo(function ConfigurationTab({
   const [remoteDirsText, setRemoteDirsText] = useState("");
   const [remoteSaving, setRemoteSaving] = useState(false);
   const [secretManagerOpen, setSecretManagerOpen] = useState(false);
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
 
 
   useEffect(() => {
@@ -165,6 +168,7 @@ export const ConfigurationTab = memo(function ConfigurationTab({
       try {
         const currentUser = await window.electron.apiGetCurrentUser();
         if (!currentUser) return;
+        setCurrentUserRole(currentUser.role ?? null);
         const phoneNumber = currentUser.phoneNumber ?? '';
         setProfile({
           firstName: currentUser.firstName ?? '',
@@ -420,6 +424,25 @@ export const ConfigurationTab = memo(function ConfigurationTab({
           </div>
         </Panel>
       </Section>
+
+      {currentUserRole === 'super_admin' && onOpenSuperAdmin ? (
+        <Section
+          title="Administration"
+          description="Super-admin only controls for global users, organizations, assignments, channels, and channel shares."
+        >
+          <ActionCard
+            icon={
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 3 4 7v6c0 5 3.4 7.6 8 8 4.6-.4 8-3 8-8V7l-8-4Z" />
+                <path d="M9 12l2 2 4-4" />
+              </svg>
+            }
+            label="Super-admin management"
+            description="Manage every workspace user, organization, membership, channel, and channel share."
+            onClick={onOpenSuperAdmin}
+          />
+        </Section>
+      ) : null}
 
       <Section
         title="Communication"

@@ -33,6 +33,7 @@ import { useAutoSyncUnread } from "./hooks/useAutoSyncUnread";
 import { useProcessEmailToAgent } from "./hooks/useProcessEmailToAgent";
 import { useAuth } from "./hooks/useAuth";
 import { SessionNotifications } from "./features/system/components/SessionNotifications";
+import { SuperAdminPanel } from "./features/admin/SuperAdminPanel";
 
 const SCROLL_THRESHOLD = 50;
 const SESSION_CHANGE_SCROLL_DELAY_MS = 100;
@@ -146,6 +147,7 @@ function App() {
   const [showSkills, setShowSkills] = useState(false);
   const [showSchedules, setShowSchedules] = useState(false);
   const [showRuns, setShowRuns] = useState(false);
+  const [showSuperAdmin, setShowSuperAdmin] = useState(false);
   const [runsPresetConversationId, setRunsPresetConversationId] = useState<string | undefined>(undefined);
   const [scheduleAgents, setScheduleAgents] = useState<Array<{ id: string; name: string; description?: string | null }>>([]);
   const [skillDownloadOpen, setSkillDownloadOpen] = useState(false);
@@ -728,7 +730,7 @@ function App() {
             newlyCreatedConversations={newlyCreatedConversations}
             onOpenConfiguration={() => { setShowConfiguration(true); setShowSkills(false); setShowSchedules(false); setShowRuns(false); }}
             onOpenSkills={() => { setShowSkills(true); setShowConfiguration(false); setShowSchedules(false); setShowRuns(false); }}
-            onOpenSchedules={() => { setShowSchedules(true); setShowSkills(false); setShowConfiguration(false); setShowRuns(false); }}
+            onOpenSchedules={() => { setShowSchedules(true); setShowSkills(false); setShowConfiguration(false); setShowRuns(false); setShowSuperAdmin(false); }}
             hasMoreEmails={hasMoreEmails}
             isLoadingMoreEmails={isLoadingMoreEmails}
             onLoadMoreEmails={handleLoadMoreEmails}
@@ -746,6 +748,8 @@ function App() {
                 setRunsPresetConversationId(undefined);
               }}
             />
+          ) : showSuperAdmin ? (
+            <SuperAdminPanel onClose={() => setShowSuperAdmin(false)} />
           ) : showSchedules ? (
             <SchedulesPanel agents={scheduleAgents} />
           ) : showSkills ? (
@@ -775,6 +779,13 @@ function App() {
                   onOpenSkillDownload={() => setSkillDownloadOpen(true)}
                   onOpenLettaCli={() => setShowLettaCli(true)}
                   onOpenMcpServers={() => setShowMcpServers(true)}
+                  onOpenSuperAdmin={() => {
+                    setShowSuperAdmin(true);
+                    setShowConfiguration(false);
+                    setShowSchedules(false);
+                    setShowSkills(false);
+                    setShowRuns(false);
+                  }}
                   isEmailConnected={isMailConnected}
                   unreadLabel={""}
                   autoSyncEnabled={autoSyncEnabled}
@@ -823,6 +834,7 @@ function App() {
                 setShowSchedules(false);
                 setShowSkills(false);
                 setShowConfiguration(false);
+                setShowSuperAdmin(false);
               } : undefined}
             />
           )

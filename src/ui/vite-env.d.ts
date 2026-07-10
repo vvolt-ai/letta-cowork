@@ -371,6 +371,26 @@ interface Window {
       error?: string;
     }>;
 
+    // Super-admin
+    apiAdminOverview: () => Promise<{
+      success: boolean;
+      overview?: { users: number; organizations: number; activeMemberships: number; channels: number };
+      error?: string;
+    }>;
+    apiAdminListUsers: () => Promise<{ success: boolean; users?: any[]; error?: string }>;
+    apiAdminUpdateUser: (userId: string, data: any) => Promise<{ success: boolean; user?: any; error?: string }>;
+    apiAdminListOrganizations: () => Promise<{ success: boolean; organizations?: any[]; error?: string }>;
+    apiAdminCreateOrganization: (data: { name: string; isActive?: boolean }) => Promise<{ success: boolean; organization?: any; error?: string }>;
+    apiAdminUpdateOrganization: (organizationId: string, data: any) => Promise<{ success: boolean; organization?: any; error?: string }>;
+    apiAdminListMemberships: () => Promise<{ success: boolean; memberships?: any[]; error?: string }>;
+    apiAdminUpsertMembership: (data: { userId: string; organizationId: string; role?: string; isActive?: boolean }) => Promise<{ success: boolean; membership?: any; error?: string }>;
+    apiAdminUpdateMembership: (membershipId: string, data: any) => Promise<{ success: boolean; membership?: any; error?: string }>;
+    apiAdminListChannels: () => Promise<{ success: boolean; channels?: any[]; error?: string }>;
+    apiAdminCreateChannel: (data: any) => Promise<{ success: boolean; channel?: any; error?: string }>;
+    apiAdminUpdateChannel: (channelId: string, data: any) => Promise<{ success: boolean; channel?: any; error?: string }>;
+    apiAdminDeleteChannel: (channelId: string) => Promise<{ success: boolean; error?: string }>;
+    apiAdminListChannelShares: () => Promise<{ success: boolean; channelShares?: any[]; error?: string }>;
+
     // Scheduler
     schedulerList: () => Promise<any[]>;
     schedulerCreate: (dto: Record<string, unknown>) => Promise<any>;

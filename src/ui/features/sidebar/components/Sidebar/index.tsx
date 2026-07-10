@@ -59,6 +59,7 @@ export interface SidebarProps {
 }
 
 export const Sidebar = memo(function Sidebar({
+  connected,
   onNewSession,
   lettaEnvOpen: _lettaEnvOpen,
   onLettaEnvOpenChange: _onLettaEnvOpenChange,
@@ -254,6 +255,8 @@ export const Sidebar = memo(function Sidebar({
         open={showEmailView}
         onOpenChange={setShowEmailView}
         emails={emails}
+        isServerConnected={connected}
+        isEmailConnected={isEmailConnected}
         isFetching={isFetchingEmails}
         onUseEmailAsInput={onUseEmailAsInput}
         isProcessingEmailInput={isProcessingEmailInput}
