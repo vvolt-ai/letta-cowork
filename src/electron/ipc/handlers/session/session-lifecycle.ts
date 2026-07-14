@@ -5,10 +5,17 @@
 
 import { deleteSession, updateSession, getSession } from "../../../libs/runtime-state.js";
 import { getStoredSessions, removeStoredSession, updateStoredSession, type StoredSession } from "../../../services/settings/index.js";
-import { debug, broadcast, createLettaClient } from "./utils.js";
-import { runnerHandles, emit, cancelAllRunners } from "./session-creation.js";
+import { debug, createLettaClient } from "./utils.js";
+import {
+    runnerHandles,
+    emit,
+    cancelAllRunners,
+} from "./session-creation.js";
+import {
+    cancelQueuedConversationTurns,
+    enqueueConversationTurn,
+} from "./conversation-turn-queue.js";
 import { abortSessionById, abortAllSessions } from "../../../libs/runner/index.js";
-import type { ServerEvent } from "./types.js";
 
 /**
  * Handle session.stop event
@@ -16,6 +23,30 @@ import type { ServerEvent } from "./types.js";
  */
 export async function handleStopSession(sessionId: string): Promise<void> {
     debug("session.stop: stopping session", { sessionId, availableHandles: Array.from(runnerHandles.keys()) });
+    cancelQueuedConversationTurns(sessionId);
+
+    // Install a barrier before awaiting cancellation. Prompts arriving while
+    // Stop is settling are queued behind this operation, so the final idle
+    // status cannot overwrite a newer turn's running state.
+    let releaseStop!: () => void;
+    const stopSettled = new Promise<void>((resolve) => {
+        releaseStop = resolve;
+    });
+    const stopBarrier = enqueueConversationTurn(
+        sessionId,
+        async (isCancelled) => {
+            await stopSettled;
+            if (isCancelled()) return;
+
+            const runtimeSession = getSession(sessionId);
+            runtimeSession?.pendingPermissions?.clear();
+            updateSession(sessionId, { status: "idle" });
+            emit({
+                type: "session.status",
+                payload: { sessionId, status: "idle" },
+            });
+        }
+    );
 
     let handle = runnerHandles.get(sessionId);
 
@@ -29,49 +60,67 @@ export async function handleStopSession(sessionId: string): Promise<void> {
         }
     }
 
-    if (handle) {
-        debug("session.stop: aborting handle");
-        await handle.abort();
-        runnerHandles.delete(sessionId);
-        for (const [key, h] of runnerHandles) {
-            if (h.sessionId === sessionId) runnerHandles.delete(key);
+    try {
+        if (handle) {
+            debug("session.stop: aborting handle");
+            await handle.abort();
+            runnerHandles.delete(sessionId);
+            for (const [key, h] of runnerHandles) {
+                if (h.sessionId === sessionId) runnerHandles.delete(key);
+            }
+        } else {
+            debug("session.stop: no handle found in runnerHandles, trying direct abort via runner");
+            await abortSessionById(sessionId);
         }
-    } else {
-        debug("session.stop: no handle found in runnerHandles, trying direct abort via runner");
-        await abortSessionById(sessionId);
+    } finally {
+        releaseStop();
     }
 
-    const runtimeSession = getSession(sessionId);
-    if (runtimeSession?.pendingPermissions) {
-        runtimeSession.pendingPermissions.clear();
-    }
-
-    updateSession(sessionId, { status: "idle" });
-    emit({ type: "session.status", payload: { sessionId, status: "idle" } });
+    await stopBarrier;
 }
 
 /**
  * Handle session.delete event
  */
 export async function handleDeleteSession(sessionId: string): Promise<void> {
-    const handle = runnerHandles.get(sessionId);
-    if (handle) {
-        handle.abort();
-        runnerHandles.delete(sessionId);
-    }
+    cancelQueuedConversationTurns(sessionId);
 
-    const lettaClient = createLettaClient();
-    if (lettaClient && sessionId) {
-        try {
-            await lettaClient.conversations.delete(sessionId);
-        } catch (err) {
-            console.error("Failed to delete conversation from Letta:", err);
+    // Hold later prompts until deletion finishes, then invalidate anything
+    // that arrived during deletion so the removed session cannot resurrect.
+    let releaseDelete!: () => void;
+    const deleteSettled = new Promise<void>((resolve) => {
+        releaseDelete = resolve;
+    });
+    const deleteBarrier = enqueueConversationTurn(sessionId, async () => {
+        await deleteSettled;
+    });
+
+    try {
+        const handle = runnerHandles.get(sessionId);
+        if (handle) {
+            await handle.abort();
+            runnerHandles.delete(sessionId);
         }
+
+        const lettaClient = createLettaClient();
+        if (lettaClient && sessionId) {
+            try {
+                await lettaClient.conversations.delete(sessionId);
+            } catch (err) {
+                console.error("Failed to delete conversation from Letta:", err);
+            }
+        }
+
+        deleteSession(sessionId);
+        removeStoredSession(sessionId);
+        emit({ type: "session.deleted", payload: { sessionId } });
+    } finally {
+        // Cancel prompts queued behind the deletion barrier before releasing it.
+        cancelQueuedConversationTurns(sessionId);
+        releaseDelete();
     }
 
-    deleteSession(sessionId);
-    removeStoredSession(sessionId);
-    emit({ type: "session.deleted", payload: { sessionId } });
+    await deleteBarrier;
 }
 
 /**

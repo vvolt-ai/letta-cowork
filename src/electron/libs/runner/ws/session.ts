@@ -142,8 +142,10 @@ export class WsSession {
     /** Resolvers for consumers awaiting the next message. */
     private streamResolvers: Array<(msg: SDKMessage | null) => void> = [];
     private streamClosed = false;
-    /** Active background pumps — keyed by run/turn id for clean teardown. */
-    private activePumps = new Set<AbortController>();
+    /** Active background pumps and their settlement promises. */
+    private activePumps = new Map<AbortController, Promise<void>>();
+    /** Server run ids observed on this session, used for targeted cancellation. */
+    private activeServerRunIds = new Set<string>();
     private startedAt: number = Date.now();
     /** Local monotonic turn id used to ignore stale terminal events in the UI. */
     private turnSeq = 0;
@@ -236,6 +238,14 @@ export class WsSession {
         if (!this._agentId || !this._conversationId) {
             throw new Error("WsSession.send: not initialized");
         }
+        if (this.activePumps.size > 0) {
+            throw new Error(
+                "WsSession.send: this session already owns an active turn"
+            );
+        }
+        if (this.streamClosed) {
+            throw new Error("WsSession.send: session is already closed");
+        }
 
         // Build system reminders for this turn (plan-mode banner,
         // permission-mode change). Prepended to the user message so the
@@ -306,9 +316,21 @@ export class WsSession {
         ];
 
         const ctrl = new AbortController();
-        this.activePumps.add(ctrl);
         this.startedAt = Date.now();
         this.activeClientRunId = `client-${this.startedAt}-${++this.turnSeq}`;
+        let terminalSettled = false;
+        const settleTurn = (success: boolean, error?: string): void => {
+            if (terminalSettled || ctrl.signal.aborted) return;
+            terminalSettled = true;
+            this.enqueue({
+                type: "result",
+                success,
+                error,
+                durationMs: Date.now() - this.startedAt,
+                conversationId: this._conversationId,
+                clientRunId: this.activeClientRunId ?? undefined,
+            } as SDKResultMessage & { clientRunId?: string });
+        };
 
         // Detect the Letta CONFLICT response that fires when the conversation
         // has a pending tool approval. Recoverable: cancel the stuck runs and
@@ -337,23 +359,6 @@ export class WsSession {
             const quoted = /"run_id"\s*:\s*"(run-[^"]+)"/i.exec(msg)?.[1];
             if (quoted) return quoted;
             return /run_id=(run-[a-z0-9-]+)/i.exec(msg)?.[1] ?? null;
-        };
-
-        const cancelBlockingRun = async (runId: string): Promise<void> => {
-            const client = getClient() as unknown as {
-                runs?: {
-                    retrieve?: (id: string) => Promise<{ status?: string }>;
-                    cancel?: (id: string) => Promise<unknown>;
-                };
-            };
-            const status = await client.runs?.retrieve?.(runId).catch(() => undefined);
-            const normalizedStatus = String(status?.status ?? "unknown").toLowerCase();
-            if (["completed", "failed", "cancelled", "canceled"].includes(normalizedStatus)) {
-                console.warn(`[WsSession] busy blocker ${runId} is already ${normalizedStatus}; retrying send`);
-                return;
-            }
-            console.warn(`[WsSession] cancelling stale busy blocker ${runId} (status=${normalizedStatus})`);
-            await client.runs?.cancel?.(runId);
         };
 
         // Detect transient network/socket failures mid-stream. Letta cloud's
@@ -414,33 +419,37 @@ export class WsSession {
         // Background pump — multi-turn loop, fire-and-forget.
         // Wrapped in an outer retry loop so we can recover once from approval
         // conflicts that race past the pre-flight recoverStuckApprovals call.
-        void (async () => {
-            let attempt = 0;
-            const MAX_ATTEMPTS = 2;
+        const pump = (async () => {
+            // Each recoverable failure class owns an independent retry budget.
+            // A provider error must not consume approval-conflict recovery (and
+            // vice versa), otherwise a later stale approval is misclassified as
+            // another generic internal LLM failure.
+            const MAX_APPROVAL_CONFLICT_RECOVERIES = 2;
+            let approvalConflictRecoveries = 0;
             // Network drops get their own (slightly larger) budget — these
             // are recoverable by reconnecting the SSE stream.
             const MAX_NETWORK_RETRIES = 4;
             let networkRetries = 0;
-            const MAX_BUSY_RETRIES = 8;
-            const BUSY_CANCEL_AFTER_SAME_RUN_RETRIES = 3;
+            const MAX_BUSY_RETRIES = 3;
             let busyRetries = 0;
-            let lastBusyRunId: string | null = null;
-            let sameBusyRunRetries = 0;
             let didPreflightApprovalRecovery = false;
             const MAX_LLM_INTERNAL_RETRIES = 3;
             let llmInternalRetries = 0;
 
             // eslint-disable-next-line no-constant-condition
             while (true) {
-            attempt++;
-            try {
+                try {
                 let nextMessages: unknown[] = initialMessages;
                 let allowResponseStateReuseForNextTurn = false;
                 let turnCount = 0;
-                const MAX_TURNS = 25; // safety cap against runaway tool loops
+                let terminalError: string | null = null;
 
-                while (turnCount < MAX_TURNS) {
-                    if (ctrl.signal.aborted) break;
+                // Client-tool continuations are part of one logical user turn.
+                // Do not manufacture a terminal result while the server still
+                // owns that turn. Cancellation is the safety valve for a truly
+                // runaway loop; a local numeric cap cannot safely release the
+                // conversation lease.
+                while (!ctrl.signal.aborted) {
                     turnCount++;
 
                     // Mirror letta-code's approval-conflict recovery: clear
@@ -624,10 +633,11 @@ export class WsSession {
                         await this.recoverStuckApprovals({ fast: false });
                         // Surface a friendly notice in the chat so the
                         // user knows what happened.
+                        terminalError =
+                            "The agent attempted a tool that isn't enabled on this agent. The pending approval has been cleared. To unlock device tools (Bash, Skill, file ops), migrate this agent to letta_v1_agent — see README.";
                         this.enqueue({
                             type: "error",
-                            message:
-                                "The agent attempted a tool that isn't enabled on this agent. The pending approval has been cleared. To unlock device tools (Bash, Skill, file ops), migrate this agent to letta_v1_agent — see README.",
+                            message: terminalError,
                         } as SDKErrorMessage);
                         break;
                     }
@@ -701,21 +711,11 @@ export class WsSession {
                     nextMessages = [{ tool_returns: toolReturns }];
                 }
 
-                if (turnCount >= MAX_TURNS) {
-                    this.enqueue({
-                        type: "error",
-                        message: `Hit max client-tool turn cap (${MAX_TURNS}). Stopping.`,
-                    } as SDKErrorMessage);
-                }
+                if (ctrl.signal.aborted) return;
 
-                // Final terminal — UI flips out of "thinking".
-                this.enqueue({
-                    type: "result",
-                    success: true,
-                    durationMs: Date.now() - this.startedAt,
-                    conversationId: this._conversationId,
-                    clientRunId: this.activeClientRunId ?? undefined,
-                } as SDKResultMessage & { clientRunId?: string });
+                // Exact-once terminal for the logical user turn. A recovered
+                // approval failure is not success; normal completion is.
+                settleTurn(terminalError === null, terminalError ?? undefined);
                 // Successful pump — break the retry loop.
                 break;
             } catch (err) {
@@ -726,31 +726,35 @@ export class WsSession {
                 const errMessage =
                     err instanceof Error ? err.message : String(err);
 
-                // If this is an approval-conflict race AND we have retries
-                // left, cancel the stuck runs server-side and retry the
-                // entire pump once. Without this, headless callers (e.g.
-                // /letta/respond, scheduler) hit a permanent CONFLICT
-                // whenever a pending approval is in flight.
-                if (
-                    isApprovalConflictError(errMessage) &&
-                    attempt < MAX_ATTEMPTS
-                ) {
-                    console.warn(
-                        `[WsSession] approval conflict on attempt ${attempt}, recovering and retrying:`,
+                // Approval conflicts are their own error class. Do not let the
+                // generic `internal_error` wrapper route them through the LLM
+                // retry budget: the conflict cannot clear without submitting a
+                // denial for the pending approval.
+                if (isApprovalConflictError(errMessage)) {
+                    if (
+                        approvalConflictRecoveries <
+                        MAX_APPROVAL_CONFLICT_RECOVERIES
+                    ) {
+                        approvalConflictRecoveries++;
+                        console.warn(
+                            `[WsSession] approval conflict; recovering and retrying (${approvalConflictRecoveries}/${MAX_APPROVAL_CONFLICT_RECOVERIES}):`,
+                            errMessage
+                        );
+                        await this.recoverStuckApprovals({ fast: false });
+                        // Loop back and retry the pump from scratch.
+                        continue;
+                    }
+
+                    console.error(
+                        `[WsSession] approval conflict remained after ${approvalConflictRecoveries} recovery attempts:`,
                         errMessage
                     );
-                    try {
-                        await this.recoverStuckApprovals({ fast: false });
-                    } catch (recoverErr) {
-                        console.warn(
-                            "[WsSession] recoverStuckApprovals during retry failed:",
-                            recoverErr instanceof Error
-                                ? recoverErr.message
-                                : String(recoverErr)
-                        );
-                    }
-                    // Loop back and retry the pump from scratch.
-                    continue;
+                    this.enqueue({
+                        type: "error",
+                        message: errMessage,
+                    } as SDKErrorMessage);
+                    settleTurn(false, errMessage);
+                    break;
                 }
 
                 if (
@@ -759,47 +763,30 @@ export class WsSession {
                 ) {
                     busyRetries++;
                     const busyRunId = extractBusyRunId(errMessage);
-                    if (busyRunId && busyRunId === lastBusyRunId) {
-                        sameBusyRunRetries++;
+                    if (busyRunId) {
+                        console.warn(
+                            `[WsSession] conversation is owned by ${busyRunId}; waiting for it to settle before retry ${busyRetries}/${MAX_BUSY_RETRIES}`
+                        );
+                        const settled = await this.waitForRunToSettle(
+                            busyRunId,
+                            ctrl.signal
+                        );
+                        if (!settled && !ctrl.signal.aborted) {
+                            throw new Error(
+                                `Conversation remained busy on ${busyRunId} after waiting for settlement`
+                            );
+                        }
                     } else {
-                        lastBusyRunId = busyRunId;
-                        sameBusyRunRetries = busyRunId ? 1 : 0;
+                        const backoffMs = Math.min(
+                            5_000,
+                            1000 + busyRetries * 1000
+                        );
+                        console.warn(
+                            `[WsSession] conversation busy conflict without run id (retry ${busyRetries}/${MAX_BUSY_RETRIES} in ${backoffMs}ms):`,
+                            errMessage
+                        );
+                        await this.sleepWithAbort(backoffMs, ctrl.signal);
                     }
-
-                    if (busyRunId && sameBusyRunRetries >= BUSY_CANCEL_AFTER_SAME_RUN_RETRIES) {
-                        try {
-                            await cancelBlockingRun(busyRunId);
-                            sameBusyRunRetries = 0;
-                            const settleMs = 1_000;
-                            console.warn(
-                                `[WsSession] cancelled busy blocker ${busyRunId}; retrying in ${settleMs}ms`
-                            );
-                            await new Promise<void>((resolve) => setTimeout(resolve, settleMs));
-                        } catch (cancelErr) {
-                            console.warn(
-                                `[WsSession] failed to cancel busy blocker ${busyRunId}:`,
-                                cancelErr instanceof Error ? cancelErr.message : String(cancelErr)
-                            );
-                        }
-                        if (ctrl.signal.aborted) {
-                            this.activePumps.delete(ctrl);
-                            return;
-                        }
-                        continue;
-                    }
-
-                    const backoffMs = Math.min(5_000, 1000 + busyRetries * 1000);
-                    console.warn(
-                        `[WsSession] conversation busy conflict (retry ${busyRetries}/${MAX_BUSY_RETRIES} in ${backoffMs}ms, blocker=${busyRunId ?? "unknown"}, same=${sameBusyRunRetries}):`,
-                        errMessage
-                    );
-                    await new Promise<void>((resolve) => {
-                        const t = setTimeout(resolve, backoffMs);
-                        if (ctrl.signal.aborted) {
-                            clearTimeout(t);
-                            resolve();
-                        }
-                    });
                     if (ctrl.signal.aborted) {
                         this.activePumps.delete(ctrl);
                         return;
@@ -821,13 +808,7 @@ export class WsSession {
                         `[WsSession] transient LLM internal error (retry ${llmInternalRetries}/${MAX_LLM_INTERNAL_RETRIES} in ${backoffMs}ms):`,
                         errMessage
                     );
-                    await new Promise<void>((resolve) => {
-                        const t = setTimeout(resolve, backoffMs);
-                        if (ctrl.signal.aborted) {
-                            clearTimeout(t);
-                            resolve();
-                        }
-                    });
+                    await this.sleepWithAbort(backoffMs, ctrl.signal);
                     if (ctrl.signal.aborted) {
                         this.activePumps.delete(ctrl);
                         return;
@@ -849,13 +830,7 @@ export class WsSession {
                         `[WsSession] transient network error (retry ${networkRetries}/${MAX_NETWORK_RETRIES} in ${backoffMs}ms):`,
                         errMessage
                     );
-                    await new Promise<void>((resolve) => {
-                        const t = setTimeout(resolve, backoffMs);
-                        if (ctrl.signal.aborted) {
-                            clearTimeout(t);
-                            resolve();
-                        }
-                    });
+                    await this.sleepWithAbort(backoffMs, ctrl.signal);
                     if (ctrl.signal.aborted) {
                         this.activePumps.delete(ctrl);
                         return;
@@ -868,20 +843,28 @@ export class WsSession {
                     type: "error",
                     message: errMessage,
                 } as SDKErrorMessage);
-                this.enqueue({
-                    type: "result",
-                    success: false,
-                    error: errMessage,
-                    durationMs: Date.now() - this.startedAt,
-                    conversationId: this._conversationId,
-                    clientRunId: this.activeClientRunId ?? undefined,
-                } as SDKResultMessage & { clientRunId?: string });
+                settleTurn(false, errMessage);
                 break;
-            }
+                }
             } // end retry while-loop
-
-            this.activePumps.delete(ctrl);
         })();
+
+        this.activePumps.set(ctrl, pump);
+        void pump
+            .catch((err) => {
+                if (ctrl.signal.aborted || terminalSettled) return;
+                const errMessage = err instanceof Error ? err.message : String(err);
+                console.error("[WsSession] unexpected pump failure:", err);
+                this.enqueue({
+                    type: "error",
+                    message: errMessage,
+                } as SDKErrorMessage);
+                settleTurn(false, errMessage);
+            })
+            .finally(() => {
+                this.activePumps.delete(ctrl);
+                this.finishStream();
+            });
     }
 
     /**
@@ -967,7 +950,10 @@ export class WsSession {
                     create: (
                         convId: string,
                         body: Record<string, unknown>,
-                        options?: { headers?: Record<string, string> }
+                        options?: {
+                            headers?: Record<string, string>;
+                            signal?: AbortSignal;
+                        }
                     ) => Promise<Stream<LettaStreamingResponse>>;
                 };
             }
@@ -988,7 +974,10 @@ export class WsSession {
                 client_tools: wireTools,
                 include_compaction_messages: true,
             },
-            Object.keys(headers).length > 0 ? { headers } : undefined
+            {
+                ...(Object.keys(headers).length > 0 ? { headers } : {}),
+                signal: ctrl.signal,
+            }
         )) as Stream<LettaStreamingResponse>;
 
         for await (const event of stream as AsyncIterable<LettaStreamingResponse>) {
@@ -999,6 +988,9 @@ export class WsSession {
             // stream ends. arguments arrive in fragments — concat.
             const e = event as unknown as Record<string, unknown>;
             const messageType = String(e.message_type ?? "");
+            if (typeof e.run_id === "string" && e.run_id) {
+                this.activeServerRunIds.add(e.run_id);
+            }
             const responseStateId = getResponseStateId(event);
             if (responseStateId) {
                 this.responseStateId = responseStateId;
@@ -1124,33 +1116,117 @@ export class WsSession {
     }
 
     async [Symbol.asyncDispose](): Promise<void> {
-        this.close();
+        await this.abort();
+    }
+
+    /**
+     * End local consumption and cancel the matching server-side conversation.
+     * The returned promise settles only after local pumps have released their
+     * lease, so callers must not start a replacement turn before it resolves.
+     */
+    async abort(): Promise<void> {
+        const pumps = Array.from(this.activePumps.entries());
+        for (const [ctrl] of pumps) ctrl.abort();
+
+        await Promise.allSettled([
+            this.cancelServerWork(),
+            ...pumps.map(([, pump]) => pump),
+        ]);
+        this.finishStream();
     }
 
     close(): void {
-        const hadActivePumps = this.activePumps.size > 0;
-        for (const ctrl of this.activePumps) ctrl.abort();
-        this.activePumps.clear();
+        void this.abort();
+    }
+
+    private finishStream(): void {
+        if (this.streamClosed) return;
         this.streamClosed = true;
         for (const resolve of this.streamResolvers) resolve(null);
         this.streamResolvers = [];
+    }
 
-        // If the user clicked stop mid-turn while a tool approval was
-        // pending, the server-side conversation is left in
-        // `requires_approval`. The next inbound message would 409 with
-        // CONFLICT until the pre-flight recovery clears it. Doing the
-        // cleanup here too means the stop button takes effect end-to-
-        // end: kill the local pump AND tell the server to drop the
-        // pending approval. Fire-and-forget; failures fall through to
-        // the next session's pre-flight recovery.
-        if (hadActivePumps && this._agentId && this._conversationId) {
-            // void this.recoverStuckApprovals().catch((err) => {
-            //     debug("WsSession: post-close recovery failed (non-fatal)", {
-            //         error:
-            //             err instanceof Error ? err.message : String(err),
-            //     });
-            // });
+    private async sleepWithAbort(
+        delayMs: number,
+        signal: AbortSignal
+    ): Promise<void> {
+        if (signal.aborted) return;
+        await new Promise<void>((resolve) => {
+            const timer = setTimeout(done, delayMs);
+            const onAbort = () => done();
+            function done(): void {
+                clearTimeout(timer);
+                signal.removeEventListener("abort", onAbort);
+                resolve();
+            }
+            signal.addEventListener("abort", onAbort, { once: true });
+        });
+    }
+
+    private async waitForRunToSettle(
+        runId: string,
+        signal: AbortSignal,
+        timeoutMs = 5 * 60_000
+    ): Promise<boolean> {
+        const client = getClient() as unknown as {
+            runs?: {
+                retrieve?: (id: string) => Promise<{ status?: string }>;
+            };
+        };
+        if (!client.runs?.retrieve) return false;
+
+        const terminal = new Set([
+            "completed",
+            "failed",
+            "cancelled",
+            "canceled",
+            "expired",
+        ]);
+        const deadline = Date.now() + timeoutMs;
+        while (!signal.aborted && Date.now() < deadline) {
+            const run = await client.runs.retrieve(runId).catch(() => undefined);
+            const status = String(run?.status ?? "unknown").toLowerCase();
+            if (terminal.has(status)) return true;
+            await this.sleepWithAbort(1_000, signal);
         }
+        return false;
+    }
+
+    private async cancelServerWork(): Promise<void> {
+        if (!this._conversationId) return;
+        const client = getClient() as unknown as {
+            conversations?: {
+                cancel?: (id: string) => Promise<unknown>;
+            };
+            runs?: {
+                retrieve?: (id: string) => Promise<{ status?: string }>;
+                cancel?: (id: string) => Promise<unknown>;
+            };
+        };
+
+        await client.conversations?.cancel?.(this._conversationId).catch((err) => {
+            debug("WsSession: conversations.cancel failed", {
+                conversationId: this._conversationId,
+                error: err instanceof Error ? err.message : String(err),
+            });
+        });
+
+        const terminal = new Set([
+            "completed",
+            "failed",
+            "cancelled",
+            "canceled",
+            "expired",
+        ]);
+        await Promise.allSettled(
+            Array.from(this.activeServerRunIds).map(async (runId) => {
+                const run = await client.runs?.retrieve?.(runId).catch(() => undefined);
+                const status = String(run?.status ?? "unknown").toLowerCase();
+                if (!terminal.has(status)) {
+                    await client.runs?.cancel?.(runId);
+                }
+            })
+        );
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -1284,8 +1360,8 @@ export class WsSession {
                 // stream in a multi-turn pump fires a stop_reason event
                 // (requires_approval → end_turn → next_turn → end_turn …),
                 // so emitting "result" here flips the UI to "completed"
-                // mid tool-execution. Only the pump's finally block in
-                // send() emits the single terminal result for the whole
+                // mid tool-execution. Only the outer pump in send() emits
+                // the single terminal result for the whole
                 // user turn.
                 //
                 // We still log so the trace stays useful for debugging.

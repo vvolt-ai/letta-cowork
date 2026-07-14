@@ -7,10 +7,11 @@ import { log, debug, timing } from "./logger.js";
 import { getAgentName } from "./client.js";
 import {
   setCurrentAbortController,
+  getCurrentAbortController,
   getCachedAgentId,
 } from "./state.js";
 import { createCanUseToolHandler } from "./permission-handler.js";
-import { createAbortHandler, abortAllSessions, abortSessionById } from "./abort-handler.js";
+import { createAbortHandler } from "./abort-handler.js";
 import {
   createOrResumeSession,
   initializeSession,
@@ -80,8 +81,9 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
     rejectConversationId = reject;
   });
 
-  // Start the query in the background
-  (async () => {
+  // Start the query in the background and retain its settlement promise.
+  // Callers use this as the per-conversation ownership lease.
+  const runPromise = (async () => {
     try {
       // Create canUseTool handler
       const canUseTool = createCanUseToolHandler(session, sendPermissionRequest);
@@ -267,7 +269,9 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
       if (sessionKey) {
         cleanupSession(sessionKey, lettaSessionRef);
       }
-      setCurrentAbortController(null);
+      if (getCurrentAbortController() === abortController) {
+        setCurrentAbortController(null);
+      }
     }
   })();
 
@@ -276,6 +280,7 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
 
   return {
     abort: createAbortHandler(realConversationId, lettaSessionRef, abortController),
-    sessionId: realConversationId
+    sessionId: realConversationId,
+    done: runPromise,
   };
 }

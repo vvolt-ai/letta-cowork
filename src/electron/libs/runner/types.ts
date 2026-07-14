@@ -37,6 +37,8 @@ export type RunnerOptions = {
 export type RunnerHandle = {
   abort: () => Promise<void>;
   sessionId: string;
+  /** Settles after the stream closes and runner cleanup releases ownership. */
+  done: Promise<void>;
 };
 
 /**

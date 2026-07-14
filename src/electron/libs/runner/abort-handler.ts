@@ -3,16 +3,14 @@
  */
 
 import type { Session as LettaSession } from "@letta-ai/letta-code-sdk";
-import { log, debug } from "./logger.js";
+import { debug } from "./logger.js";
 import { createLettaClient } from "./client.js";
 import {
   getActiveSessions,
   getSession,
   removeSession,
   getActiveLettaSession,
-  setActiveLettaSession,
   getCurrentAbortController,
-  setCurrentAbortController,
   clearActiveSessions,
 } from "./state.js";
 
@@ -82,30 +80,33 @@ export async function abortAllSessions(): Promise<void> {
 export async function abortSessionById(conversationId: string): Promise<boolean> {
   console.log("[runner] abortSessionById called:", conversationId, "active sessions:", getActiveSessions().size);
 
-  // Try to find the session by exact match (real conversation ID only)
   const sessionToAbort = getSession(conversationId);
-
   if (sessionToAbort) {
     try {
       console.log("[runner] aborting session:", conversationId);
       await sessionToAbort.abort();
-      removeSession(conversationId);
       console.log("[runner] session aborted successfully:", conversationId);
       return true;
     } catch (err) {
       console.log("[runner] error aborting session:", err);
-      // Still remove from map
-      removeSession(conversationId);
       return false;
+    } finally {
+      removeSession(conversationId);
     }
   }
 
-  // Also try to abort via current abort controller
-  const currentAbortController = getCurrentAbortController();
-  if (currentAbortController && !currentAbortController.signal.aborted) {
-    console.log("[runner] no session found, aborting via currentAbortController");
-    currentAbortController.abort();
-    return true;
+  // The local handle may already have been cleaned up while the backend run
+  // is still settling. Cancel only this conversation; never trip the global
+  // controller, which may belong to an unrelated concurrent session.
+  const lettaClient = createLettaClient();
+  if (lettaClient && /^conv-/.test(conversationId)) {
+    try {
+      await lettaClient.conversations.cancel(conversationId);
+      return true;
+    } catch (err) {
+      console.log("[runner] direct conversation cancel error:", err);
+      return false;
+    }
   }
 
   console.log("[runner] no session found to abort for:", conversationId);
@@ -128,29 +129,19 @@ export function createAbortHandler(
       activeSessionsCount: getActiveSessions().size
     });
 
-    // Get the agent ID and conversation ID if available for cancel operations
+    // Get IDs only from the matching session. Legacy activeSession is global
+    // and may belong to a newer concurrent conversation.
     const activeSession = getActiveLettaSession();
-    const agentId = lettaSessionRef?.agentId || activeSession?.agentId || null;
-    const conversationId = lettaSessionRef?.conversationId || activeSession?.conversationId || sessionKey;
+    const activeSessionMatches =
+      activeSession?.conversationId === sessionKey ? activeSession : undefined;
+    const agentId = lettaSessionRef?.agentId || activeSessionMatches?.agentId || null;
+    const conversationId =
+      lettaSessionRef?.conversationId || activeSessionMatches?.conversationId || sessionKey;
 
-    // First, call abort on the Letta session (SDK) - try multiple approaches
-    let sessionToAbort = getSession(sessionKey);
-
-    // If not found by sessionKey, try to find any active session
-    if (!sessionToAbort) {
-      console.log("[runner] session not found by sessionKey, searching all sessions");
-      for (const [, s] of getActiveSessions()) {
-        if (s) {
-          sessionToAbort = s;
-          break;
-        }
-      }
-    }
-
-    // Fallback to lettaSessionRef or activeLettaSession
-    if (!sessionToAbort) {
-      sessionToAbort = lettaSessionRef ?? activeSession ?? undefined;
-    }
+    // Abort only the matching session. Falling back to an arbitrary active
+    // session can cancel a different conversation when turns overlap.
+    const sessionToAbort =
+      getSession(sessionKey) ?? lettaSessionRef ?? activeSessionMatches;
 
     if (sessionToAbort) {
       try {
@@ -169,12 +160,15 @@ export function createAbortHandler(
     const effectiveConversationId = conversationId && /^conv-/.test(conversationId) ? conversationId : sessionKey;
     const lettaClient = createLettaClient();
 
-    // Try to cancel using conversation ID (if valid)
+    // Try to cancel using conversation ID (if valid). Agent-level cancel is
+    // only a fallback because it can stop another conversation on that agent.
+    let conversationCancelled = false;
     if (effectiveConversationId && /^conv-/.test(effectiveConversationId)) {
       if (lettaClient) {
         try {
           console.log("[runner] attempting to cancel via Letta client API with conversationId:", effectiveConversationId);
           await lettaClient.conversations.cancel(effectiveConversationId);
+          conversationCancelled = true;
           console.log("[runner] Letta client cancel successful");
         } catch (err) {
           console.log("[runner] Letta client cancel error:", err);
@@ -186,8 +180,7 @@ export function createAbortHandler(
       console.log("[runner] no valid conversationId to cancel via Letta client API, trying agent-level stop");
     }
 
-    // Always try to cancel using agent ID if available (independent of conversationId)
-    if (agentId) {
+    if (!conversationCancelled && agentId) {
       const lettaClientForAgent = createLettaClient();
       if (lettaClientForAgent) {
         try {
@@ -200,20 +193,15 @@ export function createAbortHandler(
       } else {
         console.log("[runner] no Letta client available for agent cancel");
       }
-    } else {
+    } else if (!conversationCancelled) {
       console.log("[runner] no agentId available for cancel");
     }
 
-    // Also try currentAbortController for global abort
-    const currentAbort = getCurrentAbortController();
-    if (currentAbort && !currentAbort.signal.aborted) {
-      console.log("[runner] calling currentAbortController.abort()");
-      currentAbort.abort();
-    }
-
-    // Abort our AbortController to stop any streaming
+    // Abort only this runner's controller. The global controller is shared
+    // legacy state and may point at a newer, unrelated turn.
     console.log("[runner] calling abortController.abort()");
     abortController.abort();
+    removeSession(sessionKey);
     console.log("[runner] abortController.abort() called");
   };
 }

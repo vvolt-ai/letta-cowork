@@ -7,9 +7,14 @@ import { runLetta } from "../../../libs/runner/index.js";
 import type { MessageContentItem } from "@letta-ai/letta-code-sdk";
 import { createRuntimeSession, updateSession, deleteSession, getSession } from "../../../libs/runtime-state.js";
 import { getStoredSessions } from "../../../services/settings/index.js";
-import { log, debug, broadcast } from "./utils.js";
-import type { ServerEvent, SessionContinueOptions } from "./types.js";
-import { runnerHandles, emit } from "./session-creation.js";
+import { log, debug } from "./utils.js";
+import type { SessionContinueOptions } from "./types.js";
+import {
+    runnerHandles,
+    emit,
+    trackRunnerHandle,
+} from "./session-creation.js";
+import { enqueueConversationTurn } from "./conversation-turn-queue.js";
 
 /**
  * Handle session.continue event
@@ -34,68 +39,156 @@ export async function handleContinueSession(
         attachments: attachments?.length ?? 0,
     });
 
-    let runtimeSession = getSession(conversationId);
-    if (!runtimeSession) {
-        debug("session.continue: no runtime session found, creating new one");
-        runtimeSession = createRuntimeSession(conversationId);
-    } else {
-        debug("session.continue: found existing runtime session", { status: runtimeSession.status });
-    }
+    await enqueueConversationTurn(conversationId, async (isCancelled) => {
+        // A handle may predate the FIFO (for example, the initial session.start
+        // turn). Its done promise is the ownership boundary: wait for actual
+        // stream cleanup, not for the control handle to have been returned.
+        const priorHandle = runnerHandles.get(conversationId);
+        if (priorHandle) {
+            debug("session.continue: queued behind active turn", {
+                conversationId,
+            });
+            await priorHandle.done;
+        }
+        // Stop/delete may have invalidated this queued turn while it waited for
+        // the previous owner to release the conversation.
+        if (isCancelled()) return;
 
-    const storedSession = runtimeSession.title
-        ? undefined
-        : getStoredSessions().find((session) => session.id === conversationId);
-    const resolvedTitle = runtimeSession.title ?? storedSession?.title ?? conversationId;
+        let runtimeSession = getSession(conversationId);
+        if (!runtimeSession) {
+            debug("session.continue: no runtime session found, creating new one");
+            runtimeSession = createRuntimeSession(conversationId);
+        } else {
+            debug("session.continue: found existing runtime session", {
+                status: runtimeSession.status,
+            });
+        }
 
-    runtimeSession = updateSession(conversationId, { status: "running", title: resolvedTitle }) ?? runtimeSession;
+        const storedSession = runtimeSession.title
+            ? undefined
+            : getStoredSessions().find((session) => session.id === conversationId);
+        const resolvedTitle =
+            runtimeSession.title ?? storedSession?.title ?? conversationId;
 
-    emit({ type: "session.status", payload: { sessionId: conversationId, status: "running", title: resolvedTitle } });
-    emit({ type: "stream.user_prompt", payload: { sessionId: conversationId, prompt, attachments, content } });
+        runtimeSession =
+            updateSession(conversationId, {
+                status: "running",
+                title: resolvedTitle,
+            }) ?? runtimeSession;
 
-    try {
-        debug("session.continue: calling runLetta", { conversationId });
-        let actualConversationId = conversationId;
-
-        const handle = await runLetta({
-            prompt: prompt ?? "",
-            content: content as MessageContentItem[] | undefined,
-            model,
-            session: {
-                id: conversationId, title: resolvedTitle, status: "running", cwd,
-                pendingPermissions: runtimeSession.pendingPermissions,
-            },
-            resumeConversationId: conversationId,
-            onEvent: (e) => {
-                if (actualConversationId !== conversationId && "sessionId" in e.payload) {
-                    const payload = e.payload as { sessionId: string };
-                    payload.sessionId = actualConversationId;
-                }
-                emit(e);
-            },
-            onSessionUpdate: (updates) => {
-                if (updates.lettaConversationId && updates.lettaConversationId !== conversationId) {
-                    log("session.continue: received new conversationId from runner", { old: conversationId, new: updates.lettaConversationId });
-                    actualConversationId = updates.lettaConversationId;
-
-                    deleteSession(conversationId);
-                    emit({ type: "session.deleted", payload: { sessionId: conversationId } });
-
-                    createRuntimeSession(actualConversationId);
-                    updateSession(actualConversationId, { status: "running" });
-
-                    emit({ type: "session.status", payload: { sessionId: actualConversationId, status: "running", title: actualConversationId, cwd } });
-                    emit({ type: "stream.user_prompt", payload: { sessionId: actualConversationId, prompt, attachments, content } });
-                }
+        emit({
+            type: "session.status",
+            payload: {
+                sessionId: conversationId,
+                status: "running",
+                title: resolvedTitle,
             },
         });
-        debug("session.continue: runLetta returned handle");
+        emit({
+            type: "stream.user_prompt",
+            payload: {
+                sessionId: conversationId,
+                prompt,
+                attachments,
+                content,
+            },
+        });
 
-        runnerHandles.set(actualConversationId, handle);
-    } catch (error) {
-        log("session.continue: ERROR", { error: String(error) });
-        await Promise.all(Array.from(runnerHandles.values()).map(h => h.abort()));
-        runnerHandles.clear();
-        updateSession(conversationId, { status: "error" });
-        emit({ type: "session.status", payload: { sessionId: conversationId, status: "error", error: String(error) } });
-    }
+        try {
+            debug("session.continue: calling runLetta", { conversationId });
+            let actualConversationId = conversationId;
+
+            const handle = await runLetta({
+                prompt: prompt ?? "",
+                content: content as MessageContentItem[] | undefined,
+                model,
+                session: {
+                    id: conversationId,
+                    title: resolvedTitle,
+                    status: "running",
+                    cwd,
+                    pendingPermissions: runtimeSession.pendingPermissions,
+                },
+                resumeConversationId: conversationId,
+                onEvent: (e) => {
+                    if (
+                        actualConversationId !== conversationId &&
+                        "sessionId" in e.payload
+                    ) {
+                        const payload = e.payload as { sessionId: string };
+                        payload.sessionId = actualConversationId;
+                    }
+                    emit(e);
+                },
+                onSessionUpdate: (updates) => {
+                    if (
+                        updates.lettaConversationId &&
+                        updates.lettaConversationId !== conversationId
+                    ) {
+                        log(
+                            "session.continue: received new conversationId from runner",
+                            {
+                                old: conversationId,
+                                new: updates.lettaConversationId,
+                            }
+                        );
+                        actualConversationId = updates.lettaConversationId;
+
+                        deleteSession(conversationId);
+                        emit({
+                            type: "session.deleted",
+                            payload: { sessionId: conversationId },
+                        });
+
+                        createRuntimeSession(actualConversationId);
+                        updateSession(actualConversationId, { status: "running" });
+
+                        emit({
+                            type: "session.status",
+                            payload: {
+                                sessionId: actualConversationId,
+                                status: "running",
+                                title: actualConversationId,
+                                cwd,
+                            },
+                        });
+                        emit({
+                            type: "stream.user_prompt",
+                            payload: {
+                                sessionId: actualConversationId,
+                                prompt,
+                                attachments,
+                                content,
+                            },
+                        });
+                    }
+                },
+            });
+            debug("session.continue: runLetta returned handle");
+
+            // Stop/delete can race with initialization before the handle is
+            // visible in runnerHandles. Settle that just-created run instead of
+            // allowing a cancelled queued prompt to resurrect the session.
+            if (isCancelled()) {
+                await handle.abort();
+                return;
+            }
+
+            trackRunnerHandle(actualConversationId, handle);
+            await handle.done;
+        } catch (error) {
+            log("session.continue: ERROR", { error: String(error) });
+            const activeHandle = runnerHandles.get(conversationId);
+            if (activeHandle) await activeHandle.abort();
+            updateSession(conversationId, { status: "error" });
+            emit({
+                type: "session.status",
+                payload: {
+                    sessionId: conversationId,
+                    status: "error",
+                    error: String(error),
+                },
+            });
+        }
+    });
 }

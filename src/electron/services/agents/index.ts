@@ -155,7 +155,7 @@ export async function listLettaConversations(agentId: string): Promise<LettaConv
       limit: 100,
       order: "desc",
       order_by: "last_message_at",
-    });
+    } as any);
     const conversations = await response;
     const items = Array.isArray((conversations as any).items)
       ? (conversations as any).items

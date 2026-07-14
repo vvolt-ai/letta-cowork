@@ -3,27 +3,43 @@
  * Handles starting new sessions
  */
 
-import type { RunnerHandle } from "../../../libs/runner/index.js";
-import { runLetta, clearAgentCache } from "../../../libs/runner/index.js";
+import { runLetta, clearAgentCache, type RunnerHandle } from "../../../libs/runner/index.js";
 import type { MessageContentItem } from "@letta-ai/letta-code-sdk";
-import type { PendingPermission } from "../../../libs/runtime-state.js";
-import { createRuntimeSession, updateSession } from "../../../libs/runtime-state.js";
-import type { SessionStatus } from "../../../libs/runtime-state.js";
+import {
+    createRuntimeSession,
+    updateSession,
+    type PendingPermission,
+    type SessionStatus,
+} from "../../../libs/runtime-state.js";
 import { addStoredSession } from "../../../services/settings/index.js";
 import { getLettaAgent } from "../../../services/agents/index.js";
 import { log, debug, broadcast } from "./utils.js";
 import { generateTitleFromPrompt } from "./title-generator.js";
 import type { ServerEvent, SessionStartOptions } from "./types.js";
 import type { RunnerSession } from "../../../libs/runner/types.js";
+import { cancelAllQueuedConversationTurns } from "./conversation-turn-queue.js";
 
 // Track active runner handles by real Letta conversation IDs (shared across handlers)
 export const runnerHandles = new Map<string, RunnerHandle>();
+
+export function trackRunnerHandle(
+    conversationId: string,
+    handle: RunnerHandle
+): void {
+    runnerHandles.set(conversationId, handle);
+    void handle.done.finally(() => {
+        if (runnerHandles.get(conversationId) === handle) {
+            runnerHandles.delete(conversationId);
+        }
+    });
+}
 
 /**
  * Cancel all runners and clear handles
  */
 export async function cancelAllRunners(): Promise<void> {
     debug("cancelAllRunners: cancelling all runners", { count: runnerHandles.size });
+    cancelAllQueuedConversationTurns();
     for (const [key, handle] of runnerHandles) {
         try {
             await handle.abort();
@@ -130,13 +146,14 @@ export async function handleStartSession(
 
         // runLetta now returns a handle with the real conversation ID
         const conversationId = handle.sessionId;
-        runnerHandles.set(conversationId, handle);
+        trackRunnerHandle(conversationId, handle);
         debug("session.start: runLetta returned handle", { conversationId });
 
     } catch (error) {
         log("session.start: ERROR", { error: String(error) });
         console.error("Failed to start session:", error);
-        await cancelAllRunners();
+        // runLetta cleans up its own failed initialization. Do not cancel
+        // unrelated sessions because one new session failed to start.
         emit({ type: "runner.error", payload: { message: String(error) } });
     }
 }
