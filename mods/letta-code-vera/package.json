@@ -1,0 +1,42 @@
+{
+  "name": "@verivolt/letta-code-vera",
+  "version": "0.1.0",
+  "description": "Native Letta Code integration for Vera authentication, MCP tools, and channels.",
+  "type": "module",
+  "private": true,
+  "license": "UNLICENSED",
+  "keywords": [
+    "letta-package",
+    "letta-mod",
+    "vera",
+    "verivolt"
+  ],
+  "files": [
+    "mods/vera.js",
+    "src/client.js",
+    "src/cowork-auth.js",
+    "src/commands.js",
+    "src/state.js",
+    "src/tools.js",
+    "README.md",
+    "MOD.md"
+  ],
+  "scripts": {
+    "test": "bun test ./src ./mods",
+    "check": "bun test ./src ./mods && bun --check mods/vera.js"
+  },
+  "letta": {
+    "manifestVersion": 1,
+    "mods": [
+      "mods/vera.js"
+    ],
+    "capabilities": [
+      "commands",
+      "tools"
+    ],
+    "engines": {
+      "lettaCodeCli": ">=0.28.0",
+      "lettaCodeDesktop": ">=0.28.0"
+    }
+  }
+}
