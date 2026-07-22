@@ -2,7 +2,7 @@ import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises"
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
-export const DEFAULT_VERA_SERVER_URL = "http://localhost:3010";
+export const DEFAULT_VERA_SERVER_URL = "https://vera-cowork-server.ngrok.app";
 export const STATE_VERSION = 1;
 
 export function stateFilePath(env = process.env) {

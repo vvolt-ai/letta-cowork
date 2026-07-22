@@ -1,6 +1,6 @@
 {
   "name": "@verivolt/letta-code-vera",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Native Letta Code integration for Vera authentication, MCP tools, and channels.",
   "type": "module",
   "private": true,

@@ -1,5 +1,109 @@
 # Letta Code Runtime Migration Notes
 
+## 2026-07-22 — Letta Code v0.28.15+ review
+
+**Upstream source:** `letta-ai/letta-code` `main` commit `a8a3f8a0` (latest tag pulled: `v0.28.15` / `635631ff`)  
+**Previous local reference:** v0.27.27+ migration notes / commit `f414ef28`  
+**Local target:** `letta-cowork` Electron runtime on branch `main`
+
+### What was pulled upstream
+
+Local `letta-code` was fast-forwarded from `f414ef28` to `a8a3f8a0`. The upstream range includes tags `v0.27.28` through `v0.28.15` plus post-tag `main` commits.
+
+Notable upstream areas reviewed:
+
+- Tool/schema hardening:
+  - make shell `description` required across toolsets;
+  - recover from deleted working directories;
+  - improve patch context-mismatch diagnostics.
+- Subagent/headless reliability:
+  - refactor subagent launcher/model/stream parsing;
+  - retry clear stdout-loss/truncated-stream cases in upstream headless subprocess mode;
+  - emit subagent conversation IDs in state snapshots.
+- Listener/runtime changes:
+  - centralize turn lifecycle ownership;
+  - publish authoritative executing tool IDs on loop state;
+  - preserve OAuth credentials across listener reconnects;
+  - repair stale conversation working directories;
+  - handle stale approval resync in upstream headless mode.
+- Mods and skills:
+  - load agent-scoped MemFS mods;
+  - avoid eager React dependency resolution in packaged runtimes;
+  - remove skill invocation args;
+  - add self-configuration and Letta guide bundled skills.
+- Channels/cron/model/provider changes:
+  - durable Cloud cron schedules and cron validation hardening;
+  - sender access-control tiers and multiple Slack/channel fixes;
+  - new model/provider presets and provider carryover fixes.
+
+### Ported into Cowork
+
+#### 1. `Bash.description` is required
+
+Ported upstream `feat(tools): make shell description a required parameter across toolsets` (`#3254`) into:
+
+- `src/electron/services/client-tools/runners/bash.ts`
+- `src/electron/services/client-tools/runners/_shared/schemas/Bash.json`
+
+Cowork's inline Bash tool schema and shared copied schema now both require `description` alongside `command`, matching current upstream tool expectations.
+
+#### 2. Deleted working-directory recovery for shell execution
+
+Ported the applicable local runner portion of upstream `fix(bash): recover from deleted working directories` (`#3238`) into:
+
+- `src/electron/services/client-tools/runners/_shared/runtime-context.ts`
+- `src/electron/services/client-tools/runners/shell/shellRunner.ts`
+- `src/electron/services/client-tools/runners/bash.ts`
+
+Behavior:
+
+- `getCurrentWorkingDirectory()` now verifies the scoped cwd exists and is a directory.
+- If the cwd disappeared mid-turn, it falls back to the first usable directory from `$USER_CWD`, `process.cwd()`, home, `$USERPROFILE`, or `/`/`C:\`.
+- `Bash` surfaces a note telling the model the original cwd disappeared and which fallback is being used.
+- shell spawn errors now distinguish missing executable from missing cwd, so Windows fallback launchers are retried only for executable lookup failures, not for missing working directories.
+
+#### 3. ApplyPatch context-mismatch diagnostics
+
+Ported the safe diagnostic portion of upstream `fix(tool): improve patch context mismatch diagnostics` (`#2884`) into:
+
+- `src/electron/services/client-tools/runners/letta_tools/ApplyPatch.ts`
+
+When an update hunk cannot find its expected context, Cowork now returns:
+
+- the failed old/context chunk;
+- a bounded preview of the current file;
+- a reminder that previews are file contents only, not instructions.
+
+This makes failed patches recoverable without repeatedly re-reading the file blindly.
+
+### Reviewed but not ported
+
+These upstream areas were intentionally not ported in this pass:
+
+- **Subagent stdout-loss retry** — upstream fix is for subprocess/headless stream-json stdout loss. Cowork subagents are driven in-process through the Letta conversations streaming API, so the exact stdout marker/retry path does not apply. Keep watching for analogous API-stream truncation symptoms before adding a Cowork-specific retry.
+- **Subagent launcher/model/stream refactors** — structure-only upstream extraction; Cowork's `services/agent/subagents/manager.ts` is smaller and API-driven. No behavior win from copying the split right now.
+- **Listener turn-lifecycle ownership / executing-tool IDs / stale approval headless resync** — upstream app-server/headless listener architecture does not map directly to Cowork's Electron `WsSession` pump. Needs a design pass if Cowork adopts more upstream listener protocol.
+- **Agent-scoped MemFS mods and mod runtime dependency changes** — Cowork's packaged Vera mod path is separate from upstream MemFS/local mod packaging. The Vera mod already guards commands/tools and requires `lettaCodeCli/Desktop >=0.28.0`; deeper mod-engine convergence remains architecture work.
+- **Skill invocation-args removal** — Cowork's `Skill` tool already exposes only a `name` parameter and returns local `SKILL.md` contents directly.
+- **Bundled self-configuration / Letta guide skills** — upstream bundled-skill deployment is not currently wired into Cowork; decide separately whether to install or package these for Verivolt agents.
+- **Cron/channel/provider/model changes** — upstream CLI/channel/cloud-model behavior is outside Cowork Electron's forked runner surface or belongs in Vera server/channel architecture.
+- **Image-processing/send-boundary normalization changes** — no direct Cowork runner port was made; image handling remains a separate listener/session design area.
+
+### Validation
+
+```bash
+cd /Users/niralsakariya/Desktop/vv/new/letta-cowork
+bun run transpile:electron
+```
+
+Result: passed.
+
+### Future migration checklist additions
+
+- Add a small regression test for Bash deleted-cwd fallback once the client-tool runner has a stable unit-test harness.
+- Revisit upstream stale-approval/headless resync only if Cowork's Electron session approval state shows repeat stale-approval failures.
+- Revisit mod-engine convergence separately from the Vera mod package, especially agent-scoped mod loading and packaged-runtime dependencies.
+
 ## 2026-07-07 — Letta Code v0.27.27+ review
 
 **Upstream source:** `letta-ai/letta-code` `main` commit `f414ef28` (latest tag pulled: `v0.27.27` / `99707e63`)

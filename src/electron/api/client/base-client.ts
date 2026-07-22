@@ -49,22 +49,25 @@ export class BaseHttpClient {
     const accessToken = this.tokens?.accessToken?.trim();
 
     if (accessToken) {
-      // 1. Set in current Electron process
+      // Keep the credential and its API origin together so external clients do
+      // not authenticate to one Vera deployment and send requests to another.
       process.env.COWORK_TOKEN = accessToken;
+      process.env.VERA_COWORK_API_URL = this.baseUrl;
 
-      // 2. Write env file (sourceable by scripts/agents)
+      // Write values for scripts/agents that do not inherit Electron's process env.
       this.writeEnvFile(accessToken);
 
-      // 3. Persist in user shell env (~/.zshenv) so all new terminal sessions have it
+      // Persist values for new terminal sessions.
       this.writeUserShellEnv(accessToken);
 
-      // 4. macOS: set immediately via launchctl so currently open terminals also get it
+      // macOS: make values available to newly launched GUI/terminal processes.
       this.setLaunchctlEnv(accessToken);
       return;
     }
 
-    // Clear all
+    // Clear all Cowork-managed authentication metadata.
     delete process.env.COWORK_TOKEN;
+    delete process.env.VERA_COWORK_API_URL;
     this.writeEnvFile(null);
     this.writeUserShellEnv(null);
     this.setLaunchctlEnv(null);
@@ -76,7 +79,11 @@ export class BaseHttpClient {
       if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 
       if (token) {
-        writeFileSync(COWORK_ENV_PATH, `export COWORK_TOKEN=${token}\n`, { mode: 0o600, encoding: "utf8" });
+        writeFileSync(
+          COWORK_ENV_PATH,
+          `export COWORK_TOKEN=${token}\nexport VERA_COWORK_API_URL=${this.baseUrl}\n`,
+          { mode: 0o600, encoding: "utf8" },
+        );
         writeFileSync(COWORK_TOKEN_PATH, token, { mode: 0o600, encoding: "utf8" });
       } else {
         writeFileSync(COWORK_ENV_PATH, "", { mode: 0o600, encoding: "utf8" });
@@ -109,9 +116,13 @@ export class BaseHttpClient {
       );
       let updated = existing.replace(blockRegex, "");
 
-      // Insert new block if we have a token
+      // Insert a single managed block so the token always carries its API origin.
       if (token) {
-        const block = `\n${MARKER_START}\nexport COWORK_TOKEN=${token}\n${MARKER_END}\n`;
+        const block =
+          `\n${MARKER_START}\n` +
+          `export COWORK_TOKEN=${token}\n` +
+          `export VERA_COWORK_API_URL=${this.baseUrl}\n` +
+          `${MARKER_END}\n`;
         updated = updated.trimEnd() + block;
       }
 
@@ -125,11 +136,16 @@ export class BaseHttpClient {
     if (process.platform !== "darwin") return;
     try {
       if (token) {
-        // Escape token for shell safety
-        const safe = token.replace(/'/g, "'\\''");
-        execSync(`launchctl setenv COWORK_TOKEN '${safe}'`, { stdio: "ignore" });
+        // Escape values for shell safety.
+        const safeToken = token.replace(/'/g, "'\\''");
+        const safeBaseUrl = this.baseUrl.replace(/'/g, "'\\''");
+        execSync(`launchctl setenv COWORK_TOKEN '${safeToken}'`, { stdio: "ignore" });
+        execSync(`launchctl setenv VERA_COWORK_API_URL '${safeBaseUrl}'`, {
+          stdio: "ignore",
+        });
       } else {
         execSync("launchctl unsetenv COWORK_TOKEN", { stdio: "ignore" });
+        execSync("launchctl unsetenv VERA_COWORK_API_URL", { stdio: "ignore" });
       }
     } catch {
       // launchctl may not be available in all macOS contexts — ignore silently

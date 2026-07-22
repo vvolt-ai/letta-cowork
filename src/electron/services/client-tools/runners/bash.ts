@@ -15,9 +15,13 @@ import type {
     ToolRunContext,
     ToolRunResult,
 } from "../types.js";
+import {
+    consumeWorkingDirectoryRecovery,
+    getCurrentWorkingDirectory,
+} from "./_shared/runtime-context.js";
 import { getShellEnv } from "./shell/shellEnv.js";
 import { buildShellLaunchers } from "./shell/shellLaunchers.js";
-import { spawnWithLauncher } from "./shell/shellRunner.js";
+import { type ShellExecutionError, spawnWithLauncher } from "./shell/shellRunner.js";
 
 const DEFAULT_TIMEOUT_MS = 2 * 60 * 1000;
 const MAX_TIMEOUT_MS = 10 * 60 * 1000;
@@ -74,8 +78,8 @@ async function spawnCommand(
                     signal: options.signal,
                 });
             } catch (err) {
-                const e = err as NodeJS.ErrnoException;
-                if (e.code !== "ENOENT") throw err;
+                const e = err as ShellExecutionError;
+                if (e.code !== "ENOENT" || e.reason === "cwd_missing") throw err;
                 cachedWorkingLauncher = null;
             }
         }
@@ -98,8 +102,8 @@ async function spawnCommand(
             cachedWorkingLauncher = launcher;
             return result;
         } catch (err) {
-            const e = err as NodeJS.ErrnoException;
-            if (e.code === "ENOENT") {
+            const e = err as ShellExecutionError;
+            if (e.code === "ENOENT" && e.reason !== "cwd_missing") {
                 tried.push(launcher[0] || "unknown");
                 lastError = e;
                 continue;
@@ -138,7 +142,7 @@ export const bashTool: ClientToolDefinition = {
                     "Set to true to run this command in the background. Use TaskOutput to read the output later.",
             },
         },
-        required: ["command"],
+        required: ["command", "description"],
         additionalProperties: false,
     },
     run: async (args, ctx) => runBash(args, ctx),
@@ -152,11 +156,11 @@ async function runBash(
     if (!command) {
         return { output: "Bash: missing 'command' argument", isError: true };
     }
-    const cwd =
-        process.env.USER_CWD ||
-        process.env.HOME ||
-        process.env.USERPROFILE || // Windows
-        process.cwd();
+    const cwd = getCurrentWorkingDirectory();
+    const recoveredFrom = consumeWorkingDirectoryRecovery();
+    const recoveryNote = recoveredFrom
+        ? `Note: working directory ${recoveredFrom} no longer exists; running in ${cwd} instead.\n`
+        : "";
     const requested =
         typeof args.timeout === "number" && args.timeout > 0
             ? args.timeout
@@ -184,11 +188,11 @@ async function runBash(
 
         if (exitCode !== 0 && exitCode !== null) {
             return {
-                output: `Exit code: ${exitCode}\n${output}`,
+                output: `${recoveryNote}Exit code: ${exitCode}\n${output}`,
                 isError: true,
             };
         }
-        return { output, isError: false };
+        return { output: `${recoveryNote}${output}`, isError: false };
     } catch (err) {
         const e = err as NodeJS.ErrnoException & {
             stdout?: string;
@@ -216,7 +220,7 @@ async function runBash(
                 `\n[output truncated to ${MAX_OUTPUT_CHARS} chars]`;
         }
         return {
-            output: msg.trim() || "Command failed with unknown error",
+            output: `${recoveryNote}${msg.trim() || "Command failed with unknown error"}`,
             isError: true,
         };
     }

@@ -57,8 +57,19 @@ for (const tool of codingTools) register(tool);
 for (const tool of odooMcpTools) register(tool);
 for (const tool of veraMcpTools) register(tool);
 
-export function registerClientTool(def: ClientToolDefinition): void {
-    register(def);
+export function registerClientTool(def: ClientToolDefinition): () => void {
+    if (registry.has(def.name)) {
+        throw new Error(`Client tool '${def.name}' is already registered.`);
+    }
+
+    registry.set(def.name, def);
+    return () => {
+        // Only remove the exact registration that created this disposer. This
+        // prevents a stale extension cleanup from deleting a newer tool.
+        if (registry.get(def.name) === def) {
+            registry.delete(def.name);
+        }
+    };
 }
 
 export function isClientTool(name: string): boolean {
