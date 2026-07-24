@@ -11,7 +11,7 @@ import {
     type PendingPermission,
     type SessionStatus,
 } from "../../../libs/runtime-state.js";
-import { addStoredSession } from "../../../services/settings/index.js";
+import { addStoredSession, updateStoredSession } from "../../../services/settings/index.js";
 import { getLettaAgent } from "../../../services/agents/index.js";
 import { log, debug, broadcast } from "./utils.js";
 import { generateTitleFromPrompt } from "./title-generator.js";
@@ -115,18 +115,8 @@ export async function handleStartSession(
                     updateSession(conversationId, { status: "running", title: sessionTitle });
 
                     const resolvedAgentId = agentId || process.env.LETTA_AGENT_ID || "";
-                    let agentName: string | undefined = undefined;
-                    try {
-                        console.log("[ipc] Getting agent name for agentId:", resolvedAgentId);
-                        const agent = await getLettaAgent(resolvedAgentId);
-                        console.log("[ipc] Got agent:", agent);
-                        if (agent) agentName = agent.name;
-                    } catch (e) {
-                        console.log("[ipc] Failed to get agent name:", e);
-                    }
-
                     addStoredSession({
-                        id: conversationId, agentId: resolvedAgentId, agentName,
+                        id: conversationId, agentId: resolvedAgentId, agentName: undefined,
                         title: sessionTitle, createdAt: Date.now(), updatedAt: Date.now(),
                         isEmailSession: isEmailSession ?? false,
                     });
@@ -134,12 +124,37 @@ export async function handleStartSession(
                     console.log("[session.start] Emitting session.status", { conversationId, isEmailSession, status: "running" });
                     emit({
                         type: "session.status",
-                        payload: { sessionId: conversationId, status: "running", title: sessionTitle, cwd, agentName, agentId: resolvedAgentId, background, isEmailSession },
+                        payload: { sessionId: conversationId, status: "running", title: sessionTitle, cwd, agentId: resolvedAgentId, background, isEmailSession },
                     });
                     emit({
                         type: "stream.user_prompt",
                         payload: { sessionId: conversationId, prompt, attachments, content },
                     });
+
+                    if (resolvedAgentId) {
+                        void getLettaAgent(resolvedAgentId)
+                            .then((agent) => {
+                                if (!agent?.name) return;
+                                updateStoredSession(conversationId, { agentName: agent.name, updatedAt: Date.now() });
+                                updateSession(conversationId, { title: sessionTitle });
+                                emit({
+                                    type: "session.status",
+                                    payload: {
+                                        sessionId: conversationId,
+                                        status: "running",
+                                        title: sessionTitle,
+                                        cwd,
+                                        agentName: agent.name,
+                                        agentId: resolvedAgentId,
+                                        background,
+                                        isEmailSession,
+                                    },
+                                });
+                            })
+                            .catch((e) => {
+                                console.log("[ipc] Failed to get agent name:", e);
+                            });
+                    }
                 }
             },
         });

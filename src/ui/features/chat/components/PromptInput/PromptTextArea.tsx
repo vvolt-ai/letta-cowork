@@ -18,6 +18,9 @@ export interface PromptTextAreaProps {
   onAttach: () => void;
   onSend: () => void;
   onStop: () => void;
+  onQueueAfterResponse?: () => void;
+  onStopAndResend?: () => void;
+  canAppendWhileRunning?: boolean;
   /** Speech-to-text */
   onMicToggle?: () => void;
   isMicListening?: boolean;
@@ -41,6 +44,9 @@ export const PromptTextArea = memo(function PromptTextArea({
   onAttach,
   onSend,
   onStop,
+  onQueueAfterResponse,
+  onStopAndResend,
+  canAppendWhileRunning = false,
   onMicToggle,
   isMicListening = false,
   interimTranscript = "",
@@ -141,6 +147,24 @@ export const PromptTextArea = memo(function PromptTextArea({
           )}
         </button>
       </div>
+      {isRunning && canAppendWhileRunning ? (
+        <div className="flex flex-wrap justify-end gap-2 pt-1">
+          <button
+            type="button"
+            onClick={onQueueAfterResponse}
+            className="rounded-full border border-[var(--color-border)] bg-white px-3 py-1.5 text-xs font-medium text-ink-700 transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+          >
+            Queue after response
+          </button>
+          <button
+            type="button"
+            onClick={onStopAndResend}
+            className="rounded-full border border-orange-300 bg-orange-50 px-3 py-1.5 text-xs font-medium text-orange-700 transition hover:border-orange-400 hover:bg-orange-100"
+          >
+            Stop & resend with this added
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 });

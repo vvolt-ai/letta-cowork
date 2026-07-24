@@ -296,8 +296,8 @@ export const ChatWorkspace = memo(function ChatWorkspace({
       {!shouldAutoScroll && (
         <button
           onClick={onScrollToBottom}
-          style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 152px)" }}
-          className={`pointer-events-auto absolute right-6 z-40 flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium shadow-sm transition lg:right-12 ${
+          style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 116px)" }}
+          className={`pointer-events-auto absolute right-5 z-40 flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-medium shadow-md transition lg:right-10 ${
             hasNewMessages
               ? "border border-[var(--color-accent)] bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)]"
               : "border border-[var(--color-border)] bg-white text-ink-700 hover:bg-gray-50"

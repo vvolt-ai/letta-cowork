@@ -138,10 +138,12 @@ export const Sidebar = memo(function Sidebar({
     <aside className="flex h-full w-full flex-col border-r border-[var(--color-border)] bg-[var(--color-sidebar)]/98 backdrop-blur-sm">
 
       {/* Top nav — Skills / Emails / Configuration (below traffic lights) */}
-      <div className="pt-8 px-3 pb-2 flex flex-col gap-0.5">
+      <div className="px-3 pb-3 pt-8">
+        <div className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">Cowork</div>
+        <div className="flex flex-col gap-1 rounded-2xl border border-white/60 bg-white/50 p-1 shadow-sm">
         <button
           onClick={onOpenSkills}
-          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13.5px] text-ink-700 transition hover:bg-[var(--color-sidebar-hover)] hover:text-ink-900"
+          className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-[13.5px] font-medium text-ink-700 transition hover:bg-white hover:text-ink-900 hover:shadow-sm"
         >
           <svg className="h-[18px] w-[18px] shrink-0 text-ink-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
             <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
@@ -150,7 +152,7 @@ export const Sidebar = memo(function Sidebar({
         </button>
         <button
           onClick={onOpenSchedules}
-          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13.5px] text-ink-700 transition hover:bg-[var(--color-sidebar-hover)] hover:text-ink-900"
+          className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-[13.5px] font-medium text-ink-700 transition hover:bg-white hover:text-ink-900 hover:shadow-sm"
         >
           <svg className="h-[18px] w-[18px] shrink-0 text-ink-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
             <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
@@ -159,7 +161,7 @@ export const Sidebar = memo(function Sidebar({
         </button>
         <button
           onClick={handleOpenEmailView}
-          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13.5px] text-ink-700 transition hover:bg-[var(--color-sidebar-hover)] hover:text-ink-900"
+          className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-[13.5px] font-medium text-ink-700 transition hover:bg-white hover:text-ink-900 hover:shadow-sm"
         >
           <svg className="h-[18px] w-[18px] shrink-0 text-ink-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
             <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
@@ -169,7 +171,7 @@ export const Sidebar = memo(function Sidebar({
         </button>
         <button
           onClick={onOpenConfiguration}
-          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13.5px] text-ink-700 transition hover:bg-[var(--color-sidebar-hover)] hover:text-ink-900"
+          className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-[13.5px] font-medium text-ink-700 transition hover:bg-white hover:text-ink-900 hover:shadow-sm"
         >
           <svg className="h-[18px] w-[18px] shrink-0 text-ink-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.75">
             <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -177,6 +179,7 @@ export const Sidebar = memo(function Sidebar({
           </svg>
           Configuration
         </button>
+        </div>
       </div>
 
       {/* Conversations list — scrollable */}
@@ -224,8 +227,8 @@ export const Sidebar = memo(function Sidebar({
 
       {/* User Section */}
       {userEmail && (
-        <div className="mt-auto flex-shrink-0 pt-4 border-t border-[var(--color-border)]">
-          <div className="flex items-center justify-between px-2">
+        <div className="mt-auto flex-shrink-0 border-t border-[var(--color-border)] p-3">
+          <div className="flex items-center justify-between rounded-2xl bg-white/60 px-3 py-2 shadow-sm">
             <div className="flex items-center gap-2">
               <div className="h-8 w-8 rounded-full bg-[var(--color-accent)] flex items-center justify-center text-white text-sm font-medium">
                 {userEmail.charAt(0).toUpperCase()}

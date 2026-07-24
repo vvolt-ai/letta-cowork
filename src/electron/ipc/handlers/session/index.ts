@@ -50,6 +50,13 @@ export async function handleSessionEvent(event: ClientEvent): Promise<void> {
         return;
     }
 
+    if (event.type === "session.stopAndContinue") {
+        const payload = event.payload as Parameters<typeof handleContinueSession>[0];
+        await handleStopSession(payload.sessionId);
+        await handleContinueSession(payload);
+        return;
+    }
+
     if (event.type === "session.stop") {
         const { sessionId } = event.payload as { sessionId: string };
         await handleStopSession(sessionId);

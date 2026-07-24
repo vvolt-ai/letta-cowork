@@ -42,8 +42,8 @@ export const AssistantMessage = memo(function AssistantMessage({ message, fallba
   }
 
   return (
-    <article className="group relative w-full px-1 py-3">
-      <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.3em] text-muted">
+    <article className="group relative w-full px-1 py-2.5">
+      <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-muted/90">
         <span>{agentName}</span>
         {isStreaming ? (
           <span className="relative inline-flex h-2 w-2">
@@ -55,7 +55,7 @@ export const AssistantMessage = memo(function AssistantMessage({ message, fallba
           <button
             type="button"
             onClick={onCopy}
-            className="ml-auto inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white/80 px-2 py-0.5 text-[10px] font-medium tracking-normal normal-case text-ink-600 opacity-0 transition-opacity hover:text-ink-900 group-hover:opacity-100 focus:opacity-100"
+            className="ml-auto inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white/90 px-2 py-0.5 text-[10px] font-medium tracking-normal normal-case text-ink-600 opacity-0 shadow-sm transition hover:text-ink-900 group-hover:opacity-100 focus:opacity-100"
             aria-label="Copy message"
           >
             {copied ? (
@@ -78,7 +78,7 @@ export const AssistantMessage = memo(function AssistantMessage({ message, fallba
         ) : null}
       </div>
       {textContent ? (
-        <div className="[&>*:first-child]:mt-0 [&>p:first-child]:mt-0">
+        <div className="max-w-none rounded-2xl border border-transparent px-0.5 text-[15px] leading-7 text-ink-900 [&>*:first-child]:mt-0 [&>p:first-child]:mt-0">
           <MDContent text={textContent} />
           {isStreaming ? (
             <span

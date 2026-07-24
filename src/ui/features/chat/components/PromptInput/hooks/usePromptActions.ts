@@ -26,6 +26,8 @@ export interface UsePromptActionsResult {
   setPrompt: (prompt: string) => void;
   isRunning: boolean;
   handleSend: (options?: SendMessageOptions) => Promise<void>;
+  handleQueueAfterResponse: (options?: SendMessageOptions) => Promise<void>;
+  handleStopAndResend: (options?: SendMessageOptions) => Promise<void>;
   handleStop: () => void;
   handleSlashCommand: (rawPrompt: string) => Promise<boolean>;
   handleStartFromModal: () => void;
@@ -127,9 +129,128 @@ export function usePromptActions(
   );
 
   const handleStop = useCallback(() => {
-    if (!activeSessionId) return;
+    if (!activeSessionId) {
+      if (pendingStart) {
+        setPendingStart(false);
+        setGlobalError(null);
+        sendEvent({ type: "session.cancelPending", payload: {} });
+      }
+      return;
+    }
+
+    // Optimistically release the input immediately. Backend/server-side abort
+    // can take seconds while the stream/cancel API settles, but the user intent
+    // is already clear: stop this visible turn now.
+    useAppStore.setState((state) => {
+      const session = state.sessions[activeSessionId];
+      if (!session) return state;
+      return {
+        pendingStart: false,
+        globalError: null,
+        sessions: {
+          ...state.sessions,
+          [activeSessionId]: {
+            ...session,
+            status: "idle",
+            permissionRequests: [],
+            ephemeral: {
+              ...session.ephemeral,
+              status: "idle",
+              errorMessage: undefined,
+              pendingResultStatus: undefined,
+              pendingResultError: undefined,
+              lastUpdated: Date.now(),
+            },
+          },
+        },
+      };
+    });
+
     sendEvent({ type: "session.stop", payload: { sessionId: activeSessionId } });
-  }, [activeSessionId, sendEvent]);
+  }, [activeSessionId, pendingStart, sendEvent, setGlobalError, setPendingStart]);
+
+  const handleQueueAfterResponse = useCallback(
+    async (options?: SendMessageOptions) => {
+      if (!activeSessionId) return;
+      const text = options?.text ?? prompt;
+      const trimmedText = text.trim();
+      const hasAttachments = (options?.attachments?.length ?? 0) > 0;
+      if (!trimmedText && !hasAttachments) return;
+
+      sendEvent({
+        type: "session.continue",
+        payload: {
+          sessionId: activeSessionId,
+          prompt: text,
+          content: options?.content,
+          attachments: options?.attachments,
+          cwd: overrideSessionId ? undefined : activeSession?.cwd,
+          model: selectedModel.trim() || undefined,
+        },
+      });
+      setPrompt("");
+      setGlobalError(null);
+    },
+    [activeSession?.cwd, activeSessionId, overrideSessionId, prompt, selectedModel, sendEvent, setGlobalError, setPrompt]
+  );
+
+  const handleStopAndResend = useCallback(
+    async (options?: SendMessageOptions) => {
+      if (!activeSessionId) return;
+      const text = options?.text ?? prompt;
+      const trimmedText = text.trim();
+      const hasAttachments = (options?.attachments?.length ?? 0) > 0;
+      if (!trimmedText && !hasAttachments) return;
+
+      const originalPrompt = activeSession?.lastPrompt?.trim();
+      const combinedText = originalPrompt
+        ? `${originalPrompt}\n\nAdditional instruction from user:\n${text}`
+        : text;
+      const combinedContent = options?.content?.map((item) => {
+        if (item.type === "text") return { ...item, text: combinedText };
+        return item;
+      });
+
+      useAppStore.setState((state) => {
+        const session = state.sessions[activeSessionId];
+        if (!session) return state;
+        return {
+          pendingStart: false,
+          globalError: null,
+          sessions: {
+            ...state.sessions,
+            [activeSessionId]: {
+              ...session,
+              status: "running",
+              permissionRequests: [],
+              ephemeral: {
+                ...session.ephemeral,
+                status: "thinking",
+                errorMessage: undefined,
+                pendingResultStatus: undefined,
+                pendingResultError: undefined,
+                lastUpdated: Date.now(),
+              },
+            },
+          },
+        };
+      });
+
+      sendEvent({
+        type: "session.stopAndContinue",
+        payload: {
+          sessionId: activeSessionId,
+          prompt: combinedText,
+          content: combinedContent,
+          attachments: options?.attachments,
+          cwd: overrideSessionId ? undefined : activeSession?.cwd,
+          model: selectedModel.trim() || undefined,
+        },
+      });
+      setPrompt("");
+    },
+    [activeSession?.cwd, activeSession?.lastPrompt, activeSessionId, overrideSessionId, prompt, selectedModel, sendEvent, setPrompt]
+  );
 
   const handleSlashCommand = useCallback(
     async (rawPrompt: string): Promise<boolean> => {
@@ -266,6 +387,8 @@ export function usePromptActions(
     setPrompt,
     isRunning,
     handleSend,
+    handleQueueAfterResponse,
+    handleStopAndResend,
     handleStop,
     handleSlashCommand,
     handleStartFromModal,

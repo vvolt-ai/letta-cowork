@@ -14,10 +14,41 @@
 
 import { memo, useEffect, useMemo, useState } from "react";
 import type { ToolGroupTimelineEntry } from "../types";
-import { ToolExecutionBlock } from "./ToolBlocks";
 
 interface ToolGroupBlockProps {
   group: ToolGroupTimelineEntry;
+}
+
+function summarizeChildInput(name: string, input?: string | null): string | null {
+  if (!input?.trim()) return null;
+  const trimmed = input.trim();
+
+  if (name === "TodoWrite") {
+    try {
+      const parsed = JSON.parse(trimmed);
+      const todos = Array.isArray(parsed?.todos) ? parsed.todos : [];
+      const active = todos.find((todo: any) => todo?.status === "in_progress");
+      if (active?.activeForm || active?.content) return active.activeForm ?? active.content;
+      const completed = todos.filter((todo: any) => todo?.status === "completed").length;
+      return todos.length > 0 ? `${completed}/${todos.length} tasks done` : "Updated tasks";
+    } catch {
+      return "Updated tasks";
+    }
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    const filePath = parsed?.file_path ?? parsed?.path;
+    if (typeof filePath === "string") return filePath.split("/").slice(-2).join("/");
+    const query = parsed?.query ?? parsed?.pattern ?? parsed?.symbol;
+    if (typeof query === "string") return query.length > 72 ? `${query.slice(0, 69)}…` : query;
+    const command = parsed?.command ?? parsed?.script;
+    if (typeof command === "string") return command.length > 72 ? `${command.slice(0, 69)}…` : command;
+  } catch {
+    // Fall through to text summary.
+  }
+
+  return trimmed.length > 90 ? `${trimmed.slice(0, 87)}…` : trimmed;
 }
 
 export const ToolGroupBlock = memo(function ToolGroupBlock({ group }: ToolGroupBlockProps) {
@@ -41,15 +72,15 @@ export const ToolGroupBlock = memo(function ToolGroupBlock({ group }: ToolGroupB
   const aggregateStatus: "running" | "failed" | "succeeded" =
     runningCount > 0 ? "running" : failedCount > 0 ? "failed" : "succeeded";
 
-  // Auto-expand while running, collapse when done — but respect any
-  // manual override the user has made.
+  // Tool groups should stay compact by default. The header already shows live
+  // progress, and expanded full cards make long runs visually dominate chat.
   const [userOverride, setUserOverride] = useState<boolean | null>(null);
-  const [expanded, setExpanded] = useState<boolean>(runningCount > 0);
+  const [expanded, setExpanded] = useState<boolean>(false);
 
   useEffect(() => {
     if (userOverride !== null) return;
-    setExpanded(runningCount > 0);
-  }, [runningCount, userOverride]);
+    if (aggregateStatus !== "running") setExpanded(false);
+  }, [aggregateStatus, userOverride]);
 
   const summary = useMemo(() => {
     const parts: string[] = [];
@@ -89,7 +120,7 @@ export const ToolGroupBlock = memo(function ToolGroupBlock({ group }: ToolGroupB
           setUserOverride(!expanded);
           setExpanded((v) => !v);
         }}
-        className="flex w-full items-center gap-2 text-left"
+        className="flex w-full items-center gap-2 rounded-lg px-1.5 py-1 text-left transition hover:bg-gray-50"
       >
         <span className={`inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center ${iconClass}`}>
           {aggregateStatus === "running" ? (
@@ -110,9 +141,7 @@ export const ToolGroupBlock = memo(function ToolGroupBlock({ group }: ToolGroupB
           <span className={`text-[12px] font-medium ${statusToneClass}`}>
             {name} ×{children.length}
           </span>
-          {!expanded ? (
-            <span className="text-[12px] text-muted truncate">— {summary}</span>
-          ) : null}
+          <span className="truncate text-[12px] text-muted">— {summary}</span>
         </div>
         <span className="text-ink-300 shrink-0">
           <svg
@@ -128,17 +157,21 @@ export const ToolGroupBlock = memo(function ToolGroupBlock({ group }: ToolGroupB
       </button>
 
       {expanded ? (
-        <div className="mt-1 ml-5 flex flex-col gap-0.5 border-l border-[var(--color-border)] pl-2">
-          {children.map((child) => (
-            <ToolExecutionBlock
-              key={child.id}
-              name={child.name}
-              status={child.status}
-              input={child.input}
-              output={child.output}
-              logs={child.logs}
-            />
-          ))}
+        <div className="mt-1 ml-5 overflow-hidden rounded-xl border border-[var(--color-border)] bg-white/70">
+          {children.map((child) => {
+            const childFailed = child.status === "failed";
+            const childRunning = child.status === "running";
+            const childSummary = summarizeChildInput(child.name, child.input) ?? child.output ?? child.logs?.[0] ?? "No details";
+            return (
+              <div key={child.id} className="grid grid-cols-[18px_minmax(120px,180px)_1fr] items-center gap-2 border-b border-gray-100 px-3 py-1.5 last:border-b-0">
+                <span className={`text-[12px] ${childFailed ? "text-red-500" : childRunning ? "text-blue-500" : "text-green-500"}`}>
+                  {childRunning ? "•" : childFailed ? "!" : "✓"}
+                </span>
+                <span className="truncate text-[12px] font-medium text-ink-700">{child.name}</span>
+                <span className="truncate text-[12px] text-muted">{childSummary}</span>
+              </div>
+            );
+          })}
         </div>
       ) : null}
     </section>

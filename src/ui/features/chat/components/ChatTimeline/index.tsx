@@ -45,10 +45,16 @@ export function ChatTimeline({
     && streamingAssistantText !== committedAssistantText;
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-2">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-1.5">
       {timeline.length === 0 ? (
-        <div className="py-16 text-center text-sm text-muted">
-          Start a conversation to see reasoning, tool activity, and results here.
+        <div className="mx-auto my-20 max-w-md rounded-3xl border border-[var(--color-border)] bg-white/70 px-8 py-10 text-center shadow-sm">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
+            <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
+            </svg>
+          </div>
+          <div className="text-sm font-semibold text-ink-900">Start a conversation</div>
+          <div className="mt-1.5 text-sm leading-6 text-muted">Ask for work, upload files, or use slash commands. Reasoning and tool activity will stay compact here.</div>
         </div>
       ) : (
         timeline.map((entry) => (

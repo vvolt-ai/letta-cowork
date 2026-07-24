@@ -30,27 +30,27 @@ export const ReasoningBlock = memo(function ReasoningBlock({ steps }: ReasoningB
   if (cleanedSteps.length === 0) return null;
 
   return (
-    <section className="max-w-3xl rounded-2xl border border-[var(--color-tool-border)] bg-[var(--color-tool-bg)]/70 px-4 py-3 text-sm shadow-sm">
+    <section className="max-w-3xl rounded-xl border border-[var(--color-tool-border)] bg-[var(--color-tool-bg)]/60 px-3 py-2 text-sm shadow-sm">
       <button
         type="button"
         onClick={() => setExpanded((value) => !value)}
         className="flex w-full items-center justify-between gap-3 text-left"
       >
         <div className="min-w-0">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.28em] text-muted">Reasoning</div>
-          <div className="mt-1 truncate text-sm font-medium text-ink-800">{preview}</div>
-          <div className="mt-1 text-[11px] text-muted">{cleanedSteps.length} step{cleanedSteps.length === 1 ? "" : "s"}</div>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted">Reasoning</div>
+          <div className="mt-0.5 truncate text-sm font-medium text-ink-800">{preview}</div>
+          <div className="mt-0.5 text-[11px] text-muted">{cleanedSteps.length} step{cleanedSteps.length === 1 ? "" : "s"}</div>
         </div>
-        <span className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-[var(--color-border)] bg-white text-ink-600 shadow-sm">
-          <svg viewBox="0 0 24 24" className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="2">
+        <span className="inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-[var(--color-border)] bg-white text-ink-600 shadow-sm">
+          <svg viewBox="0 0 24 24" className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M6 9l6 6 6-6" />
           </svg>
         </span>
       </button>
       {expanded ? (
-        <ol className="mt-3 space-y-1.5 text-sm text-ink-700">
+        <ol className="mt-2 max-h-72 space-y-1.5 overflow-auto text-sm text-ink-700">
           {cleanedSteps.map((step, index) => (
-            <li key={`${index}-${step.slice(0, 32)}`} className="flex gap-2 rounded-lg bg-white/55 px-3 py-2 leading-snug">
+            <li key={`${index}-${step.slice(0, 32)}`} className="flex gap-2 rounded-lg bg-white/55 px-3 py-1.5 leading-snug">
               <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[var(--color-status-thinking)]" />
               <span className="min-w-0 whitespace-pre-wrap break-words">{step}</span>
             </li>

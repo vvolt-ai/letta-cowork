@@ -258,14 +258,15 @@ export const SessionsTab = memo(function SessionsTab({
   return (
     <div className="flex flex-col">
       {/* Section header */}
-      <div className="px-4 pt-3 pb-1">
-        <span className="text-[13px] font-medium text-ink-600">All agents</span>
+      <div className="flex items-center justify-between px-4 pb-2 pt-2">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">Agents</span>
+        <span className="rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-medium text-muted">{regularSessions.length}</span>
       </div>
       {/* New conversation link */}
-      <div className="px-4 pb-2">
+      <div className="px-3 pb-3">
         <button
           onClick={onNewSession}
-          className="flex items-center gap-1.5 text-[13px] text-muted hover:text-ink-700 transition-colors"
+          className="flex w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-[var(--color-border)] bg-white/45 px-3 py-2 text-[13px] font-medium text-muted transition hover:border-[var(--color-accent)] hover:bg-white hover:text-ink-800 hover:shadow-sm"
         >
           <span className="text-base leading-none">+</span>
           <span>New conversation</span>

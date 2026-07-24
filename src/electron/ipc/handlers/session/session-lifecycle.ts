@@ -25,6 +25,17 @@ export async function handleStopSession(sessionId: string): Promise<void> {
     debug("session.stop: stopping session", { sessionId, availableHandles: Array.from(runnerHandles.keys()) });
     cancelQueuedConversationTurns(sessionId);
 
+    // Reflect the user's stop intent immediately. Actual stream/server abort can
+    // take seconds, especially while Letta/provider cancellation settles, but UI
+    // should not stay stuck on "running" during that cleanup.
+    const runtimeSession = getSession(sessionId);
+    runtimeSession?.pendingPermissions?.clear();
+    updateSession(sessionId, { status: "idle" });
+    emit({
+        type: "session.status",
+        payload: { sessionId, status: "idle" },
+    });
+
     // Install a barrier before awaiting cancellation. Prompts arriving while
     // Stop is settling are queued behind this operation, so the final idle
     // status cannot overwrite a newer turn's running state.

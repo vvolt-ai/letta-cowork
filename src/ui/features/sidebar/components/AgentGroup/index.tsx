@@ -54,15 +54,18 @@ export function AgentGroup({
   const dotColor = agentColor(displayName);
 
   return (
-    <div className="mb-3">
+    <div className="mb-3 px-1">
       {/* Agent Header */}
-      <div className="group flex items-start justify-between gap-2 px-3 py-1.5">
+      <div className="group flex items-center justify-between gap-2 px-3 py-1.5">
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
+          className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl text-left"
         >
+          <svg viewBox="0 0 24 24" className={`h-3 w-3 shrink-0 text-muted transition-transform ${isExpanded ? "rotate-90" : ""}`} fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="m9 6 6 6-6 6" />
+          </svg>
           {/* Status dot */}
-          <span className="mt-[5px] flex h-2.5 w-2.5 shrink-0 items-center justify-center">
+          <span className="flex h-2.5 w-2.5 shrink-0 items-center justify-center">
             <span
               className="h-2.5 w-2.5 rounded-full"
               style={{ backgroundColor: dotColor }}
@@ -71,7 +74,7 @@ export function AgentGroup({
 
           {/* Agent name + description */}
           <div className="min-w-0">
-            <span className="block truncate text-[14px] font-semibold leading-tight text-ink-900">
+            <span className="block truncate text-[13.5px] font-semibold leading-tight text-ink-900">
               {displayName}
             </span>
             {agentDescription && (
@@ -86,7 +89,7 @@ export function AgentGroup({
         {onNewSession && (
           <button
             onClick={(e) => { e.stopPropagation(); onNewSession(); }}
-            className="mt-0.5 shrink-0 text-muted opacity-0 transition-opacity hover:text-ink-600 group-hover:opacity-100"
+            className="shrink-0 rounded-full p-1 text-muted opacity-0 transition hover:bg-white hover:text-ink-700 hover:shadow-sm group-hover:opacity-100"
             title="New conversation"
             aria-label="New conversation"
           >

@@ -1,6 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useState } from "react";
-import MarkdownRenderer from "../../render/markdownRenderer";
+import MDContent from "../../render/markdown";
 
 interface SkillFileEntry {
   path: string;
@@ -261,7 +261,7 @@ export function SkillPreviewDialog({ open, folder, onOpenChange, onDeleted }: Pr
                         </div>
                         <div className="rounded-lg border border-gray-200 bg-white px-4 py-3">
                           <div className="max-h-56 overflow-hidden text-sm">
-                            <MarkdownRenderer text={details.body.slice(0, 800)} />
+                            <MDContent text={details.body.slice(0, 800)} />
                           </div>
                           {details.body.length > 800 && (
                             <div className="pointer-events-none h-6 bg-gradient-to-t from-white to-transparent" />
@@ -275,7 +275,7 @@ export function SkillPreviewDialog({ open, folder, onOpenChange, onDeleted }: Pr
                 {tab === "content" && (
                   <div className="prose prose-sm max-w-none">
                     {details.body ? (
-                      <MarkdownRenderer text={details.body} />
+                      <MDContent text={details.body} />
                     ) : details.rawContent ? (
                       <pre className="whitespace-pre-wrap rounded-md bg-gray-50 p-3 text-xs text-gray-700">
                         {details.rawContent}

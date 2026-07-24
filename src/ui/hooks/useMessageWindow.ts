@@ -53,19 +53,56 @@ export function useMessageWindow(
   const partialMessageRef = useRef("");
   const partialReasoningRef = useRef("");
   const partialResetTimeoutRef = useRef<number | null>(null);
+  const partialFlushRafRef = useRef<number | null>(null);
+  const shouldFlushPartialMessageRef = useRef(false);
+  const shouldFlushPartialReasoningRef = useRef(false);
+  const shouldNotifyPartialUpdateRef = useRef(false);
+
+  const cancelPendingPartialFlush = useCallback(() => {
+    if (partialFlushRafRef.current) {
+      window.cancelAnimationFrame(partialFlushRafRef.current);
+      partialFlushRafRef.current = null;
+    }
+    shouldFlushPartialMessageRef.current = false;
+    shouldFlushPartialReasoningRef.current = false;
+    shouldNotifyPartialUpdateRef.current = false;
+  }, []);
+
+  const flushPendingPartialNow = useCallback(() => {
+    if (partialFlushRafRef.current) {
+      window.cancelAnimationFrame(partialFlushRafRef.current);
+      partialFlushRafRef.current = null;
+    }
+
+    const shouldFlushMessage = shouldFlushPartialMessageRef.current;
+    const shouldFlushReasoning = shouldFlushPartialReasoningRef.current;
+
+    shouldFlushPartialMessageRef.current = false;
+    shouldFlushPartialReasoningRef.current = false;
+    shouldNotifyPartialUpdateRef.current = false;
+
+    if (shouldFlushMessage) {
+      setPartialMessage(partialMessageRef.current);
+    }
+
+    if (shouldFlushReasoning) {
+      setPartialReasoning(partialReasoningRef.current);
+    }
+  }, []);
 
   useEffect(() => {
     if (partialResetTimeoutRef.current) {
       window.clearTimeout(partialResetTimeoutRef.current);
       partialResetTimeoutRef.current = null;
     }
+    cancelPendingPartialFlush();
     partialMessageRef.current = "";
     partialReasoningRef.current = "";
     setPartialMessage("");
     setPartialReasoning("");
     setShowPartialMessage(false);
     setVisibleHistoryCount(INITIAL_VISIBLE_HISTORY_COUNT);
-  }, [sessionId]);
+  }, [cancelPendingPartialFlush, sessionId]);
 
   useEffect(() => {
     if (messages.length <= INITIAL_VISIBLE_HISTORY_COUNT) {
@@ -78,8 +115,9 @@ export function useMessageWindow(
       if (partialResetTimeoutRef.current) {
         window.clearTimeout(partialResetTimeoutRef.current);
       }
+      cancelPendingPartialFlush();
     };
-  }, []);
+  }, [cancelPendingPartialFlush]);
 
   const performAutoScroll = useCallback(
     (behavior: ScrollBehavior = "auto") => {
@@ -93,6 +131,47 @@ export function useMessageWindow(
       }
     },
     [messagesEndRef, scheduleScrollToBottom]
+  );
+
+  const schedulePartialFlush = useCallback(
+    ({ message = false, reasoning = false, notify = false } = {}) => {
+      shouldFlushPartialMessageRef.current ||= message;
+      shouldFlushPartialReasoningRef.current ||= reasoning;
+      shouldNotifyPartialUpdateRef.current ||= notify;
+
+      if (partialFlushRafRef.current) {
+        return;
+      }
+
+      partialFlushRafRef.current = window.requestAnimationFrame(() => {
+        partialFlushRafRef.current = null;
+
+        const shouldFlushMessage = shouldFlushPartialMessageRef.current;
+        const shouldFlushReasoning = shouldFlushPartialReasoningRef.current;
+        const shouldNotify = shouldNotifyPartialUpdateRef.current;
+
+        shouldFlushPartialMessageRef.current = false;
+        shouldFlushPartialReasoningRef.current = false;
+        shouldNotifyPartialUpdateRef.current = false;
+
+        if (shouldFlushMessage) {
+          setPartialMessage(partialMessageRef.current);
+        }
+
+        if (shouldFlushReasoning) {
+          setPartialReasoning(partialReasoningRef.current);
+        }
+
+        if (shouldNotify) {
+          if (shouldAutoScroll) {
+            performAutoScroll("auto");
+          } else if (onNewMessage) {
+            onNewMessage();
+          }
+        }
+      });
+    },
+    [onNewMessage, performAutoScroll, shouldAutoScroll]
   );
 
   const orderedMessages = useMemo(
@@ -124,6 +203,25 @@ export function useMessageWindow(
           window.clearTimeout(partialResetTimeoutRef.current);
           partialResetTimeoutRef.current = null;
         }
+        cancelPendingPartialFlush();
+        partialMessageRef.current = "";
+        partialReasoningRef.current = "";
+        setPartialMessage("");
+        setPartialReasoning("");
+        setShowPartialMessage(false);
+        return;
+      }
+
+      if (
+        partialEvent.type === "session.status" &&
+        partialEvent.payload.sessionId === sessionId &&
+        (partialEvent.payload.status === "idle" || partialEvent.payload.status === "error")
+      ) {
+        if (partialResetTimeoutRef.current) {
+          window.clearTimeout(partialResetTimeoutRef.current);
+          partialResetTimeoutRef.current = null;
+        }
+        cancelPendingPartialFlush();
         partialMessageRef.current = "";
         partialReasoningRef.current = "";
         setPartialMessage("");
@@ -141,6 +239,7 @@ export function useMessageWindow(
         if (partialResetTimeoutRef.current) {
           window.clearTimeout(partialResetTimeoutRef.current);
         }
+        flushPendingPartialNow();
         partialResetTimeoutRef.current = window.setTimeout(() => {
           partialMessageRef.current = "";
           setPartialMessage("");
@@ -160,14 +259,8 @@ export function useMessageWindow(
         }
 
         partialMessageRef.current += deltaText;
-        setPartialMessage(partialMessageRef.current);
         setShowPartialMessage(true);
-
-        if (shouldAutoScroll) {
-          performAutoScroll("auto");
-        } else if (onNewMessage) {
-          onNewMessage();
-        }
+        schedulePartialFlush({ message: true, notify: true });
         return;
       }
 
@@ -183,6 +276,7 @@ export function useMessageWindow(
           window.clearTimeout(partialResetTimeoutRef.current);
           partialResetTimeoutRef.current = null;
         }
+        cancelPendingPartialFlush();
         partialMessageRef.current = "";
         setPartialMessage("");
         setShowPartialMessage(true);
@@ -195,18 +289,12 @@ export function useMessageWindow(
 
         if (reasoningText) {
           partialReasoningRef.current += reasoningText;
-          setPartialReasoning(partialReasoningRef.current);
+          schedulePartialFlush({ reasoning: true, notify: true });
         }
 
         if (deltaText && !reasoningText) {
           partialMessageRef.current += deltaText;
-          setPartialMessage(partialMessageRef.current);
-        }
-
-        if (shouldAutoScroll) {
-          performAutoScroll("auto");
-        } else if (onNewMessage) {
-          onNewMessage();
+          schedulePartialFlush({ message: true, notify: true });
         }
       }
 
@@ -215,6 +303,7 @@ export function useMessageWindow(
         if (partialResetTimeoutRef.current) {
           window.clearTimeout(partialResetTimeoutRef.current);
         }
+        flushPendingPartialNow();
         partialResetTimeoutRef.current = window.setTimeout(() => {
           partialMessageRef.current = "";
           setPartialMessage("");
@@ -222,7 +311,7 @@ export function useMessageWindow(
         }, PARTIAL_MESSAGE_RESET_DELAY_MS);
       }
     },
-    [onNewMessage, performAutoScroll, sessionId, shouldAutoScroll]
+    [cancelPendingPartialFlush, flushPendingPartialNow, performAutoScroll, schedulePartialFlush, sessionId]
   );
 
   return {

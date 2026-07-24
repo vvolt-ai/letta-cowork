@@ -37,7 +37,16 @@ export const PromptInput = memo(function PromptInput({
   fullWidth = false,
   overrideSessionId,
 }: PromptInputProps) {
-  const { prompt, setPrompt, isRunning, handleSend, handleStop, handleSlashCommand } = usePromptActions(
+  const {
+    prompt,
+    setPrompt,
+    isRunning,
+    handleSend,
+    handleQueueAfterResponse,
+    handleStopAndResend,
+    handleStop,
+    handleSlashCommand,
+  } = usePromptActions(
     sendEvent, onOpenMemory, overrideSessionId
   );
 
@@ -112,54 +121,79 @@ export const PromptInput = memo(function PromptInput({
   const canSend = !attachmentsUploading && !hasPendingUploads && !hasBlockingErrors &&
     (prompt.trim().length > 0 || hasReadyAttachments) && !(disabled && !isRunning);
 
-  // Submit handler
-  const handleSubmit = useCallback(async () => {
-    if (disabled && !isRunning) return;
-    if (isRunning) { handleStop(); return; }
-    if (attachmentsUploading) return;
-
+  const buildCurrentSendOptions = useCallback(() => {
     const trimmedPrompt = prompt.trim();
     const currentAttachments = attachmentsRef.current;
     const pendingUploads = currentAttachments.some((a) => a.status === "pending" || a.status === "uploading");
     const blockingErrors = currentAttachments.some((a) => a.status === "error" && !a.uploaded);
     const readyToSend = currentAttachments.filter((a) => a.status === "uploaded" && a.uploaded);
 
-    if (!trimmedPrompt && readyToSend.length === 0) return;
-    if (blockingErrors) { setGlobalError("Remove or replace invalid attachments before sending."); return; }
-    if (pendingUploads) { setGlobalError("Please wait for attachments to finish uploading."); return; }
+    if (!trimmedPrompt && readyToSend.length === 0) return null;
+    if (blockingErrors) { setGlobalError("Remove or replace invalid attachments before sending."); return null; }
+    if (pendingUploads) { setGlobalError("Please wait for attachments to finish uploading."); return null; }
+
+    const attachmentMetadata: ChatAttachment[] = readyToSend.map((a) => ({
+      id: a.uploaded!.fileId, name: a.uploaded!.fileName || a.file.name,
+      mimeType: a.uploaded!.mimeType || a.file.type || "application/octet-stream",
+      size: a.uploaded!.size || a.file.size, url: a.uploaded!.url, kind: a.kind,
+      previewUrl: a.previewUrl ?? (a.kind === "image" || (a.uploaded!.mimeType || a.file.type || "").startsWith("image/") ? a.uploaded!.url : undefined),
+    }));
+
+    const textToSend = buildTextWithLinks(prompt, attachmentMetadata);
+    const messageContent: MessageContentItem[] = [];
+    if (textToSend.trim()) messageContent.push({ type: "text", text: textToSend });
+    for (const attachment of attachmentMetadata) {
+      if (attachment.kind === "image") {
+        messageContent.push({ type: "image", source: { type: "url", url: attachment.url } } as unknown as MessageContentItem);
+      }
+    }
+
+    return { text: textToSend, content: messageContent, attachments: attachmentMetadata, currentAttachments };
+  }, [attachmentsRef, prompt, setGlobalError]);
+
+  const clearPreparedAttachments = useCallback((currentAttachments: typeof attachmentsRef.current) => {
+    cleanupAllAttachments(currentAttachments);
+    attachmentsRef.current = [];
+    clearAllAttachments();
+  }, [attachmentsRef, cleanupAllAttachments, clearAllAttachments]);
+
+  // Submit handler
+  const handleSubmit = useCallback(async () => {
+    if (disabled && !isRunning) return;
+    if (isRunning) { handleStop(); return; }
+    if (attachmentsUploading) return;
+
+    const prepared = buildCurrentSendOptions();
+    if (!prepared) return;
 
     setGlobalError(null);
     setIsUploading(true);
     if (!overrideSessionId) onSendMessage?.();
 
     try {
-      const attachmentMetadata: ChatAttachment[] = readyToSend.map((a) => ({
-        id: a.uploaded!.fileId, name: a.uploaded!.fileName || a.file.name,
-        mimeType: a.uploaded!.mimeType || a.file.type || "application/octet-stream",
-        size: a.uploaded!.size || a.file.size, url: a.uploaded!.url, kind: a.kind,
-        previewUrl: a.previewUrl ?? (a.kind === "image" || (a.uploaded!.mimeType || a.file.type || "").startsWith("image/") ? a.uploaded!.url : undefined),
-      }));
+      const handledAsCommand = prepared.attachments.length === 0 ? await handleSlashCommand(prepared.text) : false;
+      if (!handledAsCommand) await handleSend({ text: prepared.text, content: prepared.content, attachments: prepared.attachments });
 
-      let textToSend = buildTextWithLinks(prompt, attachmentMetadata);
-      const messageContent: MessageContentItem[] = [];
-      if (textToSend.trim()) messageContent.push({ type: "text", text: textToSend });
-      for (const attachment of attachmentMetadata) {
-        if (attachment.kind === "image") {
-          messageContent.push({ type: "image", source: { type: "url", url: attachment.url } } as unknown as MessageContentItem);
-        }
-      }
-
-      const handledAsCommand = attachmentMetadata.length === 0 ? await handleSlashCommand(textToSend) : false;
-      if (!handledAsCommand) await handleSend({ text: textToSend, content: messageContent, attachments: attachmentMetadata });
-
-      cleanupAllAttachments(currentAttachments);
-      attachmentsRef.current = [];
-      clearAllAttachments();
+      clearPreparedAttachments(prepared.currentAttachments);
       setPrompt("");
     } catch (error) {
       if (!(error instanceof Error)) setGlobalError("Failed to send message.");
     } finally { setIsUploading(false); }
-  }, [attachmentsRef, attachmentsUploading, cleanupAllAttachments, clearAllAttachments, disabled, handleSend, handleSlashCommand, handleStop, isRunning, onSendMessage, overrideSessionId, prompt, setGlobalError, setPrompt]);
+  }, [attachmentsUploading, buildCurrentSendOptions, clearPreparedAttachments, disabled, handleSend, handleSlashCommand, handleStop, isRunning, onSendMessage, overrideSessionId, setGlobalError, setPrompt]);
+
+  const handleQueueClick = useCallback(async () => {
+    const prepared = buildCurrentSendOptions();
+    if (!prepared) return;
+    await handleQueueAfterResponse({ text: prepared.text, content: prepared.content, attachments: prepared.attachments });
+    clearPreparedAttachments(prepared.currentAttachments);
+  }, [buildCurrentSendOptions, clearPreparedAttachments, handleQueueAfterResponse]);
+
+  const handleStopAndResendClick = useCallback(async () => {
+    const prepared = buildCurrentSendOptions();
+    if (!prepared) return;
+    await handleStopAndResend({ text: prepared.text, content: prepared.content, attachments: prepared.attachments });
+    clearPreparedAttachments(prepared.currentAttachments);
+  }, [buildCurrentSendOptions, clearPreparedAttachments, handleStopAndResend]);
 
   // Apply slash suggestion
   const applySlashSuggestion = useCallback((suggestion: { command: string; insertText?: string }) => {
@@ -185,16 +219,17 @@ export const PromptInput = memo(function PromptInput({
     if ((event.metaKey || event.ctrlKey) && !isRunning) { event.preventDefault(); void handleSubmit(); return; }
     if (slashSuggestions.length > 0) { event.preventDefault(); applySlashSuggestion(slashSuggestions[selectedSlashIndex] ?? slashSuggestions[0]); return; }
     event.preventDefault();
+    if (isRunning && canSend) { void handleQueueClick(); return; }
     if (isRunning) { handleStop(); return; }
     void handleSubmit();
-  }, [applySlashSuggestion, disabled, handleStop, handleSubmit, isRunning, selectedSlashIndex, slashSuggestions]);
+  }, [applySlashSuggestion, canSend, disabled, handleQueueClick, handleStop, handleSubmit, isRunning, selectedSlashIndex, slashSuggestions]);
 
   return (
     <section
-      className="sticky bottom-0 left-0 right-0 z-40 bg-gradient-to-t from-[var(--color-surface)] via-[var(--color-surface)] to-transparent px-2 pb-[5px] pt-[5px] lg:px-3"
+      className="sticky bottom-0 left-0 right-0 z-40 bg-gradient-to-t from-[var(--color-surface)] via-[var(--color-surface)]/95 to-transparent px-3 pb-3 pt-2 lg:px-4"
       onDragEnter={handleDragEnter} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}
     >
-      <div className={`${fullWidth ? "w-full" : "mx-auto w-full max-w-5xl"} rounded-[22px] border border-[var(--color-border)] bg-[var(--color-surface)]/98 px-3 py-[5px] shadow-[0_12px_28px_rgba(15,23,42,0.07)] backdrop-blur-sm transition ${dragActive ? "border-[var(--color-accent)] bg-[var(--color-accent-light)]/60" : ""}`}>
+      <div className={`${fullWidth ? "w-full" : "mx-auto w-full max-w-5xl"} rounded-[24px] border border-[var(--color-border)] bg-white/95 px-3 py-2 shadow-[0_16px_44px_rgba(15,23,42,0.10)] backdrop-blur-sm transition ${dragActive ? "border-[var(--color-accent)] bg-[var(--color-accent-light)]/60 ring-4 ring-[var(--color-accent)]/10" : ""}`}>
         <AttachmentPreview attachments={attachments} onRemove={removeAttachment} />
         <ModelSelector models={models} selectedModel={selectedModel} hasSelectedModelOption={hasSelectedModelOption} modelsLoading={modelsLoading} showReasoningInChat={showReasoningInChat}
           onSelectModel={(model) => { setModelTouched(true); setSelectedModel(model); }}
@@ -205,6 +240,8 @@ export const PromptInput = memo(function PromptInput({
           placeholder={disabled ? "Waiting for approval…" : "Ask Vera anything…"} promptRef={promptRef}
           onPromptChange={setPrompt} onKeyDown={handleKeyDown} onPaste={handlePaste}
           onAttach={triggerFilePicker} onSend={handleSubmit} onStop={handleStop}
+          onQueueAfterResponse={handleQueueClick} onStopAndResend={handleStopAndResendClick}
+          canAppendWhileRunning={canSend}
           onMicToggle={toggleMic} isMicListening={isMicListening}
           interimTranscript={interimTranscript} isMicSupported={isMicSupported} />
       </div>

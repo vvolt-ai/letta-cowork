@@ -172,7 +172,7 @@ export function ConversationList({
 
   if (sessions.length === 0) {
     return (
-      <div className="px-3 py-2 text-xs text-muted">{emptyMessage}</div>
+      <div className="mx-3 rounded-2xl border border-dashed border-[var(--color-border)] bg-white/45 px-4 py-5 text-center text-xs leading-5 text-muted">{emptyMessage}</div>
     );
   }
 
@@ -180,7 +180,7 @@ export function ConversationList({
   const hasMore = sessions.length > maxVisible;
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col gap-0.5 px-2 pb-2">
       {visible.map((session) => {
         const isActive = activeSessionId === session.id;
         const isEditing = editingId === session.id;
@@ -192,10 +192,10 @@ export function ConversationList({
         return (
           <div
             key={session.id}
-            className={`group relative flex items-center gap-2 px-4 py-[7px] cursor-pointer transition-colors ${
+            className={`group relative flex cursor-pointer items-center gap-2 rounded-2xl px-3 py-2 transition ${
               isActive
-                ? "bg-[var(--color-sidebar-active)] text-ink-900"
-                : "text-ink-600 hover:bg-[var(--color-sidebar-hover)] hover:text-ink-800"
+                ? "bg-white text-ink-900 shadow-sm ring-1 ring-[var(--color-accent)]/10"
+                : "text-ink-600 hover:bg-white/70 hover:text-ink-800 hover:shadow-sm"
             }`}
             role="button"
             tabIndex={0}
@@ -223,14 +223,14 @@ export function ConversationList({
               ) : (
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5 min-w-0">
-                    <span className={`block truncate text-[13.5px] ${isActive ? "font-medium text-ink-900" : "text-ink-700"}`}>
+                    <span className={`block truncate text-[13.5px] ${isActive ? "font-semibold text-ink-900" : "font-medium text-ink-700"}`}>
                       {displayTitle}
                     </span>
                     <StatusIndicator status={ephStatus} />
                   </div>
                   {/* Status label row — only show for non-idle states */}
                   {ephStatus && ephStatus !== "idle" && (
-                    <span className={`mt-0.5 block text-[10.5px] ${
+                    <span className={`mt-1 block text-[10.5px] font-medium ${
                       ephStatus === "error"            ? "text-red-500" :
                       ephStatus === "waiting_approval" ? "text-amber-500" :
                       ephStatus === "completed"        ? "text-green-600" :
@@ -244,7 +244,7 @@ export function ConversationList({
                        ephStatus === "error"             ? "Error" : null}
                     </span>
                   )}
-                  {subtitle && !ephStatus || (ephStatus === "idle" && subtitle) ? (
+                  {subtitle && (!ephStatus || ephStatus === "idle") ? (
                     <span className="mt-0.5 block truncate text-[11px] text-muted">{subtitle}</span>
                   ) : null}
                 </div>
@@ -252,17 +252,17 @@ export function ConversationList({
             </div>
 
             {/* Relative time — hidden on hover, replaced by menu */}
-            <span className={`shrink-0 text-[11.5px] text-muted transition-opacity ${!isEditing ? "group-hover:opacity-0" : ""}`}>
+            <span className={`shrink-0 text-[11px] text-muted transition-opacity ${!isEditing ? "group-hover:opacity-0" : ""}`}>
               {relTime}
             </span>
 
             {/* Context menu — appears on hover */}
             {!isEditing && (
-              <div className="absolute right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="absolute right-2 opacity-0 transition-opacity group-hover:opacity-100">
                 <DropdownMenu.Root>
                   <DropdownMenu.Trigger asChild>
                     <button
-                      className="flex h-5 w-5 items-center justify-center rounded text-ink-400 hover:text-ink-600"
+                      className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-ink-400 shadow-sm hover:text-ink-700"
                       onClick={(event) => event.stopPropagation()}
                       onPointerDown={(event) => event.stopPropagation()}
                       aria-label="Conversation menu"

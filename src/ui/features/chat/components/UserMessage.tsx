@@ -65,13 +65,13 @@ export const UserMessage = memo(function UserMessage({ message }: { message: Use
   }
 
   return (
-    <article className="ml-auto max-w-3xl" data-message-type="user">
-      <div className="mb-2 flex justify-end text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--color-accent)]">
+    <article className="ml-auto max-w-3xl py-1" data-message-type="user">
+      <div className="mb-1.5 flex justify-end text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--color-accent)]/80">
         You
       </div>
       {message.prompt ? (
-        <div className="rounded-2xl border border-[var(--color-accent)]/30 bg-[var(--color-accent-subtle)] px-5 py-4 text-sm text-ink-900 shadow-sm ring-1 ring-[var(--color-accent)]/10">
-          <p className="whitespace-pre-wrap text-[15px] leading-7">{message.prompt}</p>
+        <div className="rounded-[20px] border border-[var(--color-accent)]/20 bg-[var(--color-accent-subtle)] px-4 py-3 text-sm text-ink-900 shadow-sm ring-1 ring-[var(--color-accent)]/5">
+          <p className="whitespace-pre-wrap text-[14.5px] leading-6">{message.prompt}</p>
         </div>
       ) : null}
       {attachments.length > 0 ? (

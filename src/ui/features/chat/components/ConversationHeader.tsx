@@ -37,17 +37,17 @@ export const ConversationHeader = memo(function ConversationHeader({ title, agen
   };
 
   return (
-    <header className="border-b border-[var(--color-border)] bg-white px-4 pb-2 pt-[calc(env(safe-area-inset-top,0px)+0.7rem)]">
-      <div className="mx-auto flex w-full max-w-5xl items-start justify-between gap-3">
+    <header className="border-b border-[var(--color-border)] bg-white/95 px-4 pb-2.5 pt-[calc(env(safe-area-inset-top,0px)+0.65rem)] backdrop-blur-sm">
+      <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3">
         <div className="flex flex-col gap-1">
-          <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
+          <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
             <span>Workspace</span>
             <span className="h-1 w-1 rounded-full bg-[var(--color-border-hover)]" />
             <span>{agentName}</span>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-[18px] font-semibold tracking-tight text-ink-900">
+            <h2 className="max-w-[44vw] truncate text-[17px] font-semibold tracking-tight text-ink-900">
               {displayTitle}
             </h2>
             {isRawConversationId ? (
@@ -55,7 +55,7 @@ export const ConversationHeader = memo(function ConversationHeader({ title, agen
             ) : (
               <span className="text-[11px] text-muted">Agent: {agentName}</span>
             )}
-            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${statusMeta.color} bg-gray-100`}>
+            <span className={`inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-medium ${statusMeta.color}`}>
               <span className="h-1.5 w-1.5 rounded-full bg-current" />
               {statusMeta.label}
             </span>
@@ -67,13 +67,13 @@ export const ConversationHeader = memo(function ConversationHeader({ title, agen
           {onViewRuns && sessionId && (
             <button
               onClick={onViewRuns}
-              className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 flex items-center gap-1 transition-colors"
+              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 text-xs font-medium text-blue-700 transition hover:bg-blue-100"
               title="View runs for this conversation"
             >
               <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
               </svg>
-              View Runs
+              Runs
             </button>
           )}
 
@@ -81,7 +81,7 @@ export const ConversationHeader = memo(function ConversationHeader({ title, agen
           {agentId && sessionId && (
             <button
               onClick={handleOpenInLetta}
-              className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded hover:bg-purple-200 flex items-center gap-1 transition-colors"
+              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-purple-200 bg-purple-50 px-3 text-xs font-medium text-purple-700 transition hover:bg-purple-100"
               title="Open in Letta"
             >
               <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -89,7 +89,7 @@ export const ConversationHeader = memo(function ConversationHeader({ title, agen
                 <polyline points="15 3 21 3 21 9" />
                 <line x1="10" y1="14" x2="21" y2="3" />
               </svg>
-              Open in Letta
+              Letta
             </button>
           )}
 
