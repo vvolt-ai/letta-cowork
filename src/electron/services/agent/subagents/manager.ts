@@ -36,6 +36,31 @@ import {
 import { runWithResourceLocks } from "./parallelism.js";
 
 const MAX_TURNS = 25; // safety cap mirroring our main session pump
+const DEFAULT_MAX_CONCURRENT_SUBAGENTS = 10;
+
+let activeSubagentRuns = 0;
+
+function getMaxConcurrentSubagents(): number {
+    const raw = process.env.COWORK_MAX_CONCURRENT_SUBAGENTS;
+    const parsed = raw ? Number.parseInt(raw, 10) : DEFAULT_MAX_CONCURRENT_SUBAGENTS;
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_CONCURRENT_SUBAGENTS;
+}
+
+function acquireSubagentSlot(description: string): void {
+    const limit = getMaxConcurrentSubagents();
+    if (activeSubagentRuns >= limit) {
+        throw new Error(
+            `Subagent limit reached (${activeSubagentRuns}/${limit}). ` +
+            `Cowork paused creation of '${description}' to prevent unlimited Task fan-out. ` +
+            `Wait for active subtasks to finish or raise COWORK_MAX_CONCURRENT_SUBAGENTS.`
+        );
+    }
+    activeSubagentRuns += 1;
+}
+
+function releaseSubagentSlot(): void {
+    activeSubagentRuns = Math.max(0, activeSubagentRuns - 1);
+}
 
 export interface RunSubagentOptions {
     parentAgentId: string;
@@ -75,6 +100,18 @@ interface PendingApproval {
 }
 
 export async function runSubagent(
+    client: Letta,
+    opts: RunSubagentOptions
+): Promise<RunSubagentResult> {
+    acquireSubagentSlot(opts.description);
+    try {
+        return await runSubagentInner(client, opts);
+    } finally {
+        releaseSubagentSlot();
+    }
+}
+
+async function runSubagentInner(
     client: Letta,
     opts: RunSubagentOptions
 ): Promise<RunSubagentResult> {

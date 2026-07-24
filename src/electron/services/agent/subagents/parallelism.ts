@@ -61,9 +61,10 @@ const PARALLEL_SAFE_TOOLS = new Set<string>([
     "web_search",
     "fetch_webpage",
     "TaskOutput",
-    // Task spawns its own scheduler downstream — safe to run multiple
-    // sibling Task calls concurrently.
-    "Task",
+    // Task is intentionally NOT parallel-safe. It spawns another agent
+    // conversation and can recursively create more Task calls. Treat it
+    // as globally locked so sibling Task fan-out serializes instead of
+    // creating an unbounded subagent storm.
     "Agent",
     // Plan-mode markers have no side effects.
     "EnterPlanMode",
