@@ -7,6 +7,7 @@
  */
 
 import cron from "node-cron";
+import type { ScheduledTask as CronScheduledTask } from "node-cron";
 import type {
   ScheduledTask,
   ScheduleRun,
@@ -32,7 +33,7 @@ type ApiClient = {
 
 interface SchedulerJob {
   taskId: string;
-  task: cron.ScheduledTask;
+  task: CronScheduledTask;
 }
 
 export type SchedulerRunResult = {
