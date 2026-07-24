@@ -11,6 +11,7 @@ import {
   getCachedAgentId,
 } from "./state.js";
 import { createCanUseToolHandler } from "./permission-handler.js";
+import type { SendPermissionRequest } from "./permission-handler.js";
 import { createAbortHandler } from "./abort-handler.js";
 import {
   createOrResumeSession,
@@ -71,7 +72,12 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
 
   // Create message and permission request senders
   const sendMessage = createMessageSender(currentSessionId, onEvent);
-  const sendPermissionRequest = createPermissionRequestSender(currentSessionId, onEvent);
+  const sendPermissionRequest: SendPermissionRequest = (toolUseId, toolName, input) => {
+    onEvent({
+      type: "permission.request",
+      payload: { sessionId: currentSessionId, toolUseId, toolName, input },
+    });
+  };
 
   // Promise to resolve when we have a real conversation ID
   let resolveConversationId!: (id: string) => void;

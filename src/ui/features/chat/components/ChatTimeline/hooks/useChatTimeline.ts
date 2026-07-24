@@ -3,7 +3,7 @@
  */
 
 import { useMemo } from "react";
-import type { IndexedMessage, TimelineEntry, ToolTimelineEntry, ToolGroupTimelineEntry } from "../../../types";
+import type { IndexedMessage, TimelineEntry, ToolTimelineEntry } from "../../../types";
 import type { SDKAssistantMessage, SDKToolResultMessage } from "../../../../../types";
 import type { ReasoningStep, ToolExecution } from "../../../../../store/useAppStore";
 import {
@@ -214,25 +214,21 @@ export function useChatTimeline({
 
     const flat = entries.filter((entry): entry is TimelineEntry => entry !== null);
 
-    // Post-process: collapse runs of 2+ consecutive same-name tool
-    // entries into a single tool_group. Threshold is intentionally low
-    // (N>=2) per the cowork UX call: even a pair of repeated bash/git
-    // calls becomes visually noisy. Mixed-name runs are NOT collapsed
-    // — the tool name carries meaning ("Bash ×12" tells you what you're
-    // about to expand into; "12 tools" doesn't).
-    return collapseConsecutiveSameName(flat);
+    // Post-process: collapse runs of adjacent tool entries into a single
+    // tool_activity row. Tool details are useful when debugging, but inline
+    // JSON/tool churn makes normal answer review painful.
+    return collapseConsecutiveToolRuns(flat);
   }, [messages, activeSessionId, partialReasoning, reasoningSteps, showReasoning, toolExecutions, cliResults]);
 }
 
 /**
  * Walks the flat timeline and folds runs of >=2 adjacent `tool` entries
- * sharing the same `name` into a `tool_group` entry containing them as
- * children. Any non-tool entry (assistant, reasoning, user, cli_result)
- * — or a tool with a different name — breaks the run.
+ * into a `tool_group` entry. Any non-tool entry (assistant, reasoning,
+ * user, cli_result) breaks the run.
  *
  * Pure function, exported for unit testing.
  */
-function collapseConsecutiveSameName(entries: TimelineEntry[]): TimelineEntry[] {
+function collapseConsecutiveToolRuns(entries: TimelineEntry[]): TimelineEntry[] {
   const GROUP_THRESHOLD = 2;
   const out: TimelineEntry[] = [];
   let i = 0;
@@ -243,28 +239,25 @@ function collapseConsecutiveSameName(entries: TimelineEntry[]): TimelineEntry[] 
       i += 1;
       continue;
     }
-    // Scan forward for adjacent tool entries with the same name.
+
     const run: ToolTimelineEntry[] = [current];
     let j = i + 1;
     while (j < entries.length) {
       const next = entries[j];
-      if (next.kind !== "tool" || next.name !== current.name) break;
+      if (next.kind !== "tool") break;
       run.push(next);
       j += 1;
     }
+
     if (run.length >= GROUP_THRESHOLD) {
-      const group: ToolGroupTimelineEntry = {
+      const uniqueNames = Array.from(new Set(run.map((entry) => entry.name)));
+      out.push({
         kind: "tool_group",
-        // Stable id derived from the first child so React reconciles
-        // sensibly when more tool calls stream into an existing group
-        // (e.g. the burst is still arriving).
         id: `tool-group:${run[0].id}`,
-        name: current.name,
+        name: uniqueNames.length === 1 ? uniqueNames[0] : "Tool activity",
         children: run,
-      };
-      out.push(group);
+      });
     } else {
-      // Singleton — emit as-is.
       out.push(current);
     }
     i = j;

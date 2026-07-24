@@ -71,79 +71,97 @@ export function DecisionPanel({
   });
 
   if (request.toolName === "AskUserQuestion" && questions.length > 0) {
+    const hasMultipleQuestions = questions.length > 1;
+    const requiresSubmitButton = hasMultipleQuestions || questions.some((q) => q.multiSelect || !q.options?.length);
+
     return (
-      <div className="rounded-2xl border border-accent/20 bg-accent-subtle p-5">
-        <div className="text-xs font-semibold text-accent">Question from Vera</div>
-        {questions.map((q, qIndex) => (
-          <div key={qIndex} className="mt-4">
-            <p className="text-sm text-ink-700">{q.question}</p>
-            {q.header && (
-              <span className="mt-2 inline-flex items-center rounded-full bg-surface px-2 py-0.5 text-xs text-muted">
-                {q.header}
-              </span>
-            )}
-            <div className="mt-3 grid gap-2">
-              {(q.options ?? []).map((option, optIndex) => {
-                const shouldAutoSubmit = questions.length === 1 && !q.multiSelect;
-                return (
-                  <button
-                    key={optIndex}
-                    className={`rounded-xl border px-4 py-3 text-left text-sm text-ink-700 transition-colors ${
-                      (selectedOptions[qIndex] ?? []).includes(option.label)
-                        ? "border-info/50 bg-info/5"
-                        : "border-ink-900/10 bg-surface hover:border-info/40 hover:bg-surface-tertiary"
-                    }`}
-                    onClick={() => {
-                      if (shouldAutoSubmit) {
-                        // Single question, single select - submit immediately with this answer
-                        const updatedInput = {
-                          ...input,
-                          answers: { [q.question]: option.label },
-                        };
-                        onSubmit({ behavior: "allow", updatedInput });
-                        return;
-                      }
-                      toggleOption(qIndex, option.label, q.multiSelect);
-                    }}
-                  >
-                    <div className="font-medium">{option.label}</div>
-                    {option.description && <div className="mt-1 text-xs text-muted">{option.description}</div>}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="mt-3">
-              <label className="block text-xs font-medium text-muted">Other</label>
-              <input
-                type="text"
-                className="mt-1 w-full rounded-xl border border-ink-900/10 bg-surface px-3 py-2 text-sm text-ink-700 focus:border-info/50 focus:outline-none"
-                placeholder="Type your answer..."
-                value={otherInputs[qIndex] ?? ""}
-                onChange={(e) => setOtherInputs((prev) => ({ ...prev, [qIndex]: e.target.value }))}
-              />
-            </div>
-            {q.multiSelect && <div className="mt-2 text-xs text-muted">Multiple selections allowed.</div>}
+      <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 shadow-sm">
+        <div className="space-y-2">
+          {questions.map((q, qIndex) => {
+            const options = q.options ?? [];
+            const selected = selectedOptions[qIndex] ?? [];
+            return (
+              <div key={qIndex} className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-100 text-[10px] font-bold text-amber-700">?</span>
+                <span className="font-medium text-ink-800">{q.question}</span>
+                {q.header ? <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-500">{q.header}</span> : null}
+
+                {options.length > 0 ? (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {options.map((option, optIndex) => {
+                      const isSelected = selected.includes(option.label);
+                      const shouldAutoSubmit = questions.length === 1 && !q.multiSelect;
+                      return (
+                        <button
+                          key={optIndex}
+                          type="button"
+                          title={option.description}
+                          className={`rounded-full border px-2.5 py-1 text-xs font-medium transition ${
+                            isSelected
+                              ? "border-accent bg-accent text-white"
+                              : "border-gray-200 bg-gray-50 text-ink-700 hover:border-accent/40 hover:bg-white"
+                          }`}
+                          onClick={() => {
+                            if (shouldAutoSubmit) {
+                              onSubmit({
+                                behavior: "allow",
+                                updatedInput: {
+                                  ...input,
+                                  answers: { [q.question]: option.label },
+                                },
+                              });
+                              return;
+                            }
+                            toggleOption(qIndex, option.label, q.multiSelect);
+                          }}
+                        >
+                          {isSelected ? "✓ " : ""}{option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    className="min-w-[220px] flex-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-sm text-ink-800 focus:border-accent focus:outline-none"
+                    placeholder="Type answer…"
+                    value={otherInputs[qIndex] ?? ""}
+                    onChange={(e) => setOtherInputs((prev) => ({ ...prev, [qIndex]: e.target.value }))}
+                  />
+                )}
+
+                {q.multiSelect ? <span className="text-xs text-gray-500">multi-select</span> : null}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="mt-2 flex items-center justify-between gap-2 border-t border-gray-100 pt-2">
+          <span className="text-xs text-gray-500">Input needed to continue</span>
+          <div className="flex items-center gap-2">
+            {requiresSubmitButton ? (
+              <button
+                type="button"
+                className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                  canSubmit ? "bg-accent text-white hover:bg-accent-hover" : "cursor-not-allowed bg-gray-100 text-gray-400"
+                }`}
+                onClick={() => {
+                  if (!canSubmit) return;
+                  onSubmit({ behavior: "allow", updatedInput: buildUpdatedInput() });
+                }}
+                disabled={!canSubmit}
+              >
+                Submit
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="rounded-full px-2 py-1 text-xs font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+              onClick={() => onSubmit({ behavior: "deny", message: "User canceled the question" })}
+            >
+              Cancel
+            </button>
           </div>
-        ))}
-        <div className="mt-5 flex flex-wrap gap-3">
-          <button
-            className={`rounded-full px-5 py-2 text-sm font-medium text-white shadow-soft transition-colors ${
-              canSubmit ? "bg-accent hover:bg-accent-hover" : "bg-ink-400/40 cursor-not-allowed"
-            }`}
-            onClick={() => {
-              if (!canSubmit) return;
-              onSubmit({ behavior: "allow", updatedInput: buildUpdatedInput() });
-            }}
-            disabled={!canSubmit}
-          >
-            Submit answers
-          </button>
-          <button
-            className="rounded-full border border-ink-900/10 bg-surface px-5 py-2 text-sm font-medium text-ink-700 hover:bg-surface-tertiary transition-colors"
-            onClick={() => onSubmit({ behavior: "deny", message: "User canceled the question" })}
-          >
-            Cancel
-          </button>
         </div>
       </div>
     );

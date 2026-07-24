@@ -237,18 +237,6 @@ export const ChatWorkspace = memo(function ChatWorkspace({
             </div>
           ) : null}
 
-          {questionRequests.length > 0 && onPermissionResult ? (
-            <div className="mb-4 space-y-3">
-              {questionRequests.map((request) => (
-                <DecisionPanel
-                  key={request.toolUseId}
-                  request={request}
-                  onSubmit={(result) => onPermissionResult(request.toolUseId, result)}
-                />
-              ))}
-            </div>
-          ) : null}
-
           {isHistoryLoading && visibleMessages.length === 0 ? (
             <div className="flex min-h-[220px] items-center justify-center">
               <div className="flex flex-col items-center gap-3 text-center">
@@ -281,6 +269,20 @@ export const ChatWorkspace = memo(function ChatWorkspace({
           <div ref={messagesEndRef} />
         </div>
       </div>
+
+      {questionRequests.length > 0 && onPermissionResult ? (
+        <div className="border-t border-gray-200 bg-white px-4 py-2">
+          <div className="mx-auto w-full max-w-5xl space-y-2">
+            {questionRequests.map((request) => (
+              <DecisionPanel
+                key={request.toolUseId}
+                request={request}
+                onSubmit={(result) => onPermissionResult(request.toolUseId, result)}
+              />
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div className="border-t border-[var(--color-border)] bg-white px-2 py-2">
         <PromptInput

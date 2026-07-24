@@ -70,6 +70,19 @@ function summarizeToolInput(name: string, input?: string | null): string | null 
 
   if (name === "LiveApplyPatch") return "Applied live patch";
   if (name === "LiveRejectPatch") return "Rejected live patch";
+  if (name === "AskUserQuestion") {
+    try {
+      const parsed = JSON.parse(trimmed);
+      const firstQuestion = Array.isArray(parsed?.questions) ? parsed.questions[0]?.question : null;
+      const answers = parsed?.answers && typeof parsed.answers === "object" ? parsed.answers : null;
+      const firstAnswer = answers && firstQuestion ? answers[firstQuestion] : null;
+      return firstQuestion
+        ? `${firstQuestion}${firstAnswer ? ` · ${firstAnswer}` : ""}`
+        : "Asked question";
+    } catch {
+      return "Asked question";
+    }
+  }
   if (name === "ProjectRunScript") {
     try {
       const parsed = JSON.parse(trimmed);
@@ -372,19 +385,27 @@ function GitInputCard({ data }: { data: JsonRecord }) {
 
 function AskUserQuestionInputCard({ data }: { data: JsonRecord }) {
   const questions = Array.isArray(data.questions) ? data.questions.filter(isRecord) : [];
+  const answers = isRecord(data.answers) ? data.answers : {};
   return (
-    <CompactDetails label="Question details">
-      <div className="space-y-2">
-        {questions.map((question, index) => (
-          <div key={index} className="rounded-lg border border-gray-200 bg-white p-3">
-            <div className="text-[12px] font-medium text-ink-800">{asText(question.question)}</div>
-            {Array.isArray(question.options) ? (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {question.options.filter(isRecord).map((option, optionIndex) => <Pill key={optionIndex}>{asText(option.label)}</Pill>)}
-              </div>
-            ) : null}
-          </div>
-        ))}
+    <CompactDetails label="Question">
+      <div className="space-y-1.5">
+        {questions.map((question, index) => {
+          const questionText = asText(question.question);
+          const answer = asText(answers[questionText]);
+          return (
+            <div key={index} className="flex flex-wrap items-center gap-1.5 text-[12px] leading-5">
+              <span className="font-medium text-ink-800">{questionText}</span>
+              {Array.isArray(question.options)
+                ? question.options.filter(isRecord).map((option, optionIndex) => {
+                    const label = asText(option.label);
+                    const selected = answer.split(",").map((part) => part.trim()).includes(label);
+                    return <Pill key={optionIndex}>{selected ? "✓ " : ""}{label}</Pill>;
+                  })
+                : null}
+              {answer ? <span className="text-[11px] font-medium text-emerald-700">answered: {answer}</span> : null}
+            </div>
+          );
+        })}
       </div>
     </CompactDetails>
   );
@@ -663,6 +684,7 @@ function toolStatusGlyph(isRunning: boolean, isError: boolean) {
 }
 
 function ToolOutputView({ name, output, tone }: { name: string; output: string; tone: Tone }) {
+  if (name === "AskUserQuestion") return null;
   const parsed = parseJsonRecord(output);
   if (!parsed) {
     if (name === "Read" || name === "ReadLSP") return <ReadOutputCard output={output} tone={tone} />;
@@ -703,6 +725,7 @@ export const ToolExecutionBlock = memo(function ToolExecutionBlock({ name, statu
   }, [isRunning, logs, output]);
 
   const label = toolDisplayLabel(name, summary);
+  const collapsedSummary = summary && !/^[{\[]/.test(summary.trim()) ? summary : null;
   const rowToneClass = isError
     ? "text-red-600 hover:bg-red-50"
     : isRunning
@@ -720,8 +743,8 @@ export const ToolExecutionBlock = memo(function ToolExecutionBlock({ name, statu
           {toolStatusGlyph(isRunning, isError)}
         </span>
         <span className="truncate font-medium">{label}</span>
-        {summary && !expanded && name.toLowerCase() !== "tool" ? (
-          <span className="hidden truncate text-ink-300 sm:inline">· {summary}</span>
+        {collapsedSummary && !expanded && name.toLowerCase() !== "tool" ? (
+          <span className="hidden truncate text-ink-300 sm:inline">· {collapsedSummary}</span>
         ) : null}
         <svg viewBox="0 0 24 24" className={`h-3 w-3 shrink-0 text-ink-300 opacity-0 transition group-hover:opacity-100 ${expanded ? "rotate-90 opacity-100" : ""}`} fill="none" stroke="currentColor" strokeWidth="2">
           <path d="m9 6 6 6-6 6" />

@@ -518,17 +518,16 @@ export class WsSession {
                                             status: "error" as const,
                                         };
                                     }
-                                    // Plan-mode permission gate — block
-                                    // write/destructive tools while in
-                                    // plan mode before they execute.
-                                    const planCheck = this.planMode.checkPermission(
-                                        req.toolName,
-                                        args as Record<string, unknown>
-                                    );
-                                    if (planCheck.decision === "deny") {
-                                        const denyMsg =
-                                            planCheck.reason ??
-                                            `Permission mode: ${this.planMode.getMode()}`;
+
+                                    const permissionDecision =
+                                        req.toolName === "AskUserQuestion" && this.opts.canUseTool
+                                            ? await this.opts.canUseTool(req.toolName, args)
+                                            : null;
+                                    if (isDeniedPermissionDecision(permissionDecision)) {
+                                        const denyMsg = getPermissionDenialMessage(
+                                            permissionDecision,
+                                            "User canceled the question"
+                                        );
                                         this.enqueue({
                                             type: "tool_call",
                                             toolCallId: req.toolCallId,
@@ -550,9 +549,50 @@ export class WsSession {
                                             status: "error" as const,
                                         };
                                     }
+                                    const argsToRun = getPermissionUpdatedInput(
+                                        permissionDecision,
+                                        args
+                                    );
+                                    const rawArgumentsForUi =
+                                        argsToRun === args
+                                            ? req.argumentsRaw
+                                            : JSON.stringify(argsToRun);
+
+                                    // Plan-mode permission gate — block
+                                    // write/destructive tools while in
+                                    // plan mode before they execute.
+                                    const planCheck = this.planMode.checkPermission(
+                                        req.toolName,
+                                        argsToRun as Record<string, unknown>
+                                    );
+                                    if (planCheck.decision === "deny") {
+                                        const denyMsg =
+                                            planCheck.reason ??
+                                            `Permission mode: ${this.planMode.getMode()}`;
+                                        this.enqueue({
+                                            type: "tool_call",
+                                            toolCallId: req.toolCallId,
+                                            toolName: req.toolName,
+                                            toolInput: argsToRun,
+                                            rawArguments: rawArgumentsForUi,
+                                            uuid: `toolcall-${req.toolCallId}`,
+                                        } as unknown as SDKToolCallMessage);
+                                        this.enqueue({
+                                            type: "tool_result",
+                                            toolCallId: req.toolCallId,
+                                            content: denyMsg,
+                                            isError: true,
+                                            uuid: `tool-result-${req.toolCallId}`,
+                                        } as unknown as SDKToolResultMessage);
+                                        return {
+                                            tool_call_id: req.toolCallId,
+                                            tool_return: denyMsg,
+                                            status: "error" as const,
+                                        };
+                                    }
                                     const r = await runClientTool(
                                         req.toolName,
-                                        args,
+                                        argsToRun,
                                         {
                                             signal: ctrl.signal,
                                             agentId: this._agentId ?? undefined,
@@ -567,8 +607,8 @@ export class WsSession {
                                         type: "tool_call",
                                         toolCallId: req.toolCallId,
                                         toolName: req.toolName,
-                                        toolInput: args,
-                                        rawArguments: req.argumentsRaw,
+                                        toolInput: argsToRun,
+                                        rawArguments: rawArgumentsForUi,
                                         uuid: `toolcall-${req.toolCallId}`,
                                     } as unknown as SDKToolCallMessage);
                                     this.enqueue({
@@ -1424,6 +1464,44 @@ function parseToolArgs(raw: string): Record<string, unknown> {
         // empty so the runner can fail gracefully with a useful error.
     }
     return {};
+}
+
+type PermissionDecisionWithUpdatedInput = CanUseToolResponse & {
+    updatedInput?: Record<string, unknown>;
+    updated_input?: Record<string, unknown>;
+    message?: string;
+};
+
+function isDeniedPermissionDecision(
+    decision: CanUseToolResponse | null
+): boolean {
+    return (
+        !!decision &&
+        typeof decision === "object" &&
+        (decision as { behavior?: unknown }).behavior === "deny"
+    );
+}
+
+function getPermissionDenialMessage(
+    decision: CanUseToolResponse | null,
+    fallback: string
+): string {
+    if (!decision || typeof decision !== "object") return fallback;
+    const message = (decision as PermissionDecisionWithUpdatedInput).message;
+    return typeof message === "string" && message.trim() ? message : fallback;
+}
+
+function getPermissionUpdatedInput(
+    decision: CanUseToolResponse | null,
+    fallback: Record<string, unknown>
+): Record<string, unknown> {
+    if (!decision || typeof decision !== "object") return fallback;
+    const typed = decision as PermissionDecisionWithUpdatedInput;
+    const updated = typed.updatedInput ?? typed.updated_input;
+    if (updated && typeof updated === "object" && !Array.isArray(updated)) {
+        return updated;
+    }
+    return fallback;
 }
 
 function extractText(value: unknown): string {

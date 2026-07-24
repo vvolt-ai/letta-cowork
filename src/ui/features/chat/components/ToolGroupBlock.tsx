@@ -58,9 +58,14 @@ export const ToolGroupBlock = memo(function ToolGroupBlock({ group }: ToolGroupB
     if (succeededCount > 0 && (runningCount > 0 || failedCount > 0)) {
       parts.push(`${succeededCount} done`);
     }
-    if (parts.length === 0) return "all succeeded";
+    if (parts.length === 0) parts.push("all succeeded");
+
+    const names = Array.from(new Set(children.map((child) => child.name))).slice(0, 4);
+    if (names.length > 0) {
+      parts.push(names.join(", ") + (new Set(children.map((child) => child.name)).size > names.length ? ", …" : ""));
+    }
     return parts.join(" · ");
-  }, [runningCount, failedCount, succeededCount]);
+  }, [children, runningCount, failedCount, succeededCount]);
 
   const statusToneClass =
     aggregateStatus === "failed"
