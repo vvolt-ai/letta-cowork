@@ -16,6 +16,7 @@ import { productivityTools } from "./runners/productivity.js";
 import { codingTools } from "./runners/coding.js";
 import { odooMcpTools } from "./runners/odooMcp.js";
 import { veraMcpTools } from "./runners/veraMcp.js";
+import { browserTools } from "./runners/browser.js";
 import { emitExtensionToolStart } from "../extensions/extension-events.js";
 import type {
     ClientToolDefinition,
@@ -43,6 +44,7 @@ function register(def: ClientToolDefinition): void {
 //   • Skill, list_skills — kept from our earlier impl
 //   • ProjectContext, Git, LogTail, WebFetch, MemoryNotes, UserPreferences, Reminders — Cowork productivity tools
 //   • ProjectDetect, ProjectMap, ProjectRunScript, ProjectMemory*, LivePatch*, GitChangedByAgent, GitDiffSummary, LogSearch — Cowork coding workflow tools
+//   • BrowserNavigate, BrowserSnapshot, BrowserClick, BrowserType, BrowserWaitFor, BrowserTakeScreenshot, BrowserConsoleMessages, BrowserNetworkRequests, BrowserClose — built-in Playwright browser automation
 //
 // Deferred (need agent runtime / memory subsystem / UI hooks):
 //   BashOutput, KillBash, EnterPlanMode, ExitPlanMode,
@@ -56,6 +58,7 @@ for (const tool of productivityTools) register(tool);
 for (const tool of codingTools) register(tool);
 for (const tool of odooMcpTools) register(tool);
 for (const tool of veraMcpTools) register(tool);
+for (const tool of browserTools) register(tool);
 
 export function registerClientTool(def: ClientToolDefinition): () => void {
     if (registry.has(def.name)) {
