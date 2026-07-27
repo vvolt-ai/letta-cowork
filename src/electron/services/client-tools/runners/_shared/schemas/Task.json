@@ -13,10 +13,6 @@
       "type": "string",
       "description": "The type of specialized agent to use for this task"
     },
-    "model": {
-      "type": "string",
-      "description": "Optional model to use for this agent. If not specified, inherits from parent. Prefer lighter models for quick, straightforward tasks to minimize cost and latency."
-    },
     "run_in_background": {
       "type": "boolean",
       "description": "Set to true to run this agent in the background. The tool result will include an output_file path - use Read tool or Bash tail to check on output."
