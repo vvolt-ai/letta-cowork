@@ -75,21 +75,23 @@ export function useSessionController({ connected, sendEvent }: UseSessionControl
   }, [activeSession, activeSessionId, resolvePermissionRequest, sendEvent, setGlobalError]);
 
   // Check if Letta environment is configured
-  const isLettaEnvConfigured = useCallback(async () => {
+  const isLettaEnvConfigured = useCallback(async (agentIdOverride?: string) => {
     try {
       const env = await window.electron.getLettaEnv();
       const baseUrl = env.LETTA_BASE_URL.trim();
       const apiKey = env.LETTA_API_KEY.trim();
-      const agentId = env.LETTA_AGENT_ID.trim();
+      const agentId = agentIdOverride?.trim() || env.LETTA_AGENT_ID.trim();
       return baseUrl.length > 0 && apiKey.length > 0 && agentId.length > 0;
     } catch {
       return false;
     }
   }, []);
 
-  // Handle starting session - checks config first
-  const handleStartSessionClick = useCallback(async (setLettaEnvOpen?: (open: boolean) => void) => {
-    const configured = await isLettaEnvConfigured();
+  // Handle opening a fresh conversation context - checks config first.
+  // The first message sent from the main composer will create the session.
+  const handleStartSessionClick = useCallback(async (setLettaEnvOpen?: (open: boolean) => void, agentId?: string) => {
+    const trimmedAgentId = agentId?.trim();
+    const configured = await isLettaEnvConfigured(trimmedAgentId);
     if (!configured) {
       setShowStartModal(false);
       if (setLettaEnvOpen) {
@@ -97,8 +99,24 @@ export function useSessionController({ connected, sendEvent }: UseSessionControl
       }
       return;
     }
-    handleNewSession();
-  }, [handleNewSession, isLettaEnvConfigured, setShowStartModal]);
+
+    if (trimmedAgentId) {
+      try {
+        const currentEnv = await window.electron.getLettaEnv();
+        if (currentEnv.LETTA_AGENT_ID !== trimmedAgentId) {
+          await window.electron.updateLettaEnv({
+            ...currentEnv,
+            LETTA_AGENT_ID: trimmedAgentId,
+          });
+        }
+      } catch (err) {
+        console.error("Failed to update agent in env:", err);
+      }
+    }
+
+    setActiveSessionId(null, false);
+    setShowStartModal(false);
+  }, [isLettaEnvConfigured, setActiveSessionId, setShowStartModal]);
 
   // Handle starting a new session with a specific agent, or continuing an existing conversation.
   const handleStartWithAgent = useCallback(async (agentId: string, model?: string, conversationId?: string) => {

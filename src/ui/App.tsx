@@ -402,9 +402,14 @@ function App() {
       .catch(console.warn);
   }, [showSchedules]);
 
-  // Wrapped handleStartSessionClick for Sidebar - calls with setLettaEnvOpen callback
-  const handleStartSessionClickWithEnv = useCallback(() => {
-    handleStartSessionClick(setLettaEnvOpen);
+  // Wrapped handleStartSessionClick for Sidebar - opens a fresh composer directly.
+  const handleStartSessionClickWithEnv = useCallback((agentId?: string) => {
+    setShowConfiguration(false);
+    setShowSkills(false);
+    setShowSchedules(false);
+    setShowRuns(false);
+    setShowSuperAdmin(false);
+    void handleStartSessionClick(setLettaEnvOpen, agentId);
   }, [handleStartSessionClick, setLettaEnvOpen]);
 
   // Wrapped handleStartWithAgent for StartSessionModal - just updates env and lets the modal close

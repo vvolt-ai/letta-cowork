@@ -41,7 +41,7 @@ const selectSidebarSessionTokens = (state: ReturnType<typeof useAppStore.getStat
 };
 
 interface SessionsTabProps {
-  onNewSession: () => void;
+  onNewSession: (agentId?: string) => void;
   onDeleteSession: (sessionId: string) => void;
   onResumeSession: (sessionId: string) => void;
   onOpenEmailView: () => void;
@@ -265,7 +265,7 @@ export const SessionsTab = memo(function SessionsTab({
       {/* New conversation link */}
       <div className="px-3 pb-3">
         <button
-          onClick={onNewSession}
+          onClick={() => onNewSession()}
           className="flex w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-[var(--color-border)] bg-white/45 px-3 py-2 text-[13px] font-medium text-muted transition hover:border-[var(--color-accent)] hover:bg-white hover:text-ink-800 hover:shadow-sm"
         >
           <span className="text-base leading-none">+</span>

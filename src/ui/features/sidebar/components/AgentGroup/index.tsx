@@ -17,7 +17,7 @@ interface AgentGroupProps {
   onDeleteSession: (sessionId: string) => void;
   onResumeSession?: (sessionId: string) => void;
   onRenameSession: (sessionId: string, title: string) => void;
-  onNewSession?: () => void;
+  onNewSession?: (agentId?: string) => void;
 }
 
 // Generate a consistent color for each agent based on name
@@ -32,7 +32,7 @@ function agentColor(name: string): string {
 }
 
 export function AgentGroup({
-  agentId: _agentId,
+  agentId,
   agentName,
   agentDescription,
   sessions,
@@ -88,7 +88,7 @@ export function AgentGroup({
         {/* New conversation pencil icon */}
         {onNewSession && (
           <button
-            onClick={(e) => { e.stopPropagation(); onNewSession(); }}
+            onClick={(e) => { e.stopPropagation(); onNewSession(agentId); }}
             className="shrink-0 rounded-full p-1 text-muted opacity-0 transition hover:bg-white hover:text-ink-700 hover:shadow-sm group-hover:opacity-100"
             title="New conversation"
             aria-label="New conversation"

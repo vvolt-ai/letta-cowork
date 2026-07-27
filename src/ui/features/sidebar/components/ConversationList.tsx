@@ -170,6 +170,17 @@ export function ConversationList({
     finishEditing();
   };
 
+  const confirmDeleteSession = (session: ConversationListSession) => {
+    const title = getSessionTitle?.(session) || session.title || "Untitled session";
+    const confirmed = window.confirm(
+      `Delete conversation "${title}"?\n\nThis will remove the conversation from Cowork.`
+    );
+
+    if (confirmed) {
+      onDeleteSession(session.id);
+    }
+  };
+
   if (sessions.length === 0) {
     return (
       <div className="mx-3 rounded-2xl border border-dashed border-[var(--color-border)] bg-white/45 px-4 py-5 text-center text-xs leading-5 text-muted">{emptyMessage}</div>
@@ -300,7 +311,10 @@ export function ConversationList({
                       )}
                       <DropdownMenu.Item
                         className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-error outline-none hover:bg-error/10"
-                        onSelect={() => onDeleteSession(session.id)}
+                        onSelect={(event) => {
+                          event.preventDefault();
+                          confirmDeleteSession(session);
+                        }}
                       >
                         Delete conversation
                       </DropdownMenu.Item>

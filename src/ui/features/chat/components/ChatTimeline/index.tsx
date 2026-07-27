@@ -3,13 +3,72 @@
  * Displays a timeline of conversation messages, tool executions, and reasoning
  */
 
+import { useCallback, useEffect, useState } from "react";
 import type { ChatTimelineProps } from "../../types";
 import { useChatTimeline } from "./hooks/useChatTimeline";
 import { TimelineMessage } from "./TimelineMessage";
 import { TimelineLoading } from "./TimelineLoading";
 import { AssistantMessage } from "../AssistantMessage";
+import { AgentDropdown } from "../AgentDropdown";
+import { useAppStore } from "../../../../store/useAppStore";
 
 export type { ChatTimelineProps, TimelineEntry } from "../../types";
+
+function NewConversationAgentSelector() {
+  const [selectedAgentId, setSelectedAgentId] = useState("");
+  const [savingAgentId, setSavingAgentId] = useState(false);
+  const setGlobalError = useAppStore((state) => state.setGlobalError);
+
+  useEffect(() => {
+    let cancelled = false;
+    window.electron.getLettaEnv()
+      .then((env) => {
+        if (cancelled) return;
+        setSelectedAgentId(env.LETTA_AGENT_ID?.trim() ?? "");
+      })
+      .catch((error) => {
+        console.error("Failed to load Letta environment:", error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleAgentChange = useCallback(async (agentId: string) => {
+    const trimmedAgentId = agentId.trim();
+    if (!trimmedAgentId) return;
+
+    setSavingAgentId(true);
+    setSelectedAgentId(trimmedAgentId);
+    try {
+      const currentEnv = await window.electron.getLettaEnv();
+      await window.electron.updateLettaEnv({
+        ...currentEnv,
+        LETTA_AGENT_ID: trimmedAgentId,
+      });
+      setGlobalError(null);
+    } catch (error) {
+      console.error("Failed to select agent for new conversation:", error);
+      setGlobalError("Failed to select agent for the new conversation.");
+    } finally {
+      setSavingAgentId(false);
+    }
+  }, [setGlobalError]);
+
+  return (
+    <div className="mt-6 text-left">
+      <AgentDropdown
+        value={selectedAgentId}
+        onChange={handleAgentChange}
+        disabled={savingAgentId}
+      />
+      <p className="mt-2 text-xs leading-5 text-muted">
+        The first message will start a new conversation with this agent.
+      </p>
+    </div>
+  );
+}
 
 export function ChatTimeline({
   messages,
@@ -55,6 +114,7 @@ export function ChatTimeline({
           </div>
           <div className="text-sm font-semibold text-ink-900">Start a conversation</div>
           <div className="mt-1.5 text-sm leading-6 text-muted">Ask for work, upload files, or use slash commands. Reasoning and tool activity will stay compact here.</div>
+          {!activeSessionId ? <NewConversationAgentSelector /> : null}
         </div>
       ) : (
         timeline.map((entry) => (

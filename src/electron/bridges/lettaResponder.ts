@@ -1,4 +1,11 @@
-import { createSession, resumeSession, type LettaCodeSession, type SDKMessage } from "@letta-ai/letta-code-sdk";
+import {
+  createSession,
+  resumeSession,
+  type LettaCodeSession,
+  type MessageContentItem,
+  type SDKMessage,
+  type SendMessage,
+} from "@letta-ai/letta-code-sdk";
 import type { UploadedBridgeAttachment } from "./attachmentUploads.js";
 
 type ChannelName = "whatsapp" | "telegram" | "slack" | "discord";
@@ -66,6 +73,62 @@ const formatAttachmentLine = (attachment: UploadedBridgeAttachment): string => {
   return `- [${attachment.fileName}](${attachment.url})${details ? ` (${details})` : ""}`;
 };
 
+type SupportedImageMimeType = "image/png" | "image/jpeg" | "image/gif" | "image/webp";
+
+const SUPPORTED_IMAGE_MIME_TYPES = new Set<string>([
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+]);
+
+const isSupportedImageMimeType = (mimeType: string): mimeType is SupportedImageMimeType => (
+  SUPPORTED_IMAGE_MIME_TYPES.has(mimeType.toLowerCase())
+);
+
+const fetchImageAsBase64 = async (attachment: UploadedBridgeAttachment): Promise<string> => {
+  const response = await fetch(attachment.url);
+  if (!response.ok) {
+    throw new Error(`download failed (${response.status} ${response.statusText})`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  return Buffer.from(arrayBuffer).toString("base64");
+};
+
+const buildInlineImageContent = async (
+  attachments: UploadedBridgeAttachment[] | undefined,
+  warnings: string[]
+): Promise<MessageContentItem[]> => {
+  const imageAttachments = (attachments ?? []).filter((attachment) => (
+    attachment.kind === "image" && isSupportedImageMimeType(attachment.mimeType)
+  ));
+
+  if (imageAttachments.length === 0) {
+    return [];
+  }
+
+  const content: MessageContentItem[] = [];
+
+  for (const attachment of imageAttachments) {
+    try {
+      content.push({
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: attachment.mimeType.toLowerCase() as SupportedImageMimeType,
+          data: await fetchImageAsBase64(attachment),
+        },
+      });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      warnings.push(`Failed to attach ${attachment.fileName} as inline image: ${reason}`);
+    }
+  }
+
+  return content;
+};
+
 export class LettaResponder {
   private activeSession: LettaCodeSession | null = null;
   private activeConversationId: string | null = null;
@@ -109,6 +172,7 @@ export class LettaResponder {
     const session = this.createOrResumeSession(input.agentId);
     this.activeSession = session;
 
+    const warnings = [...(input.warnings ?? [])];
     const promptSections: string[] = [
       `Channel: ${input.channel}`,
       `Sender: ${input.senderId}`,
@@ -124,17 +188,22 @@ export class LettaResponder {
       );
     }
 
-    if (input.warnings && input.warnings.length > 0) {
+    const inlineImages = await buildInlineImageContent(input.attachments, warnings);
+
+    if (warnings.length > 0) {
       promptSections.push(
         "",
         "Attachment upload warnings:",
-        ...input.warnings.map((warning) => `- ${warning}`)
+        ...warnings.map((warning) => `- ${warning}`)
       );
     }
 
     const normalizedPrompt = promptSections.join("\n");
+    const sendMessage: SendMessage = inlineImages.length > 0
+      ? [{ type: "text", text: normalizedPrompt }, ...inlineImages]
+      : normalizedPrompt;
 
-    await session.send(normalizedPrompt);
+    await session.send(sendMessage);
 
     if (session.conversationId) {
       this.activeConversationId = session.conversationId;

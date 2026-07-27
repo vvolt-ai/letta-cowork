@@ -10,7 +10,7 @@ import { SessionsTab } from "../SessionsTab";
 
 export interface SidebarProps {
   connected: boolean;
-  onNewSession: () => void;
+  onNewSession: (agentId?: string) => void;
   onOpenSchedules?: () => void;
   lettaEnvOpen: boolean;
   onLettaEnvOpenChange: (open: boolean) => void;
