@@ -15,6 +15,10 @@ import {
   type AuthTokens,
 } from "../../api/index.js";
 import { ensureSchedulerInitialized, teardownScheduler } from "../../services/scheduler/bootstrap.js";
+import {
+  startRemoteAccessService,
+  stopRemoteAccessService,
+} from "../../services/remote-access/remoteAccessService.js";
 
 // Types for IPC events
 export interface ApiConfig {
@@ -90,8 +94,10 @@ export function initializeApiIpcHandlers(): void {
     console.log('[API IPC] is-authenticated:', result);
     if (result) {
       await ensureSchedulerInitialized();
+      startRemoteAccessService();
     } else {
       teardownScheduler();
+      stopRemoteAccessService();
     }
     return result;
   });
@@ -139,6 +145,7 @@ export function initializeApiIpcHandlers(): void {
       const tokens = await api.login(credentials.email, credentials.password);
       console.log('[API IPC] login successful, user:', tokens.user?.email);
       await ensureSchedulerInitialized();
+      startRemoteAccessService();
       return { success: true, user: tokens.user };
     } catch (error) {
       console.error('[API IPC] login failed:', error);
@@ -161,6 +168,7 @@ export function initializeApiIpcHandlers(): void {
     try {
       const tokens = await api.verifyEmailOtp(data.email, data.otp);
       await ensureSchedulerInitialized();
+      startRemoteAccessService();
       return { success: true, user: tokens.user };
     } catch (error) {
       console.error('[API IPC] verify email OTP failed:', error);
@@ -174,6 +182,7 @@ export function initializeApiIpcHandlers(): void {
       const tokens = await api.register(data);
       console.log('[API IPC] register successful, user:', tokens.user?.email);
       await ensureSchedulerInitialized();
+      startRemoteAccessService();
       return { success: true, user: tokens.user };
     } catch (error) {
       console.error('[API IPC] register failed:', error);
@@ -202,6 +211,7 @@ export function initializeApiIpcHandlers(): void {
       return { success: true };
     } finally {
       teardownScheduler();
+      stopRemoteAccessService();
     }
   });
 

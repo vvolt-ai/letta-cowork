@@ -40,6 +40,12 @@ export function applyRemoteAccessSettings(updates: Partial<RemoteAccessSettings>
   return state;
 }
 
+export function startRemoteAccessService(): void {
+  if (getRemoteAccessSettings().enabled) {
+    client?.start();
+  }
+}
+
 export function stopRemoteAccessService(): void {
   client?.stop();
 }

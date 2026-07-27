@@ -1,32 +1,7 @@
 import { memo, useEffect, useState } from "react";
 
 interface ConfigurationTabProps {
-  coworkSettings: CoworkSettings;
-  lettaEnvOpen: boolean;
-  onLettaEnvOpenChange: (open: boolean) => void;
-  onOpenChannels?: () => void;
-  onOpenSkillDownload: () => void;
-  onOpenLettaCli: () => void;
-  onOpenMcpServers: () => void;
   onOpenSuperAdmin?: () => void;
-  isEmailConnected: boolean;
-  unreadLabel: string;
-  autoSyncEnabled: boolean;
-  onToggleAutoSync: (enabled: boolean) => void;
-  onConnectEmail: () => void;
-  onDisconnectEmail: () => void;
-  onOpenEmailView: () => void;
-  onRefreshEmails: () => void;
-  onOpenAddAgentsModal: () => void;
-}
-
-interface CoworkSettings {
-  showWhatsApp: boolean;
-  showTelegram: boolean;
-  showSlack: boolean;
-  showDiscord: boolean;
-  showEmailAutomation: boolean;
-  showLettaEnv: boolean;
 }
 
 interface RemoteAccessSettings {
@@ -74,22 +49,7 @@ function Panel({ children, className = "" }: { children: React.ReactNode; classN
 }
 
 export const ConfigurationTab = memo(function ConfigurationTab({
-  lettaEnvOpen,
-  onLettaEnvOpenChange,
-  onOpenChannels,
-  onOpenSkillDownload,
-  onOpenLettaCli,
-  onOpenMcpServers,
   onOpenSuperAdmin,
-  isEmailConnected,
-  unreadLabel,
-  autoSyncEnabled,
-  onToggleAutoSync,
-  onConnectEmail,
-  onDisconnectEmail,
-  onOpenEmailView,
-  onRefreshEmails,
-  onOpenAddAgentsModal,
 }: ConfigurationTabProps) {
   const [profile, setProfile] = useState({
     firstName: '',
@@ -108,7 +68,6 @@ export const ConfigurationTab = memo(function ConfigurationTab({
   const [remoteState, setRemoteState] = useState<RemoteAccessState | null>(null);
   const [remoteDirsText, setRemoteDirsText] = useState("");
   const [remoteSaving, setRemoteSaving] = useState(false);
-  const [secretManagerOpen, setSecretManagerOpen] = useState(false);
   const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
 
 
@@ -391,17 +350,26 @@ export const ConfigurationTab = memo(function ConfigurationTab({
           title="Administration"
           description="Super-admin only controls for global users, organizations, assignments, channels, and channel shares."
         >
-          <ActionCard
-            icon={
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 3 4 7v6c0 5 3.4 7.6 8 8 4.6-.4 8-3 8-8V7l-8-4Z" />
-                <path d="M9 12l2 2 4-4" />
-              </svg>
-            }
-            label="Super-admin management"
-            description="Manage every workspace user, organization, membership, channel, and channel share."
-            onClick={onOpenSuperAdmin}
-          />
+          <Panel>
+            <button
+              type="button"
+              onClick={onOpenSuperAdmin}
+              className="flex w-full items-center gap-3 rounded-lg p-1 text-left transition hover:bg-gray-50"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 3 4 7v6c0 5 3.4 7.6 8 8 4.6-.4 8-3 8-8V7l-8-4Z" />
+                  <path d="M9 12l2 2 4-4" />
+                </svg>
+              </span>
+              <span>
+                <span className="block text-sm font-medium text-gray-900">Super-admin management</span>
+                <span className="mt-0.5 block text-xs text-gray-500">
+                  Manage every workspace user, organization, membership, channel, and channel share.
+                </span>
+              </span>
+            </button>
+          </Panel>
         </Section>
       ) : null}
 
