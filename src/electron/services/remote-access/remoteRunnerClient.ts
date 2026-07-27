@@ -47,6 +47,26 @@ export class RemoteRunnerClient {
     }
   }
 
+  restart(): void {
+    if (!this.settings.enabled) {
+      this.stop();
+      return;
+    }
+
+    this.clearReconnect();
+    this.clearConnectionTimers();
+    this.environmentId = undefined;
+    this.lastError = undefined;
+
+    const socket = this.socket;
+    this.socket = null;
+    if (socket && socket.readyState !== WebSocket.CLOSED) {
+      socket.terminate();
+    }
+
+    this.start();
+  }
+
   start(): void {
     if (!this.settings.enabled) {
       this.setStatus("disabled");
@@ -86,10 +106,14 @@ export class RemoteRunnerClient {
       this.setStatus(this.settings.enabled ? "offline" : "disabled");
       if (this.settings.enabled) this.scheduleReconnect();
     });
+    socket.on("unexpected-response", (_request, response) => {
+      if (this.socket !== socket) return;
+      response.resume();
+      this.forceReconnect(`Remote server rejected the runner connection (${response.statusCode}).`);
+    });
     socket.on("error", (err) => {
       if (this.socket !== socket) return;
-      this.lastError = err.message;
-      this.setStatus("error");
+      this.forceReconnect(err.message);
     });
   }
 

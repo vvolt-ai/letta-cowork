@@ -16,7 +16,7 @@ import {
 } from "../../api/index.js";
 import { ensureSchedulerInitialized, teardownScheduler } from "../../services/scheduler/bootstrap.js";
 import {
-  startRemoteAccessService,
+  restartRemoteAccessService,
   stopRemoteAccessService,
 } from "../../services/remote-access/remoteAccessService.js";
 
@@ -94,7 +94,7 @@ export function initializeApiIpcHandlers(): void {
     console.log('[API IPC] is-authenticated:', result);
     if (result) {
       await ensureSchedulerInitialized();
-      startRemoteAccessService();
+      restartRemoteAccessService();
     } else {
       teardownScheduler();
       stopRemoteAccessService();
@@ -145,7 +145,7 @@ export function initializeApiIpcHandlers(): void {
       const tokens = await api.login(credentials.email, credentials.password);
       console.log('[API IPC] login successful, user:', tokens.user?.email);
       await ensureSchedulerInitialized();
-      startRemoteAccessService();
+      restartRemoteAccessService();
       return { success: true, user: tokens.user };
     } catch (error) {
       console.error('[API IPC] login failed:', error);
@@ -168,7 +168,7 @@ export function initializeApiIpcHandlers(): void {
     try {
       const tokens = await api.verifyEmailOtp(data.email, data.otp);
       await ensureSchedulerInitialized();
-      startRemoteAccessService();
+      restartRemoteAccessService();
       return { success: true, user: tokens.user };
     } catch (error) {
       console.error('[API IPC] verify email OTP failed:', error);
@@ -182,7 +182,7 @@ export function initializeApiIpcHandlers(): void {
       const tokens = await api.register(data);
       console.log('[API IPC] register successful, user:', tokens.user?.email);
       await ensureSchedulerInitialized();
-      startRemoteAccessService();
+      restartRemoteAccessService();
       return { success: true, user: tokens.user };
     } catch (error) {
       console.error('[API IPC] register failed:', error);
