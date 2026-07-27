@@ -1,4 +1,4 @@
-import { createSession, resumeSession, type Session as LettaSession, type SDKMessage } from "@letta-ai/letta-code-sdk";
+import { createSession, resumeSession, type LettaCodeSession, type SDKMessage } from "@letta-ai/letta-code-sdk";
 import type { UploadedBridgeAttachment } from "./attachmentUploads.js";
 
 type ChannelName = "whatsapp" | "telegram" | "slack" | "discord";
@@ -67,11 +67,11 @@ const formatAttachmentLine = (attachment: UploadedBridgeAttachment): string => {
 };
 
 export class LettaResponder {
-  private activeSession: LettaSession | null = null;
+  private activeSession: LettaCodeSession | null = null;
   private activeConversationId: string | null = null;
   private activeAgentId: string | null = null;
 
-  private createOrResumeSession(targetAgentId?: string): LettaSession {
+  private createOrResumeSession(targetAgentId?: string): LettaCodeSession {
     const effectiveAgentId = targetAgentId?.trim() || process.env.LETTA_AGENT_ID?.trim() || undefined;
     const sessionOptions = {
       cwd: process.cwd(),
