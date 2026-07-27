@@ -16,7 +16,6 @@ export function initializeRemoteAccessService(window: BrowserWindow): void {
   const settings = getRemoteAccessSettings();
   client = new RemoteRunnerClient(settings, broadcastState);
   registerRemoteAccessIpcHandlers();
-  if (settings.enabled) client.start();
 }
 
 export function getRemoteAccessState(): RemoteAccessState {
@@ -38,6 +37,12 @@ export function applyRemoteAccessSettings(updates: Partial<RemoteAccessSettings>
   const state = client.getState();
   broadcastState(state);
   return state;
+}
+
+export function restartRemoteAccessService(): void {
+  if (getRemoteAccessSettings().enabled) {
+    client?.restart();
+  }
 }
 
 export function stopRemoteAccessService(): void {
