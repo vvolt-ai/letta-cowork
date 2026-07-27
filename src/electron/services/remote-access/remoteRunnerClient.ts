@@ -11,6 +11,8 @@ import type {
 } from "./types.js";
 
 const HEARTBEAT_MS = 25_000;
+const REGISTRATION_TIMEOUT_MS = 15_000;
+const HEARTBEAT_ACK_TIMEOUT_MS = 20_000;
 const RECONNECT_MIN_MS = 1_000;
 const RECONNECT_MAX_MS = 30_000;
 
@@ -19,6 +21,8 @@ export type StateListener = (state: RemoteAccessState) => void;
 export class RemoteRunnerClient {
   private socket: WebSocket | null = null;
   private heartbeat: NodeJS.Timeout | null = null;
+  private heartbeatAckTimeout: NodeJS.Timeout | null = null;
+  private registrationTimeout: NodeJS.Timeout | null = null;
   private reconnect: NodeJS.Timeout | null = null;
   private reconnectDelay = RECONNECT_MIN_MS;
   private environmentId: string | undefined;
@@ -61,22 +65,29 @@ export class RemoteRunnerClient {
 
     const url = buildWebSocketUrl(api.apiBaseUrl, token);
     this.setStatus("connecting");
-    this.socket = new WebSocket(url, { headers: { Authorization: `Bearer ${token}` } });
+    const socket = new WebSocket(url, { headers: { Authorization: `Bearer ${token}` } });
+    this.socket = socket;
 
-    this.socket.on("open", () => {
+    socket.on("open", () => {
+      if (this.socket !== socket) return;
       this.lastError = undefined;
       this.reconnectDelay = RECONNECT_MIN_MS;
       this.register();
+      this.startRegistrationTimeout();
     });
-    this.socket.on("message", (raw) => this.handleMessage(raw.toString()));
-    this.socket.on("close", () => {
-      this.clearHeartbeat();
+    socket.on("message", (raw) => {
+      if (this.socket === socket) this.handleMessage(raw.toString());
+    });
+    socket.on("close", () => {
+      if (this.socket !== socket) return;
+      this.clearConnectionTimers();
       this.socket = null;
       this.environmentId = undefined;
       this.setStatus(this.settings.enabled ? "offline" : "disabled");
       if (this.settings.enabled) this.scheduleReconnect();
     });
-    this.socket.on("error", (err) => {
+    socket.on("error", (err) => {
+      if (this.socket !== socket) return;
       this.lastError = err.message;
       this.setStatus("error");
     });
@@ -84,7 +95,7 @@ export class RemoteRunnerClient {
 
   stop(): void {
     this.clearReconnect();
-    this.clearHeartbeat();
+    this.clearConnectionTimers();
     this.environmentId = undefined;
     const socket = this.socket;
     this.socket = null;
@@ -127,12 +138,24 @@ export class RemoteRunnerClient {
     }
 
     if (message.type === "runner.registered") {
+      this.clearRegistrationTimeout();
+      this.clearHeartbeatAckTimeout();
       this.environmentId = message.environment.id;
       this.setStatus("online");
       this.startHeartbeat();
       return;
     }
+    if (message.type === "runner.registration_required") {
+      this.clearConnectionTimers();
+      this.environmentId = undefined;
+      this.setStatus("connecting");
+      this.register();
+      this.startRegistrationTimeout();
+      return;
+    }
     if (message.type === "runner.heartbeat.ack") {
+      if (message.environmentId !== this.environmentId) return;
+      this.clearHeartbeatAckTimeout();
       this.lastHeartbeatAt = new Date().toISOString();
       this.emitState();
       return;
@@ -175,9 +198,17 @@ export class RemoteRunnerClient {
 
   private sendHeartbeat(): void {
     if (!this.environmentId) return;
-    this.lastHeartbeatAt = new Date().toISOString();
-    this.send({ type: "runner.heartbeat", environmentId: this.environmentId, timestamp: this.lastHeartbeatAt });
-    this.emitState();
+    this.send({
+      type: "runner.heartbeat",
+      environmentId: this.environmentId,
+      timestamp: new Date().toISOString(),
+    });
+    if (!this.heartbeatAckTimeout) {
+      this.heartbeatAckTimeout = setTimeout(() => {
+        this.heartbeatAckTimeout = null;
+        this.forceReconnect("Remote server stopped acknowledging heartbeats.");
+      }, HEARTBEAT_ACK_TIMEOUT_MS);
+    }
   }
 
   private scheduleReconnect(): void {
@@ -189,9 +220,46 @@ export class RemoteRunnerClient {
     this.reconnectDelay = Math.min(this.reconnectDelay * 2, RECONNECT_MAX_MS);
   }
 
+  private startRegistrationTimeout(): void {
+    this.clearRegistrationTimeout();
+    this.registrationTimeout = setTimeout(() => {
+      this.registrationTimeout = null;
+      this.forceReconnect("Remote server did not register this machine.");
+    }, REGISTRATION_TIMEOUT_MS);
+  }
+
+  private forceReconnect(reason: string): void {
+    if (!this.settings.enabled) return;
+    this.lastError = reason;
+    this.setStatus("offline");
+    const socket = this.socket;
+    if (socket && socket.readyState !== WebSocket.CLOSED) {
+      socket.terminate();
+      return;
+    }
+    this.socket = null;
+    this.scheduleReconnect();
+  }
+
   private clearHeartbeat(): void {
     if (this.heartbeat) clearInterval(this.heartbeat);
     this.heartbeat = null;
+  }
+
+  private clearHeartbeatAckTimeout(): void {
+    if (this.heartbeatAckTimeout) clearTimeout(this.heartbeatAckTimeout);
+    this.heartbeatAckTimeout = null;
+  }
+
+  private clearRegistrationTimeout(): void {
+    if (this.registrationTimeout) clearTimeout(this.registrationTimeout);
+    this.registrationTimeout = null;
+  }
+
+  private clearConnectionTimers(): void {
+    this.clearHeartbeat();
+    this.clearHeartbeatAckTimeout();
+    this.clearRegistrationTimeout();
   }
 
   private clearReconnect(): void {

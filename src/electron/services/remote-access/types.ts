@@ -61,6 +61,7 @@ export interface ServerToolCancelMessage {
 export type ServerRemoteRunnerMessage =
   | { type: "runner.connected" }
   | { type: "runner.registered"; environment: { id: string; name?: string; status?: string } }
+  | { type: "runner.registration_required" }
   | { type: "runner.heartbeat.ack"; environmentId: string }
   | { type: "error"; message: string }
   | ServerToolRequestMessage
