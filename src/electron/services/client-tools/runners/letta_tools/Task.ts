@@ -12,7 +12,6 @@
  *   • prompt         — the task body
  *   • subagent_type  — currently informational; treated like a tag.
  *                      All subagent_types share the parent agent today.
- *   • model          — optional per-request override_model
  *   • agent_id       — deploy a specific agent instead of inheriting
  *   • conversation_id — resume an existing subagent session
  *   • run_in_background — IGNORED in this build (Option C deferred)
@@ -29,7 +28,6 @@ interface TaskArgs {
     description: string;
     prompt: string;
     subagent_type: string;
-    model?: string;
     run_in_background?: boolean;
     agent_id?: string;
     conversation_id?: string;
@@ -99,7 +97,6 @@ export async function task(args: TaskArgs): Promise<TaskResult> {
             description: args.description,
             agentId: args.agent_id,
             conversationId: args.conversation_id,
-            model: args.model,
             signal,
         });
     } catch (err) {

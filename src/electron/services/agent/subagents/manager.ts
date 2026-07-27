@@ -72,8 +72,6 @@ export interface RunSubagentOptions {
     agentId?: string;
     /** Optional resume — if set, subagent continues an existing conversation. */
     conversationId?: string;
-    /** Per-request model override (translates to override_model in the request). */
-    model?: string;
     /** Abort signal propagated from the calling tool's run context. */
     signal: AbortSignal;
 }
@@ -153,7 +151,6 @@ async function runSubagentInner(
             conversationId,
             messages: nextMessages,
             wireTools,
-            model: opts.model,
             signal: opts.signal,
         });
         if (opts.signal.aborted) break;
@@ -265,7 +262,6 @@ async function runOneTurn(args: {
     conversationId: string;
     messages: unknown[];
     wireTools: unknown[];
-    model?: string;
     signal: AbortSignal;
 }): Promise<TurnResult> {
     const calls = new Map<string, PendingToolCall>();
@@ -290,7 +286,6 @@ async function runOneTurn(args: {
         client_skills: [],
         client_tools: args.wireTools,
         include_compaction_messages: true,
-        ...(args.model ? { override_model: args.model } : {}),
     })) as AsyncIterable<unknown>;
 
     for await (const ev of stream) {

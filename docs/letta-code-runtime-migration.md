@@ -1,5 +1,9 @@
 # Letta Code Runtime Migration Notes
 
+## 2026-07-27 — Task subagents inherit the agent model
+
+Cowork no longer exposes or accepts a per-Task `model` override. Every subagent conversation uses the model configured on its target agent, and message requests never include `override_model`. This prevents model-generated Task arguments from silently changing the agent's configured model.
+
 ## 2026-07-22 — Letta Code v0.28.15+ review
 
 **Upstream source:** `letta-ai/letta-code` `main` commit `a8a3f8a0` (latest tag pulled: `v0.28.15` / `635631ff`)  
