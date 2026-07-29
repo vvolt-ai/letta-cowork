@@ -99,7 +99,11 @@ export async function handleGetSessionHistory(
     try {
         const response = await lettaClient.conversations.messages.list(conversationId, {
             limit,
-            ...(requestedBefore ? { before: requestedBefore } : {}),
+            // Conversation messages are returned newest-first. In Letta's cursor
+            // semantics `after` advances past the oldest item in that descending
+            // page and therefore loads older history. `before` walks back toward
+            // newer records and causes heavily overlapping/shrinking pages.
+            ...(requestedBefore ? { after: requestedBefore } : {}),
         } as Record<string, unknown>);
 
         const items = (Array.isArray((response as { items?: unknown[] }).items)
@@ -117,10 +121,10 @@ export async function handleGetSessionHistory(
         // has_more. A short page is not reliable evidence of exhaustion because the
         // server can return partial pages. Keep pagination available until a request
         // for an older cursor actually returns no raw records.
+        const nextBefore = items.at(-1)?.id ?? normalised.nextBefore;
         const hasMore = typeof responseHasMore === "boolean"
             ? responseHasMore
-            : items.length > 0;
-        const nextBefore = ((response as { next_before?: string }).next_before as string | undefined) ?? normalised.nextBefore;
+            : items.length > 0 && nextBefore !== requestedBefore;
 
         debug("session.history: response", {
             conversationId, requestedBefore, returned: messages.length,
