@@ -29,6 +29,11 @@ export interface ToolRunContext {
     agentId?: string;
     conversationId?: string;
     /**
+     * Authenticated per-user runtime secrets for this tool invocation.
+     * Values are process-memory-only and must never be logged or persisted.
+     */
+    runtimeEnv?: Readonly<Record<string, string>>;
+    /**
      * Per-session plan-mode manager. Threaded through so plan tools
      * can mutate per-session state without a global singleton.
      * Typed as `unknown` to avoid a circular import — narrow at usage.

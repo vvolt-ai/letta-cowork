@@ -4,7 +4,8 @@ import { promises as fs } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, extname, join, relative, resolve } from "node:path";
 import { promisify } from "node:util";
-import type { ClientToolDefinition, ToolRunResult } from "../types.js";
+import type { ClientToolDefinition, ToolRunContext, ToolRunResult } from "../types.js";
+import { redactRuntimeSecrets } from "./_shared/runtime-secrets.js";
 
 const execFileAsync = promisify(execFile);
 const MAX_OUTPUT = 32_000;
@@ -56,14 +57,29 @@ function fail(error: unknown): ToolRunResult {
   return { output: error instanceof Error ? error.message : String(error), isError: true };
 }
 
-async function run(command: string, args: string[], options?: { cwd?: string; timeout?: number }): Promise<string> {
-  const result = await execFileAsync(command, args, {
-    cwd: options?.cwd ?? cwd(),
-    timeout: options?.timeout ?? 120_000,
-    maxBuffer: 20 * 1024 * 1024,
-    env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GCM_INTERACTIVE: "never" },
-  });
-  return truncate(`${result.stdout ?? ""}${result.stderr ?? ""}`.trim() || "(no output)");
+async function run(
+  command: string,
+  args: string[],
+  options?: { cwd?: string; timeout?: number; runtimeEnv?: ToolRunContext["runtimeEnv"] },
+): Promise<string> {
+  try {
+    const result = await execFileAsync(command, args, {
+      cwd: options?.cwd ?? cwd(),
+      timeout: options?.timeout ?? 120_000,
+      maxBuffer: 20 * 1024 * 1024,
+      env: {
+        ...process.env,
+        ...options?.runtimeEnv,
+        GIT_TERMINAL_PROMPT: "0",
+        GCM_INTERACTIVE: "never",
+      },
+    });
+    const output = `${result.stdout ?? ""}${result.stderr ?? ""}`.trim() || "(no output)";
+    return truncate(redactRuntimeSecrets(output, options?.runtimeEnv));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(redactRuntimeSecrets(message, options?.runtimeEnv));
+  }
 }
 
 async function gitRoot(start = cwd()): Promise<string> {
@@ -297,7 +313,7 @@ const projectRunScriptTool: ClientToolDefinition = {
     required: ["script"],
     additionalProperties: false,
   },
-  run: async (args) => {
+  run: async (args, ctx) => {
     try {
       const root = await gitRoot(resolve(asString(args.path, cwd())));
       const script = asString(args.script).trim();
@@ -310,7 +326,11 @@ const projectRunScriptTool: ClientToolDefinition = {
       const commandArgs = runArgsForScript(pm, script, asStringArray(args.args));
       const started = Date.now();
       try {
-        const output = await run(command, commandArgs, { cwd: root, timeout: Math.min(Math.max(Number(args.timeoutMs) || 300_000, 1000), 900_000) });
+        const output = await run(command, commandArgs, {
+          cwd: root,
+          timeout: Math.min(Math.max(Number(args.timeoutMs) || 300_000, 1000), 900_000),
+          runtimeEnv: ctx.runtimeEnv,
+        });
         return ok(JSON.stringify({ command: `${command} ${commandArgs.join(" ")}`, status: "success", durationMs: Date.now() - started, output }, null, 2));
       } catch (e) {
         return ok(JSON.stringify({ command: `${command} ${commandArgs.join(" ")}`, status: "failed", durationMs: Date.now() - started, output: e instanceof Error ? e.message : String(e) }, null, 2));
@@ -480,15 +500,19 @@ const codeDiagnosticsTool: ClientToolDefinition = {
   name: "CodeDiagnostics",
   description: "Run the smallest available project diagnostic command and return compact TypeScript/build errors. Prefer before/after coding edits.",
   parameters: { type: "object", properties: { path: { type: "string" }, script: { type: "string", description: "Optional script override, e.g. build or transpile:electron." }, timeoutMs: { type: "number" } }, additionalProperties: false },
-  run: async (args) => {
+  run: async (args, ctx) => {
     try {
       const root = await gitRoot(resolve(asString(args.path, cwd())));
       const pkg = await readPackage(root);
       const scripts = (pkg?.scripts as Record<string, string> | undefined) ?? {};
       const preferred = asString(args.script) || (scripts["transpile:electron"] ? "transpile:electron" : scripts["typecheck"] ? "typecheck" : scripts["build"] ? "build" : "");
-      if (preferred) return projectRunScriptTool.run({ path: root, script: preferred, timeoutMs: args.timeoutMs }, { signal: new AbortController().signal });
+      if (preferred) return projectRunScriptTool.run({ path: root, script: preferred, timeoutMs: args.timeoutMs }, ctx);
       if (existsSync(join(root, "tsconfig.json"))) {
-        const output = await run("npx", ["tsc", "--noEmit"], { cwd: root, timeout: Math.min(Math.max(Number(args.timeoutMs) || 300_000, 1000), 900_000) });
+        const output = await run("npx", ["tsc", "--noEmit"], {
+          cwd: root,
+          timeout: Math.min(Math.max(Number(args.timeoutMs) || 300_000, 1000), 900_000),
+          runtimeEnv: ctx.runtimeEnv,
+        });
         return ok(JSON.stringify({ command: "npx tsc --noEmit", status: "success", output }, null, 2));
       }
       return fail("No diagnostic script or tsconfig.json found.");

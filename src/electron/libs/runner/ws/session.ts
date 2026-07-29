@@ -33,6 +33,7 @@ import {
 } from "../../../services/client-tools/index.js";
 import { clearPendingApprovals } from "../../../services/agents/approval-recovery.js";
 import { runWithResourceLocks } from "../../../services/agent/subagents/parallelism.js";
+import { getVeraCoworkApiClient } from "../../../api/index.js";
 import { PlanModeManager } from "./plan-mode/mode-manager.js";
 import {
     buildTurnReminders,
@@ -178,6 +179,27 @@ export class WsSession {
 
     get conversationId(): string | null {
         return this._conversationId;
+    }
+
+    /**
+     * Fetch the authenticated user's runtime secrets for this desktop turn.
+     * The values stay in this WsSession/tool context only: they are never
+     * copied into process.env, renderer state, logs, or persisted locally.
+     */
+    private async loadRuntimeEnv(): Promise<Readonly<Record<string, string>>> {
+        if (!this._agentId) return Object.freeze({});
+        try {
+            const env = await getVeraCoworkApiClient().getAgentSecretRuntimeEnv(
+                this._agentId
+            );
+            return Object.freeze({ ...env });
+        } catch (error) {
+            console.warn(
+                "[WsSession] runtime secret fetch failed; continuing without secrets:",
+                error instanceof Error ? error.message : String(error)
+            );
+            return Object.freeze({});
+        }
     }
 
     /**
@@ -445,6 +467,9 @@ export class WsSession {
             let didPreflightApprovalRecovery = false;
             const MAX_LLM_INTERNAL_RETRIES = 3;
             let llmInternalRetries = 0;
+            // Refresh once per logical user turn so newly saved/rotated secrets
+            // are available immediately without placing them in global state.
+            const runtimeEnv = await this.loadRuntimeEnv();
 
             // eslint-disable-next-line no-constant-condition
             while (true) {
@@ -603,6 +628,7 @@ export class WsSession {
                                             conversationId:
                                                 this._conversationId ?? undefined,
                                             planMode: this.planMode,
+                                            runtimeEnv,
                                         }
                                     );
                                     // Mirror to the renderer so the user
@@ -722,6 +748,7 @@ export class WsSession {
                                     conversationId:
                                         this._conversationId ?? undefined,
                                     planMode: this.planMode,
+                                    runtimeEnv,
                                 }
                             );
                             this.enqueue({

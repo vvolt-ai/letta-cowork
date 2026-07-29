@@ -19,6 +19,7 @@ import {
     consumeWorkingDirectoryRecovery,
     getCurrentWorkingDirectory,
 } from "./_shared/runtime-context.js";
+import { redactRuntimeSecrets } from "./_shared/runtime-secrets.js";
 import { getShellEnv } from "./shell/shellEnv.js";
 import { buildShellLaunchers } from "./shell/shellLaunchers.js";
 import { type ShellExecutionError, spawnWithLauncher } from "./shell/shellRunner.js";
@@ -172,13 +173,14 @@ async function runBash(
     try {
         const { stdout, stderr, exitCode } = await spawnCommand(command, {
             cwd,
-            env: getShellEnv(),
+            env: getShellEnv(ctx.runtimeEnv),
             timeoutMs,
             signal: ctx.signal,
         });
 
         let output = stdout || "";
         if (stderr) output = output ? `${output}\n${stderr}` : stderr;
+        output = redactRuntimeSecrets(output, ctx.runtimeEnv);
         if (output.length > MAX_OUTPUT_CHARS) {
             output =
                 output.slice(0, MAX_OUTPUT_CHARS) +
@@ -214,6 +216,7 @@ async function runBash(
         if (e.stderr) msg += e.stderr;
         else if (e.message) msg += e.message;
         if (e.stdout) msg = `${e.stdout}\n${msg}`;
+        msg = redactRuntimeSecrets(msg, ctx.runtimeEnv);
         if (msg.length > MAX_OUTPUT_CHARS) {
             msg =
                 msg.slice(0, MAX_OUTPUT_CHARS) +

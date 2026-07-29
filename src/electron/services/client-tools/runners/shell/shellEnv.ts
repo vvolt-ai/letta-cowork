@@ -7,6 +7,7 @@
  *   • Neuters interactive pagers — without these, `git log`, `man`, etc.
  *     spawn an interactive pager that hangs the spawn forever (no TTY).
  *   • Sets TERM if missing.
+ *   • Merges authenticated per-turn runtime secrets without mutating process.env.
  *
  * Letta-code-specific bits (memoryFilesystem, settingsManager, agent
  * context, NODE_PATH for skill scripts) are intentionally omitted —
@@ -28,8 +29,16 @@ function getRipgrepBinDir(): string | undefined {
     }
 }
 
-export function getShellEnv(): NodeJS.ProcessEnv {
+export function getShellEnv(
+    runtimeEnv: Readonly<Record<string, string>> = {}
+): NodeJS.ProcessEnv {
     const env: NodeJS.ProcessEnv = { ...process.env };
+
+    // Runtime secrets are scoped to this spawned process. Never copy them into
+    // process.env, where concurrent sessions or unrelated app code could see them.
+    for (const [key, value] of Object.entries(runtimeEnv)) {
+        env[key] = value;
+    }
 
     // Locate the PATH variable case-insensitively (Windows uses "Path").
     const pathKey =

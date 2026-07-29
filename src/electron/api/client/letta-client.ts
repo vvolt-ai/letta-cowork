@@ -294,6 +294,17 @@ export class VeraCoworkApiClient extends BaseHttpClient {
     });
   }
 
+  async getAgentSecretRuntimeEnv(agentId: string): Promise<Record<string, string>> {
+    const result = await this.request<{ env: Record<string, string> }>(
+      "/agent-secrets/runtime-env",
+      {
+        method: "POST",
+        body: { agentId },
+      },
+    );
+    return result.env ?? {};
+  }
+
   async deleteAgentSecret(id: string): Promise<{ success: boolean }> {
     return this.request<{ success: boolean }>(`/agent-secrets/${encodeURIComponent(id)}`, {
       method: "DELETE",
