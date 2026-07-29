@@ -239,11 +239,11 @@ export const ChatWorkspace = memo(function ChatWorkspace({
           ) : null}
 
           {activeSessionId && (hasMoreHistory || (isHistoryLoading && visibleMessages.length > 0)) ? (
-            <div className="mb-4 flex justify-center">
+            <div className="sticky top-3 z-30 mb-4 flex justify-center pointer-events-none">
               <button
                 onClick={onLoadMoreHistory}
                 disabled={isHistoryLoading}
-                className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-xs font-medium text-ink-700 transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-60"
+                className="pointer-events-auto rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-xs font-medium text-ink-700 shadow-[var(--shadow-soft)] transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isHistoryLoading ? "Loading earlier messages…" : "Load more messages"}
               </button>

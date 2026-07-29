@@ -39,6 +39,7 @@ import { SettingsWorkspace, type SettingsSection } from "./features/settings/com
 
 const SCROLL_THRESHOLD = 50;
 const SESSION_CHANGE_SCROLL_DELAY_MS = 100;
+const LOAD_EARLIER_SCROLL_THRESHOLD_PX = 240;
 const AUTO_SYNC_ENABLED_KEY = "auto_sync_unread_enabled";
 const SIDEBAR_WIDTH_STORAGE_KEY = "sidebar_width_px";
 const DEFAULT_SIDEBAR_WIDTH = 280;
@@ -549,6 +550,28 @@ function App() {
     };
   }, []);
 
+  const handleLoadMoreHistory = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (!container || pendingHistoryLoadRef.current || activeSession?.isLoadingHistory) return;
+
+    const hasLocalHistory = hasMoreHistory;
+    const hasServerHistory = Boolean(activeSession?.hasMoreHistory);
+    if (!hasLocalHistory && !hasServerHistory) return;
+
+    pendingHistoryLoadRef.current = {
+      prevScrollHeight: container.scrollHeight,
+      prevScrollTop: container.scrollTop,
+    };
+
+    // Expand before requesting another server page so those older records enter
+    // the visible window immediately instead of requiring a second click.
+    loadMoreHistory();
+
+    if (!hasLocalHistory && hasServerHistory && activeSessionId) {
+      useAppStore.getState().fetchSessionHistory(activeSessionId, 50);
+    }
+  }, [activeSession?.hasMoreHistory, activeSession?.isLoadingHistory, activeSessionId, hasMoreHistory, loadMoreHistory]);
+
   const handleScroll = useCallback(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
@@ -561,30 +584,11 @@ function App() {
         setHasNewMessages(false);
       }
     }
-  }, [shouldAutoScroll]);
 
-  const handleLoadMoreHistory = useCallback(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-
-    const hasLocalHistory = hasMoreHistory;
-    const hasServerHistory = Boolean(activeSession?.hasMoreHistory);
-    if (!hasLocalHistory && !hasServerHistory) return;
-
-    pendingHistoryLoadRef.current = {
-      prevScrollHeight: container.scrollHeight,
-      prevScrollTop: container.scrollTop,
-    };
-
-    if (hasLocalHistory) {
-      loadMoreHistory();
-      return;
+    if (container.scrollTop <= LOAD_EARLIER_SCROLL_THRESHOLD_PX) {
+      handleLoadMoreHistory();
     }
-
-    if (activeSessionId) {
-      useAppStore.getState().fetchSessionHistory(activeSessionId, 50);
-    }
-  }, [activeSession?.hasMoreHistory, activeSessionId, hasMoreHistory, loadMoreHistory]);
+  }, [handleLoadMoreHistory, shouldAutoScroll]);
 
   const handleToggleActivityPanel = useCallback(() => {
     setIsActivityOpen((prev) => !prev);
@@ -602,6 +606,7 @@ function App() {
     setShouldAutoScroll(true);
     setHasNewMessages(false);
     prevMessagesLengthRef.current = 0;
+    pendingHistoryLoadRef.current = null;
     const timer = window.setTimeout(() => {
       scheduleScrollToBottom("auto");
     }, SESSION_CHANGE_SCROLL_DELAY_MS);
@@ -628,7 +633,7 @@ function App() {
     }
 
     prevMessagesLengthRef.current = messages.length;
-  }, [messages, scheduleScrollToBottom, shouldAutoScroll]);
+  }, [messages, scheduleScrollToBottom, shouldAutoScroll, visibleMessages.length]);
 
   const scrollToBottom = useCallback(() => {
     setShouldAutoScroll(true);
@@ -819,7 +824,7 @@ function App() {
               showPartialMessage={showPartialMessage}
               partialReasoning={partialReasoning}
               isHistoryLoading={Boolean(activeSession?.isLoadingHistory)}
-              hasMoreHistory={hasMoreHistory || Boolean(activeSession?.hasMoreHistory) || Boolean(activeSession?.totalDisplayableCount && activeSession.totalDisplayableCount > visibleMessages.length)}
+              hasMoreHistory={hasMoreHistory || Boolean(activeSession?.hasMoreHistory)}
               reasoningSteps={reasoningSteps}
               toolExecutions={toolExecutions}
               cliResults={ephemeralState?.cliResults ?? []}

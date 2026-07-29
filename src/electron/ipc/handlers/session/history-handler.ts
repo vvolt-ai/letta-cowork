@@ -112,9 +112,14 @@ export async function handleGetSessionHistory(
             ? (response as unknown as { total: number }).total
             : items.length;
         const totalDisplayableCount = normalised.allFiltered.length;
-        const hasMore = typeof (response as unknown as { has_more?: boolean }).has_more === "boolean"
-            ? (response as unknown as { has_more: boolean }).has_more
-            : normalised.hasMore;
+        const responseHasMore = (response as unknown as { has_more?: boolean }).has_more;
+        // conversations.messages.list returns an ArrayPage, which does not expose
+        // has_more. A short page is not reliable evidence of exhaustion because the
+        // server can return partial pages. Keep pagination available until a request
+        // for an older cursor actually returns no raw records.
+        const hasMore = typeof responseHasMore === "boolean"
+            ? responseHasMore
+            : items.length > 0;
         const nextBefore = ((response as { next_before?: string }).next_before as string | undefined) ?? normalised.nextBefore;
 
         debug("session.history: response", {
