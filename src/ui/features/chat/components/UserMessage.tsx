@@ -65,13 +65,10 @@ export const UserMessage = memo(function UserMessage({ message }: { message: Use
   }
 
   return (
-    <article className="ml-auto max-w-3xl py-1" data-message-type="user">
-      <div className="mb-1.5 flex justify-end text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--color-accent)]/80">
-        You
-      </div>
+    <article className="ml-auto min-w-0 max-w-[80%] py-1" data-message-type="user">
       {message.prompt ? (
-        <div className="rounded-[20px] border border-[var(--color-accent)]/20 bg-[var(--color-accent-subtle)] px-4 py-3 text-sm text-ink-900 shadow-sm ring-1 ring-[var(--color-accent)]/5">
-          <p className="whitespace-pre-wrap text-[14.5px] leading-6">{message.prompt}</p>
+        <div className="rounded-[1.65rem] border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm text-ink-900 shadow-[var(--shadow-soft)]">
+          <p className="whitespace-pre-wrap break-words text-[14.5px] leading-6">{message.prompt}</p>
         </div>
       ) : null}
       {attachments.length > 0 ? (
@@ -82,7 +79,7 @@ export const UserMessage = memo(function UserMessage({ message }: { message: Use
               href={attachment.url}
               target="_blank"
               rel="noreferrer"
-              className="group flex items-center gap-3 rounded-xl border border-[var(--color-attachment-border)] bg-[var(--color-attachment-bg)] px-3 py-2 text-xs text-ink-700 transition hover:border-[var(--color-accent)]"
+              className="group flex min-w-0 max-w-full items-center gap-3 rounded-xl border border-[var(--color-attachment-border)] bg-[var(--color-attachment-bg)] px-3 py-2 text-xs text-ink-700 transition hover:border-[var(--color-accent)]"
             >
               {(() => {
                 const mimeType = attachment.mimeType || "";
@@ -104,8 +101,8 @@ export const UserMessage = memo(function UserMessage({ message }: { message: Use
                   </span>
                 );
               })()}
-              <span className="flex flex-col">
-                <span className="font-medium text-ink-800">
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate font-medium text-ink-800">
                   {attachment.name}
                 </span>
                 <span className="text-muted">{formatBytes(attachment.size || 0)}</span>

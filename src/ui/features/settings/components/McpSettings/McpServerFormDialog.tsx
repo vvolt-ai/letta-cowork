@@ -102,16 +102,19 @@ export function McpServerFormDialog({ open, editing, onClose, onSubmit }: Props)
   };
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-      <form onSubmit={handleSubmit}>
-          <div className="flex items-center justify-between p-4 border-b">
-            <h3 className="text-lg font-semibold text-gray-900">
-              {editing ? "Edit MCP server" : "Add MCP server"}
-            </h3>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <button type="button" className="absolute inset-0 bg-ink-900/45 backdrop-blur-sm" onClick={onClose} aria-label="Close MCP form" />
+      <form onSubmit={handleSubmit} className="relative flex max-h-[88vh] w-full max-w-[680px] flex-col overflow-hidden rounded-3xl border border-white/70 bg-[var(--color-surface)] shadow-2xl">
+          <div className="flex items-start justify-between border-b border-[var(--color-border)] px-6 py-5">
+            <div>
+              <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--color-accent-subtle)] text-[var(--color-accent)]"><svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01"/></svg></div>
+              <h3 className="text-lg font-semibold text-ink-900">{editing ? "Edit MCP server" : "Add MCP server"}</h3>
+              <p className="mt-1 text-sm text-muted">Connect an HTTP or SSE tool provider to Vera.</p>
+            </div>
             <button
               type="button"
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
+              className="flex h-9 w-9 items-center justify-center rounded-xl text-muted transition hover:bg-[var(--color-surface-secondary)] hover:text-ink-900"
               aria-label="Close"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -120,13 +123,13 @@ export function McpServerFormDialog({ open, editing, onClose, onSubmit }: Props)
             </button>
           </div>
 
-          <div className="p-4 space-y-3 max-h-[60vh] overflow-auto">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
             <Field label="Name" hint="Shown in the agent settings UI.">
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full px-3 py-2 border rounded-md text-sm"
+                className="mt-1.5 h-10 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-000)] px-3 text-sm outline-none transition focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)]/10"
                 placeholder="e.g. Linear, Notion, Github"
                 autoFocus
               />
@@ -136,7 +139,7 @@ export function McpServerFormDialog({ open, editing, onClose, onSubmit }: Props)
               <select
                 value={transport}
                 onChange={(e) => setTransport(e.target.value as McpTransport)}
-                className="w-full px-3 py-2 border rounded-md text-sm"
+                className="mt-1.5 h-10 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-000)] px-3 text-sm outline-none transition focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)]/10"
               >
                 <option value="http">Streamable HTTP</option>
                 <option value="sse">SSE</option>
@@ -151,7 +154,7 @@ export function McpServerFormDialog({ open, editing, onClose, onSubmit }: Props)
                 type="url"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                className="w-full px-3 py-2 border rounded-md text-sm font-mono"
+                className="mt-1.5 h-10 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-000)] px-3 font-mono text-sm outline-none transition focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)]/10"
                 placeholder="https://example.com/mcp"
               />
             </Field>
@@ -167,7 +170,7 @@ export function McpServerFormDialog({ open, editing, onClose, onSubmit }: Props)
               <textarea
                 value={configJson}
                 onChange={(e) => setConfigJson(e.target.value)}
-                className="w-full px-3 py-2 border rounded-md text-sm font-mono min-h-40"
+                className="mt-1.5 min-h-40 w-full resize-y rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-000)] px-3 py-2.5 font-mono text-sm outline-none transition focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)]/10"
                 placeholder={defaultMcpJsonExample}
                 autoComplete="off"
                 spellCheck={false}
@@ -212,18 +215,18 @@ export function McpServerFormDialog({ open, editing, onClose, onSubmit }: Props)
             )}
           </div>
 
-          <div className="p-4 border-t flex justify-end gap-2">
+          <div className="flex justify-end gap-2 border-t border-[var(--color-border)] bg-[var(--color-surface-secondary)]/40 px-6 py-4">
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-md"
+              className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-sm font-medium text-ink-700 transition hover:bg-[var(--color-surface-secondary)]"
               disabled={submitting}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50"
+              className="rounded-xl bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:brightness-95 disabled:opacity-50"
               disabled={submitting}
             >
               {submitting ? "Saving…" : editing ? "Save changes" : "Add server"}

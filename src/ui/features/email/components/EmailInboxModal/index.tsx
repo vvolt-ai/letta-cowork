@@ -309,17 +309,16 @@ export function EmailInboxModal({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-ink-900/40 backdrop-blur-sm" />
-        <Dialog.Content className="fixed inset-1 z-50 h-[calc(100vh-8px)] w-[calc(100vw-8px)] rounded-lg border border-[var(--color-border)] bg-white shadow-xl overflow-hidden flex flex-col">
+        <Dialog.Content className="fixed inset-2 z-50 flex h-[calc(100vh-16px)] w-[calc(100vw-16px)] flex-col overflow-hidden rounded-3xl border border-white/70 bg-[var(--color-bg-000)] shadow-2xl outline-none">
           {/* Header */}
-          <div className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] px-4 py-3 shrink-0">
+          <div className="flex min-h-16 shrink-0 items-center justify-between gap-4 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-3">
             <div className="flex items-center gap-3">
-              <Dialog.Title className="text-lg font-semibold text-ink-900">
-                📧 Inbox
-              </Dialog.Title>
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--color-accent-subtle)] text-[var(--color-accent)]"><svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 7 8 6 8-6"/></svg></span>
+              <div><Dialog.Title className="text-sm font-semibold tracking-tight text-ink-900">Emails</Dialog.Title><p className="mt-0.5 text-[10px] text-muted">Connected Zoho inbox</p></div>
               {onRefresh && (
                 <button
                   onClick={onRefresh}
-                  className="rounded-lg border border-[var(--color-border)] bg-white px-2 py-1 text-xs font-medium text-ink-700 hover:bg-gray-50"
+                  className="inline-flex h-8 items-center rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-000)] px-3 text-[11px] font-semibold text-ink-600 transition hover:bg-[var(--color-surface-secondary)]"
                   title="Refresh emails"
                 >
                   ↻ Refresh
@@ -331,7 +330,7 @@ export function EmailInboxModal({
                 <button
                   onClick={onClickSendToAgent}
                   disabled={!canSendToAgent && !hasSendError}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-medium min-w-[140px] disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 disabled:border disabled:border-slate-200 disabled:hover:bg-slate-100 ${sendButtonClass}`}
+                  className={`min-w-[140px] rounded-xl px-3 py-2 text-[11px] font-semibold shadow-sm transition disabled:cursor-not-allowed disabled:border disabled:border-[var(--color-border)] disabled:bg-[var(--color-surface-secondary)] disabled:text-muted ${sendButtonClass}`}
                   title={sendDisabledReason || (activeEmail ? `Send "${activeEmail.subject || activeEmail.messageId}" to agent` : "Send this email to an agent")}
                 >
                   <span className="flex items-center justify-center gap-1">
@@ -354,7 +353,7 @@ export function EmailInboxModal({
                 <button
                   onClick={onClickViewConversation}
                   disabled={!canViewConversation}
-                  className="rounded-lg border border-[var(--color-border)] bg-white px-3 py-1.5 text-xs font-medium text-ink-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200 disabled:hover:bg-slate-100"
+                  className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-000)] px-3 py-2 text-[11px] font-semibold text-ink-600 transition hover:bg-[var(--color-surface-secondary)] hover:text-ink-900 disabled:cursor-not-allowed disabled:bg-[var(--color-surface-secondary)] disabled:text-muted"
                   title={viewConversationDisabledReason || "View conversation for this email"}
                 >
                   View Conversation
@@ -369,7 +368,7 @@ export function EmailInboxModal({
               )}
             </div>
             <Dialog.Close asChild>
-              <button className="rounded-full p-1.5 text-ink-500 hover:bg-ink-900/10" aria-label="Close inbox">
+              <button className="flex h-9 w-9 items-center justify-center rounded-xl text-muted transition hover:bg-[var(--color-surface-secondary)] hover:text-ink-900" aria-label="Close inbox">
                 <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M6 6l12 12M18 6l-12 12" />
                 </svg>
@@ -378,7 +377,7 @@ export function EmailInboxModal({
           </div>
 
           {/* Body: full-bleed Zoho webview */}
-          <div className="relative flex-1 min-h-0 bg-white flex">
+          <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-white">
             <ZohoMailEmbed
               initialMessageId={selectedEmail?.messageId}
               onMailIdChange={handleZohoMailIdChange}
@@ -396,7 +395,7 @@ export function EmailInboxModal({
 
             {/* Conversation overlay drawer */}
             {viewingConversationId && (
-              <div className="absolute inset-y-0 right-0 z-10 flex w-full max-w-[520px] flex-col border-l border-[var(--color-border)] bg-white shadow-xl">
+              <div className="absolute inset-y-0 right-0 z-10 flex w-full min-w-0 max-w-[680px] flex-col overflow-hidden border-l border-[var(--color-border)] bg-[var(--color-bg-000)] shadow-2xl">
                 <ConversationViewer
                   sessionId={viewingConversationId}
                   onBack={handleBackFromConversation}

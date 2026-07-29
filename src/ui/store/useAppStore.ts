@@ -22,6 +22,8 @@ export type PermissionRequest = {
   requestedAt?: number;
 };
 
+export type PermissionMode = "standard" | "acceptEdits" | "unrestricted";
+
 export type AgentDisplayStatus =
   | "idle"
   | "thinking"
@@ -57,6 +59,8 @@ export type EphemeralState = {
   status: AgentDisplayStatus;
   lastUpdated: number;
   errorMessage?: string;
+  /** A failed tool attempt while the run is still active/recovering. */
+  recoveryMessage?: string;
   pendingResultStatus?: "completed" | "error";
   pendingResultError?: string;
 };
@@ -460,6 +464,7 @@ function clearEphemeral(_ephemeral: EphemeralState, status: AgentDisplayStatus =
     assistantDraft: undefined,
     status,
     errorMessage,
+    recoveryMessage: undefined,
     lastUpdated: Date.now(),
     pendingResultStatus: undefined,
     pendingResultError: undefined,
@@ -628,6 +633,7 @@ export interface AppState {
    */
   rejectedModels: string[];
   showReasoningInChat: boolean;
+  permissionMode: PermissionMode;
   notifications: SessionCompletionNotification[];
   // IPC function reference
   ipcSendEvent: ((event: ClientEvent) => void) | null;
@@ -648,6 +654,7 @@ export interface AppState {
   setSelectedModel: (model: string) => void;
   markModelRejected: (model: string) => void;
   setShowReasoningInChat: (show: boolean) => void;
+  setPermissionMode: (mode: PermissionMode) => void;
   addNotification: (notification: SessionCompletionNotification) => void;
   dismissNotification: (id: string) => void;
   dismissNotificationsForSession: (sessionId: string) => void;
@@ -691,6 +698,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
   selectedModel: "",
   rejectedModels: [],
   showReasoningInChat: true,
+  permissionMode: "standard",
   notifications: [],
   ipcSendEvent: null,
 
@@ -875,6 +883,10 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
 
   setShowReasoningInChat: (show) => {
     set({ showReasoningInChat: show });
+  },
+
+  setPermissionMode: (permissionMode) => {
+    set({ permissionMode });
   },
 
 
@@ -1305,11 +1317,14 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
                 const errorText = buildToolErrorText();
                 ephemeral = {
                   ...ephemeral,
-                  errorMessage: errorText,
+                  // Tool failures are model-visible and the agent can retry or
+                  // choose another approach. Only a failed `result` is terminal.
+                  errorMessage: undefined,
+                  recoveryMessage: errorText,
                   pendingResultStatus: undefined,
                   pendingResultError: undefined,
                 };
-                status = "error";
+                status = hasRunning ? "running_tool" : "thinking";
                 break;
               }
 
@@ -1541,5 +1556,6 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
   partialize: (state) => ({
     selectedModel: state.selectedModel,
     showReasoningInChat: state.showReasoningInChat,
+    permissionMode: state.permissionMode,
   }),
 }));

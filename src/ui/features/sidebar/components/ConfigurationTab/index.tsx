@@ -1,8 +1,9 @@
 import { memo, useEffect, useState } from "react";
-import { SecretManager } from "../../../settings/components/SecretManager/SecretManager";
 import { IntegrationList } from "../IntegrationList";
+import { ChannelsManager } from "../../../channels/components/ChannelsManager";
 
 interface ConfigurationTabProps {
+  section?: "all" | "profile" | "communication" | "agent-tools" | "remote-access" | "administration";
   coworkSettings: CoworkSettings;
   lettaEnvOpen: boolean;
   onLettaEnvOpenChange: (open: boolean) => void;
@@ -50,19 +51,25 @@ interface RemoteAccessState {
 function Section({
   title,
   description,
+  hideHeading = false,
   children,
 }: {
   title: string;
   description?: string;
+  hideHeading?: boolean;
   children: React.ReactNode;
 }) {
+  if (hideHeading) {
+    return <section className="min-w-0">{children}</section>;
+  }
+
   return (
-    <section className="space-y-2">
-      <div>
-        <h3 className="text-[13px] font-semibold text-ink-900">{title}</h3>
-        {description ? <p className="mt-0.5 text-[12px] leading-4 text-muted">{description}</p> : null}
+    <section className="border-b border-[var(--color-border)] pb-6 last:border-b-0 last:pb-0">
+      <div className="mb-4">
+        <h3 className="text-base font-semibold text-ink-900">{title}</h3>
+        {description ? <p className="mt-1 max-w-3xl text-sm leading-6 text-muted">{description}</p> : null}
       </div>
-      {children}
+      <div className="min-w-0">{children}</div>
     </section>
   );
 }
@@ -81,7 +88,7 @@ function ActionCard({
   return (
     <button
       onClick={onClick}
-      className="group flex min-h-[72px] w-full items-start gap-3 rounded-xl border border-[var(--color-border)] bg-white p-3 text-left transition hover:border-[var(--color-accent)]/50 hover:bg-gray-50 hover:shadow-sm"
+      className="group flex min-h-[68px] w-full items-start gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-left shadow-[var(--shadow-soft)] transition hover:border-[var(--color-accent)]/50 hover:bg-[var(--color-surface-secondary)]"
     >
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 transition group-hover:bg-blue-100">
         {icon}
@@ -99,19 +106,14 @@ function ActionCard({
 
 function Panel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`rounded-xl border border-[var(--color-border)] bg-white p-3 shadow-sm ${className}`}>
+    <div className={`rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-soft)] ${className}`}>
       {children}
     </div>
   );
 }
 
 export const ConfigurationTab = memo(function ConfigurationTab({
-  lettaEnvOpen,
-  onLettaEnvOpenChange,
-  onOpenChannels,
-  onOpenSkillDownload,
-  onOpenLettaCli,
-  onOpenMcpServers,
+  section = "all",
   onOpenSuperAdmin,
   isEmailConnected,
   unreadLabel,
@@ -140,7 +142,6 @@ export const ConfigurationTab = memo(function ConfigurationTab({
   const [remoteState, setRemoteState] = useState<RemoteAccessState | null>(null);
   const [remoteDirsText, setRemoteDirsText] = useState("");
   const [remoteSaving, setRemoteSaving] = useState(false);
-  const [secretManagerOpen, setSecretManagerOpen] = useState(false);
   const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
 
 
@@ -316,43 +317,44 @@ export const ConfigurationTab = memo(function ConfigurationTab({
   );
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5">
-      <Section
+    <div className="mx-auto max-w-5xl space-y-6">
+      {(section === "all" || section === "profile") ? <Section
         title="Your profile"
         description="Keep your Cowork identity up to date. Phone number helps match external channel messages to your account."
+        hideHeading={section !== "all"}
       >
         <Panel>
-          <div className="grid gap-3 md:grid-cols-4">
-            <label className="block md:col-span-2">
-              <span className="text-sm font-medium text-gray-700">Email</span>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block sm:col-span-2">
+              <span className="text-sm font-medium text-ink-700">Email</span>
               <input
                 value={profile.email}
                 disabled
-                className="mt-1 h-9 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm text-gray-500"
+                className="mt-1 h-9 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-secondary)] px-3 text-sm text-muted"
               />
             </label>
 
             <label className="block">
-              <span className="text-sm font-medium text-gray-700">First name</span>
+              <span className="text-sm font-medium text-ink-700">First name</span>
               <input
                 value={profile.firstName}
                 onChange={(event) => setProfile((prev) => ({ ...prev, firstName: event.target.value }))}
-                className="mt-1 h-9 w-full rounded-lg border border-gray-300 px-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="mt-1 h-9 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-sm text-ink-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </label>
 
             <label className="block">
-              <span className="text-sm font-medium text-gray-700">Last name</span>
+              <span className="text-sm font-medium text-ink-700">Last name</span>
               <input
                 value={profile.lastName}
                 onChange={(event) => setProfile((prev) => ({ ...prev, lastName: event.target.value }))}
-                className="mt-1 h-9 w-full rounded-lg border border-gray-300 px-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="mt-1 h-9 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-sm text-ink-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </label>
 
-            <div className="block md:col-span-4">
+            <div className="block sm:col-span-2">
               <label className="block">
-                <span className="text-sm font-medium text-gray-700">Phone number</span>
+                <span className="text-sm font-medium text-ink-700">Phone number</span>
                 <input
                   value={profile.phoneNumber}
                   onChange={(event) => {
@@ -364,11 +366,11 @@ export const ConfigurationTab = memo(function ConfigurationTab({
                     }
                   }}
                   placeholder="+918849286808"
-                  className="mt-1 h-9 w-full rounded-lg border border-gray-300 px-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="mt-1 h-9 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-sm text-ink-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
               </label>
               <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                <span className="text-gray-500">Include country code.</span>
+                <span className="text-muted">Include country code.</span>
                 {!phoneNumberChanged && verifiedPhoneNumber ? (
                   <span className="font-medium text-green-600">Verified</span>
                 ) : (
@@ -393,7 +395,7 @@ export const ConfigurationTab = memo(function ConfigurationTab({
                       type="button"
                       onClick={handleVerifyMobileOtp}
                       disabled={mobileOtpVerifying || !mobileOtp.trim()}
-                      className="rounded-md bg-blue-600 px-2.5 py-1 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+                      className="rounded-md bg-[var(--color-accent)] px-2.5 py-1 font-medium text-white hover:brightness-95 disabled:cursor-not-allowed disabled:bg-gray-300"
                     >
                       {mobileOtpVerifying ? 'Verifying...' : 'Verify'}
                     </button>
@@ -408,11 +410,11 @@ export const ConfigurationTab = memo(function ConfigurationTab({
             </div>
           </div>
 
-          <div className="mt-3 flex items-center gap-3 border-t border-gray-100 pt-3">
+          <div className="mt-3 flex items-center gap-3 border-t border-[var(--color-border)] pt-3">
             <button
               onClick={handleSaveProfile}
               disabled={profileSaving || !profile.firstName.trim()}
-              className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+              className="rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-white hover:brightness-95 disabled:cursor-not-allowed disabled:bg-gray-300"
             >
               {profileSaving ? 'Saving...' : 'Save profile'}
             </button>
@@ -423,12 +425,13 @@ export const ConfigurationTab = memo(function ConfigurationTab({
             ) : null}
           </div>
         </Panel>
-      </Section>
+      </Section> : null}
 
-      {currentUserRole === 'super_admin' && onOpenSuperAdmin ? (
+      {(section === "all" || section === "administration") && currentUserRole === 'super_admin' && onOpenSuperAdmin ? (
         <Section
           title="Administration"
           description="Super-admin only controls for global users, organizations, assignments, channels, and channel shares."
+          hideHeading={section !== "all"}
         >
           <ActionCard
             icon={
@@ -444,21 +447,15 @@ export const ConfigurationTab = memo(function ConfigurationTab({
         </Section>
       ) : null}
 
-      <Section
+      {(section === "all" || section === "communication") ? <Section
         title="Communication"
         description="Connect where Cowork should listen and respond. Channels are for chat platforms; email automation handles mailbox workflows."
+        hideHeading={section !== "all"}
       >
-        <div className="grid gap-3 md:grid-cols-2">
-          <ActionCard
-            icon={
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
-            }
-            label="Channels"
-            description="Configure Discord, Telegram, Slack, WhatsApp, and other chat entry points."
-            onClick={onOpenChannels}
-          />
+        <div className="grid gap-3">
+          <Panel className="md:col-span-2">
+            <ChannelsManager embedded />
+          </Panel>
           <Panel className="md:col-span-2">
             <IntegrationList
               isEmailConnected={isEmailConnected}
@@ -473,109 +470,18 @@ export const ConfigurationTab = memo(function ConfigurationTab({
             />
           </Panel>
         </div>
-      </Section>
+      </Section> : null}
 
-      <Section
-        title="Agent tools"
-        description="Install skills, connect external MCP providers, or open the Letta CLI for advanced agent work."
-      >
-        <div className="grid gap-3 md:grid-cols-2">
-          <ActionCard
-            icon={
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-            }
-            label="Download skill"
-            description="Install a reusable skill from a URL."
-            onClick={onOpenSkillDownload}
-          />
-          <ActionCard
-            icon={
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="4" width="18" height="6" rx="1.5" />
-                <rect x="3" y="14" width="18" height="6" rx="1.5" />
-                <circle cx="7" cy="7" r="0.5" fill="currentColor" />
-                <circle cx="7" cy="17" r="0.5" fill="currentColor" />
-              </svg>
-            }
-            label="MCP servers"
-            description="Connect external tool providers like Ryze, Composio, or custom MCP endpoints."
-            onClick={onOpenMcpServers}
-          />
-          <ActionCard
-            icon={
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="11" width="18" height="10" rx="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                <circle cx="12" cy="16" r="1" />
-              </svg>
-            }
-            label="Runtime secrets"
-            description="Add encrypted account secrets for agents and tools, exposed as environment variables."
-            onClick={() => setSecretManagerOpen(true)}
-          />
-          <ActionCard
-            icon={
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="4 17 10 11 4 5" />
-                <line x1="12" y1="19" x2="20" y2="19" />
-              </svg>
-            }
-            label="Letta CLI"
-            description="Open a command-line interface for direct runtime operations."
-            onClick={onOpenLettaCli}
-          />
-          <ActionCard
-            icon={
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="3" />
-                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14" />
-              </svg>
-            }
-            label="Environment variables"
-            description="Manage advanced Letta and Vera environment configuration."
-            onClick={() => onLettaEnvOpenChange(!lettaEnvOpen)}
-          />
-        </div>
-      </Section>
-
-      {secretManagerOpen ? (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setSecretManagerOpen(false)}
-          />
-          <div className="relative mx-4 flex max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b p-4">
-              <h2 className="text-xl font-semibold text-gray-900">Runtime secrets</h2>
-              <button
-                onClick={() => setSecretManagerOpen(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="overflow-auto">
-              <SecretManager />
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      <Section
+      {(section === "all" || section === "remote-access") ? <Section
         title="Remote access"
         description="Expose this desktop as an online tool runner for server-routed conversations such as WhatsApp. Phase 1 uses auto-approval plus path guardrails."
+        hideHeading={section !== "all"}
       >
         <Panel>
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-sm font-medium text-gray-900">Remote runner</p>
-              <p className="mt-0.5 text-xs leading-5 text-gray-500">
+              <p className="mt-0.5 text-xs leading-5 text-muted">
                 Status: <span className="font-semibold">{remoteState?.status ?? 'loading'}</span>
                 {remoteState?.environmentId ? ` · ${remoteState.environmentId}` : ''}
               </p>
@@ -594,9 +500,9 @@ export const ConfigurationTab = memo(function ConfigurationTab({
             </button>
           </div>
 
-          <div className="mt-4 grid gap-4 border-t border-gray-100 pt-4">
+          <div className="mt-4 grid gap-4 border-t border-[var(--color-border)] pt-4">
             <label className="block">
-              <span className="text-sm font-medium text-gray-700">Environment name</span>
+              <span className="text-sm font-medium text-ink-700">Environment name</span>
               <input
                 value={remoteState?.settings.environmentName ?? ''}
                 onChange={(event) => setRemoteState((prev) => prev ? { ...prev, settings: { ...prev.settings, environmentName: event.target.value } } : prev)}
@@ -605,7 +511,7 @@ export const ConfigurationTab = memo(function ConfigurationTab({
               />
             </label>
             <label className="block">
-              <span className="text-sm font-medium text-gray-700">Allowed directories</span>
+              <span className="text-sm font-medium text-ink-700">Allowed directories</span>
               <textarea
                 value={remoteDirsText}
                 onChange={(event) => setRemoteDirsText(event.target.value)}
@@ -613,26 +519,26 @@ export const ConfigurationTab = memo(function ConfigurationTab({
                 rows={3}
                 className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
-              <p className="mt-1 text-xs text-gray-500">Tools can only read/run inside these directories.</p>
+              <p className="mt-1 text-xs text-muted">Tools can only read/run inside these directories.</p>
             </label>
             <div className="flex items-center gap-3">
               <button
                 onClick={handleAddRemoteDirectory}
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-ink-700 hover:bg-gray-50"
               >
                 Add directory
               </button>
               <button
                 onClick={() => handleSaveRemoteAccess()}
                 disabled={remoteSaving || !remoteState}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+                className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:brightness-95 disabled:cursor-not-allowed disabled:bg-gray-300"
               >
                 {remoteSaving ? 'Saving...' : 'Save remote access'}
               </button>
             </div>
           </div>
         </Panel>
-      </Section>
+      </Section> : null}
 
     </div>
   );

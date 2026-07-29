@@ -23,9 +23,10 @@ export function ChannelList({
 }: ChannelListProps) {
   if (channels.length === 0) {
     return (
-      <div className="text-center py-8 text-slate-500">
-        <p>No channels configured</p>
-        <p className="text-sm mt-1">Click "Add Channel" to get started</p>
+      <div className="rounded-2xl border border-dashed border-[var(--color-border-strong)] bg-[var(--color-surface-secondary)] py-10 text-center text-muted">
+        <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">＋</div>
+        <p className="mt-3 text-sm font-medium text-ink-800">No channels configured</p>
+        <p className="mt-1 text-xs">Use “Add channel” to connect your first provider.</p>
       </div>
     );
   }

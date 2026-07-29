@@ -22,7 +22,7 @@ import type { SendPermissionRequest } from "./permission-handler.js";
  */
 export type SessionOptions = {
   cwd: string;
-  permissionMode: "bypassPermissions";
+  permissionMode: "standard" | "acceptEdits" | "unrestricted";
   canUseTool: (toolName: string, input: unknown) => Promise<CanUseToolResponse>;
   systemInfoReminder: boolean;
   model?: string;
@@ -45,11 +45,14 @@ export function isValidLettaId(id: string | undefined): boolean {
 export function createSessionOptions(
   session: RunnerSession,
   model: string | undefined,
+  permissionMode: RunnerOptions["permissionMode"],
   canUseTool: (toolName: string, input: unknown) => Promise<CanUseToolResponse>
 ): SessionOptions {
   return {
     cwd: session.cwd ?? DEFAULT_CWD,
-    permissionMode: "bypassPermissions" as const,
+    // Preserve unattended/background callers that predate the selector. The
+    // interactive composer always sends its explicit user-selected mode.
+    permissionMode: permissionMode ?? "unrestricted",
     canUseTool,
     systemInfoReminder: false,
     model: model,
@@ -68,7 +71,7 @@ export function createOrResumeSession(
   const { session, resumeConversationId, preferredAgentId, model } = options;
   const targetAgentId = preferredAgentId?.trim() || undefined;
   const cachedAgentId = getCachedAgentId();
-  const sessionOptions = createSessionOptions(session, model, canUseTool);
+  const sessionOptions = createSessionOptions(session, model, options.permissionMode, canUseTool);
 
   if (resumeConversationId && isValidLettaId(resumeConversationId)) {
     // Resume specific conversation

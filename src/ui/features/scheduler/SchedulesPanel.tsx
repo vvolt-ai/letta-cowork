@@ -5,29 +5,33 @@ import type { ScheduledTask, CreateScheduledTaskForm } from "./types";
 import { buildCronExpression } from "./types";
 import { CreateScheduleDialog } from "./CreateScheduleDialog";
 import { ScheduleRunsDrawer } from "./ScheduleRunsDrawer";
+import { InnerPageLayout } from "../layout/components/InnerPageLayout";
 
 interface Props {
   agents: LettaAgent[];
+  onClose?: () => void;
 }
 
 function EmptyState({ tab, onCreate }: { tab: string; onCreate: () => void }) {
   return (
-    <div className="flex flex-col items-center justify-center h-64 gap-4">
-      <div className="w-20 h-20 opacity-20">
-        <svg viewBox="0 0 80 80" fill="none" className="w-full h-full text-gray-400">
-          <rect x="10" y="10" width="60" height="60" rx="4" stroke="currentColor" strokeWidth="2" strokeDasharray="6 4"/>
-          <rect x="20" y="20" width="40" height="40" rx="2" stroke="currentColor" strokeWidth="2" strokeDasharray="4 3"/>
-          <rect x="30" y="30" width="20" height="20" rx="1" stroke="currentColor" strokeWidth="2"/>
+    <div className="rounded-2xl border border-dashed border-[var(--color-border-strong)] bg-[var(--color-surface)] px-6 py-14 text-center shadow-[var(--shadow-soft)]">
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
+        <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6" stroke="currentColor" strokeWidth="1.8">
+          <rect x="3" y="5" width="18" height="16" rx="3" />
+          <path d="M8 3v4M16 3v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01" />
         </svg>
       </div>
-      <p className="text-sm text-gray-500">
-        No {tab === "recurring" ? "recurring" : "one-off"} tasks
+      <h3 className="mt-4 text-sm font-semibold text-ink-900">No {tab === "recurring" ? "recurring schedules" : "one-off schedules"}</h3>
+      <p className="mx-auto mt-1 max-w-sm text-xs leading-5 text-muted">
+        {tab === "recurring"
+          ? "Create an automatic routine that sends a prompt to an agent on a repeating schedule."
+          : "Schedule a prompt to run once at a specific date and time."}
       </p>
       <button
         onClick={onCreate}
-        className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
+        className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[var(--color-accent)] px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:brightness-95"
       >
-        + Create new scheduled task
+        <span className="text-base leading-none">+</span> Create schedule
       </button>
     </div>
   );
@@ -39,7 +43,7 @@ function StatusDot({ enabled }: { enabled: boolean }) {
   );
 }
 
-export function SchedulesPanel({ agents }: Props) {
+export function SchedulesPanel({ agents, onClose }: Props) {
   const [tasks, setTasks] = useState<ScheduledTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"recurring" | "one_off">("recurring");
@@ -136,58 +140,49 @@ export function SchedulesPanel({ agents }: Props) {
   const filtered = tasks.filter((t) => t.scheduleType === activeTab);
 
   return (
-    <div className="flex flex-col h-full bg-white">
-      {/* Header */}
-      <div className="px-8 pt-8 pb-4">
-        <div className="flex items-start justify-between mb-1">
-          <h1 className="text-2xl font-semibold text-gray-900">Schedules</h1>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => {}} // TODO: help tooltip
-              className="text-sm text-gray-500 hover:text-gray-700"
-            >
-              What are schedules?
-            </button>
-            <button
-              onClick={() => setShowCreate(true)}
-              className="flex items-center gap-1.5 px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
-            >
-              + Create
-            </button>
-          </div>
-        </div>
-        <p className="text-sm text-gray-500">Schedules let you automate messages to your agent on a predetermined schedule</p>
-      </div>
-
-      {/* Tabs */}
-      <div className="px-8 border-b border-gray-200">
-        <div className="flex gap-1">
+    <InnerPageLayout
+      title="Schedules"
+      description="Automate messages to your agents on a recurring or one-off schedule."
+      onClose={onClose}
+      contentWidthClassName="max-w-5xl"
+      contentClassName="py-7"
+      actions={(
+        <button
+          onClick={() => setShowCreate(true)}
+          className="rounded-xl bg-[var(--color-accent)] px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:brightness-95"
+        >
+          + Create
+        </button>
+      )}
+      headerContent={(
+        <div className="inline-flex rounded-xl bg-[var(--color-surface-secondary)] p-1">
           {([["recurring", "Recurring"], ["one_off", "One-off"]] as const).map(([value, label]) => (
             <button
               key={value}
               onClick={() => setActiveTab(value)}
-              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
                 activeTab === value
-                  ? "border-gray-900 text-gray-900"
-                  : "border-transparent text-gray-500 hover:text-gray-700"
+                  ? "bg-[var(--color-surface)] text-ink-900 shadow-sm"
+                  : "text-muted hover:text-ink-900"
               }`}
             >
               {label}
             </button>
           ))}
         </div>
-      </div>
+      )}
+    >
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="min-w-0 space-y-4">
         {loading && (
-          <div className="flex items-center justify-center h-32 text-sm text-gray-400">
+          <div className="flex h-40 items-center justify-center rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] text-xs text-muted">
+            <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-[var(--color-border-strong)] border-t-[var(--color-accent)]" />
             Loading schedules…
           </div>
         )}
 
         {error && (
-          <div className="mx-8 mt-6 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
           </div>
         )}
@@ -197,55 +192,28 @@ export function SchedulesPanel({ agents }: Props) {
         )}
 
         {!loading && !error && filtered.length > 0 && (
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-100">
-              <tr>
-                <th className="text-left px-8 py-3 font-medium text-gray-500">Name</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Description</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Status</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Schedule</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Runs on</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Timezone</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Created</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
+          <div className="space-y-3">
               {filtered.map((task) => (
-                <tr key={task.id} className="border-b border-gray-50 hover:bg-gray-50 group">
-                  <td className="px-8 py-4">
-                    <div className="flex items-center gap-2">
-                      <StatusDot enabled={task.enabled} />
-                      <span className="font-medium text-gray-900">{task.name}</span>
+                <article key={task.id} className="group rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-soft)] transition hover:border-[var(--color-border-strong)]">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
+                        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="truncate text-sm font-semibold text-ink-900">{task.name}</h3>
+                          <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold ${task.enabled ? "bg-green-50 text-green-700" : "bg-[var(--color-surface-secondary)] text-muted"}`}>
+                            <StatusDot enabled={task.enabled} />{task.enabled ? "Active" : "Paused"}
+                          </span>
+                        </div>
+                        <p className="mt-1 truncate text-xs text-muted">{task.description || "No description"}</p>
+                      </div>
                     </div>
-                  </td>
-                  <td className="px-4 py-4 text-gray-500 max-w-[200px] truncate">
-                    {task.description ?? "—"}
-                  </td>
-                  <td className="px-4 py-4">
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                      task.enabled
-                        ? "bg-green-100 text-green-700"
-                        : "bg-gray-100 text-gray-500"
-                    }`}>
-                      {task.enabled ? "Active" : "Paused"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-4 font-mono text-xs text-gray-600">
-                    {task.cronExpression}
-                  </td>
-                  <td className="px-4 py-4 text-gray-500 text-xs">
-                    {(task.executionTarget ?? "cowork") === "server" ? "Server" : "CoWork"}
-                  </td>
-                  <td className="px-4 py-4 text-gray-500 text-xs">{task.timezone}</td>
-                  <td className="px-4 py-4 text-gray-400 text-xs">
-                    {new Date(task.createdAt).toLocaleDateString()}
-                  </td>
-                  <td className="px-4 py-4">
-                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex flex-wrap items-center justify-end gap-1.5">
                       <button
                         onClick={() => setRunsTask(task)}
-                        className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                        className="rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-[var(--color-accent)] hover:bg-[var(--color-accent-subtle)]"
                         title="View runs"
                       >
                         Runs {task.runCount ? `(${task.runCount})` : ""}
@@ -253,40 +221,43 @@ export function SchedulesPanel({ agents }: Props) {
                       <button
                         onClick={() => handleRunNow(task)}
                         disabled={runningId === task.id}
-                        className={
-                          `text-xs text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed`
-                        }
+                        className="rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-ink-600 hover:bg-[var(--color-surface-secondary)] disabled:cursor-not-allowed disabled:opacity-50"
                         title="Run now"
                       >
                         {runningId === task.id ? "Running…" : "Run now"}
                       </button>
                       <button
                         onClick={() => setEditTask(task)}
-                        className="text-xs text-gray-500 hover:text-gray-700"
+                        className="rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-ink-600 hover:bg-[var(--color-surface-secondary)]"
                         title="Edit"
                       >
                         Edit
                       </button>
                       <button
                         onClick={() => handleToggle(task.id)}
-                        className="text-xs text-gray-500 hover:text-gray-700"
+                        className="rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-ink-600 hover:bg-[var(--color-surface-secondary)]"
                         title={task.enabled ? "Pause" : "Resume"}
                       >
                         {task.enabled ? "Pause" : "Resume"}
                       </button>
                       <button
                         onClick={() => handleDelete(task.id)}
-                        className="text-xs text-red-500 hover:text-red-700"
+                        className="rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-red-600 hover:bg-red-50"
                         title="Delete"
                       >
                         Delete
                       </button>
                     </div>
-                  </td>
-                </tr>
+                  </div>
+                  <div className="mt-4 grid gap-3 border-t border-[var(--color-border)] pt-3 sm:grid-cols-4">
+                    <div><div className="text-[10px] font-medium uppercase tracking-wide text-muted">Schedule</div><div className="mt-1 font-mono text-[11px] text-ink-700">{task.cronExpression}</div></div>
+                    <div><div className="text-[10px] font-medium uppercase tracking-wide text-muted">Runs on</div><div className="mt-1 text-xs text-ink-700">{(task.executionTarget ?? "cowork") === "server" ? "Server" : "Cowork"}</div></div>
+                    <div><div className="text-[10px] font-medium uppercase tracking-wide text-muted">Timezone</div><div className="mt-1 truncate text-xs text-ink-700">{task.timezone}</div></div>
+                    <div><div className="text-[10px] font-medium uppercase tracking-wide text-muted">Created</div><div className="mt-1 text-xs text-ink-700">{new Date(task.createdAt).toLocaleDateString()}</div></div>
+                  </div>
+                </article>
               ))}
-            </tbody>
-          </table>
+          </div>
         )}
       </div>
 
@@ -323,6 +294,6 @@ export function SchedulesPanel({ agents }: Props) {
       )}
 
       <ScheduleRunsDrawer task={runsTask} onClose={() => setRunsTask(null)} />
-    </div>
+    </InnerPageLayout>
   );
 }

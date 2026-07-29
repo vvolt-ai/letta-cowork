@@ -23,7 +23,7 @@ import { enqueueConversationTurn } from "./conversation-turn-queue.js";
 export async function handleContinueSession(
     options: SessionContinueOptions
 ): Promise<void> {
-    const { sessionId: conversationId, prompt, content, attachments, cwd, model } = options;
+    const { sessionId: conversationId, prompt, content, attachments, cwd, model, permissionMode } = options;
 
     // Validate we have a real conversation ID
     if (!conversationId || !/^(agent-|conv-|conversation-|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/.test(conversationId)) {
@@ -102,6 +102,7 @@ export async function handleContinueSession(
                 prompt: prompt ?? "",
                 content: content as MessageContentItem[] | undefined,
                 model,
+                permissionMode,
                 session: {
                     id: conversationId,
                     title: resolvedTitle,

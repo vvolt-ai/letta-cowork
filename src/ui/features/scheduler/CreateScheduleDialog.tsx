@@ -21,20 +21,13 @@ interface Props {
 }
 
 const EMPTY_FORM: CreateScheduledTaskForm = {
-  name: "",
-  description: "",
-  prompt: "",
-  agentId: "",
-  conversationId: "",
-  scheduleType: "recurring",
-  executionTarget: "cowork",
-  frequency: "daily",
-  time: "09:00",
-  dayOfWeek: "1",
-  cronExpression: "0 9 * * *",
-  timezone: "UTC",
-  enabled: true,
+  name: "", description: "", prompt: "", agentId: "", conversationId: "",
+  scheduleType: "recurring", executionTarget: "cowork", frequency: "daily",
+  time: "09:00", dayOfWeek: "1", cronExpression: "0 9 * * *", timezone: "UTC", enabled: true,
 };
+
+const inputClass = "w-full rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 py-2.5 text-xs text-ink-900 outline-none transition placeholder:text-muted focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-subtle)]";
+const labelClass = "mb-1.5 block text-[11px] font-semibold text-ink-700";
 
 export function CreateScheduleDialog({ open, agents, onClose, onSave, initialValues, mode = "create" }: Props) {
   const [form, setForm] = useState<CreateScheduledTaskForm>({ ...EMPTY_FORM, ...initialValues });
@@ -58,7 +51,6 @@ export function CreateScheduleDialog({ open, agents, onClose, onSave, initialVal
     if (!form.name.trim()) { setError("Name is required"); return; }
     if (!form.prompt.trim()) { setError("Prompt is required"); return; }
     if (!form.agentId) { setError("Please select an agent"); return; }
-
     setSaving(true);
     setError(null);
     try {
@@ -73,255 +65,72 @@ export function CreateScheduleDialog({ open, agents, onClose, onSave, initialVal
 
   if (!open) return null;
 
+  const Segment = <T extends string>({ values, value, labels, onChange }: { values: readonly T[]; value: T; labels: Record<T, string>; onChange: (next: T) => void }) => (
+    <div className="inline-flex w-full rounded-xl bg-[var(--color-surface-secondary)] p-1">
+      {values.map((item) => (
+        <button key={item} type="button" onClick={() => onChange(item)} className={`flex-1 rounded-lg px-3 py-2 text-[11px] font-semibold transition ${value === item ? "bg-[var(--color-surface)] text-ink-900 shadow-sm" : "text-muted hover:text-ink-900"}`}>
+          {labels[item]}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100">
-          <h2 className="text-lg font-semibold text-gray-900">
-            {mode === "edit" ? "Edit scheduled task" : "New scheduled task"}
-          </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/35 p-5 backdrop-blur-sm" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <div className="flex max-h-[86vh] w-full max-w-[760px] flex-col overflow-hidden rounded-3xl border border-white/70 bg-[var(--color-bg-000)] shadow-2xl">
+        <header className="flex shrink-0 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-4">
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>
+            </span>
+            <div>
+              <h2 className="text-base font-semibold text-ink-900">{mode === "edit" ? "Edit schedule" : "Create schedule"}</h2>
+              <p className="mt-0.5 text-[11px] text-muted">Automate a prompt for one of your agents.</p>
+            </div>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-xl p-2 text-muted transition hover:bg-[var(--color-surface-secondary)] hover:text-ink-900" aria-label="Close"><svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+        </header>
+
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
+          <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-soft)]">
+            <div className="mb-4"><h3 className="text-xs font-semibold text-ink-900">Task</h3><p className="mt-0.5 text-[10px] text-muted">Describe what the agent should do.</p></div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div><label className={labelClass}>Name</label><input className={inputClass} placeholder="Daily standup summary" value={form.name} onChange={(e) => set("name", e.target.value)} /></div>
+              <div><label className={labelClass}>Description <span className="font-normal text-muted">(optional)</span></label><input className={inputClass} placeholder="Summarize yesterday’s notes" value={form.description} onChange={(e) => set("description", e.target.value)} /></div>
+              <div className="sm:col-span-2"><label className={labelClass}>Prompt</label><textarea className={`${inputClass} min-h-[88px] resize-y`} placeholder="Tell the agent exactly what to do…" value={form.prompt} onChange={(e) => set("prompt", e.target.value)} /></div>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-soft)]">
+            <div className="mb-4"><h3 className="text-xs font-semibold text-ink-900">Agent and execution</h3><p className="mt-0.5 text-[10px] text-muted">Choose who runs this task and where it executes.</p></div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div><label className={labelClass}>Agent</label><select className={inputClass} value={form.agentId} onChange={(e) => set("agentId", e.target.value)}><option value="">Select an agent…</option>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></div>
+              <div><label className={labelClass}>Run on</label><Segment values={["cowork", "server"] as const} value={form.executionTarget} labels={{ cowork: "Cowork app", server: "Server" }} onChange={(next) => set("executionTarget", next)} /></div>
+              <div className="sm:col-span-2"><label className={labelClass}>Target conversation</label><Segment values={["default", "specific"] as const} value={form.conversationId ? "specific" : "default"} labels={{ default: "Default conversation", specific: "Specific conversation" }} onChange={(next) => set("conversationId", next === "specific" ? "specific" : "")} />{form.conversationId ? <input className={`${inputClass} mt-2 font-mono`} placeholder="conv-…" value={form.conversationId === "specific" ? "" : form.conversationId} onChange={(e) => set("conversationId", e.target.value)} autoFocus /> : null}</div>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-soft)]">
+            <div className="mb-4"><h3 className="text-xs font-semibold text-ink-900">Timing</h3><p className="mt-0.5 text-[10px] text-muted">Choose when and how often this task runs.</p></div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2"><label className={labelClass}>Schedule type</label><Segment values={["recurring", "one_off"] as const} value={form.scheduleType} labels={{ recurring: "Recurring", one_off: "One-off" }} onChange={(next) => set("scheduleType", next)} /></div>
+              {form.scheduleType === "recurring" ? <div><label className={labelClass}>Frequency</label><select className={inputClass} value={form.frequency} onChange={(e) => set("frequency", e.target.value as CreateScheduledTaskForm["frequency"])}>{FREQUENCIES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></div> : null}
+              {form.scheduleType === "recurring" && form.frequency !== "hourly" && form.frequency !== "custom" ? <div><label className={labelClass}>Time</label><select className={inputClass} value={form.time} onChange={(e) => set("time", e.target.value)}>{TIME_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></div> : null}
+              {form.scheduleType === "recurring" && form.frequency === "weekly" ? <div><label className={labelClass}>Day of week</label><select className={inputClass} value={form.dayOfWeek} onChange={(e) => set("dayOfWeek", e.target.value)}>{DAYS_OF_WEEK.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></div> : null}
+              {form.scheduleType === "recurring" && form.frequency === "custom" ? <div><label className={labelClass}>Cron expression</label><input className={`${inputClass} font-mono`} placeholder="0 9 * * *" value={form.cronExpression} onChange={(e) => set("cronExpression", e.target.value)} /></div> : null}
+              <div><label className={labelClass}>Timezone</label><select className={inputClass} value={form.timezone} onChange={(e) => set("timezone", e.target.value)}>{TIMEZONES.map((timezone) => <option key={timezone} value={timezone}>{timezone}</option>)}</select></div>
+            </div>
+            {form.scheduleType === "recurring" ? <div className="mt-3 flex items-center gap-2 rounded-xl bg-[var(--color-surface-secondary)] px-3 py-2 text-[10px] text-muted"><span>Schedule preview</span><code className="font-mono font-semibold text-ink-700">{cronPreview}</code></div> : null}
+          </section>
+
+          <div className="flex gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-accent-subtle)] p-3 text-[11px] leading-5 text-ink-700"><span className="text-[var(--color-accent)]">✦</span><p><span className="font-semibold">Need a notification?</span> Include it in the prompt—for example, “send the summary to WhatsApp +1234567890.” Scheduled runs may use a short randomized delay.</p></div>
+          {error ? <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-700">{error}</div> : null}
         </div>
 
-        {/* Info banner */}
-        <div className="mx-6 mt-4 flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm text-blue-700">
-          <span className="mt-0.5">ℹ️</span>
-          <span>Choose whether this task runs in Vera Cowork or on the server.</span>
-        </div>
-
-        <div className="px-6 py-4 space-y-4">
-          {/* Name */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-            <input
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="e.g. Daily standup summary"
-              value={form.name}
-              onChange={(e) => set("name", e.target.value)}
-            />
-          </div>
-
-          {/* Description */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <input
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="e.g. Summarize yesterday's standup notes"
-              value={form.description}
-              onChange={(e) => set("description", e.target.value)}
-            />
-          </div>
-
-          {/* Prompt */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Prompt</label>
-            <textarea
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[80px] resize-y"
-              placeholder="e.g. Summarize the latest standup notes and post to #general"
-              value={form.prompt}
-              onChange={(e) => set("prompt", e.target.value)}
-            />
-          </div>
-
-          {/* Schedule type */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Schedule type</label>
-            <div className="flex rounded-lg border border-gray-300 overflow-hidden">
-              {(["recurring", "one_off"] as const).map((type) => (
-                <button
-                  key={type}
-                  onClick={() => set("scheduleType", type)}
-                  className={`flex-1 py-2 text-sm font-medium transition-colors ${
-                    form.scheduleType === type
-                      ? "bg-gray-900 text-white"
-                      : "bg-white text-gray-600 hover:bg-gray-50"
-                  }`}
-                >
-                  {type === "recurring" ? "Recurring" : "One-off"}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Agent */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Agent</label>
-            <select
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              value={form.agentId}
-              onChange={(e) => set("agentId", e.target.value)}
-            >
-              <option value="">Search and select an agent</option>
-              {agents.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Execution target */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Run on</label>
-            <div className="flex rounded-lg border border-gray-300 overflow-hidden">
-              {(["cowork", "server"] as const).map((target) => (
-                <button
-                  key={target}
-                  type="button"
-                  onClick={() => set("executionTarget", target)}
-                  className={`flex-1 py-2 text-sm font-medium transition-colors ${
-                    form.executionTarget === target
-                      ? "bg-gray-900 text-white"
-                      : "bg-white text-gray-600 hover:bg-gray-50"
-                  }`}
-                >
-                  {target === "cowork" ? "CoWork app" : "Server"}
-                </button>
-              ))}
-            </div>
-            <p className="mt-1 text-xs text-gray-400">
-              CoWork requires the desktop app to be running. Server runs even when CoWork is closed.
-            </p>
-          </div>
-
-          {/* Target conversation */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Target conversation</label>
-            <div className="flex rounded-lg border border-gray-300 overflow-hidden">
-              {(["", "specific"] as const).map((type) => (
-                <button
-                  key={type}
-                  onClick={() => set("conversationId", type === "specific" ? form.conversationId || "" : "")}
-                  className={`flex-1 py-2 text-sm font-medium transition-colors ${
-                    (type === "" && !form.conversationId) || (type === "specific" && !!form.conversationId)
-                      ? "bg-gray-900 text-white"
-                      : "bg-white text-gray-600 hover:bg-gray-50"
-                  }`}
-                >
-                  {type === "" ? "Default conversation" : "Specific conversation"}
-                </button>
-              ))}
-            </div>
-            {form.conversationId !== "" && (
-              <input
-                className="mt-2 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Conversation ID (e.g. conv-xxx)"
-                value={form.conversationId}
-                onChange={(e) => set("conversationId", e.target.value)}
-              />
-            )}
-          </div>
-
-          {/* Frequency */}
-          {form.scheduleType === "recurring" && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Frequency</label>
-              <select
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                value={form.frequency}
-                onChange={(e) => set("frequency", e.target.value as CreateScheduledTaskForm["frequency"])}
-              >
-                {FREQUENCIES.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
-              </select>
-            </div>
-          )}
-
-          {/* Time */}
-          {form.scheduleType === "recurring" && form.frequency !== "hourly" && form.frequency !== "custom" && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
-              <select
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                value={form.time}
-                onChange={(e) => set("time", e.target.value)}
-              >
-                {TIME_OPTIONS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
-            </div>
-          )}
-
-          {/* Day of week */}
-          {form.scheduleType === "recurring" && form.frequency === "weekly" && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Day of week</label>
-              <select
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                value={form.dayOfWeek}
-                onChange={(e) => set("dayOfWeek", e.target.value)}
-              >
-                {DAYS_OF_WEEK.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
-              </select>
-            </div>
-          )}
-
-          {/* Custom cron */}
-          {form.scheduleType === "recurring" && form.frequency === "custom" && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Cron expression</label>
-              <input
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="0 9 * * *"
-                value={form.cronExpression}
-                onChange={(e) => set("cronExpression", e.target.value)}
-              />
-            </div>
-          )}
-
-          {/* Timezone */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
-            <select
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              value={form.timezone}
-              onChange={(e) => set("timezone", e.target.value)}
-            >
-              {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
-            </select>
-          </div>
-
-          {/* Cron preview */}
-          {form.scheduleType === "recurring" && (
-            <p className="text-xs text-gray-500 font-mono">Cron: {cronPreview}</p>
-          )}
-
-          <p className="text-xs text-gray-400">
-            Scheduled tasks use a randomized delay of several minutes for performance.
-          </p>
-
-          {/* ── Notifications hint ─────────────────────────────────────
-              Notifications used to be a configurable dispatch on the
-              server. They moved into the prompt: the agent now decides
-              whether/where/how to notify, using the cowork-channels
-              skill to call POST /channels/:id/send. The dialog used to
-              have a whole UI section for picking channel + recipient -
-              all of that came out May 15. */}
-          <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2.5 text-xs text-blue-800">
-            <div className="font-medium mb-0.5">Want a notification?</div>
-            <div className="text-blue-700">
-              Tell the agent in the prompt above. Example: <span className="font-mono">"...and send the summary to WhatsApp +1234567890"</span>. The agent uses the cowork-channels skill to deliver it.
-            </div>
-          </div>
-
-          {error && (
-            <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="px-4 py-2 text-sm font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors"
-          >
-            {saving ? "Saving…" : mode === "edit" ? "Save changes" : "Create task"}
-          </button>
-        </div>
+        <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-3.5">
+          <button type="button" onClick={onClose} className="rounded-xl px-4 py-2.5 text-xs font-medium text-ink-600 transition hover:bg-[var(--color-surface-secondary)]">Cancel</button>
+          <button type="button" onClick={handleSave} disabled={saving} className="rounded-xl bg-[var(--color-accent)] px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:brightness-95 disabled:opacity-50">{saving ? "Saving…" : mode === "edit" ? "Save changes" : "Create schedule"}</button>
+        </footer>
       </div>
     </div>
   );

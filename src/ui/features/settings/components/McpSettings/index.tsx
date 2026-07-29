@@ -55,131 +55,65 @@ export function McpSettings() {
   };
 
   return (
-    <div className="p-4">
-      <div className="flex items-center justify-between mb-4">
+    <div className="space-y-5">
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">MCP Servers</h2>
-          <p className="text-sm text-slate-500">
-            Connect external tools via the Model Context Protocol. Agents attach
-            servers individually and pick which tools they expose.
-          </p>
+          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01"/></svg>
+          </div>
+          <h2 className="text-base font-semibold text-ink-900">Connected MCP servers</h2>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-muted">External tools available through the Model Context Protocol. Add or edit server configuration without leaving this list.</p>
         </div>
-        {!showForm ? <div className="flex gap-2">
-          <button
-            onClick={refresh}
-            className="px-3 py-1.5 text-sm border rounded-lg text-slate-700 hover:bg-slate-50"
-            disabled={loading}
-            title="Refresh server list"
-          >
-            ↻
+        <div className="flex shrink-0 gap-2">
+          <button onClick={refresh} disabled={loading} title="Refresh server list" className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-ink-500 transition hover:bg-[var(--color-surface-secondary)] disabled:opacity-50">
+            <svg viewBox="0 0 24 24" className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M20 6v5h-5M4 18v-5h5"/><path d="M6.1 9a7 7 0 0 1 11.5-2.6L20 9M4 15l2.4 2.6A7 7 0 0 0 17.9 15"/></svg>
           </button>
-          <button
-            onClick={handleAdd}
-            className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-          >
-            + Add server
+          <button onClick={handleAdd} className="inline-flex h-10 items-center gap-2 rounded-xl bg-[var(--color-accent)] px-4 text-sm font-semibold text-white shadow-sm transition hover:brightness-95">
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
+            Add MCP
           </button>
-        </div> : null}
+        </div>
       </div>
 
-      {showForm ? (
-        <McpServerFormDialog
-          open={showForm}
-          editing={editing}
-          onClose={() => setShowForm(false)}
-          onSubmit={handleSubmit}
-        />
-      ) : loading ? (
+      {loading ? (
         <LoadingRow />
       ) : error ? (
-        <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-3">
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
           {error}
         </div>
       ) : servers.length === 0 ? (
         <EmptyState onAdd={handleAdd} />
       ) : (
-        <div className="border rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left">
-              <tr>
-                <th className="px-3 py-2 font-medium text-slate-700">Name</th>
-                <th className="px-3 py-2 font-medium text-slate-700">Transport</th>
-                <th className="px-3 py-2 font-medium text-slate-700">Scope</th>
-                <th className="px-3 py-2 font-medium text-slate-700">Status</th>
-                <th className="px-3 py-2 font-medium text-slate-700 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {servers.map((server) => {
-                const status = testStatus[server.id];
-                return (
-                  <tr key={server.id} className="border-t">
-                    <td className="px-3 py-2">
-                      <div className="font-medium text-slate-900">{server.name}</div>
-                      <div className="text-xs text-slate-500 font-mono truncate max-w-xs">
-                        {server.url}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2 text-slate-600 uppercase text-xs">
-                      {server.transport}
-                    </td>
-                    <td className="px-3 py-2 text-xs">
-                      {server.ownerUserId === null ? (
-                        <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded">
-                          Org-shared
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded">
-                          Private
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-xs">
-                      <ServerStatus server={server} status={status} />
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      <div className="inline-flex gap-1 items-center">
-                        <ActionButton onClick={() => testServer(server.id)} title="Test connection">
-                          Test
-                        </ActionButton>
-                        <ActionButton onClick={() => refreshTools(server.id)} title="Re-discover tools">
-                          Refresh
-                        </ActionButton>
-                        <IconButton
-                          onClick={() => handleEdit(server)}
-                          title="Edit"
-                          variant="default"
-                        >
-                          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
-                            {/* pencil icon */}
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                          </svg>
-                        </IconButton>
-                        <IconButton
-                          onClick={() => handleDelete(server)}
-                          title="Delete"
-                          variant="danger"
-                        >
-                          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
-                            {/* trash icon */}
-                            <path d="M3 6h18" />
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
-                            <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                            <line x1="10" y1="11" x2="10" y2="17" />
-                            <line x1="14" y1="11" x2="14" y2="17" />
-                          </svg>
-                        </IconButton>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-soft)]">
+          {servers.map((server, index) => {
+            const status = testStatus[server.id];
+            return (
+              <article key={server.id} className={`flex flex-col gap-4 p-4 lg:flex-row lg:items-center ${index ? "border-t border-[var(--color-border)]" : ""}`}>
+                <div className="flex min-w-0 flex-1 items-start gap-3">
+                  <span className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${server.enabled ? "bg-emerald-50 text-emerald-600" : "bg-[var(--color-surface-secondary)] text-muted"}`}><svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01"/></svg></span>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-semibold text-ink-900">{server.name}</h3>
+                      <span className="rounded-full bg-[var(--color-surface-secondary)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">{server.transport}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${server.ownerUserId === null ? "bg-blue-50 text-blue-700" : "bg-violet-50 text-violet-700"}`}>{server.ownerUserId === null ? "Organization" : "Private"}</span>
+                    </div>
+                    <p className="mt-1 truncate font-mono text-xs text-muted">{server.url}</p>
+                    <div className="mt-1.5 text-xs"><ServerStatus server={server} status={status} /></div>
+                  </div>
+                </div>
+                <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
+                  <ActionButton onClick={() => testServer(server.id)} title="Test connection">Test</ActionButton>
+                  <ActionButton onClick={() => refreshTools(server.id)} title="Re-discover tools">Refresh tools</ActionButton>
+                  <IconButton onClick={() => handleEdit(server)} title="Edit"><svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg></IconButton>
+                  <IconButton onClick={() => handleDelete(server)} title="Delete" variant="danger"><svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4h8v2"/></svg></IconButton>
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
 
+      <McpServerFormDialog open={showForm} editing={editing} onClose={() => setShowForm(false)} onSubmit={handleSubmit} />
     </div>
   );
 }

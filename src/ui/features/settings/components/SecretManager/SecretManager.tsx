@@ -61,6 +61,7 @@ export function SecretManager() {
   const [drafts, setDrafts] = useState<SecretDraft[]>([newDraft()]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showForm, setShowForm] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -138,6 +139,7 @@ export function SecretManager() {
       setDrafts([newDraft()]);
       await loadSecrets();
       setMessage(`${rows.length} secret${rows.length === 1 ? "" : "s"} saved.`);
+      setShowForm(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save secrets");
     } finally {
@@ -163,107 +165,45 @@ export function SecretManager() {
     }
   }
 
+  const openNewSecret = () => {
+    setDrafts([newDraft()]);
+    setError(null);
+    setShowForm(true);
+  };
+
   return (
-    <section className="border-b bg-slate-50 p-4">
-      <div className="flex items-start justify-between gap-3">
+    <section className="space-y-5">
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Runtime secrets</p>
-          <h3 className="text-base font-semibold text-gray-900">Account Secret Manager</h3>
-          <p className="mt-1 text-sm text-gray-600">
-            Secrets are encrypted on Vera server and attached to your account. Agent/tool runs under your account receive
-            them as environment variables. Values are write-only and hidden after saving.
-          </p>
+          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--color-accent-subtle)] text-[var(--color-accent)]"><svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></svg></div>
+          <h2 className="text-base font-semibold text-ink-900">Saved runtime secrets</h2>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-muted">Encrypted account values exposed to authorized agent and tool runs as environment variables. Saved values remain hidden.</p>
         </div>
         <div className="flex shrink-0 gap-2">
-          <button
-            type="button"
-            onClick={() => void loadSecrets()}
-            disabled={loading || saving}
-            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-white disabled:opacity-50"
-          >
-            {loading ? "Loading..." : "Refresh"}
-          </button>
-          <button
-            type="button"
-            onClick={addDraft}
-            disabled={saving}
-            className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            Add secret
-          </button>
+          <button type="button" onClick={() => void loadSecrets()} disabled={loading || saving} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs font-semibold text-ink-600 hover:bg-[var(--color-surface-secondary)] disabled:opacity-50">Refresh</button>
+          <button type="button" onClick={openNewSecret} disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-accent)] px-4 py-2 text-xs font-semibold text-white hover:brightness-95 disabled:opacity-50"><span className="text-base leading-none">+</span> Add secret</button>
         </div>
       </div>
 
-      {error ? <div className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
-      {message ? <div className="mt-3 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">{message}</div> : null}
+      {error && !showForm ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
+      {message ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{message}</div> : null}
 
-      <div className="mt-4 space-y-3">
-        {drafts.map((draft, index) => (
-          <div key={draft.id} className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
-            <label className="block text-sm font-medium text-gray-700">
-              Secret name #{index + 1}
-              <input
-                value={draft.name}
-                onChange={(event) => updateDraft(draft.id, { name: event.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, "_") })}
-                placeholder="API_KEY"
-                autoComplete="off"
-                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-              />
-            </label>
-            <label className="block text-sm font-medium text-gray-700">
-              Secret value #{index + 1}
-              <input
-                value={draft.value}
-                onChange={(event) => updateDraft(draft.id, { value: event.target.value })}
-                placeholder="Paste secret value"
-                type="password"
-                autoComplete="new-password"
-                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-              />
-            </label>
-            {drafts.length > 1 ? (
-              <button
-                type="button"
-                onClick={() => removeDraft(draft.id)}
-                disabled={saving}
-                className="self-end rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-white disabled:opacity-50"
-              >
-                Remove
-              </button>
-            ) : null}
-          </div>
-        ))}
-
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={() => void saveSecrets()}
-            disabled={saving || !drafts.some((draft) => draft.name.trim())}
-            className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            {saving ? "Saving..." : "Save secrets"}
-          </button>
-          <span className="text-sm text-gray-500">
-            Example usage in Bash/runtime tools: <code className="rounded bg-gray-100 px-1 py-0.5">{firstUsageExample}</code>
-          </span>
-        </div>
-      </div>
-
-      <div className="mt-4 space-y-2">
+      <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-soft)]">
         {secrets.map((secret) => (
-          <article key={secret.id} className="flex items-center justify-between gap-3 rounded-lg border bg-white p-3">
-            <div>
-              <h4 className="font-medium text-gray-900">🔐 {secret.name}</h4>
-              <p className="text-sm text-gray-500">
+          <article key={secret.id} className="flex items-center justify-between gap-4 border-b border-[var(--color-border)] p-4 last:border-b-0">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600"><svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span>
+              <div className="min-w-0"><h4 className="truncate font-mono text-sm font-semibold text-ink-900">{secret.name}</h4>
+              <p className="mt-0.5 text-xs text-muted">
                 Account secret · {secret.updatedAt ? `Updated ${new Date(secret.updatedAt).toLocaleString()}` : "Saved"}
-              </p>
+              </p></div>
             </div>
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => setDrafts([newDraft(secret.name)])}
+                onClick={() => { setDrafts([newDraft(secret.name)]); setError(null); setShowForm(true); }}
                 disabled={saving}
-                className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-medium text-ink-700 hover:bg-[var(--color-surface-secondary)] disabled:opacity-50"
               >
                 Update value
               </button>
@@ -271,7 +211,7 @@ export function SecretManager() {
                 type="button"
                 onClick={() => void deleteSecret(secret)}
                 disabled={saving}
-                className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
+                className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
               >
                 Delete
               </button>
@@ -279,11 +219,27 @@ export function SecretManager() {
           </article>
         ))}
         {!secrets.length && !loading ? (
-          <div className="rounded-lg border border-dashed bg-white p-4 text-sm text-gray-500">
-            No secrets yet. Add one or more name/value rows above.
+          <div className="p-12 text-center text-sm text-muted">
+            No runtime secrets saved yet.
           </div>
         ) : null}
       </div>
+
+      {showForm ? (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <button type="button" className="absolute inset-0 bg-ink-900/45 backdrop-blur-sm" onClick={() => setShowForm(false)} aria-label="Close secret form" />
+          <div className="relative flex max-h-[88vh] w-full max-w-[680px] flex-col overflow-hidden rounded-3xl border border-white/70 bg-[var(--color-surface)] shadow-2xl">
+            <div className="flex items-start justify-between border-b border-[var(--color-border)] px-6 py-5"><div><h3 className="text-lg font-semibold text-ink-900">Add runtime secret</h3><p className="mt-1 text-sm text-muted">Values are encrypted and become write-only after saving.</p></div><button type="button" onClick={() => setShowForm(false)} className="flex h-9 w-9 items-center justify-center rounded-xl text-muted hover:bg-[var(--color-surface-secondary)]">✕</button></div>
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
+              {drafts.map((draft, index) => <div key={draft.id} className="grid gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-000)] p-4 md:grid-cols-[1fr_1fr_auto]"><label className="text-xs font-semibold text-ink-700">Secret name #{index + 1}<input value={draft.name} onChange={(event) => updateDraft(draft.id, { name: event.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, "_") })} placeholder="API_KEY" autoComplete="off" className="mt-1.5 h-10 w-full rounded-xl border border-[var(--color-border)] px-3 font-mono text-sm outline-none focus:border-[var(--color-accent)]" /></label><label className="text-xs font-semibold text-ink-700">Secret value #{index + 1}<input value={draft.value} onChange={(event) => updateDraft(draft.id, { value: event.target.value })} placeholder="Paste secret value" type="password" autoComplete="new-password" className="mt-1.5 h-10 w-full rounded-xl border border-[var(--color-border)] px-3 text-sm outline-none focus:border-[var(--color-accent)]" /></label>{drafts.length > 1 ? <button type="button" onClick={() => removeDraft(draft.id)} className="self-end rounded-xl border border-[var(--color-border)] px-3 py-2 text-xs text-ink-600">Remove</button> : null}</div>)}
+              <button type="button" onClick={addDraft} className="text-xs font-semibold text-[var(--color-accent)]">+ Add another secret</button>
+              <p className="text-xs text-muted">Example runtime usage: <code className="rounded bg-[var(--color-surface-secondary)] px-1.5 py-0.5">{firstUsageExample}</code></p>
+              {error ? <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}
+            </div>
+            <div className="flex justify-end gap-2 border-t border-[var(--color-border)] bg-[var(--color-surface-secondary)]/40 px-6 py-4"><button type="button" onClick={() => setShowForm(false)} className="rounded-xl border border-[var(--color-border)] px-4 py-2 text-sm font-medium text-ink-700">Cancel</button><button type="button" onClick={() => void saveSecrets()} disabled={saving || !drafts.some((draft) => draft.name.trim())} className="rounded-xl bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? "Saving…" : "Save secrets"}</button></div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

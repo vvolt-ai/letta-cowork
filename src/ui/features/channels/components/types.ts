@@ -127,6 +127,7 @@ export interface OrganizationUser {
 
 export interface ChannelsManagerProps {
   onAuthError?: (error: Error) => void;
+  embedded?: boolean;
 }
 
 export const PROVIDERS: readonly { id: string; name: string; icon: string }[] = [

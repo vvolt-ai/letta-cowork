@@ -92,6 +92,7 @@ export function ChatTimeline({
     showReasoning,
     toolExecutions,
     cliResults,
+    agentStatus,
   });
 
   const lastCommittedAssistant = [...messages].reverse().find((item) => item.message.type === "assistant");
@@ -104,9 +105,9 @@ export function ChatTimeline({
     && streamingAssistantText !== committedAssistantText;
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-1.5">
+    <div className="mx-auto flex w-full min-w-0 max-w-[920px] flex-col gap-2 overflow-hidden">
       {timeline.length === 0 ? (
-        <div className="mx-auto my-20 max-w-md rounded-3xl border border-[var(--color-border)] bg-white/70 px-8 py-10 text-center shadow-sm">
+        <div className="mx-auto my-20 max-w-md px-8 py-10 text-center">
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
             <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8">
               <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
@@ -137,12 +138,12 @@ export function ChatTimeline({
       )}
 
       {errorMessage ? (
-        <div className="flex items-start gap-3 rounded-2xl border border-[var(--color-status-error)]/25 bg-[var(--color-status-error)]/5 px-4 py-3 text-sm">
+        <div className="flex min-w-0 items-start gap-3 rounded-2xl border border-[var(--color-status-error)]/25 bg-[var(--color-status-error)]/5 px-4 py-3 text-sm">
           <svg viewBox="0 0 24 24" className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-status-error)]" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="12" cy="12" r="10" />
             <path d="M12 8v4M12 16h.01" />
           </svg>
-          <div>
+          <div className="min-w-0 break-words">
             <div className="font-medium text-[var(--color-status-error)]">Agent error</div>
             <div className="mt-0.5 text-xs leading-5 text-[var(--color-status-error)]/80">{errorMessage}</div>
           </div>

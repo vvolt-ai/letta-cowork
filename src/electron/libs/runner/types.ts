@@ -27,6 +27,7 @@ export type RunnerOptions = {
   resumeConversationId?: string;
   preferredAgentId?: string;
   model?: string;
+  permissionMode?: "standard" | "acceptEdits" | "unrestricted";
   onEvent: (event: ServerEvent) => void;
   onSessionUpdate?: (updates: { lettaConversationId?: string }) => void;
 };

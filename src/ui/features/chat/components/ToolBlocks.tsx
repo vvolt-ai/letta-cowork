@@ -729,14 +729,14 @@ export const ToolExecutionBlock = memo(function ToolExecutionBlock({ name, statu
   const rowToneClass = isError
     ? "text-red-600 hover:bg-red-50"
     : isRunning
-      ? "text-blue-600 hover:bg-blue-50"
-      : "text-ink-400 hover:bg-gray-50 hover:text-ink-600";
+      ? "text-[var(--color-accent)] hover:bg-[var(--color-accent-light)]"
+      : "text-muted hover:bg-[var(--color-surface-hover)] hover:text-ink-700";
   return (
-    <section className="max-w-4xl px-1 py-[1px]">
+    <section className="max-w-4xl py-[1px]">
       <button
         type="button"
         onClick={() => setExpanded((value) => !value)}
-        className={`group inline-flex max-w-full items-center gap-1.5 rounded-md px-1.5 py-0.5 text-left text-[12px] leading-5 transition ${rowToneClass}`}
+        className={`group inline-flex max-w-full items-center gap-1.5 rounded-lg px-2 py-1 text-left text-[12px] leading-5 transition ${rowToneClass}`}
         title={summary ? `${name}: ${summary}` : name}
       >
         <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center opacity-80">

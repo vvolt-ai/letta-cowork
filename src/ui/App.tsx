@@ -10,21 +10,22 @@ import { useZohoEmail } from "./hooks/useZohoEmail";
 import { useEmailAsInput } from "./hooks/useEmailAsInput";
 import { useEmailSelection } from "./hooks/useEmailSelection";
 import { WorkspaceLayout } from "./features/layout/components/WorkspaceLayout";
+import { InnerPageLayout } from "./features/layout/components/InnerPageLayout";
 import { ChatWorkspace } from "./features/chat/components/ChatWorkspace";
 import { ConfigurationTab } from "./features/sidebar/components/ConfigurationTab";
 import { SkillsPanel } from "./features/skills/SkillsPanel";
 import { SchedulesPanel } from "./features/scheduler/SchedulesPanel";
 import { RunsDebuggerPanel } from "./features/runs-debugger";
 import { SkillDownloadDialog } from "./features/settings/components/SkillDownloadDialog";
-import { LettaTerminal } from "./features/settings/components/LettaTerminal";
 import { useDownloadSkill } from "./hooks/useDownloadSkill";
-import * as Dialog from "@radix-ui/react-dialog";
 import { ActivityPanel } from "./features/activity/components/ActivityPanel";
 import { GlobalErrorToast } from "./features/system/components/GlobalErrorToast";
 import { EmailDetailsDialog } from "./features/email/components/EmailDetailsDialog";
 import { CoworkSettingsDialog } from "./features/settings/components/CoworkSettingsDialog";
 import { MemoryDialog } from "./features/settings/components/MemoryDialog";
-import { McpServersDialog } from "./features/settings/components/McpSettings/McpServersDialog";
+import { McpSettings } from "./features/settings/components/McpSettings";
+import { SecretManager } from "./features/settings/components/SecretManager/SecretManager";
+import { EnvironmentSettings } from "./features/settings/components/EnvironmentSettings";
 import { ChangeEnv } from "./features/settings/components/ChangeEnv";
 import { LoginScreen } from "./features/auth/components/LoginScreen";
 import { useSessionController } from "./hooks/useSessionController";
@@ -34,6 +35,7 @@ import { useProcessEmailToAgent } from "./hooks/useProcessEmailToAgent";
 import { useAuth } from "./hooks/useAuth";
 import { SessionNotifications } from "./features/system/components/SessionNotifications";
 import { SuperAdminPanel } from "./features/admin/SuperAdminPanel";
+import { SettingsWorkspace, type SettingsSection } from "./features/settings/components/SettingsWorkspace";
 
 const SCROLL_THRESHOLD = 50;
 const SESSION_CHANGE_SCROLL_DELAY_MS = 100;
@@ -148,11 +150,11 @@ function App() {
   const [showSchedules, setShowSchedules] = useState(false);
   const [showRuns, setShowRuns] = useState(false);
   const [showSuperAdmin, setShowSuperAdmin] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>("profile");
   const [runsPresetConversationId, setRunsPresetConversationId] = useState<string | undefined>(undefined);
   const [scheduleAgents, setScheduleAgents] = useState<Array<{ id: string; name: string; description?: string | null }>>([]);
   const [skillDownloadOpen, setSkillDownloadOpen] = useState(false);
-  const [showLettaCli, setShowLettaCli] = useState(false);
-  const [showMcpServers, setShowMcpServers] = useState(false);
 
   const {
     skillUrl,
@@ -563,17 +565,26 @@ function App() {
 
   const handleLoadMoreHistory = useCallback(() => {
     const container = scrollContainerRef.current;
-    if (!container || !hasMoreHistory) {
-      return;
-    }
+    if (!container) return;
+
+    const hasLocalHistory = hasMoreHistory;
+    const hasServerHistory = Boolean(activeSession?.hasMoreHistory);
+    if (!hasLocalHistory && !hasServerHistory) return;
 
     pendingHistoryLoadRef.current = {
       prevScrollHeight: container.scrollHeight,
       prevScrollTop: container.scrollTop,
     };
 
-    loadMoreHistory();
-  }, [hasMoreHistory, loadMoreHistory]);
+    if (hasLocalHistory) {
+      loadMoreHistory();
+      return;
+    }
+
+    if (activeSessionId) {
+      useAppStore.getState().fetchSessionHistory(activeSessionId, 50);
+    }
+  }, [activeSession?.hasMoreHistory, activeSessionId, hasMoreHistory, loadMoreHistory]);
 
   const handleToggleActivityPanel = useCallback(() => {
     setIsActivityOpen((prev) => !prev);
@@ -733,9 +744,11 @@ function App() {
             awaitingConversationEmailId={awaitingConversationEmailId}
             errorEmailId={errorEmailId}
             newlyCreatedConversations={newlyCreatedConversations}
-            onOpenConfiguration={() => { setShowConfiguration(true); setShowSkills(false); setShowSchedules(false); setShowRuns(false); }}
-            onOpenSkills={() => { setShowSkills(true); setShowConfiguration(false); setShowSchedules(false); setShowRuns(false); }}
-            onOpenSchedules={() => { setShowSchedules(true); setShowSkills(false); setShowConfiguration(false); setShowRuns(false); setShowSuperAdmin(false); }}
+            onOpenSettings={() => {
+              setSettingsSection("profile");
+              setShowSettings(true);
+              setIsActivityOpen(false);
+            }}
             hasMoreEmails={hasMoreEmails}
             isLoadingMoreEmails={isLoadingMoreEmails}
             onLoadMoreEmails={handleLoadMoreEmails}
@@ -756,34 +769,24 @@ function App() {
           ) : showSuperAdmin ? (
             <SuperAdminPanel onClose={() => setShowSuperAdmin(false)} />
           ) : showSchedules ? (
-            <SchedulesPanel agents={scheduleAgents} />
+            <SchedulesPanel agents={scheduleAgents} onClose={() => setShowSchedules(false)} />
           ) : showSkills ? (
             <SkillsPanel onClose={() => setShowSkills(false)} />
           ) : showConfiguration ? (
-            <div className="flex h-full flex-col">
-              {/* Configuration header */}
-              <div className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-4">
-                <h2 className="text-base font-semibold text-ink-900">Configuration</h2>
-                <button
-                  onClick={() => setShowConfiguration(false)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-muted hover:bg-[var(--color-sidebar-hover)] hover:text-ink-700 transition"
-                  aria-label="Close configuration"
-                >
-                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M6 6l12 12M18 6l-12 12" />
-                  </svg>
-                </button>
-              </div>
-              {/* Configuration content */}
-              <div className="flex-1 overflow-y-auto px-6 py-6">
-                <ConfigurationTab
+            <InnerPageLayout
+              title="Configuration"
+              description="Manage integrations, tools, and workspace behavior."
+              onClose={() => setShowConfiguration(false)}
+              contentWidthClassName="max-w-5xl"
+            >
+              <ConfigurationTab
                   coworkSettings={coworkSettings}
                   lettaEnvOpen={lettaEnvOpen}
                   onLettaEnvOpenChange={setLettaEnvOpen}
                   onOpenChannels={() => setShowCoworkSettings(true)}
                   onOpenSkillDownload={() => setSkillDownloadOpen(true)}
-                  onOpenLettaCli={() => setShowLettaCli(true)}
-                  onOpenMcpServers={() => setShowMcpServers(true)}
+                  onOpenLettaCli={() => {}}
+                  onOpenMcpServers={() => {}}
                   onOpenSuperAdmin={() => {
                     setShowSuperAdmin(true);
                     setShowConfiguration(false);
@@ -800,9 +803,8 @@ function App() {
                   onOpenEmailView={() => setShowConfiguration(false)}
                   onRefreshEmails={refetchEmails}
                   onOpenAddAgentsModal={() => setShowConfiguration(false)}
-                />
-              </div>
-            </div>
+              />
+            </InnerPageLayout>
           ) : (
             <ChatWorkspace
               title={activeSession?.title}
@@ -817,7 +819,7 @@ function App() {
               showPartialMessage={showPartialMessage}
               partialReasoning={partialReasoning}
               isHistoryLoading={Boolean(activeSession?.isLoadingHistory)}
-              hasMoreHistory={hasMoreHistory || Boolean(activeSession?.totalDisplayableCount && activeSession.totalDisplayableCount > visibleMessages.length)}
+              hasMoreHistory={hasMoreHistory || Boolean(activeSession?.hasMoreHistory) || Boolean(activeSession?.totalDisplayableCount && activeSession.totalDisplayableCount > visibleMessages.length)}
               reasoningSteps={reasoningSteps}
               toolExecutions={toolExecutions}
               cliResults={ephemeralState?.cliResults ?? []}
@@ -858,6 +860,70 @@ function App() {
         }
       />
 
+      {showSettings ? (
+        <SettingsWorkspace
+          activeSection={settingsSection}
+          onSectionChange={setSettingsSection}
+          onClose={() => setShowSettings(false)}
+        >
+          {settingsSection === "skills" ? (
+            <SkillsPanel onClose={() => setShowSettings(false)} />
+          ) : settingsSection === "schedules" ? (
+            <SchedulesPanel agents={scheduleAgents} onClose={() => setShowSettings(false)} />
+          ) : settingsSection === "administration" ? (
+            <SuperAdminPanel onClose={() => setShowSettings(false)} />
+          ) : settingsSection === "mcp-servers" ? (
+            <InnerPageLayout title="MCP servers" description="Connect and manage external tool providers." onClose={() => setShowSettings(false)} contentWidthClassName="max-w-6xl">
+              <McpSettings />
+            </InnerPageLayout>
+          ) : settingsSection === "runtime-secrets" ? (
+            <InnerPageLayout title="Runtime secrets" description="Manage encrypted values available to your agent tools." onClose={() => setShowSettings(false)} contentWidthClassName="max-w-5xl">
+              <SecretManager />
+            </InnerPageLayout>
+          ) : settingsSection === "vera-environment" ? (
+            <InnerPageLayout title="Vera Environment" description="Configure the runtime connection used by Cowork." onClose={() => setShowSettings(false)} contentWidthClassName="max-w-4xl">
+              <EnvironmentSettings />
+            </InnerPageLayout>
+          ) : (
+            <InnerPageLayout
+              title={{
+                profile: "Profile",
+                communication: "Communication",
+                "remote-access": "Remote access",
+              }[settingsSection] ?? "Settings"}
+              description={{
+                profile: "Manage your Cowork identity and contact information.",
+                communication: "Connect channels and configure email automation.",
+                "remote-access": "Control the desktop tool runner used by remote agents.",
+              }[settingsSection] ?? "Manage Cowork."}
+              onClose={() => setShowSettings(false)}
+              contentWidthClassName="max-w-5xl"
+            >
+              <ConfigurationTab
+                section={settingsSection}
+                coworkSettings={coworkSettings}
+                lettaEnvOpen={lettaEnvOpen}
+                onLettaEnvOpenChange={setLettaEnvOpen}
+                onOpenChannels={() => setShowCoworkSettings(true)}
+                onOpenSkillDownload={() => setSkillDownloadOpen(true)}
+                onOpenLettaCli={() => {}}
+                onOpenMcpServers={() => {}}
+                onOpenSuperAdmin={() => setSettingsSection("administration")}
+                isEmailConnected={isMailConnected}
+                unreadLabel=""
+                autoSyncEnabled={autoSyncEnabled}
+                onToggleAutoSync={setAutoSyncEnabled}
+                onConnectEmail={connectEmail}
+                onDisconnectEmail={disconnectEmail}
+                onOpenEmailView={() => setShowSettings(false)}
+                onRefreshEmails={refetchEmails}
+                onOpenAddAgentsModal={() => setShowSettings(false)}
+              />
+            </InnerPageLayout>
+          )}
+        </SettingsWorkspace>
+      ) : null}
+
       {pendingStart ? (
         <div className="fixed inset-0 z-[999] flex items-center justify-center bg-ink-900/20 backdrop-blur-sm">
           <div className="flex flex-col items-center gap-3 rounded-2xl border border-ink-900/10 bg-surface px-6 py-5 shadow-elevated">
@@ -894,7 +960,6 @@ function App() {
         onAuthError={handleAuthError}
       />
       <MemoryDialog open={isMemoryOpen} onOpenChange={setIsMemoryOpen} />
-      <McpServersDialog open={showMcpServers} onOpenChange={setShowMcpServers} />
 
       {/* Skill Download Dialog */}
       <SkillDownloadDialog
@@ -914,31 +979,6 @@ function App() {
         onReset={resetSkillForm}
       />
 
-      {/* Letta CLI Dialog */}
-      <Dialog.Root open={showLettaCli} onOpenChange={setShowLettaCli}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-ink-900/50 backdrop-blur-sm" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-[60] w-full max-w-3xl -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-ink-900/10 bg-[#0d1117] shadow-2xl focus:outline-none">
-            <div className="flex items-center justify-between px-5 py-3 border-b border-ink-900/20">
-              <div className="flex items-center gap-2">
-                <svg viewBox="0 0 24 24" className="h-4 w-4 text-[var(--color-accent)]" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="4 17 10 11 4 5" />
-                  <line x1="12" y1="19" x2="20" y2="19" />
-                </svg>
-                <Dialog.Title className="text-sm font-semibold text-ink-100">Letta CLI</Dialog.Title>
-              </div>
-              <Dialog.Close asChild>
-                <button className="rounded-full p-1.5 text-ink-500 hover:bg-ink-900/30 hover:text-ink-300 transition" aria-label="Close">
-                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M6 6l12 12M18 6l-12 12" />
-                  </svg>
-                </button>
-              </Dialog.Close>
-            </div>
-            <LettaTerminal className="rounded-b-2xl" style={{ height: "520px" }} />
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
       <EmailDetailsDialog
         open={isEmailDetailsOpen}
         onOpenChange={setIsEmailDetailsOpen}

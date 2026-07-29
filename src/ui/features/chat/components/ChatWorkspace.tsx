@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import type { CanUseToolResponse, ClientEvent } from "../../../types";
 import { useAppStore } from "../../../store/useAppStore";
 import type { AgentDisplayStatus, PermissionRequest, ReasoningStep, ToolExecution } from "../../../store/useAppStore";
@@ -77,13 +77,26 @@ export const ChatWorkspace = memo(function ChatWorkspace({
   const activeSession = useAppStore((state) => (activeSessionId ? state.sessions[activeSessionId] : undefined));
   const showReasoningInChat = useAppStore((state) => state.showReasoningInChat);
   const errorMessage = activeSession?.ephemeral?.errorMessage;
+  const recoveryMessage = activeSession?.ephemeral?.recoveryMessage;
   const setGlobalError = useAppStore((state) => state.setGlobalError);
   const [isCancellingRecoveredRun, setIsCancellingRecoveredRun] = useState(false);
   const [isResolvingApprovals, setIsResolvingApprovals] = useState(false);
+  const [showRecoveryNotice, setShowRecoveryNotice] = useState(false);
+
+  useEffect(() => {
+    if (!recoveryMessage) {
+      setShowRecoveryNotice(false);
+      return;
+    }
+
+    setShowRecoveryNotice(true);
+    const timeout = window.setTimeout(() => setShowRecoveryNotice(false), 6000);
+    return () => window.clearTimeout(timeout);
+  }, [recoveryMessage]);
 
   const permissionRequests = permissionRequestsProp ?? activeSession?.permissionRequests ?? [];
-  const questionRequests = useMemo(
-    () => permissionRequests.filter((request) => request.toolName === "AskUserQuestion" && request.source !== "recovered"),
+  const livePermissionRequests = useMemo(
+    () => permissionRequests.filter((request) => request.source !== "recovered"),
     [permissionRequests]
   );
   const recoveredRequests = useMemo(
@@ -103,7 +116,7 @@ export const ChatWorkspace = memo(function ChatWorkspace({
   }[agentStatus];
 
   return (
-    <section className="relative flex h-full flex-1 flex-col">
+    <section className="relative flex h-full flex-1 flex-col bg-[var(--color-bg-000)]">
       <ConversationHeader
         title={resolvedTitle}
         agentName={resolvedAgentName}
@@ -120,14 +133,14 @@ export const ChatWorkspace = memo(function ChatWorkspace({
       <div
         ref={scrollContainerRef}
         onScroll={onScroll}
-        className="flex-1 overflow-y-auto bg-white"
+        className="flex-1 overflow-y-auto bg-[var(--color-bg-000)]"
       >
-        <div className="mx-auto w-full max-w-5xl px-6 py-6">
-          <div className="mb-5 rounded-2xl border border-[var(--color-border)] bg-gray-50 px-4 py-3 text-sm">
+        <div className="mx-auto w-full max-w-[920px] px-5 py-8 lg:px-8">
+          <div className="mb-5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]/65 px-3.5 py-2 text-sm shadow-[var(--shadow-soft)]">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">Status</div>
-                <div className="mt-1 font-medium text-ink-800">{statusCopy}</div>
+                <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Current state</div>
+                <div className="mt-0.5 text-xs font-medium text-ink-700">{statusCopy}</div>
               </div>
               <div className="flex items-center gap-2">
                 {permissionRequests.length > 0 ? (
@@ -150,7 +163,7 @@ export const ChatWorkspace = memo(function ChatWorkspace({
                           setIsResolvingApprovals(false);
                         });
                     }}
-                    className="rounded-full border border-gray-300 bg-white px-3 py-1.5 text-[11px] font-medium text-gray-700 transition hover:border-gray-400 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-70"
+                    className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-[11px] font-medium text-ink-700 transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-70"
                     disabled={isResolvingApprovals}
                   >
                     {isResolvingApprovals ? "Resolving approvals…" : "Resolve approvals"}
@@ -184,7 +197,7 @@ export const ChatWorkspace = memo(function ChatWorkspace({
                   <button
                     type="button"
                     onClick={onOpenMemory}
-                    className="rounded-full border border-[var(--color-border)] bg-gray-100 px-3 py-1.5 text-[11px] font-medium text-ink-700 transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                    className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-secondary)] px-3 py-1.5 text-[11px] font-medium text-ink-700 transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
                   >
                     Memory
                   </button>
@@ -230,7 +243,7 @@ export const ChatWorkspace = memo(function ChatWorkspace({
               <button
                 onClick={onLoadMoreHistory}
                 disabled={isHistoryLoading}
-                className="rounded-full border border-[var(--color-border)] bg-white px-4 py-2 text-xs font-medium text-ink-700 transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-xs font-medium text-ink-700 transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isHistoryLoading ? "Loading earlier messages…" : "Load more messages"}
               </button>
@@ -251,29 +264,47 @@ export const ChatWorkspace = memo(function ChatWorkspace({
               </div>
             </div>
           ) : (
-            <ChatTimeline
-              messages={visibleMessages}
-              activeSessionId={activeSessionId}
-              agentName={resolvedAgentName}
-              agentStatus={agentStatus}
-              partialMessage={partialMessage}
-              showPartialMessage={showPartialMessage}
-              partialReasoning={partialReasoning}
-              reasoningSteps={reasoningSteps}
-              toolExecutions={toolExecutions}
-              cliResults={cliResults}
-              showReasoning={showReasoningInChat}
-              errorMessage={agentStatus === "error" ? errorMessage : undefined}
-            />
+            <>
+              <ChatTimeline
+                messages={visibleMessages}
+                activeSessionId={activeSessionId}
+                agentName={resolvedAgentName}
+                agentStatus={agentStatus}
+                partialMessage={partialMessage}
+                showPartialMessage={showPartialMessage}
+                partialReasoning={partialReasoning}
+                reasoningSteps={reasoningSteps}
+                toolExecutions={toolExecutions}
+                cliResults={cliResults}
+                showReasoning={showReasoningInChat}
+                errorMessage={agentStatus === "error" ? errorMessage : undefined}
+              />
+          {recoveryMessage && showRecoveryNotice && agentStatus !== "error" ? (
+                <div className="mt-3 flex items-start gap-3 rounded-2xl border border-amber-300/70 bg-amber-50/80 px-4 py-3 text-sm text-amber-900">
+                  <svg className="mt-0.5 h-4 w-4 shrink-0 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+                    <path d="M20 4v6h-6" />
+                  </svg>
+                  <div className="min-w-0">
+                    <div className="font-medium">Tool attempt failed — agent is continuing</div>
+                    <div className="mt-0.5 text-xs leading-5 text-amber-800">The agent is still working and may retry automatically or use another approach.</div>
+                    <details className="mt-1 text-xs text-amber-800/80">
+                      <summary className="cursor-pointer select-none">Failure details</summary>
+                      <div className="mt-1 whitespace-pre-wrap break-words">{recoveryMessage}</div>
+                    </details>
+                  </div>
+                </div>
+              ) : null}
+            </>
           )}
           <div ref={messagesEndRef} />
         </div>
       </div>
 
-      {questionRequests.length > 0 && onPermissionResult ? (
-        <div className="border-t border-gray-200 bg-white px-4 py-2">
-          <div className="mx-auto w-full max-w-5xl space-y-2">
-            {questionRequests.map((request) => (
+      {livePermissionRequests.length > 0 && onPermissionResult ? (
+        <div className="border-t border-[var(--color-border)] bg-[var(--color-bg-000)] px-4 py-2">
+          <div className="mx-auto w-full max-w-[920px] space-y-2">
+            {livePermissionRequests.map((request) => (
               <DecisionPanel
                 key={request.toolUseId}
                 request={request}
@@ -284,7 +315,7 @@ export const ChatWorkspace = memo(function ChatWorkspace({
         </div>
       ) : null}
 
-      <div className="border-t border-[var(--color-border)] bg-white px-2 py-2">
+      <div className="bg-[var(--color-bg-000)] px-2">
         <PromptInput
           sendEvent={sendEvent}
           onSendMessage={onSendMessage}

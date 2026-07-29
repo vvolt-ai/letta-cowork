@@ -22,7 +22,7 @@ interface AssistantMessageProps {
   agentName: string;
 }
 
-export const AssistantMessage = memo(function AssistantMessage({ message, fallbackText = "", isStreaming = false, agentName }: AssistantMessageProps) {
+export const AssistantMessage = memo(function AssistantMessage({ message, fallbackText = "", isStreaming = false }: AssistantMessageProps) {
   const textContent = (message && extractText(message.content)) || fallbackText;
   const [copied, setCopied] = useState(false);
 
@@ -42,9 +42,8 @@ export const AssistantMessage = memo(function AssistantMessage({ message, fallba
   }
 
   return (
-    <article className="group relative w-full px-1 py-2.5">
-      <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-muted/90">
-        <span>{agentName}</span>
+    <article className="group relative w-full min-w-0 overflow-hidden py-2.5">
+      <div className="mb-1 flex h-5 items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted/90">
         {isStreaming ? (
           <span className="relative inline-flex h-2 w-2">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-accent)] opacity-60" />
@@ -55,7 +54,7 @@ export const AssistantMessage = memo(function AssistantMessage({ message, fallba
           <button
             type="button"
             onClick={onCopy}
-            className="ml-auto inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white/90 px-2 py-0.5 text-[10px] font-medium tracking-normal normal-case text-ink-600 opacity-0 shadow-sm transition hover:text-ink-900 group-hover:opacity-100 focus:opacity-100"
+            className="ml-auto inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]/90 px-2 py-0.5 text-[10px] font-medium tracking-normal normal-case text-ink-600 opacity-0 transition hover:text-ink-900 group-hover:opacity-100 focus:opacity-100"
             aria-label="Copy message"
           >
             {copied ? (
@@ -78,7 +77,7 @@ export const AssistantMessage = memo(function AssistantMessage({ message, fallba
         ) : null}
       </div>
       {textContent ? (
-        <div className="max-w-none rounded-2xl border border-transparent px-0.5 text-[15px] leading-7 text-ink-900 [&>*:first-child]:mt-0 [&>p:first-child]:mt-0">
+        <div className="chat-prose min-w-0 max-w-full break-words text-ink-900 [&>*:first-child]:mt-0 [&>p:first-child]:mt-0">
           <MDContent text={textContent} />
           {isStreaming ? (
             <span

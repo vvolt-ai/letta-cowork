@@ -75,14 +75,14 @@ export function DecisionPanel({
     const requiresSubmitButton = hasMultipleQuestions || questions.some((q) => q.multiSelect || !q.options?.length);
 
     return (
-      <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 shadow-sm">
+      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 shadow-[var(--shadow-soft)]">
         <div className="space-y-2">
           {questions.map((q, qIndex) => {
             const options = q.options ?? [];
             const selected = selectedOptions[qIndex] ?? [];
             return (
               <div key={qIndex} className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-100 text-[10px] font-bold text-amber-700">?</span>
+                <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-subtle)] text-[11px] font-bold text-[var(--color-accent)]">?</span>
                 <span className="font-medium text-ink-800">{q.question}</span>
                 {q.header ? <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-500">{q.header}</span> : null}
 
@@ -98,8 +98,8 @@ export function DecisionPanel({
                           title={option.description}
                           className={`rounded-full border px-2.5 py-1 text-xs font-medium transition ${
                             isSelected
-                              ? "border-accent bg-accent text-white"
-                              : "border-gray-200 bg-gray-50 text-ink-700 hover:border-accent/40 hover:bg-white"
+                              ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-white"
+                              : "border-[var(--color-border)] bg-[var(--color-surface-secondary)] text-ink-700 hover:border-[var(--color-accent)] hover:bg-[var(--color-surface)]"
                           }`}
                           onClick={() => {
                             if (shouldAutoSubmit) {
@@ -168,28 +168,35 @@ export function DecisionPanel({
   }
 
   return (
-    <div className="rounded-2xl border border-accent/20 bg-accent-subtle p-5">
-      <div className="text-xs font-semibold text-accent">Permission Request</div>
-      <p className="mt-2 text-sm text-ink-700">
-        Vera wants to use: <span className="font-medium">{request.toolName}</span>
-      </p>
-      <div className="mt-3 rounded-xl bg-surface-tertiary p-3">
+    <div className="rounded-2xl border border-[var(--color-accent)]/30 bg-[var(--color-surface)] p-4 shadow-[var(--shadow-soft)]">
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 3 5 6v5c0 4.7 2.8 8.1 7 10 4.2-1.9 7-5.3 7-10V6l-7-3Z" /></svg>
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-accent)]">Approval required</div>
+          <p className="mt-1 text-sm text-ink-700">
+            Vera wants to run <span className="font-semibold text-ink-900">{request.toolName}</span>
+          </p>
+        </div>
+      </div>
+      <div className="mt-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-secondary)] p-3">
         <pre className="text-xs text-ink-600 font-mono whitespace-pre-wrap break-words max-h-40 overflow-auto">
           {JSON.stringify(request.input, null, 2)}
         </pre>
       </div>
-      <div className="mt-4 flex flex-wrap gap-3">
+      <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
         <button
-          className="rounded-full bg-accent px-5 py-2 text-sm font-medium text-white shadow-soft hover:bg-accent-hover transition-colors"
-          onClick={() => onSubmit({ behavior: "allow" })}
-        >
-          Allow
-        </button>
-        <button
-          className="rounded-full border border-ink-900/10 bg-surface px-5 py-2 text-sm font-medium text-ink-700 hover:bg-surface-tertiary transition-colors"
-          onClick={() => onSubmit({ behavior: "deny", message: "User denied the request" })}
+          className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-sm font-medium text-ink-700 transition hover:border-[var(--color-error)]/50 hover:text-[var(--color-error)]"
+          onClick={() => onSubmit({ behavior: "deny", message: `User denied ${request.toolName}` })}
         >
           Deny
+        </button>
+        <button
+          className="rounded-full bg-[var(--color-accent)] px-5 py-2 text-sm font-medium text-white shadow-[var(--shadow-soft)] transition hover:bg-[var(--color-accent-hover)]"
+          onClick={() => onSubmit({ behavior: "allow" })}
+        >
+          Allow once
         </button>
       </div>
     </div>

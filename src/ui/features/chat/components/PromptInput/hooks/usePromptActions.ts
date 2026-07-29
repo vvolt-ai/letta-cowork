@@ -47,6 +47,7 @@ export function usePromptActions(
     activeSessionId ? state.sessions[activeSessionId] : undefined
   );
   const selectedModel = useAppStore((state) => state.selectedModel);
+  const permissionMode = useAppStore((state) => state.permissionMode);
   const setPrompt = useAppStore((state) => state.setPrompt);
   const setPendingStart = useAppStore((state) => state.setPendingStart);
   const setGlobalError = useAppStore((state) => state.setGlobalError);
@@ -89,6 +90,7 @@ export function usePromptActions(
             cwd: cwd.trim() || undefined,
             allowedTools: DEFAULT_ALLOWED_TOOLS,
             model: selectedModel.trim() || undefined,
+            permissionMode,
           },
         });
         if (!hasAttachments) {
@@ -108,6 +110,7 @@ export function usePromptActions(
             attachments: options?.attachments,
             cwd: overrideSessionId ? undefined : activeSession?.cwd,
             model: selectedModel.trim() || undefined,
+            permissionMode,
           },
         });
         setPrompt("");
@@ -120,6 +123,7 @@ export function usePromptActions(
       isRunning,
       overrideSessionId,
       prompt,
+      permissionMode,
       selectedModel,
       sendEvent,
       setGlobalError,
@@ -186,12 +190,13 @@ export function usePromptActions(
           attachments: options?.attachments,
           cwd: overrideSessionId ? undefined : activeSession?.cwd,
           model: selectedModel.trim() || undefined,
+          permissionMode,
         },
       });
       setPrompt("");
       setGlobalError(null);
     },
-    [activeSession?.cwd, activeSessionId, overrideSessionId, prompt, selectedModel, sendEvent, setGlobalError, setPrompt]
+    [activeSession?.cwd, activeSessionId, overrideSessionId, permissionMode, prompt, selectedModel, sendEvent, setGlobalError, setPrompt]
   );
 
   const handleStopAndResend = useCallback(
@@ -245,11 +250,12 @@ export function usePromptActions(
           attachments: options?.attachments,
           cwd: overrideSessionId ? undefined : activeSession?.cwd,
           model: selectedModel.trim() || undefined,
+          permissionMode,
         },
       });
       setPrompt("");
     },
-    [activeSession?.cwd, activeSession?.lastPrompt, activeSessionId, overrideSessionId, prompt, selectedModel, sendEvent, setPrompt]
+    [activeSession?.cwd, activeSession?.lastPrompt, activeSessionId, overrideSessionId, permissionMode, prompt, selectedModel, sendEvent, setPrompt]
   );
 
   const handleSlashCommand = useCallback(

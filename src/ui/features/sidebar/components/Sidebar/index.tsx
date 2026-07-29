@@ -11,7 +11,7 @@ import { SessionsTab } from "../SessionsTab";
 export interface SidebarProps {
   connected: boolean;
   onNewSession: (agentId?: string) => void;
-  onOpenSchedules?: () => void;
+  onOpenSettings?: () => void;
   lettaEnvOpen: boolean;
   onLettaEnvOpenChange: (open: boolean) => void;
   onDeleteSession: (sessionId: string) => void;
@@ -47,8 +47,6 @@ export interface SidebarProps {
   awaitingConversationEmailId?: string | null;
   errorEmailId?: string | null;
   newlyCreatedConversations?: Map<string, { conversationId: string; agentId?: string }>;
-  onOpenConfiguration?: () => void;
-  onOpenSkills?: () => void;
   // Pagination props
   hasMoreEmails?: boolean;
   isLoadingMoreEmails?: boolean;
@@ -96,9 +94,7 @@ export const Sidebar = memo(function Sidebar({
   awaitingConversationEmailId,
   errorEmailId,
   newlyCreatedConversations,
-  onOpenConfiguration,
-  onOpenSkills,
-  onOpenSchedules,
+  onOpenSettings,
   hasMoreEmails,
   isLoadingMoreEmails,
   onLoadMoreEmails,
@@ -137,47 +133,42 @@ export const Sidebar = memo(function Sidebar({
   return (
     <aside className="flex h-full w-full flex-col border-r border-[var(--color-border)] bg-[var(--color-sidebar)]/98 backdrop-blur-sm">
 
-      {/* Top nav — Skills / Emails / Configuration (below traffic lights) */}
+      {/* Consolidated settings entry (below traffic lights) */}
       <div className="px-3 pb-3 pt-8">
         <div className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">Cowork</div>
-        <div className="flex flex-col gap-1 rounded-2xl border border-white/60 bg-white/50 p-1 shadow-sm">
+        <div className="space-y-2">
         <button
-          onClick={onOpenSkills}
-          className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-[13.5px] font-medium text-ink-700 transition hover:bg-white hover:text-ink-900 hover:shadow-sm"
+          onClick={onOpenSettings}
+          className="group flex w-full items-center gap-3 rounded-2xl border border-white/60 bg-white/55 p-3 text-left shadow-sm transition hover:bg-white hover:shadow-md"
         >
-          <svg className="h-[18px] w-[18px] shrink-0 text-ink-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-            <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
-          </svg>
-          Skills
-        </button>
-        <button
-          onClick={onOpenSchedules}
-          className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-[13.5px] font-medium text-ink-700 transition hover:bg-white hover:text-ink-900 hover:shadow-sm"
-        >
-          <svg className="h-[18px] w-[18px] shrink-0 text-ink-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-          </svg>
-          Schedules
-        </button>
-        <button
-          onClick={handleOpenEmailView}
-          className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-[13.5px] font-medium text-ink-700 transition hover:bg-white hover:text-ink-900 hover:shadow-sm"
-        >
-          <svg className="h-[18px] w-[18px] shrink-0 text-ink-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-            <polyline points="22,6 12,13 2,6" />
-          </svg>
-          Emails
-        </button>
-        <button
-          onClick={onOpenConfiguration}
-          className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-[13.5px] font-medium text-ink-700 transition hover:bg-white hover:text-ink-900 hover:shadow-sm"
-        >
-          <svg className="h-[18px] w-[18px] shrink-0 text-ink-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.75">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
+          <svg className="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.75">
             <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
-          Configuration
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[13.5px] font-semibold text-ink-800">Settings</span>
+            <span className="mt-0.5 block text-[10px] text-muted">Skills, schedules and integrations</span>
+          </span>
+          <svg className="h-4 w-4 text-muted transition group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="m9 18 6-6-6-6"/></svg>
+        </button>
+        <button
+          type="button"
+          onClick={handleOpenEmailView}
+          className="group flex w-full items-center gap-3 rounded-2xl border border-white/60 bg-white/55 p-3 text-left shadow-sm transition hover:bg-white hover:shadow-md"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
+            <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+              <rect x="3" y="5" width="18" height="14" rx="2" />
+              <path d="m4 7 8 6 8-6" />
+            </svg>
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[13.5px] font-semibold text-ink-800">Emails</span>
+            <span className="mt-0.5 block text-[10px] text-muted">Open your connected inbox</span>
+          </span>
+          <svg className="h-4 w-4 text-muted transition group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="m9 18 6-6-6-6"/></svg>
         </button>
         </div>
       </div>

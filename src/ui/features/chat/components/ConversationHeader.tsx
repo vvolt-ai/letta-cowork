@@ -37,37 +37,30 @@ export const ConversationHeader = memo(function ConversationHeader({ title, agen
   };
 
   return (
-    <header className="border-b border-[var(--color-border)] bg-white/95 px-4 pb-2.5 pt-[calc(env(safe-area-inset-top,0px)+0.65rem)] backdrop-blur-sm">
-      <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
-            <span>Workspace</span>
-            <span className="h-1 w-1 rounded-full bg-[var(--color-border-hover)]" />
-            <span>{agentName}</span>
-          </div>
+    <header className="h-12 border-b border-[var(--color-border)] bg-[var(--color-bg-000)]/90 px-4 backdrop-blur-md lg:px-8">
+      <div className="mx-auto grid h-full w-full max-w-[1200px] grid-cols-[1fr_auto_1fr] items-center gap-3">
+        <div className="flex min-w-0 items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
+          <span>Vera Cowork</span>
+          <span className="hidden h-1 w-1 rounded-full bg-[var(--color-border-hover)] sm:block" />
+          <span className="hidden truncate sm:block">{agentName}</span>
+        </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="max-w-[44vw] truncate text-[17px] font-semibold tracking-tight text-ink-900">
+          <div className="flex min-w-0 items-center justify-center gap-2">
+            <h2 className="max-w-[40vw] truncate text-[15px] font-medium tracking-tight text-ink-900">
               {displayTitle}
             </h2>
-            {isRawConversationId ? (
-              <span className="font-mono text-[11px] text-muted">{title}</span>
-            ) : (
-              <span className="text-[11px] text-muted">Agent: {agentName}</span>
-            )}
-            <span className={`inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-medium ${statusMeta.color}`}>
+            <span className={`inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-0.5 text-[10px] font-medium ${statusMeta.color}`}>
               <span className="h-1.5 w-1.5 rounded-full bg-current" />
               {statusMeta.label}
             </span>
           </div>
-        </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-self-end gap-1.5">
           {/* View Runs Button — opens Runs Debugger scoped to this conversation */}
           {onViewRuns && sessionId && (
             <button
               onClick={onViewRuns}
-              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 text-xs font-medium text-blue-700 transition hover:bg-blue-100"
+              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-xs font-medium text-ink-600 transition hover:bg-[var(--color-surface-hover)] hover:text-ink-900"
               title="View runs for this conversation"
             >
               <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -81,7 +74,7 @@ export const ConversationHeader = memo(function ConversationHeader({ title, agen
           {agentId && sessionId && (
             <button
               onClick={handleOpenInLetta}
-              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-purple-200 bg-purple-50 px-3 text-xs font-medium text-purple-700 transition hover:bg-purple-100"
+              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-xs font-medium text-ink-600 transition hover:bg-[var(--color-surface-hover)] hover:text-ink-900"
               title="Open in Letta"
             >
               <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -99,7 +92,7 @@ export const ConversationHeader = memo(function ConversationHeader({ title, agen
               onClick={onToggleActivity}
               aria-label={toggleAria}
               title={toggleLabel}
-              className="hidden h-8 w-8 items-center justify-center rounded-lg border border-[var(--color-border)] bg-white text-ink-700 shadow-sm transition hover:border-[var(--color-border-hover)] hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)] lg:inline-flex"
+              className="hidden h-8 w-8 items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-ink-700 transition hover:bg-[var(--color-surface-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)] lg:inline-flex"
             >
               <svg
                 viewBox="0 0 24 24"

@@ -8,7 +8,7 @@ import { CredentialsModal } from '../CredentialsModal';
 import { ConfigModal } from '../ConfigModal';
 import { ConnectorMarketplace } from '../ConnectorMarketplace';
 
-export function ChannelsManager({ onAuthError }: ChannelsManagerProps) {
+export function ChannelsManager({ onAuthError, embedded = false }: ChannelsManagerProps) {
   const {
     channels,
     organizationChannels,
@@ -62,9 +62,9 @@ export function ChannelsManager({ onAuthError }: ChannelsManagerProps) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-8">
+      <div className="flex items-center justify-center rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-8">
         <svg
-          className="animate-spin h-6 w-6 text-blue-500"
+          className="h-5 w-5 animate-spin text-[var(--color-accent)]"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -73,24 +73,27 @@ export function ChannelsManager({ onAuthError }: ChannelsManagerProps) {
           <circle className="opacity-25" cx="12" cy="12" r="10" />
           <path className="opacity-75" d="M4 12a8 8 0 018-8" />
         </svg>
-        <span className="ml-2 text-slate-600">Loading channels...</span>
+        <span className="ml-2 text-xs text-muted">Loading channels…</span>
       </div>
     );
   }
 
   return (
-    <div className="p-4">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-slate-900">Channels</h2>
+    <div className={embedded ? "space-y-4" : "p-4"}>
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <div>
+          <h2 className="text-sm font-semibold text-ink-900">Connected channels</h2>
+          <p className="mt-0.5 text-xs text-muted">{channels.length} {channels.length === 1 ? "channel" : "channels"} configured</p>
+        </div>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+          className="rounded-xl bg-[var(--color-accent)] px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:brightness-95"
         >
-          + Add Channel
+          + Add channel
         </button>
       </div>
 
-      <ConnectorMarketplace onAddChannel={() => setShowCreateModal(true)} />
+      {!embedded ? <ConnectorMarketplace onAddChannel={() => setShowCreateModal(true)} /> : null}
 
       {error && (
         <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">

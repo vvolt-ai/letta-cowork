@@ -66,7 +66,7 @@ export const PromptTextArea = memo(function PromptTextArea({
   }, []);
 
   return (
-    <div className="mt-2 flex flex-col gap-1">
+    <div className="mt-1 flex flex-col gap-1">
       {/* Interim transcript ghost text */}
       {isMicListening && interimTranscript && (
         <p className="px-4 text-xs text-muted italic truncate">{interimTranscript}…</p>
@@ -75,7 +75,7 @@ export const PromptTextArea = memo(function PromptTextArea({
         <button
           type="button"
           onClick={onAttach}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[18px] border border-[var(--color-border)] bg-[var(--color-surface-secondary)] text-ink-600 transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl text-muted transition hover:bg-[var(--color-surface-hover)] hover:text-ink-900"
           disabled={disabled && !isRunning}
           aria-label="Attach files"
         >
@@ -95,7 +95,7 @@ export const PromptTextArea = memo(function PromptTextArea({
             className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-[18px] border transition ${
               isMicListening
                 ? "border-red-400 bg-red-50 text-red-500"
-                : "border-[var(--color-border)] bg-[var(--color-surface-secondary)] text-ink-600 hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                : "border-transparent bg-transparent text-muted hover:bg-[var(--color-surface-hover)] hover:text-ink-900"
             }`}
           >
             {/* Pulsing ring when listening */}
@@ -111,7 +111,7 @@ export const PromptTextArea = memo(function PromptTextArea({
 
         <textarea
           rows={1}
-          className="flex-1 min-h-[52px] resize-none rounded-[22px] border border-[var(--color-border)] bg-[var(--color-surface-secondary)]/70 px-3.5 py-2.5 text-sm leading-5 text-ink-800 placeholder:text-muted focus:border-[var(--color-accent)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/10 disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex-1 min-h-[52px] resize-none border-0 bg-transparent px-2 py-2.5 text-[15px] leading-6 text-ink-900 placeholder:text-muted focus:outline-none focus:ring-0 disabled:cursor-not-allowed disabled:opacity-60"
           placeholder={isMicListening ? "Listening…" : placeholder}
           value={prompt}
           onChange={(e) => onPromptChange(e.target.value)}
@@ -122,7 +122,7 @@ export const PromptTextArea = memo(function PromptTextArea({
           disabled={disabled && !isRunning}
         />
         <button
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[18px] shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60 ${
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl shadow-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${
             isRunning
               ? "bg-[var(--color-status-error)] text-white hover:bg-[var(--color-status-error)]/90"
               : "bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)]"
@@ -152,7 +152,7 @@ export const PromptTextArea = memo(function PromptTextArea({
           <button
             type="button"
             onClick={onQueueAfterResponse}
-            className="rounded-full border border-[var(--color-border)] bg-white px-3 py-1.5 text-xs font-medium text-ink-700 transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+            className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-medium text-ink-700 transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
           >
             Queue after response
           </button>

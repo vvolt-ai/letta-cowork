@@ -92,7 +92,7 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
   const runPromise = (async () => {
     try {
       // Create canUseTool handler
-      const canUseTool = createCanUseToolHandler(session, sendPermissionRequest);
+      const canUseTool = createCanUseToolHandler(session, sendPermissionRequest, options.permissionMode);
 
       // Create or resume session
       const lettaSession = createOrResumeSession(options, canUseTool);

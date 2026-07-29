@@ -57,10 +57,18 @@ export type TimelineEntry =
       name: string;
       children: ToolTimelineEntry[];
     }
+  | {
+      kind: "activity_group";
+      id: string;
+      children: ActivityTimelineEntry[];
+      isLive: boolean;
+    }
   | { kind: "cli_result"; id: string; command: string; output: string; exitCode: number };
 
 export type ToolTimelineEntry = Extract<TimelineEntry, { kind: "tool" }>;
 export type ToolGroupTimelineEntry = Extract<TimelineEntry, { kind: "tool_group" }>;
+export type ReasoningTimelineEntry = Extract<TimelineEntry, { kind: "reasoning" }>;
+export type ActivityTimelineEntry = ReasoningTimelineEntry | ToolTimelineEntry;
 
 export type ChatTimelineProps = {
   messages: IndexedMessage[];

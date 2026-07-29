@@ -3,6 +3,7 @@ import { RUN_STATUS_FILTERS, type RunStatusFilter } from "./types";
 import { useAgentRuns } from "./hooks/useAgentRuns";
 import { RunRow } from "./RunRow";
 import { BulkActionDialog } from "./BulkActionDialog";
+import { InnerPageLayout } from "../layout/components/InnerPageLayout";
 
 const PAGE_SIZE = 25;
 
@@ -114,39 +115,23 @@ export function RunsDebuggerPanel({ defaultAgentId, defaultConversationId, onClo
   };
 
   return (
-    <div className="flex h-full flex-col bg-white">
-      {/* Header */}
-      <div className="flex flex-col gap-3 border-b border-gray-100 bg-white px-6 py-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">Runs Debugger</h2>
-            <p className="text-xs text-gray-500">
-              Inspect, approve, and reject agent runs. {total} total in view.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
+    <InnerPageLayout
+      title="Runs Debugger"
+      description={`Inspect, approve, and reject agent runs. ${total} total in view.`}
+      onClose={onClose}
+      contentWidthClassName="max-w-7xl"
+      contentClassName="p-0"
+      actions={(
             <button
               onClick={() => void refresh()}
               disabled={loading}
-              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-medium text-ink-700 transition hover:bg-[var(--color-sidebar-hover)] disabled:opacity-50"
             >
               {loading ? "Loading…" : "Refresh"}
             </button>
-            {onClose && (
-              <button
-                onClick={onClose}
-                aria-label="Close runs debugger"
-                title="Close and return to conversation"
-                className="flex h-8 w-8 items-center justify-center rounded-full text-gray-500 transition hover:bg-gray-100 hover:text-gray-800"
-              >
-                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M6 6l12 12M18 6l-12 12" />
-                </svg>
-              </button>
-            )}
-          </div>
-        </div>
-
+      )}
+      headerContent={(
+        <div className="space-y-3">
         {/* Filters row */}
         <div className="flex flex-wrap items-center gap-3">
           <label className="flex items-center gap-2 text-xs text-gray-600">
@@ -248,10 +233,12 @@ export function RunsDebuggerPanel({ defaultAgentId, defaultConversationId, onClo
             {error}
           </div>
         )}
-      </div>
+        </div>
+      )}
+    >
 
       {/* Table */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="min-w-0 overflow-x-auto">
         {!agentId ? (
           <div className="flex h-48 flex-col items-center justify-center text-sm text-gray-400">
             <span className="mb-2 text-3xl">🧭</span>
@@ -331,6 +318,6 @@ export function RunsDebuggerPanel({ defaultAgentId, defaultConversationId, onClo
           {toast}
         </div>
       )}
-    </div>
+    </InnerPageLayout>
   );
 }

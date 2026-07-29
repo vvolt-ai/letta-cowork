@@ -32,10 +32,10 @@ export const ModelSelector = memo(function ModelSelector({
   if (!modelsLoading && models.length === 0) return null;
 
   return (
-    <div className="mb-2 flex items-center justify-between gap-2 text-xs text-ink-500">
+    <div className="mb-1 flex items-center justify-between gap-2 text-xs text-ink-500">
       <div className="flex items-center gap-2 min-w-0">
         <select
-          className="h-6 min-w-[140px] rounded-full border border-[var(--color-border)] bg-transparent px-2 text-[11px] text-ink-600 transition hover:border-[var(--color-accent)] focus:border-[var(--color-border)] focus:outline-none focus:ring-0"
+          className="h-6 min-w-[140px] rounded-full border border-[var(--color-border)] bg-[var(--color-bg-000)]/60 px-2 text-[11px] text-ink-600 transition hover:border-[var(--color-accent)] focus:outline-none focus:ring-0"
           value={selectedModel}
           onChange={(event) => onSelectModel(event.target.value)}
           disabled={modelsLoading}
@@ -58,7 +58,7 @@ export const ModelSelector = memo(function ModelSelector({
         className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] transition ${
           showReasoningInChat
             ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
-            : "border-[var(--color-border)] bg-[var(--color-surface-secondary)] text-ink-600"
+            : "border-[var(--color-border)] bg-[var(--color-bg-000)]/60 text-ink-600"
         }`}
         aria-pressed={showReasoningInChat}
       >

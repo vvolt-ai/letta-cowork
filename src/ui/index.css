@@ -2,35 +2,35 @@
 @import "highlight.js/styles/github.css";
 
 @theme {
-  --color-brand: #5b7cfa;
+  --color-brand: #d97757;
   --color-brand-content: #ffffff;
-  --color-brand-hover: #4c6ef5;
-  --color-brand-light: #eef2ff;
-  --color-brand-light-content: #3143a4;
+  --color-brand-hover: #c46849;
+  --color-brand-light: #fef3ee;
+  --color-brand-light-content: #9a432d;
   
   /* Surface colors */
-  --color-surface: #ffffff;
-  --color-surface-secondary: #f8fafc;
-  --color-surface-tertiary: #eef2ff;
-  --color-surface-hover: #f1f5ff;
+  --color-surface: #faf9f4;
+  --color-surface-secondary: #f5f3ed;
+  --color-surface-tertiary: #f0eee8;
+  --color-surface-hover: #ece9e1;
   
   /* Text colors */
-  --color-ink-900: #111827;
-  --color-ink-800: #1f2937;
-  --color-ink-700: #374151;
-  --color-ink-600: #4b5563;
-  --color-ink-500: #6b7280;
-  --color-ink-400: #9ca3af;
+  --color-ink-900: #1a1a1a;
+  --color-ink-800: #2d2b28;
+  --color-ink-700: #45413c;
+  --color-ink-600: #5c5751;
+  --color-ink-500: #746d65;
+  --color-ink-400: #9b9389;
   
   /* Muted colors */
-  --color-muted: #94a3b8;
-  --color-muted-light: #a5b4cc;
+  --color-muted: #8c8378;
+  --color-muted-light: #aaa197;
   
   /* Accent colors */
-  --color-accent: #5b7cfa;
-  --color-accent-hover: #4c6ef5;
-  --color-accent-light: #eef2ff;
-  --color-accent-subtle: #e5ecff;
+  --color-accent: #d97757;
+  --color-accent-hover: #c46849;
+  --color-accent-light: #fef3ee;
+  --color-accent-subtle: #f8e9e2;
   
   /* Status colors */
   --color-error: #ef4444;
@@ -47,31 +47,31 @@
   --color-status-error: #ef4444;
   
   /* Background colors */
-  --color-bg-000: #ffffff;
-  --color-bg-100: #f8fafc;
-  --color-bg-200: #eef2ff;
-  --color-bg-300: #e6e8ec;
-  --color-bg-400: #d8dce5;
+  --color-bg-000: #faf9f4;
+  --color-bg-100: #f5f3ed;
+  --color-bg-200: #f0eee8;
+  --color-bg-300: #e7e3dc;
+  --color-bg-400: #d8d2c9;
   
   /* Border */
-  --color-border: #e6e8ec;
-  --color-border-hover: #cbd5f5;
+  --color-border: #e2dfd9;
+  --color-border-hover: #cfc9bf;
   
   /* Sidebar - neutral blue gray */
-  --color-sidebar: #f9fafb;
-  --color-sidebar-hover: #f1f5ff;
-  --color-sidebar-active: #e9efff;
+  --color-sidebar: #f0eee8;
+  --color-sidebar-hover: #e9e6df;
+  --color-sidebar-active: #e2ded5;
   
   /* Utility backgrounds */
-  --color-tool-bg: #f5f7ff;
-  --color-tool-border: #e2e8ff;
-  --color-attachment-bg: #f3f6ff;
-  --color-attachment-border: #dce3ff;
+  --color-tool-bg: #f5f3ed;
+  --color-tool-border: #e2dfd9;
+  --color-attachment-bg: #f2f0eb;
+  --color-attachment-border: #e2dfd9;
   
   /* Shadows */
   --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.08);
-  --shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.12);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-elevated: 0 8px 24px rgba(49, 42, 36, 0.14);
   --shadow-panel: 0 12px 28px rgba(15, 23, 42, 0.08);
 }
 
@@ -87,7 +87,7 @@ body,
 }
 
 body {
-  font-family: "Onest", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-family: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
   background-color: var(--color-bg-100);
   color: var(--color-ink-900);
   -webkit-font-smoothing: antialiased;
@@ -161,31 +161,31 @@ button {
 /* Dark mode overrides using CSS custom properties */
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-brand: #ff8a65;
-    --color-brand-content: #fafafa;
-    --color-brand-hover: #3d2f2b;
-    --color-brand-light: #2b2320;
-    --color-brand-light-content: #ff8a65;
+    --color-brand: #d67a52;
+    --color-brand-content: #fffaf4;
+    --color-brand-hover: #c56c46;
+    --color-brand-light: rgba(214, 122, 82, 0.14);
+    --color-brand-light-content: #e99772;
     
-    --color-surface: #1d1d1d;
-    --color-surface-secondary: #171717;
-    --color-surface-tertiary: #212121;
-    --color-surface-hover: #0a0a0a;
+    --color-surface: #22201d;
+    --color-surface-secondary: #1d1b18;
+    --color-surface-tertiary: #292621;
+    --color-surface-hover: #2a2723;
     
-    --color-ink-900: #d6d6d6;
-    --color-ink-800: #c2c2c2;
-    --color-ink-700: #a6a6a6;
-    --color-ink-600: #8c8c8c;
-    --color-ink-500: #737373;
-    --color-ink-400: #2b2b2b;
+    --color-ink-900: #f1ece4;
+    --color-ink-800: #ddd6cd;
+    --color-ink-700: #c7beb3;
+    --color-ink-600: #b6ada2;
+    --color-ink-500: #9b9287;
+    --color-ink-400: #746c63;
     
-    --color-muted: #7a7a7a;
-    --color-muted-light: #595959;
+    --color-muted: #8c8378;
+    --color-muted-light: #6e665d;
     
-    --color-accent: #ff8a65;
-    --color-accent-hover: #3d2f2b;
-    --color-accent-light: #2b2320;
-    --color-accent-subtle: #3d2f2b;
+    --color-accent: #d67a52;
+    --color-accent-hover: #c56c46;
+    --color-accent-light: rgba(214, 122, 82, 0.14);
+    --color-accent-subtle: rgba(214, 122, 82, 0.16);
     
     --color-error: #ff6b6b;
     --color-error-light: #3d2424;
@@ -196,15 +196,48 @@ button {
     --color-warning: #ffc966;
     --color-warning-light: #3d3524;
     
-    --color-bg-000: #1d1d1d;
-    --color-bg-100: #171717;
-    --color-bg-200: #212121;
-    --color-bg-300: #2b2b2b;
-    --color-bg-400: #3d3d3d;
+    --color-bg-000: #171614;
+    --color-bg-100: #1d1b18;
+    --color-bg-200: #22201d;
+    --color-bg-300: #2a2723;
+    --color-bg-400: #34302a;
     
-    --color-border: #2b2b2b;
-    --color-border-hover: #ff8a65;
+    --color-border: #34302a;
+    --color-border-hover: #504940;
     
-    --color-sidebar: #1c1c1c;
+    --color-sidebar: #1b1916;
+    --color-sidebar-hover: #27231f;
+    --color-sidebar-active: #302b26;
+    --color-tool-bg: #1d1b18;
+    --color-tool-border: #34302a;
+    --color-attachment-bg: #22201d;
+    --color-attachment-border: #34302a;
   }
 }
+
+.chat-prose {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 1.0625rem;
+  line-height: 1.625;
+  letter-spacing: -0.01em;
+}
+
+.chat-prose pre,
+.chat-prose table,
+.chat-prose img {
+  max-width: 100%;
+}
+
+.chat-prose h1,
+.chat-prose h2,
+.chat-prose h3,
+.chat-prose h4 {
+  font-family: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.chat-prose p { margin-bottom: 0.75rem; }
+.chat-prose p:last-child { margin-bottom: 0; }

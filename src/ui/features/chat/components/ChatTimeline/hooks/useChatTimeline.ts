@@ -3,9 +3,10 @@
  */
 
 import { useMemo } from "react";
-import type { IndexedMessage, TimelineEntry, ToolTimelineEntry } from "../../../types";
+import type { ActivityTimelineEntry, IndexedMessage, TimelineEntry, ToolTimelineEntry } from "../../../types";
 import type { SDKAssistantMessage, SDKToolResultMessage } from "../../../../../types";
 import type { ReasoningStep, ToolExecution } from "../../../../../store/useAppStore";
+import type { AgentDisplayStatus } from "../../../../../store/useAppStore";
 import {
   normalizeReasoning,
   isGenericToolName,
@@ -28,6 +29,7 @@ export type UseChatTimelineParams = {
   showReasoning?: boolean;
   toolExecutions?: ToolExecution[];
   cliResults?: Array<{ id: string; command: string; output: string; exitCode: number }>;
+  agentStatus?: AgentDisplayStatus;
 };
 
 /**
@@ -41,6 +43,7 @@ export function useChatTimeline({
   showReasoning = false,
   toolExecutions = [],
   cliResults = [],
+  agentStatus = "idle",
 }: UseChatTimelineParams): TimelineEntry[] {
   return useMemo(() => {
     const entries: Array<TimelineEntry | null> = [];
@@ -163,27 +166,46 @@ export function useChatTimeline({
       }
     });
 
+    // Merge current-turn reasoning and tools by their actual timestamps. The
+    // previous implementation appended all reasoning first and all tools
+    // second, which made the UI look stale and hid what the agent was doing.
+    const liveEvents: Array<
+      | { type: "reasoning"; at: number; id: string; content: string }
+      | { type: "tool"; at: number; tool: ToolExecution }
+    > = [];
+
     if (showReasoning) {
-      const combinedReasoning = [
-        ...reasoningSteps
-          .map((step) => step.content)
-          .filter((content) => typeof content === "string" && content.trim().length > 0),
-        partialReasoning.trim(),
-      ]
-        .filter((content) => content.length > 0)
-        .join("\n");
-      const normalizedSteps = normalizeReasoning(combinedReasoning);
-      if (normalizedSteps.length > 0) {
-        entries.push({
-          kind: "reasoning",
-          id: `${activeSessionId ?? "session"}-ephemeral-reasoning`,
-          steps: normalizedSteps,
+      reasoningSteps.forEach((step) => {
+        if (step.content.trim()) {
+          liveEvents.push({ type: "reasoning", at: step.updatedAt, id: step.id, content: step.content });
+        }
+      });
+      if (partialReasoning.trim() && reasoningSteps.length === 0) {
+        liveEvents.push({
+          type: "reasoning",
+          at: Number.MAX_SAFE_INTEGER,
+          id: `${activeSessionId ?? "session"}-partial-reasoning`,
+          content: partialReasoning,
         });
       }
     }
 
-    toolExecutions.forEach((toolExecution) => {
-      const ephemeralToolEntry = toolExecutionToTimelineEntry(toolExecution);
+    toolExecutions.forEach((tool) => {
+      liveEvents.push({ type: "tool", at: tool.startedAt, tool });
+    });
+
+    liveEvents.sort((a, b) => a.at - b.at).forEach((event) => {
+      if (event.type === "reasoning") {
+        const steps = normalizeReasoning(event.content);
+        if (steps.length === 0) return;
+        const existingIndex = entries.findIndex((entry) => entry?.kind === "reasoning" && entry.id === event.id);
+        const nextEntry = { kind: "reasoning" as const, id: event.id, steps };
+        if (existingIndex >= 0) entries[existingIndex] = nextEntry;
+        else entries.push(nextEntry);
+        return;
+      }
+
+      const ephemeralToolEntry = toolExecutionToTimelineEntry(event.tool);
       const existingIndex = entries.findIndex((entry) => entry?.kind === "tool" && entry.id === ephemeralToolEntry.id);
       if (existingIndex >= 0) {
         const existing = entries[existingIndex];
@@ -214,53 +236,40 @@ export function useChatTimeline({
 
     const flat = entries.filter((entry): entry is TimelineEntry => entry !== null);
 
-    // Post-process: collapse runs of adjacent tool entries into a single
-    // tool_activity row. Tool details are useful when debugging, but inline
-    // JSON/tool churn makes normal answer review painful.
-    return collapseConsecutiveToolRuns(flat);
-  }, [messages, activeSessionId, partialReasoning, reasoningSteps, showReasoning, toolExecutions, cliResults]);
+    const liveIds = new Set([
+      ...reasoningSteps.map((step) => step.id),
+      ...toolExecutions.map((tool) => tool.id),
+      ...(partialReasoning.trim() ? [`${activeSessionId ?? "session"}-partial-reasoning`] : []),
+    ]);
+    const isAgentActive = agentStatus === "thinking" || agentStatus === "running_tool" || agentStatus === "waiting_approval" || agentStatus === "generating";
+    return groupActivityRuns(flat, liveIds, isAgentActive);
+  }, [messages, activeSessionId, partialReasoning, reasoningSteps, showReasoning, toolExecutions, cliResults, agentStatus]);
 }
 
-/**
- * Walks the flat timeline and folds runs of >=2 adjacent `tool` entries
- * into a `tool_group` entry. Any non-tool entry (assistant, reasoning,
- * user, cli_result) breaks the run.
- *
- * Pure function, exported for unit testing.
- */
-function collapseConsecutiveToolRuns(entries: TimelineEntry[]): TimelineEntry[] {
-  const GROUP_THRESHOLD = 2;
+function groupActivityRuns(entries: TimelineEntry[], liveIds: Set<string>, isAgentActive: boolean): TimelineEntry[] {
   const out: TimelineEntry[] = [];
-  let i = 0;
-  while (i < entries.length) {
-    const current = entries[i];
-    if (current.kind !== "tool") {
-      out.push(current);
-      i += 1;
-      continue;
-    }
+  let activity: ActivityTimelineEntry[] = [];
 
-    const run: ToolTimelineEntry[] = [current];
-    let j = i + 1;
-    while (j < entries.length) {
-      const next = entries[j];
-      if (next.kind !== "tool") break;
-      run.push(next);
-      j += 1;
-    }
+  const flush = () => {
+    if (activity.length === 0) return;
+    const children = activity;
+    activity = [];
+    out.push({
+      kind: "activity_group",
+      id: `activity:${children[0].id}`,
+      children,
+      isLive: isAgentActive && children.some((entry) => liveIds.has(entry.id)),
+    });
+  };
 
-    if (run.length >= GROUP_THRESHOLD) {
-      const uniqueNames = Array.from(new Set(run.map((entry) => entry.name)));
-      out.push({
-        kind: "tool_group",
-        id: `tool-group:${run[0].id}`,
-        name: uniqueNames.length === 1 ? uniqueNames[0] : "Tool activity",
-        children: run,
-      });
-    } else {
-      out.push(current);
+  entries.forEach((entry) => {
+    if (entry.kind === "reasoning" || entry.kind === "tool") {
+      activity.push(entry);
+      return;
     }
-    i = j;
-  }
+    flush();
+    out.push(entry);
+  });
+  flush();
   return out;
 }

@@ -55,7 +55,7 @@ import { debug } from "../logger.js";
 
 export interface WsSessionOptions {
     cwd?: string;
-    permissionMode?: "bypassPermissions";
+    permissionMode?: "standard" | "acceptEdits" | "unrestricted";
     canUseTool?: (
         toolName: string,
         input: unknown
@@ -500,22 +500,17 @@ export class WsSession {
                     // makes the server fall through to its own dispatch
                     // and respond "Tool not found".
                     if (turnResult.approvalRequests.length > 0) {
-                        const allow =
-                            this.opts.permissionMode === "bypassPermissions";
                         console.log(
-                            `[WsSession] auto-${allow ? "allow" : "deny"} ${turnResult.approvalRequests.length} approval(s)`,
+                            `[WsSession] handling ${turnResult.approvalRequests.length} approval(s) in ${this.opts.permissionMode ?? "unrestricted"} mode`,
                             turnResult.approvalRequests.map((r) => r.toolName)
                         );
 
                         const approvalEntries: unknown[] = [];
-                        if (allow) {
-                            // Execute each approved tool locally, then
-                            // build the type:"tool" entries.
-                            // Resource-aware scheduler: reads/searches
-                            // fan out, writes to the same file_path
-                            // serialize, Bash/global-effect tools hold
-                            // a global lock. See subagents/parallelism.
-                            const executed = await runWithResourceLocks(
+                        // Each request enters the execution pipeline. The
+                        // canUseTool handler decides whether to prompt or
+                        // auto-allow according to the selected mode, then
+                        // approved work executes with resource-aware locking.
+                        const executed = await runWithResourceLocks(
                                 turnResult.approvalRequests,
                                 (req) => req.toolName,
                                 (req) => parseToolArgs(req.argumentsRaw),
@@ -529,10 +524,9 @@ export class WsSession {
                                         };
                                     }
 
-                                    const permissionDecision =
-                                        req.toolName === "AskUserQuestion" && this.opts.canUseTool
-                                            ? await this.opts.canUseTool(req.toolName, args)
-                                            : null;
+                                    const permissionDecision = this.opts.canUseTool
+                                        ? await this.opts.canUseTool(req.toolName, args)
+                                        : ({ behavior: "deny", message: "Permission handler unavailable" } as CanUseToolResponse);
                                     if (isDeniedPermissionDecision(permissionDecision)) {
                                         const denyMsg = getPermissionDenialMessage(
                                             permissionDecision,
@@ -636,24 +630,14 @@ export class WsSession {
                                             : ("success" as const),
                                     };
                                 }
-                            );
-                            for (const e of executed) {
-                                approvalEntries.push({
-                                    type: "tool",
-                                    tool_call_id: e.tool_call_id,
-                                    tool_return: e.tool_return,
-                                    status: e.status,
-                                });
-                            }
-                        } else {
-                            for (const req of turnResult.approvalRequests) {
-                                approvalEntries.push({
-                                    type: "approval",
-                                    tool_call_id: req.toolCallId,
-                                    approve: false,
-                                    reason: `Tool '${req.toolName || "unknown"}' was denied by the client.`,
-                                });
-                            }
+                        );
+                        for (const e of executed) {
+                            approvalEntries.push({
+                                type: "tool",
+                                tool_call_id: e.tool_call_id,
+                                tool_return: e.tool_return,
+                                status: e.status,
+                            });
                         }
                         // Wire shape: ONE message of type "approval" with
                         // an `approvals` array — NOT N messages.

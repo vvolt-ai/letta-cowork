@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useListSkills } from "../../hooks/useListSkills";
 import { useDownloadSkill } from "../../hooks/useDownloadSkill";
 import { SkillPreviewDialog } from "./SkillPreviewDialog";
+import { InnerPageLayout } from "../layout/components/InnerPageLayout";
 
 interface SkillsPanelProps {
   onClose: () => void;
@@ -41,41 +42,19 @@ export function SkillsPanel({ onClose }: SkillsPanelProps) {
   );
 
   return (
-    <div className="flex h-full flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-4">
-        <div className="flex items-center gap-2">
-          <svg className="h-5 w-5 text-ink-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-            <path d="M12 2L2 7l10 5 10-5-10-5z" />
-            <path d="M2 17l10 5 10-5" />
-            <path d="M2 12l10 5 10-5" />
-          </svg>
-          <h2 className="text-base font-semibold text-ink-900">Skills</h2>
-          {!loading && (
-            <span className="ml-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-ink-600">
-              {skills.length} installed
-            </span>
-          )}
-        </div>
-        <button
-          onClick={onClose}
-          className="flex h-8 w-8 items-center justify-center rounded-full text-muted hover:bg-[var(--color-sidebar-hover)] hover:text-ink-700 transition"
-          aria-label="Close skills panel"
-        >
-          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M6 6l12 12M18 6l-12 12" />
-          </svg>
-        </button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-6 py-6">
-        <div className="max-w-2xl">
+    <InnerPageLayout
+      title="Skills"
+      description={!loading ? `${skills.length} installed · Reusable instructions agents can load on demand.` : "Reusable instructions agents can load on demand."}
+      onClose={onClose}
+      contentWidthClassName="max-w-5xl"
+    >
+        <div className="mx-auto max-w-3xl">
 
           {/* Install section */}
-          <div className="mb-8 rounded-xl border border-[var(--color-border)] bg-white p-5">
+          <div className="mb-8 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
             <h3 className="mb-1 text-[13.5px] font-semibold text-ink-900">Install from GitHub</h3>
             <p className="mb-4 text-[12.5px] text-muted">
-              Paste a GitHub URL or <code className="rounded bg-gray-100 px-1 py-0.5 text-[11px]">owner/repo/path</code> to install a skill.
+              Paste a GitHub URL or <code className="rounded bg-[var(--color-surface-secondary)] px-1 py-0.5 text-[11px]">owner/repo/path</code> to install a skill.
             </p>
 
             <div className="flex flex-col gap-3">
@@ -86,7 +65,7 @@ export function SkillsPanel({ onClose }: SkillsPanelProps) {
                   value={skillUrl}
                   onChange={(e) => setSkillUrl(e.target.value)}
                   placeholder="https://github.com/owner/repo/tree/main/skills/my-skill"
-                  className="w-full rounded-lg border border-[var(--color-border)] bg-white px-3 py-2 text-[13px] text-ink-900 placeholder:text-ink-400 focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                  className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[13px] text-ink-900 placeholder:text-ink-400 focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
                 />
               </div>
 
@@ -99,7 +78,7 @@ export function SkillsPanel({ onClose }: SkillsPanelProps) {
                   value={skillName}
                   onChange={(e) => setSkillName(e.target.value)}
                   placeholder="my-skill"
-                  className="w-full rounded-lg border border-[var(--color-border)] bg-white px-3 py-2 text-[13px] text-ink-900 placeholder:text-ink-400 focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                  className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[13px] text-ink-900 placeholder:text-ink-400 focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
                 />
               </div>
 
@@ -169,7 +148,7 @@ export function SkillsPanel({ onClose }: SkillsPanelProps) {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search skills..."
-                  className="w-full rounded-lg border border-[var(--color-border)] bg-white px-3 py-2 text-[13px] placeholder:text-ink-400 focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                  className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[13px] placeholder:text-ink-400 focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
                 />
               </div>
             )}
@@ -194,7 +173,7 @@ export function SkillsPanel({ onClose }: SkillsPanelProps) {
                     key={skill.id}
                     type="button"
                     onClick={() => setPreviewFolder(skill.folder)}
-                    className="group flex w-full items-start gap-3.5 rounded-xl border border-[var(--color-border)] bg-white px-4 py-3.5 text-left transition hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-accent)]/[0.03] hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/40"
+                    className="group flex w-full items-start gap-3.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3.5 text-left transition hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-accent)]/[0.03] hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/40"
                     aria-label={`Preview skill ${skill.name}`}
                   >
                     {/* Icon */}
@@ -211,7 +190,7 @@ export function SkillsPanel({ onClose }: SkillsPanelProps) {
                         <span className="truncate text-[13.5px] font-medium text-ink-900">
                           {skill.name}
                         </span>
-                        <span className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] text-ink-500">
+                        <span className="shrink-0 rounded bg-[var(--color-surface-secondary)] px-1.5 py-0.5 font-mono text-[10px] text-ink-500">
                           {skill.folder}
                         </span>
                       </div>
@@ -234,14 +213,12 @@ export function SkillsPanel({ onClose }: SkillsPanelProps) {
             )}
           </div>
         </div>
-      </div>
-
       <SkillPreviewDialog
         open={!!previewFolder}
         folder={previewFolder}
         onOpenChange={(v) => { if (!v) setPreviewFolder(null); }}
         onDeleted={() => { setPreviewFolder(null); refresh(); }}
       />
-    </div>
+    </InnerPageLayout>
   );
 }

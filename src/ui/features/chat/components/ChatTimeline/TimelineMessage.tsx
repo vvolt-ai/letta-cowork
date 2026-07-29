@@ -8,6 +8,7 @@ import { AssistantMessage } from "../AssistantMessage";
 import { ReasoningBlock } from "../ReasoningBlock";
 import { ToolExecutionBlock } from "../ToolBlocks";
 import { ToolGroupBlock } from "../ToolGroupBlock";
+import { ActivityStreamBlock } from "../ActivityStreamBlock";
 
 export type TimelineMessageProps = {
   entry: TimelineEntry;
@@ -46,6 +47,8 @@ export function TimelineMessage({ entry, agentName }: TimelineMessageProps) {
       );
     case "tool_group":
       return <ToolGroupBlock key={entry.id} group={entry} />;
+    case "activity_group":
+      return <ActivityStreamBlock key={entry.id} entries={entry.children} isLive={entry.isLive} />;
     case "cli_result":
       return (
         <CliResultBlock

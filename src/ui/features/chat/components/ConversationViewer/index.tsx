@@ -90,13 +90,13 @@ export const ConversationViewer = memo(function ConversationViewer({
   const isProcessing = ["thinking", "running_tool", "generating", "waiting_approval"].includes(agentStatus);
   
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex h-full min-w-0 flex-col overflow-hidden bg-[var(--color-bg-000)]">
       {/* Header */}
-      <div className="flex items-center gap-3 px-3 py-2 border-b border-[var(--color-border)] bg-white">
+      <div className="flex min-h-16 min-w-0 shrink-0 items-center gap-2.5 border-b border-[var(--color-border)] bg-[var(--color-surface)]/95 px-4 py-3 backdrop-blur-md sm:gap-3 sm:px-5">
         {showBackButton && onBack && (
           <button
             onClick={onBack}
-            className="rounded-lg p-1.5 text-ink-500 hover:bg-gray-100"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-000)] text-ink-500 transition hover:bg-[var(--color-surface-secondary)] hover:text-ink-900"
             title="Back"
           >
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -105,12 +105,11 @@ export const ConversationViewer = memo(function ConversationViewer({
           </button>
         )}
         <div className="flex-1 min-w-0">
-          <h2 className="text-base font-semibold text-ink-900 truncate">
+          <div className="mb-0.5 text-[9px] font-semibold uppercase tracking-[0.16em] text-muted">Agent conversation</div>
+          <h2 className="truncate text-sm font-semibold tracking-tight text-ink-900">
             {session?.title || "Conversation"}
           </h2>
-          <div className="text-xs text-muted">
-            {session?.agentName || "Agent"}
-          </div>
+          <div className="mt-0.5 truncate text-[10px] text-muted">{session?.agentName || "Agent"}</div>
         </div>
 
         {/* Status Badge */}
@@ -123,10 +122,10 @@ export const ConversationViewer = memo(function ConversationViewer({
               const lettaUrl = `https://app.letta.com/projects/default-project/agents/${session.agentId}?conversation=${sessionId}`;
               window.electron.openExternal(lettaUrl);
             }}
-            className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded hover:bg-purple-200 flex items-center gap-1"
+            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-000)] px-2.5 text-[11px] font-semibold text-ink-600 transition hover:bg-[var(--color-surface-secondary)] hover:text-ink-900 sm:px-3"
             title="Open in Letta"
           >
-            <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
               <polyline points="15 3 21 3 21 9" />
               <line x1="10" y1="14" x2="21" y2="3" />
@@ -139,7 +138,7 @@ export const ConversationViewer = memo(function ConversationViewer({
       {/* Messages */}
       <div
         ref={scrollContainerRef}
-        className="flex-1 overflow-auto bg-white"
+        className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-[var(--color-bg-000)] px-4 py-3 sm:px-5 sm:py-4"
         onScroll={handleScroll}
       >
         <ChatTimeline
@@ -158,7 +157,7 @@ export const ConversationViewer = memo(function ConversationViewer({
       </div>
 
       {/* Input */}
-      <div className="border-t border-[var(--color-border)] bg-white px-2 py-2">
+      <div className="min-w-0 shrink-0 border-t border-[var(--color-border)] bg-[var(--color-surface)]/95 px-3 py-3 backdrop-blur-md sm:px-4">
         <PromptInput
           overrideSessionId={sessionId}
           disabled={isProcessing}
@@ -172,19 +171,20 @@ export const ConversationViewer = memo(function ConversationViewer({
 
 // Status Badge Component
 function StatusBadge({ status }: { status: string }) {
-  const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
-    idle: { bg: "bg-gray-100", text: "text-gray-700", label: "Idle" },
-    thinking: { bg: "bg-yellow-100", text: "text-yellow-700", label: "Thinking..." },
-    running_tool: { bg: "bg-blue-100", text: "text-blue-700", label: "Running Tool" },
-    waiting_approval: { bg: "bg-orange-100", text: "text-orange-700", label: "Waiting Approval" },
-    generating: { bg: "bg-blue-100", text: "text-blue-700", label: "Generating..." },
-    completed: { bg: "bg-green-100", text: "text-green-700", label: "Completed" },
-    error: { bg: "bg-red-100", text: "text-red-700", label: "Error" },
+  const statusConfig: Record<string, { bg: string; text: string; dot: string; label: string }> = {
+    idle: { bg: "bg-[var(--color-surface-secondary)]", text: "text-muted", dot: "bg-ink-400", label: "Idle" },
+    thinking: { bg: "bg-amber-50", text: "text-amber-700", dot: "bg-amber-500", label: "Thinking" },
+    running_tool: { bg: "bg-sky-50", text: "text-sky-700", dot: "bg-sky-500", label: "Running tool" },
+    waiting_approval: { bg: "bg-orange-50", text: "text-orange-700", dot: "bg-orange-500", label: "Approval" },
+    generating: { bg: "bg-[var(--color-accent-subtle)]", text: "text-[var(--color-accent)]", dot: "bg-[var(--color-accent)]", label: "Responding" },
+    completed: { bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-500", label: "Completed" },
+    error: { bg: "bg-red-50", text: "text-red-700", dot: "bg-red-500", label: "Error" },
   };
   const config = statusConfig[status] || statusConfig.idle;
   
   return (
-    <span className={`text-xs ${config.bg} ${config.text} px-2 py-1 rounded-full`}>
+    <span className={`inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] px-2.5 py-1 text-[10px] font-semibold ${config.bg} ${config.text}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${config.dot}`} />
       {config.label}
     </span>
   );

@@ -4,7 +4,7 @@
 
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type { ChatAttachment, ClientEvent, MessageContentItem } from "../../../../types";
-import { useAppStore, type AppState } from "../../../../store/useAppStore";
+import { useAppStore, type AppState, type PermissionMode } from "../../../../store/useAppStore";
 
 import { AttachmentPreview } from "./AttachmentPreview";
 import { SlashCommandSuggestions } from "./SlashCommandSuggestions";
@@ -55,6 +55,8 @@ export const PromptInput = memo(function PromptInput({
   const showReasoningInChat = useAppStore((state: AppState) => state.showReasoningInChat);
   const setShowReasoningInChat = useAppStore((state: AppState) => state.setShowReasoningInChat);
   const setGlobalError = useAppStore((state: AppState) => state.setGlobalError);
+  const permissionMode = useAppStore((state: AppState) => state.permissionMode);
+  const setPermissionMode = useAppStore((state: AppState) => state.setPermissionMode);
   const activeSessionId = useAppStore((state: AppState) => state.activeSessionId);
   const activeAgentId = useAppStore((state: AppState) =>
     activeSessionId ? state.sessions[activeSessionId]?.agentId : undefined
@@ -226,10 +228,10 @@ export const PromptInput = memo(function PromptInput({
 
   return (
     <section
-      className="sticky bottom-0 left-0 right-0 z-40 bg-gradient-to-t from-[var(--color-surface)] via-[var(--color-surface)]/95 to-transparent px-3 pb-3 pt-2 lg:px-4"
+      className={`${fullWidth ? "w-full min-w-0 bg-transparent p-0" : "sticky bottom-0 left-0 right-0 z-40 bg-[var(--color-bg-000)]/92 px-5 pb-5 pt-2 backdrop-blur-md lg:px-8"}`}
       onDragEnter={handleDragEnter} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}
     >
-      <div className={`${fullWidth ? "w-full" : "mx-auto w-full max-w-5xl"} rounded-[24px] border border-[var(--color-border)] bg-white/95 px-3 py-2 shadow-[0_16px_44px_rgba(15,23,42,0.10)] backdrop-blur-sm transition ${dragActive ? "border-[var(--color-accent)] bg-[var(--color-accent-light)]/60 ring-4 ring-[var(--color-accent)]/10" : ""}`}>
+      <div className={`${fullWidth ? "w-full min-w-0" : "mx-auto w-full max-w-[920px]"} rounded-[1.75rem] border border-[var(--color-border)] bg-[var(--color-surface)]/88 px-3.5 py-3 shadow-[var(--shadow-card)] backdrop-blur-sm transition ${dragActive ? "border-[var(--color-accent)] bg-[var(--color-accent-light)]/60 ring-2 ring-[var(--color-accent)]/15" : ""}`}>
         <AttachmentPreview attachments={attachments} onRemove={removeAttachment} />
         <ModelSelector models={models} selectedModel={selectedModel} hasSelectedModelOption={hasSelectedModelOption} modelsLoading={modelsLoading} showReasoningInChat={showReasoningInChat}
           onSelectModel={(model) => { setModelTouched(true); setSelectedModel(model); }}
@@ -244,6 +246,28 @@ export const PromptInput = memo(function PromptInput({
           canAppendWhileRunning={canSend}
           onMicToggle={toggleMic} isMicListening={isMicListening}
           interimTranscript={interimTranscript} isMicSupported={isMicSupported} />
+      </div>
+      <div className={`${fullWidth ? "w-full min-w-0" : "mx-auto w-full max-w-[920px]"} mt-2 flex items-center px-2`}>
+        <label className="group relative inline-flex items-center gap-2 text-xs text-muted">
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <path d="M12 3 5 6v5c0 4.7 2.8 8.1 7 10 4.2-1.9 7-5.3 7-10V6l-7-3Z" />
+            <path d="m9.5 12 1.6 1.6 3.6-3.8" />
+          </svg>
+          <select
+            value={permissionMode}
+            onChange={(event) => setPermissionMode(event.target.value as PermissionMode)}
+            disabled={isRunning}
+            className="appearance-none bg-transparent pr-4 text-xs font-medium text-ink-600 outline-none transition hover:text-ink-900 disabled:cursor-not-allowed disabled:opacity-60"
+            title="Choose how Vera handles tool approvals"
+          >
+            <option value="standard">Default approvals</option>
+            <option value="acceptEdits">Auto-allow edits</option>
+            <option value="unrestricted">Full access</option>
+          </select>
+          <svg viewBox="0 0 24 24" className="pointer-events-none absolute right-0 h-3 w-3 text-muted" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="m7 10 5 5 5-5" />
+          </svg>
+        </label>
       </div>
       <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileInputChange} />
     </section>

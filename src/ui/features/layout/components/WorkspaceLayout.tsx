@@ -106,7 +106,7 @@ export function WorkspaceLayout({
       >
         <span className="pointer-events-none absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 rounded-full bg-[var(--color-border)]" />
       </div>
-      <main className="flex min-w-0 flex-1 flex-col">
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {chat}
       </main>
       {activity ? (

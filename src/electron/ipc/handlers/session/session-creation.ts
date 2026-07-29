@@ -69,7 +69,7 @@ export function emit(event: ServerEvent): void {
 export async function handleStartSession(
     options: SessionStartOptions
 ): Promise<void> {
-    const { prompt, content, attachments, cwd, agentId, model, title, background, isEmailSession } = options;
+    const { prompt, content, attachments, cwd, agentId, model, permissionMode, title, background, isEmailSession } = options;
     clearAgentCache();
 
     debug("session.start: starting new session", {
@@ -98,6 +98,7 @@ export async function handleStartSession(
             content: content as MessageContentItem[] | undefined,
             preferredAgentId: agentId,
             model,
+            permissionMode,
             session: sessionConfig,
             onEvent: (e) => {
                 // All events now should have the real conversation ID

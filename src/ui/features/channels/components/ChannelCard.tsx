@@ -35,20 +35,20 @@ export function ChannelCard({
   const whatsappConfig = channel.config as WhatsAppConfig | undefined;
 
   return (
-    <div className="p-4 bg-white rounded-lg border border-slate-200">
+    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-soft)] transition hover:border-[var(--color-border-strong)]">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="text-2xl">{getProviderIcon(channel.provider)}</span>
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--color-accent-subtle)] text-xl">{getProviderIcon(channel.provider)}</span>
           <div>
-            <h3 className="font-medium text-slate-900">{channel.name}</h3>
-            <p className="text-sm text-slate-500 capitalize">
+            <h3 className="text-sm font-semibold text-ink-900">{channel.name}</h3>
+            <p className="mt-0.5 text-xs capitalize text-muted">
               {isRouteChannel ? 'WhatsApp agent route' : channel.provider}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {isRouteChannel ? (
-            <span className="px-2 py-1 rounded text-sm bg-blue-50 text-blue-700">
+            <span className="rounded-full bg-[var(--color-accent-subtle)] px-2 py-1 text-[10px] font-semibold text-[var(--color-accent)]">
               Route
             </span>
           ) : (
@@ -59,7 +59,7 @@ export function ChannelCard({
 
       {/* Show config info */}
       {channel.config && Object.keys(channel.config).length > 0 && (
-        <div className="mt-2 text-xs text-slate-500">
+        <div className="ml-[52px] mt-2 text-[11px] text-muted">
           {channel.config.defaultAgentId && (
             <span>Agent: {String(channel.config.defaultAgentId)}</span>
           )}
@@ -74,8 +74,8 @@ export function ChannelCard({
 
       {/* QR Code for WhatsApp */}
       {status?.status === 'qr' && status.qrDataUrl && (
-        <div className="mt-4 p-4 bg-slate-50 rounded-lg text-center">
-          <p className="text-sm text-slate-600 mb-2">
+        <div className="mt-4 rounded-xl bg-[var(--color-surface-secondary)] p-4 text-center">
+          <p className="mb-2 text-xs text-ink-600">
             Scan this QR code with WhatsApp
           </p>
           <img
