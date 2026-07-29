@@ -409,7 +409,10 @@ export function StartSessionModal({
                 {selectedAgentId.trim() ? "Create new conversation" : "Select an agent first"}
               </option>
               {conversationOptions.map((conversation) => {
-                const label = conversation.summary?.trim() || conversation.id;
+                const summary = conversation.summary?.trim();
+                const label = summary && summary !== conversation.id
+                  ? `${summary} — ${conversation.id}`
+                  : conversation.id;
                 const meta = [formatConversationDate(conversation.lastMessageAt ?? conversation.updatedAt ?? conversation.createdAt), conversation.model]
                   .filter(Boolean)
                   .join(" • ");

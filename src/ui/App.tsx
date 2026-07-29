@@ -417,8 +417,8 @@ function App() {
 
   // Wrapped handleStartWithAgent for StartSessionModal - just updates env and lets the modal close
   // The session.start event is already sent by handleStartWithAgent
-  const handleStartWithAgentAndStart = useCallback(async (agentId: string, model?: string) => {
-    await handleStartWithAgent(agentId, model);
+  const handleStartWithAgentAndStart = useCallback(async (agentId: string, model?: string, conversationId?: string) => {
+    await handleStartWithAgent(agentId, model, conversationId);
     // Don't call handleStartFromModal - handleStartWithAgent already sends session.start
     setShowStartModal(false);
   }, [handleStartWithAgent, setShowStartModal]);

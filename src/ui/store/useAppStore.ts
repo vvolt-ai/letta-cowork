@@ -585,6 +585,14 @@ export type SessionView = {
   planUpdatedAt?: number;
 };
 
+export type ExistingConversationSelection = {
+  id: string;
+  title?: string;
+  agentId?: string;
+  createdAt?: number;
+  updatedAt?: number;
+};
+
 export type CoworkSettings = {
   showWhatsApp: boolean;
   showTelegram: boolean;
@@ -645,6 +653,7 @@ export interface AppState {
   setGlobalError: (error: string | null) => void;
   setShowStartModal: (show: boolean) => void;
   setActiveSessionId: (id: string | null, fetchHistory?: boolean) => void;
+  openExistingConversation: (conversation: ExistingConversationSelection) => void;
   renameSession: (sessionId: string, title: string) => void;
   fetchSessionHistory: (sessionId: string, limit?: number, before?: string) => void;
   setEmailSessionId: (id: string) => void;
@@ -829,6 +838,32 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
           });
         }
       }, 0);
+    }
+  },
+
+  openExistingConversation: (conversation) => {
+    const existing = get().sessions[conversation.id];
+
+    if (!existing) {
+      set((state) => ({
+        sessions: {
+          ...state.sessions,
+          [conversation.id]: {
+            ...createSession(conversation.id),
+            title: conversation.title ?? "",
+            agentId: conversation.agentId,
+            createdAt: conversation.createdAt,
+            updatedAt: conversation.updatedAt,
+          },
+        },
+      }));
+    }
+
+    get().setActiveSessionId(conversation.id, false);
+
+    const selected = get().sessions[conversation.id];
+    if (selected && !selected.hydrated && !selected.isLoadingHistory) {
+      get().fetchSessionHistory(conversation.id, 50);
     }
   },
 
