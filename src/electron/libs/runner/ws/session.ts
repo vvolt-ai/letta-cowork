@@ -152,6 +152,16 @@ export class WsSession {
     private activeClientRunId: string | null = null;
     /** Last server response-state id for auto approval continuations. */
     private responseStateId: string | null = null;
+    /**
+     * Letta streams may alternate between `id`, `otid`, or both for chunks
+     * belonging to the same logical message. Keep aliases so renderer-side
+     * accumulation does not replace the draft whenever one identifier is
+     * omitted by a provider adapter.
+     */
+    private readonly assistantIdsByMessageId = new Map<string, string>();
+    private readonly assistantIdsByOtid = new Map<string, string>();
+    private readonly reasoningIdsByMessageId = new Map<string, string>();
+    private readonly reasoningIdsByOtid = new Map<string, string>();
 
     constructor(opts: WsSessionOptions = {}) {
         this.opts = opts;
@@ -1039,25 +1049,22 @@ export class WsSession {
                 });
             }
             if (messageType === "tool_call_message") {
-                const tc = (e.tool_call as
-                    | {
-                          tool_call_id?: string;
-                          name?: string;
-                          arguments?: string;
-                      }
-                    | undefined) ?? {};
-                const id = String(tc.tool_call_id ?? "");
-                if (!id) continue;
-                const existing = calls.get(id);
-                if (existing) {
-                    if (tc.name && !existing.name) existing.name = tc.name;
-                    existing.argumentsRaw += tc.arguments ?? "";
-                } else {
-                    calls.set(id, {
-                        toolCallId: id,
-                        name: tc.name ?? "",
-                        argumentsRaw: tc.arguments ?? "",
-                    });
+                // Current Letta streams can use either the legacy singular
+                // `tool_call` or the parallel `tool_calls[]` shape.
+                for (const tc of getStreamingToolCalls(e)) {
+                    const id = String(tc.tool_call_id ?? "");
+                    if (!id) continue;
+                    const existing = calls.get(id);
+                    if (existing) {
+                        if (tc.name && !existing.name) existing.name = tc.name;
+                        existing.argumentsRaw += tc.arguments ?? "";
+                    } else {
+                        calls.set(id, {
+                            toolCallId: id,
+                            name: tc.name ?? "",
+                            argumentsRaw: tc.arguments ?? "",
+                        });
+                    }
                 }
             } else if (messageType === "stop_reason") {
                 const stopReasonRaw = String(
@@ -1085,27 +1092,7 @@ export class WsSession {
                 // tool_return, status}). The argument fragments stream in
                 // — dedupe on tool_call_id and concat .arguments.
                 const reqId = String(e.id ?? "");
-                const tcs = (Array.isArray((e as { tool_calls?: unknown }).tool_calls)
-                    ? ((e as { tool_calls?: unknown[] }).tool_calls as Array<{
-                          tool_call_id?: string;
-                          name?: string;
-                          arguments?: string;
-                      }>)
-                    : (e as { tool_call?: unknown }).tool_call
-                      ? [
-                            (e as {
-                                tool_call: {
-                                    tool_call_id?: string;
-                                    name?: string;
-                                    arguments?: string;
-                                };
-                            }).tool_call,
-                        ]
-                      : []) as Array<{
-                    tool_call_id?: string;
-                    name?: string;
-                    arguments?: string;
-                }>;
+                const tcs = getStreamingToolCalls(e);
                 for (const tc of tcs) {
                     const tcid = String(tc?.tool_call_id ?? "");
                     if (!tcid) continue;
@@ -1299,6 +1286,52 @@ export class WsSession {
         this.streamQueue.push(stamped);
     }
 
+    private resolveStreamMessageId(
+        kind: "assistant" | "reasoning",
+        event: Record<string, unknown>
+    ): string | undefined {
+        const messageId =
+            typeof event.id === "string" && event.id ? event.id : undefined;
+        const otid =
+            typeof event.otid === "string" && event.otid ? event.otid : undefined;
+        const byMessageId =
+            kind === "assistant"
+                ? this.assistantIdsByMessageId
+                : this.reasoningIdsByMessageId;
+        const byOtid =
+            kind === "assistant"
+                ? this.assistantIdsByOtid
+                : this.reasoningIdsByOtid;
+
+        const canonicalFromMessageId = messageId
+            ? byMessageId.get(messageId)
+            : undefined;
+        const canonicalFromOtid = otid ? byOtid.get(otid) : undefined;
+        let canonical =
+            canonicalFromMessageId ??
+            canonicalFromOtid ??
+            messageId ??
+            otid;
+        if (!canonical) return undefined;
+
+        // Providers can emit multiple content blocks with one message id
+        // (for example text -> thinking -> text), assigning each block a new
+        // OTID. Keep the first mixed id/OTID sequence together, then give a
+        // genuinely new OTID its own row rather than appending to an old block.
+        if (otid && !canonicalFromOtid && canonicalFromMessageId) {
+            const hasPriorOtidAlias = Array.from(byOtid.entries()).some(
+                ([mappedOtid, mappedCanonical]) =>
+                    mappedCanonical === canonicalFromMessageId &&
+                    mappedOtid !== otid
+            );
+            if (hasPriorOtidAlias) canonical = otid;
+        }
+
+        if (messageId) byMessageId.set(messageId, canonical);
+        if (otid) byOtid.set(otid, canonical);
+        return canonical;
+    }
+
     private handleStreamingEvent(event: LettaStreamingResponse): void {
         // Discriminate on `message_type` — every variant has it.
         const e = event as unknown as Record<string, unknown>;
@@ -1308,10 +1341,12 @@ export class WsSession {
             case "assistant_message": {
                 const text = extractText(e.content);
                 if (!text) return;
+                const uuid = this.resolveStreamMessageId("assistant", e);
+                if (!uuid) return;
                 this.enqueue({
                     type: "assistant",
                     content: text,
-                    uuid: String(e.id ?? Date.now()),
+                    uuid,
                 } as SDKAssistantMessage);
                 return;
             }
@@ -1320,66 +1355,76 @@ export class WsSession {
                 const text =
                     extractText(e.reasoning) || extractText(e.content);
                 if (!text) return;
+                const uuid = this.resolveStreamMessageId("reasoning", e);
+                if (!uuid) return;
                 // SDKReasoningMessage requires { type, content, uuid }.
                 this.enqueue({
                     type: "reasoning",
                     content: text,
-                    uuid: String(e.id ?? `reasoning-${Date.now()}-${Math.random()}`),
+                    uuid,
                     runId: typeof e.run_id === "string" ? e.run_id : undefined,
                 } as SDKReasoningMessage);
                 return;
             }
             case "tool_call_message": {
-                const tc = (e.tool_call as
-                    | {
-                          tool_call_id?: string;
-                          name?: string;
-                          arguments?: string;
-                      }
-                    | undefined) ?? {};
-                // SDKToolCallMessage requires { type, toolCallId, toolName,
-                // toolInput, uuid }. Streaming tool_call events arrive as
-                // partial JSON-string fragments — the SDK accumulates them
-                // via `rawArguments`.
-                let parsedInput: Record<string, unknown> = {};
-                if (tc.arguments) {
-                    try {
-                        const parsed = JSON.parse(tc.arguments);
-                        if (parsed && typeof parsed === "object") {
-                            parsedInput = parsed as Record<string, unknown>;
+                for (const tc of getStreamingToolCalls(e)) {
+                    const toolCallId = String(tc.tool_call_id ?? "");
+                    if (!toolCallId) continue;
+                    // SDKToolCallMessage requires { type, toolCallId, toolName,
+                    // toolInput, uuid }. Streaming tool-call arguments arrive
+                    // as partial JSON fragments and are merged by the UI.
+                    let parsedInput: Record<string, unknown> = {};
+                    if (tc.arguments) {
+                        try {
+                            const parsed = JSON.parse(tc.arguments);
+                            if (parsed && typeof parsed === "object") {
+                                parsedInput = parsed as Record<string, unknown>;
+                            }
+                        } catch {
+                            // Partial / non-JSON fragment — rawArguments is the
+                            // authoritative value until all chunks arrive.
                         }
-                    } catch {
-                        // Partial / non-JSON fragment — leave parsedInput empty,
-                        // consumer reads rawArguments for live token display.
                     }
+                    this.enqueue({
+                        type: "tool_call",
+                        toolCallId,
+                        toolName: tc.name ?? "",
+                        toolInput: parsedInput,
+                        rawArguments: tc.arguments,
+                        uuid: `toolcall-${toolCallId}`,
+                        runId:
+                            typeof e.run_id === "string" ? e.run_id : undefined,
+                    } as SDKToolCallMessage);
                 }
-                this.enqueue({
-                    type: "tool_call",
-                    toolCallId: String(tc.tool_call_id ?? ""),
-                    toolName: tc.name ?? "",
-                    toolInput: parsedInput,
-                    rawArguments: tc.arguments,
-                    uuid: String(e.id ?? `toolcall-${Date.now()}-${Math.random()}`),
-                    runId: typeof e.run_id === "string" ? e.run_id : undefined,
-                } as SDKToolCallMessage);
                 return;
             }
             case "tool_return_message": {
-                const callId = String(e.tool_call_id ?? "");
-                const status =
-                    String(e.status ?? "success").toLowerCase() === "success"
-                        ? "success"
-                        : "error";
-                const out = extractText(e.tool_return) || extractText(e.stdout);
-                // SDKToolResultMessage uses `content` (not `output`).
-                this.enqueue({
-                    type: "tool_result",
-                    toolCallId: callId,
-                    content: out,
-                    isError: status === "error",
-                    uuid: String(e.id ?? `toolret-${Date.now()}-${Math.random()}`),
-                    runId: typeof e.run_id === "string" ? e.run_id : undefined,
-                } as SDKToolResultMessage);
+                // Parallel tool execution emits `tool_returns[]`; older servers
+                // use singular fields. Normalize both, including the streaming
+                // `func_response` name used by current Letta Code.
+                for (const toolReturn of getStreamingToolReturns(e)) {
+                    const callId = String(toolReturn.tool_call_id ?? "");
+                    if (!callId) continue;
+                    const status =
+                        String(toolReturn.status ?? "success").toLowerCase() ===
+                        "success"
+                            ? "success"
+                            : "error";
+                    const rawOutput =
+                        toolReturn.func_response ??
+                        toolReturn.tool_return ??
+                        toolReturn.stdout;
+                    const out = stringifyToolOutput(rawOutput);
+                    this.enqueue({
+                        type: "tool_result",
+                        toolCallId: callId,
+                        content: out,
+                        isError: status === "error",
+                        uuid: `toolret-${callId}`,
+                        runId:
+                            typeof e.run_id === "string" ? e.run_id : undefined,
+                    } as SDKToolResultMessage);
+                }
                 return;
             }
             case "system_message":
@@ -1419,6 +1464,8 @@ export class WsSession {
                 // runOneStreamTurn; they must stay hidden from UI/history.
                 return;
             case "usage_statistics":
+            case "summary_message":
+            case "event_message":
                 return;
             default:
                 debug("WsSession: unknown streaming event", {
@@ -1450,6 +1497,59 @@ interface PendingApproval {
     toolName: string;
     /** Tool arguments JSON — accumulated across stream fragments. */
     argumentsRaw: string;
+}
+
+interface StreamingToolCall {
+    tool_call_id?: string;
+    name?: string;
+    arguments?: string;
+}
+
+interface StreamingToolReturn {
+    tool_call_id?: string;
+    status?: string;
+    func_response?: unknown;
+    tool_return?: unknown;
+    stdout?: unknown;
+}
+
+/** Normalize legacy singular and current parallel tool-call stream shapes. */
+function getStreamingToolCalls(
+    event: Record<string, unknown>
+): StreamingToolCall[] {
+    if (Array.isArray(event.tool_calls) && event.tool_calls.length > 0) {
+        return event.tool_calls.filter(
+            (item): item is StreamingToolCall =>
+                !!item && typeof item === "object"
+        );
+    }
+    if (event.tool_call && typeof event.tool_call === "object") {
+        return [event.tool_call as StreamingToolCall];
+    }
+    return [];
+}
+
+/** Normalize legacy singular and current parallel tool-return stream shapes. */
+function getStreamingToolReturns(
+    event: Record<string, unknown>
+): StreamingToolReturn[] {
+    if (Array.isArray(event.tool_returns) && event.tool_returns.length > 0) {
+        return event.tool_returns.filter(
+            (item): item is StreamingToolReturn =>
+                !!item && typeof item === "object"
+        );
+    }
+    return [event as StreamingToolReturn];
+}
+
+function stringifyToolOutput(value: unknown): string {
+    if (typeof value === "string") return value;
+    if (value == null) return "";
+    try {
+        return JSON.stringify(value);
+    } catch {
+        return String(value);
+    }
 }
 
 function parseToolArgs(raw: string): Record<string, unknown> {
@@ -1513,7 +1613,7 @@ function extractText(value: unknown): string {
                 if (typeof item === "string") return item;
                 if (item && typeof item === "object") {
                     const it = item as Record<string, unknown>;
-                    return String(it.text ?? it.content ?? "");
+                    return String(it.text ?? it.delta ?? it.content ?? "");
                 }
                 return "";
             })
@@ -1521,7 +1621,7 @@ function extractText(value: unknown): string {
     }
     if (typeof value === "object") {
         const v = value as Record<string, unknown>;
-        return String(v.text ?? v.content ?? "");
+        return String(v.text ?? v.delta ?? v.content ?? "");
     }
     return "";
 }

@@ -18,6 +18,7 @@ interface LettaMessageContentSource {
 interface LettaMessageContent {
   type?: string;
   text?: string;
+  delta?: string;
   reasoning?: string;
   source?: LettaMessageContentSource;
   url?: string;
@@ -51,7 +52,7 @@ function extractText(value: unknown): string {
         pieces.push(block);
       } else if (typeof block === "object") {
         const record = block as any;
-        const maybeText = record.text ?? record.reasoning ?? record.content ?? record.output ?? record.result;
+        const maybeText = record.text ?? record.delta ?? record.reasoning ?? record.content ?? record.output ?? record.result;
         if (typeof maybeText === "string") pieces.push(maybeText);
       }
     }
@@ -59,7 +60,7 @@ function extractText(value: unknown): string {
   }
   if (typeof value === "object") {
     const record = value as Record<string, unknown>;
-    const preferredKeys = ["command", "file_path", "query", "pattern", "url", "description", "text", "reasoning", "content", "output", "result"];
+    const preferredKeys = ["command", "file_path", "query", "pattern", "url", "description", "text", "delta", "reasoning", "content", "output", "result"];
     for (const key of preferredKeys) {
       const candidate = record[key];
       if (typeof candidate === "string" && candidate.trim().length > 0) {
@@ -120,6 +121,7 @@ function normaliseLogs(value: unknown): string[] {
 
 export interface LettaMessage {
   id?: string;
+  otid?: string;
   message_id?: string;
   uuid?: string;
   message_type?: string;
@@ -234,7 +236,7 @@ export function filterConversationMessages(rawMessages: LettaMessage[]): Convers
       const assistantMessage: ConversationStreamMessage = {
         type: "assistant",
         content: textContent,
-        uuid: msg.uuid || msg.id || msg.message_id || randomUUID(),
+        uuid: msg.uuid || msg.id || msg.otid || msg.message_id || randomUUID(),
         createdAt,
         historyOrder,
       } as ConversationStreamMessage;
@@ -294,10 +296,12 @@ export function filterConversationMessages(rawMessages: LettaMessage[]): Convers
         (msg as any).name as string | undefined,
       ) || "tool";
       const outputRaw = firstPresent(
+        (msg as any).func_response,
         (msg as any).tool_return,
         (msg as any).output,
         (msg as any).result,
         (msg as any).content,
+        metadata.func_response,
         metadata.tool_return,
         metadata.output,
         metadata.result,
@@ -335,7 +339,7 @@ export function filterConversationMessages(rawMessages: LettaMessage[]): Convers
         const reasoningMessage: ConversationStreamMessage = {
           type: "reasoning",
           content: reasoningText,
-          uuid: msg.id || msg.message_id || randomUUID(),
+          uuid: msg.id || msg.otid || msg.message_id || randomUUID(),
           createdAt,
           historyOrder,
         } as unknown as ConversationStreamMessage;
