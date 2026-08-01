@@ -13,17 +13,21 @@ export type SendPermissionRequest = (toolUseId: string, toolName: string, input:
 
 const READ_ONLY_TOOLS = new Set([
   "Read", "ReadLSP", "Glob", "Grep", "LS", "ViewImage", "LogTail", "LogSearch",
-  "CodeSearch", "CodeGetDefinition", "CodeFindReferences", "CodeFileOutline", "CodeDiagnostics",
+  "CodeSearch", "CodeGetDefinition", "CodeFindReferences", "CodeFileOutline", "TestFindRelated",
   "ProjectContext", "ProjectDetect", "ProjectMap", "ProjectMemoryStatus", "ProjectMemoryRead", "ProjectMemorySearch",
-  "GitDiffSummary", "GitChangedByAgent", "TaskGet", "TaskList", "TaskOutput",
+  "GitDiffSummary", "GitChangedByAgent", "LiveDiffStatus", "ToolTraceSearch", "RunTimeline", "TaskGet", "TaskList", "TaskOutput",
   "BrowserSnapshot", "BrowserConsoleMessages", "BrowserNetworkRequests",
   "odoo_search", "odoo_count", "odoo_group", "odoo_get_models", "odoo_get_fields", "odoo_health_check_health_odoo_get",
 ]);
 
-const EDIT_TOOLS = new Set(["Edit", "MultiEdit", "Write", "ApplyPatch", "LiveApplyPatch"]);
+const EDIT_TOOLS = new Set([
+  "Edit", "MultiEdit", "Write", "ApplyPatch",
+  "CodeEdit", "CodeApplyPatch", "CodeFormatFiles", "CodeOrganizeImports",
+  "ProjectMemoryBootstrap", "ProjectMemoryWrite", "LiveApplyPatch",
+]);
 
 function isReadOnlyRequest(toolName: string, input: unknown): boolean {
-  if (READ_ONLY_TOOLS.has(toolName) || toolName.startsWith("Code")) return true;
+  if (READ_ONLY_TOOLS.has(toolName)) return true;
   if (toolName === "Git" && input && typeof input === "object") {
     const operation = (input as { operation?: unknown }).operation;
     return operation === "status" || operation === "diff" || operation === "log" || operation === "branch";

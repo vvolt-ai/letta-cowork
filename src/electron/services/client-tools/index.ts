@@ -17,6 +17,8 @@ import { codingTools } from "./runners/coding.js";
 import { odooMcpTools } from "./runners/odooMcp.js";
 import { veraMcpTools } from "./runners/veraMcp.js";
 import { browserTools } from "./runners/browser.js";
+import { appendToolTrace, runTimelineTool, toolTraceSearchTool } from "./runners/tool-traces.js";
+import type { ToolTraceStatus } from "./runners/tool-traces.js";
 import { emitExtensionToolStart } from "../extensions/extension-events.js";
 import type {
     ClientToolDefinition,
@@ -43,7 +45,7 @@ function register(def: ClientToolDefinition): void {
 //   • TodoWrite, AskUserQuestion — workflow
 //   • Skill, list_skills — kept from our earlier impl
 //   • ProjectContext, Git, LogTail, WebFetch, MemoryNotes, UserPreferences, Reminders — Cowork productivity tools
-//   • ProjectDetect, ProjectMap, ProjectRunScript, ProjectMemory*, LivePatch*, GitChangedByAgent, GitDiffSummary, LogSearch — Cowork coding workflow tools
+//   • ProjectDetect, ProjectMap, CodeEdit, CodeApplyPatch, ProjectRunScript, ProjectMemory*, LivePatch*, GitChangedByAgent, GitDiffSummary, LogSearch, ToolTraceSearch, RunTimeline — Cowork coding workflow tools
 //   • BrowserNavigate, BrowserSnapshot, BrowserClick, BrowserType, BrowserWaitFor, BrowserTakeScreenshot, BrowserConsoleMessages, BrowserNetworkRequests, BrowserClose — built-in Playwright browser automation
 //
 // Deferred (need agent runtime / memory subsystem / UI hooks):
@@ -59,6 +61,8 @@ for (const tool of codingTools) register(tool);
 for (const tool of odooMcpTools) register(tool);
 for (const tool of veraMcpTools) register(tool);
 for (const tool of browserTools) register(tool);
+register(toolTraceSearchTool);
+register(runTimelineTool);
 
 export function registerClientTool(def: ClientToolDefinition): () => void {
     if (registry.has(def.name)) {
@@ -92,37 +96,63 @@ export async function runClientTool(
     args: Record<string, unknown>,
     ctx: ToolRunContext
 ): Promise<ToolRunResult> {
+    const startedAt = new Date();
     const def = registry.get(name);
+    let argsToRun = args;
+    let status: ToolTraceStatus = "error";
+    let result: ToolRunResult;
+
     if (!def) {
-        return {
+        result = {
             output: `Client tool '${name}' is not registered on this device.`,
             isError: true,
         };
-    }
-    try {
-        const toolStartResult = await emitExtensionToolStart({
-            agentId: ctx.agentId,
-            conversationId: ctx.conversationId,
-            toolName: name,
-            args,
-            context: ctx,
-        });
-        if (toolStartResult.deny) {
-            return {
-                output: toolStartResult.reason || `Client tool '${name}' was denied by an extension.`,
+    } else {
+        try {
+            const toolStartResult = await emitExtensionToolStart({
+                agentId: ctx.agentId,
+                conversationId: ctx.conversationId,
+                toolName: name,
+                args,
+                context: ctx,
+            });
+            argsToRun = toolStartResult.args ?? args;
+            if (toolStartResult.deny) {
+                status = "denied";
+                result = {
+                    output:
+                        toolStartResult.reason ||
+                        `Client tool '${name}' was denied by an extension.`,
+                    isError: true,
+                };
+            } else {
+                result = await def.run(argsToRun, ctx);
+                status = result.isError ? "error" : "success";
+            }
+        } catch (err) {
+            result = {
+                output: `Client tool '${name}' threw: ${
+                    err instanceof Error ? err.stack ?? err.message : String(err)
+                }`,
                 isError: true,
             };
         }
-
-        return await def.run(toolStartResult.args ?? args, ctx);
-    } catch (err) {
-        return {
-            output: `Client tool '${name}' threw: ${
-                err instanceof Error ? err.stack ?? err.message : String(err)
-            }`,
-            isError: true,
-        };
     }
+
+    try {
+        await appendToolTrace({
+            toolName: name,
+            status,
+            startedAt,
+            args: argsToRun,
+            result,
+            context: ctx,
+        });
+    } catch (error) {
+        // Observability must never change the outcome of the tool being observed.
+        console.warn("[client-tools] Failed to persist tool trace", error);
+    }
+    return result;
 }
 
 export type {

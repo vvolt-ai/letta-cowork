@@ -12,6 +12,7 @@ import { useEmailSelection } from "./hooks/useEmailSelection";
 import { WorkspaceLayout } from "./features/layout/components/WorkspaceLayout";
 import { InnerPageLayout } from "./features/layout/components/InnerPageLayout";
 import { ChatWorkspace } from "./features/chat/components/ChatWorkspace";
+import { ProjectExplorerPanel } from "./features/chat/components/ProjectExplorerPanel";
 import { ConfigurationTab } from "./features/sidebar/components/ConfigurationTab";
 import { SkillsPanel } from "./features/skills/SkillsPanel";
 import { SchedulesPanel } from "./features/scheduler/SchedulesPanel";
@@ -146,6 +147,7 @@ function App() {
   const [hasNewMessages, setHasNewMessages] = useState(false);
   const [lettaEnvOpen, setLettaEnvOpen] = useState(false);
   const [isActivityOpen, setIsActivityOpen] = useState(false);
+  const [isProjectOpen, setIsProjectOpen] = useState(false);
   const [showConfiguration, setShowConfiguration] = useState(false);
   const [showSkills, setShowSkills] = useState(false);
   const [showSchedules, setShowSchedules] = useState(false);
@@ -591,7 +593,19 @@ function App() {
   }, [handleLoadMoreHistory, shouldAutoScroll]);
 
   const handleToggleActivityPanel = useCallback(() => {
-    setIsActivityOpen((prev) => !prev);
+    setIsActivityOpen((prev) => {
+      const next = !prev;
+      if (next) setIsProjectOpen(false);
+      return next;
+    });
+  }, []);
+
+  const handleToggleProjectPanel = useCallback(() => {
+    setIsProjectOpen((prev) => {
+      const next = !prev;
+      if (next) setIsActivityOpen(false);
+      return next;
+    });
   }, []);
 
   const handleSidebarWidthChange = useCallback((nextWidth: number) => {
@@ -707,6 +721,7 @@ function App() {
     <>
       <WorkspaceLayout
         sidebarWidth={sidebarWidth}
+        activityWidthClassName={isProjectOpen ? "lg:w-[400px] xl:w-[480px]" : undefined}
         minSidebarWidth={MIN_SIDEBAR_WIDTH}
         maxSidebarWidth={MAX_SIDEBAR_WIDTH}
         onSidebarWidthChange={handleSidebarWidthChange}
@@ -838,7 +853,9 @@ function App() {
               scrollContainerRef={scrollContainerRef}
               messagesEndRef={messagesEndRef}
               activityOpen={isActivityOpen}
+              projectOpen={isProjectOpen}
               onToggleActivity={handleToggleActivityPanel}
+              onToggleProject={activeSession?.cwd ? handleToggleProjectPanel : undefined}
               onOpenMemory={() => setIsMemoryOpen(true)}
               onViewRuns={activeSessionId ? () => {
                 setRunsPresetConversationId(activeSessionId);
@@ -852,7 +869,9 @@ function App() {
           )
         }
         activity={
-          isActivityOpen ? (
+          isProjectOpen && activeSession?.cwd ? (
+            <ProjectExplorerPanel rootPath={activeSession.cwd} onClose={() => setIsProjectOpen(false)} />
+          ) : isActivityOpen ? (
             <ActivityPanel
               status={agentStatus}
               ephemeral={ephemeralState}

@@ -4,6 +4,7 @@ interface WorkspaceLayoutProps {
   sidebar: ReactNode;
   chat: ReactNode;
   activity?: ReactNode | null;
+  activityWidthClassName?: string;
   sidebarWidth?: number;
   minSidebarWidth?: number;
   maxSidebarWidth?: number;
@@ -16,6 +17,7 @@ export function WorkspaceLayout({
   sidebar,
   chat,
   activity,
+  activityWidthClassName = "lg:w-[280px] xl:w-[300px]",
   sidebarWidth = DEFAULT_LAYOUT_SIDEBAR_WIDTH,
   minSidebarWidth = 220,
   maxSidebarWidth = 420,
@@ -110,7 +112,7 @@ export function WorkspaceLayout({
         {chat}
       </main>
       {activity ? (
-        <aside className="hidden shrink-0 border-l border-[var(--color-border)] bg-[var(--color-surface)] lg:flex lg:w-[280px] xl:w-[300px]">
+        <aside className={`hidden shrink-0 border-l border-[var(--color-border)] bg-[var(--color-surface)] lg:flex ${activityWidthClassName}`}>
           {activity}
         </aside>
       ) : null}

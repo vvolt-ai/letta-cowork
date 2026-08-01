@@ -28,6 +28,8 @@ export interface ToolRunContext {
     /** Conversation/agent scope, in case a runner wants to log/route on it. */
     agentId?: string;
     conversationId?: string;
+    /** Upstream call id used to correlate UI calls, returns, and local traces. */
+    toolCallId?: string;
     /**
      * Authenticated per-user runtime secrets for this tool invocation.
      * Values are process-memory-only and must never be logged or persisted.

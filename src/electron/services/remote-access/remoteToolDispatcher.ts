@@ -51,6 +51,7 @@ export class RemoteToolDispatcher {
         signal: controller.signal,
         agentId: input.agentId,
         conversationId: input.conversationId,
+        toolCallId: input.requestId,
       });
       return {
         status: result.isError ? "error" : "success",

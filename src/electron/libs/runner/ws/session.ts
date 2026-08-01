@@ -627,6 +627,7 @@ export class WsSession {
                                             agentId: this._agentId ?? undefined,
                                             conversationId:
                                                 this._conversationId ?? undefined,
+                                            toolCallId: req.toolCallId,
                                             planMode: this.planMode,
                                             runtimeEnv,
                                         }
@@ -747,6 +748,7 @@ export class WsSession {
                                     agentId: this._agentId ?? undefined,
                                     conversationId:
                                         this._conversationId ?? undefined,
+                                    toolCallId: call.toolCallId,
                                     planMode: this.planMode,
                                     runtimeEnv,
                                 }

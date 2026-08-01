@@ -171,7 +171,7 @@ function touchedFilesForTool(name: string, args: Record<string, unknown>): strin
     }
     if (name === "ApplyPatch" && typeof args.input === "string") {
         const files = new Set<string>();
-        const marker = /\*\*\* (?:Add File|Update File|Delete File):\s+(.+)$/gm;
+        const marker = /\*\*\* (?:Add File|Update File|Delete File|Move to):\s+(.+)$/gm;
         let match: RegExpExecArray | null;
         while ((match = marker.exec(args.input)) !== null) {
             const file = match[1]?.trim();
@@ -209,10 +209,15 @@ function makeTool(
                 if (!result.isError) {
                     const touched = touchedFilesForTool(name, args);
                     if (touched.length > 0) {
-                        await noteToolTouchedFiles(process.env.USER_CWD || process.cwd(), touched, name, {
-                            agentId: ctx.agentId,
-                            conversationId: ctx.conversationId,
-                        });
+                        try {
+                            await noteToolTouchedFiles(process.env.USER_CWD || process.cwd(), touched, name, {
+                                agentId: ctx.agentId,
+                                conversationId: ctx.conversationId,
+                            });
+                        } catch (trackingError) {
+                            const warning = trackingError instanceof Error ? trackingError.message : String(trackingError);
+                            result.output = `${result.output}\n\nWarning: the file operation succeeded, but touched-file tracking failed: ${warning}`;
+                        }
                     }
                 }
                 return result;

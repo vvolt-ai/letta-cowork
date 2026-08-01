@@ -1,6 +1,6 @@
 /**
  * LSP-enhanced Read tool - wraps the base Read tool and adds LSP diagnostics
- * This is used when LETTA_ENABLE_LSP is set
+ * TypeScript/JavaScript files use the bundled project-aware language service.
  */
 import { getCurrentWorkingDirectory } from "../_shared/runtime-context.js";
 import { read as baseRead, type ToolReturnContent } from "./Read.js";
@@ -38,11 +38,6 @@ export async function read_lsp(args: ReadLSPArgs): Promise<ReadLSPResult> {
   // First, call the base read function
   const result = await baseRead(args);
 
-  // Skip LSP if not enabled (shouldn't happen since we only load this when enabled)
-  if (!process.env.LETTA_ENABLE_LSP) {
-    return result;
-  }
-
   // If content is multimodal (image), skip LSP processing - only applies to text files
   if (typeof result.content !== "string") {
     return result;
@@ -59,8 +54,8 @@ export async function read_lsp(args: ReadLSPArgs): Promise<ReadLSPResult> {
   }
 
   try {
-    // Import LSP manager dynamically
-    const { lspManager } = await import("../../lsp/manager.js"); // resolved via local stub when LETTA_ENABLE_LSP unset
+    // Load TypeScript lazily so non-source reads do not pay language-service startup cost.
+    const { lspManager } = await import("../../lsp/manager.js");
     const path = await import("node:path");
 
     // Resolve the path
@@ -71,9 +66,6 @@ export async function read_lsp(args: ReadLSPArgs): Promise<ReadLSPResult> {
 
     // Touch the file (opens it in LSP if not already open)
     await lspManager.touchFile(resolvedPath, false);
-
-    // Wait briefly for diagnostics (LSP servers are async)
-    await new Promise((resolve) => setTimeout(resolve, 100));
 
     // Get diagnostics
     const diagnostics = lspManager.getDiagnostics(resolvedPath);

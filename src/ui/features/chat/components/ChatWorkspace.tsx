@@ -36,7 +36,9 @@ interface ChatWorkspaceProps {
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
   activityOpen: boolean;
+  projectOpen?: boolean;
   onToggleActivity: () => void;
+  onToggleProject?: () => void;
   onOpenMemory?: () => void;
   onViewRuns?: () => void;
 }
@@ -68,7 +70,9 @@ export const ChatWorkspace = memo(function ChatWorkspace({
   scrollContainerRef,
   messagesEndRef,
   activityOpen,
+  projectOpen,
   onToggleActivity,
+  onToggleProject,
   onOpenMemory,
   onViewRuns,
 }: ChatWorkspaceProps) {
@@ -124,7 +128,9 @@ export const ChatWorkspace = memo(function ChatWorkspace({
         sessionId={activeSessionId ?? undefined}
         status={agentStatus}
         activityOpen={activityOpen}
+        projectOpen={projectOpen}
         onToggleActivity={onToggleActivity}
+        onToggleProject={onToggleProject}
         onViewRuns={onViewRuns}
       />
 

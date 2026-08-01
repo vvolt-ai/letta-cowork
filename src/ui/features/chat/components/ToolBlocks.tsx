@@ -1,4 +1,4 @@
-import { memo, useMemo, useState, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 interface ToolExecutionBlockProps {
   name: string;
@@ -69,6 +69,7 @@ function summarizeToolInput(name: string, input?: string | null): string | null 
   }
 
   if (name === "LiveApplyPatch") return "Applied live patch";
+  if (name === "LiveUndoPatch") return "Undid live patch";
   if (name === "LiveRejectPatch") return "Rejected live patch";
   if (name === "AskUserQuestion") {
     try {
@@ -91,7 +92,61 @@ function summarizeToolInput(name: string, input?: string | null): string | null 
       return "Run project script";
     }
   }
+  if (name === "ProjectMemoryBootstrap") {
+    try {
+      const parsed = JSON.parse(trimmed);
+      return parsed?.status === "created" ? "Initialized project memory" : "Project memory already initialized";
+    } catch {
+      return "Initialize project memory";
+    }
+  }
   if (name.startsWith("ProjectMemory")) return "Project memory";
+  if (name === "CodeEdit") {
+    try {
+      const parsed = JSON.parse(trimmed);
+      return parsed?.file ? `Edited ${parsed.file}` : "Edited repository file";
+    } catch {
+      return "Edited repository file";
+    }
+  }
+  if (name === "CodeApplyPatch") {
+    try {
+      const parsed = JSON.parse(trimmed);
+      const count = Array.isArray(parsed?.files) ? parsed.files.length : 0;
+      return count > 0 ? `Applied patch to ${count} file${count === 1 ? "" : "s"}` : "Applied code patch";
+    } catch {
+      return "Applied code patch";
+    }
+  }
+  if (name === "CodeFormatFiles" || name === "CodeOrganizeImports") {
+    try {
+      const parsed = JSON.parse(trimmed);
+      const count = Array.isArray(parsed?.changedFiles) ? parsed.changedFiles.length : 0;
+      const action = name === "CodeFormatFiles" ? "Formatted" : "Organized imports in";
+      if (count > 0) return `${action} ${count} file${count === 1 ? "" : "s"}`;
+      return name === "CodeFormatFiles" ? "Files already formatted" : "Imports already organized";
+    } catch {
+      return name === "CodeFormatFiles" ? "Format repository files" : "Organize repository imports";
+    }
+  }
+  if (name === "TestFindRelated") {
+    try {
+      const parsed = JSON.parse(trimmed);
+      const count = Number(parsed?.count) || 0;
+      return `Found ${count} related test${count === 1 ? "" : "s"}`;
+    } catch {
+      return "Find related tests";
+    }
+  }
+  if (name === "TestRunRelated" || name === "TestRunByName") {
+    try {
+      const parsed = JSON.parse(trimmed);
+      const status = parsed?.status === "passed" ? "passed" : parsed?.status === "cancelled" ? "cancelled" : "failed";
+      return name === "TestRunRelated" ? `Related tests ${status}` : `Named tests ${status}`;
+    } catch {
+      return name === "TestRunRelated" ? "Run related tests" : "Run tests by name";
+    }
+  }
   if (name.startsWith("Code")) return "Code intelligence";
 
   return trimmed.length > 140 ? `${trimmed.slice(0, 137)}…` : trimmed;
@@ -584,6 +639,71 @@ function DiagnosticsOutputCard({ data, tone }: { data: JsonRecord; tone: Tone })
   );
 }
 
+function RunTimelineOutputCard({ data, tone }: { data: JsonRecord; tone: Tone }) {
+  const events = Array.isArray(data.events) ? data.events.filter(isRecord) : [];
+  const links = Array.isArray(data.links) ? data.links.filter(isRecord) : [];
+  const summary = isRecord(data.summary) ? data.summary : {};
+  const inboundLinks = new Map<string, JsonRecord[]>();
+  for (const link of links) {
+    const target = asText(link.to);
+    if (target) inboundLinks.set(target, [...(inboundLinks.get(target) ?? []), link]);
+  }
+  const failures = Number(summary.failures) || 0;
+  const eventColor = (event: JsonRecord) => {
+    const status = asText(event.status).toLowerCase();
+    if (/failed|error|denied/.test(status)) return "bg-red-500";
+    if (event.kind === "test" || event.kind === "diagnostics") return "bg-emerald-500";
+    if (event.kind === "patch_apply") return "bg-blue-500";
+    return "bg-violet-500";
+  };
+  return (
+    <ToolCard title="Run timeline" tone={failures > 0 ? "error" : tone}>
+      <div className="truncate font-mono text-[10px] text-muted" title={asText(data.repoRoot)}>{asText(data.repoRoot)}</div>
+      <div className="flex flex-wrap gap-1.5">
+        <Pill>{asText(summary.proposals || 0)} patches</Pill>
+        <Pill>{asText(summary.applications || 0)} applications</Pill>
+        <Pill>{asText(summary.diagnostics || 0)} diagnostics</Pill>
+        <Pill>{asText(summary.tests || 0)} tests</Pill>
+        {failures > 0 ? <Pill>{failures} failures</Pill> : null}
+      </div>
+      {events.length === 0 ? <div className="text-[11px] text-muted">No linked patch or validation events found in this time range.</div> : (
+        <div className="space-y-0">
+          {events.map((event, index) => {
+            const id = asText(event.id);
+            const files = Array.isArray(event.files) ? event.files.filter((file): file is string => typeof file === "string") : [];
+            const proposalIds = Array.isArray(event.linkedProposalIds) ? event.linkedProposalIds.filter((value): value is string => typeof value === "string") : [];
+            const incoming = inboundLinks.get(id) ?? [];
+            return (
+              <div key={id || index} className="relative flex gap-3 pb-3 last:pb-0">
+                {index < events.length - 1 ? <div className="absolute bottom-0 left-[5px] top-3 w-px bg-gray-200" /> : null}
+                <span className={`relative mt-1.5 h-[11px] w-[11px] shrink-0 rounded-full border-2 border-white shadow-sm ${eventColor(event)}`} />
+                <div className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white/80 px-2.5 py-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="truncate text-[11px] font-semibold text-ink-700">{asText(event.summary) || asText(event.toolName)}</div>
+                      <div className="mt-0.5 text-[9px] text-muted">{asText(event.timestamp) ? new Date(asText(event.timestamp)).toLocaleString() : ""}</div>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                      <Pill>{asText(event.kind)}</Pill><Pill>{asText(event.status)}</Pill>
+                    </div>
+                  </div>
+                  {incoming.length > 0 ? (
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {incoming.map((link, linkIndex) => <span key={linkIndex} className="rounded bg-blue-50 px-1.5 py-0.5 text-[9px] text-blue-700">↳ {asText(link.type).replace(/_/g, " ")}{link.proposalId ? ` · ${asText(link.proposalId).slice(0, 8)}` : ""}</span>)}
+                    </div>
+                  ) : proposalIds.length > 0 ? <div className="mt-1 font-mono text-[9px] text-violet-600">patch {proposalIds.map((idValue) => idValue.slice(0, 8)).join(", ")}</div> : null}
+                  {files.length > 0 ? <div className="mt-1.5 truncate font-mono text-[9px] text-muted" title={files.join("\n")}>{files.slice(0, 4).join(" · ")}{files.length > 4 ? ` · +${files.length - 4}` : ""}</div> : null}
+                  {isRecord(event.details) && Object.keys(event.details).length > 0 ? <CompactDetails label="Event details"><CodeBlock text={JSON.stringify(event.details, null, 2)} max="max-h-40" /></CompactDetails> : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </ToolCard>
+  );
+}
+
 function CodeSearchOutputCard({ data, tone }: { data: JsonRecord; tone: Tone }) {
   const message = asText(data.message ?? data.output);
   const matches = asText(data.matches);
@@ -664,11 +784,25 @@ function toolDisplayLabel(name: string, summary: string | null): string {
   if (name === "Bash") return "ran command";
   if (name === "ProjectRunScript") return "ran script";
   if (name === "CodeDiagnostics") return "checked diagnostics";
+  if (name === "RunTimeline") return "built run timeline";
   if (name === "CodeGetDefinition") return "found definitions";
   if (name === "CodeFindReferences") return "found references";
   if (name === "CodeFileOutline") return "outlined file";
   if (name === "TodoWrite") return "updated tasks";
   if (name === "AskUserQuestion") return "asked question";
+  if (name === "LiveProposePatch") return "proposed patch";
+  if (name === "LiveApplyPatch") return "applied patch";
+  if (name === "LiveUndoPatch") return "undid patch";
+  if (name === "LiveRejectPatch") return "rejected patch";
+  if (name === "ProjectMemoryBootstrap") return "initialized project memory";
+  if (name === "CodeEdit") return "edited code";
+  if (name === "CodeApplyPatch") return "applied code patch";
+  if (name === "CodeFormatFiles") return "formatted code";
+  if (name === "CodeOrganizeImports") return "organized imports";
+  if (name === "LiveRegeneratePatch") return "regenerated patch proposal";
+  if (name === "TestFindRelated") return "found related tests";
+  if (name === "TestRunRelated") return "ran related tests";
+  if (name === "TestRunByName") return "ran named tests";
   if (name.toLowerCase() === "tool") return summary ? summary : "used tool";
   return name;
 }
@@ -683,9 +817,283 @@ function toolStatusGlyph(isRunning: boolean, isError: boolean) {
   return <span className="text-[11px] leading-none text-ink-300">✓</span>;
 }
 
+function LivePatchReviewCard({ output }: { output: string }) {
+  const proposalId = useMemo(() => {
+    const parsed = parseJsonRecord(output);
+    return typeof parsed?.proposalId === "string" ? parsed.proposalId : null;
+  }, [output]);
+  const [proposal, setProposal] = useState<LivePatchProposalView | null>(null);
+  const [loading, setLoading] = useState(Boolean(proposalId));
+  const [action, setAction] = useState<"apply" | "reject" | "undo" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [rejecting, setRejecting] = useState(false);
+  const [confirmingUndo, setConfirmingUndo] = useState(false);
+  const [reason, setReason] = useState("");
+  const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
+  const [selectedHunkIds, setSelectedHunkIds] = useState<string[]>([]);
+  const initializedSelection = useRef<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!proposalId) {
+      setProposal(null);
+      setLoading(false);
+      setError("The proposal result did not include a proposal ID.");
+      return;
+    }
+
+    const load = async (showLoading: boolean) => {
+      if (showLoading) setLoading(true);
+      try {
+        const next = await window.electron.getLivePatchProposal(proposalId);
+        if (!cancelled) {
+          setProposal((current) => !current || next.updatedAt >= current.updatedAt ? next : current);
+          if (next.status === "pending" && initializedSelection.current !== next.id) {
+            const files: string[] = [];
+            const hunks: string[] = [];
+            for (const patchFile of next.patchFiles) {
+              if (patchFile.hunkSelectable && patchFile.hunks.length > 0) hunks.push(...patchFile.hunks.map((hunk) => hunk.id));
+              else files.push(patchFile.id);
+            }
+            setSelectedFileIds(files);
+            setSelectedHunkIds(hunks);
+            initializedSelection.current = next.id;
+          }
+          if (showLoading) setError(null);
+        }
+      } catch (cause) {
+        if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause));
+      } finally {
+        if (!cancelled && showLoading) setLoading(false);
+      }
+    };
+
+    setProposal(null);
+    setError(null);
+    initializedSelection.current = null;
+    void load(true);
+    const refreshTimer = window.setInterval(() => void load(false), 4_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(refreshTimer);
+    };
+  }, [proposalId]);
+
+  const apply = async () => {
+    if (!proposalId || action) return;
+    setAction("apply");
+    setError(null);
+    try {
+      const result = await window.electron.applyLivePatchProposal(proposalId, {
+        fileIds: selectedFileIds,
+        hunkIds: selectedHunkIds,
+      });
+      setProposal(result.proposal);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+      try {
+        setProposal(await window.electron.getLivePatchProposal(proposalId));
+      } catch {
+        // Preserve the apply error; background refresh can retry proposal loading.
+      }
+    } finally {
+      setAction(null);
+    }
+  };
+
+  const undo = async () => {
+    if (!proposalId || action) return;
+    setAction("undo");
+    setError(null);
+    try {
+      const result = await window.electron.undoLivePatchProposal(proposalId);
+      setProposal(result.proposal);
+      setConfirmingUndo(false);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setAction(null);
+    }
+  };
+
+  const reject = async () => {
+    if (!proposalId || action) return;
+    setAction("reject");
+    setError(null);
+    try {
+      const next = await window.electron.rejectLivePatchProposal(proposalId, reason.trim() || undefined);
+      setProposal(next);
+      setRejecting(false);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setAction(null);
+    }
+  };
+
+  if (loading) return <ToolCard title="Loading patch proposal" tone="running"><div className="text-xs text-muted">Reading the stored proposal…</div></ToolCard>;
+  if (!proposal) return <ToolCard title="Patch proposal unavailable" tone="error"><CodeBlock text={error ?? output} /></ToolCard>;
+
+  const riskClass = proposal.riskLevel === "high" ? "text-red-700 bg-red-50 border-red-200" : proposal.riskLevel === "medium" ? "text-amber-700 bg-amber-50 border-amber-200" : "text-emerald-700 bg-emerald-50 border-emerald-200";
+  const statusTone: Tone = proposal.conflict || proposal.status === "rejected" ? "error" : proposal.status === "pending" || proposal.status === "undone" || proposal.status === "superseded" ? "neutral" : "success";
+  const selectedHunkSet = new Set(selectedHunkIds);
+  const selectedFileSet = new Set(selectedFileIds);
+  const selectedCount = selectedFileIds.length + selectedHunkIds.length;
+  const toggleFile = (patchFile: LivePatchProposalView["patchFiles"][number]) => {
+    if (patchFile.hunkSelectable && patchFile.hunks.length > 0) {
+      const hunkIds = patchFile.hunks.map((hunk) => hunk.id);
+      const allSelected = hunkIds.every((id) => selectedHunkSet.has(id));
+      setSelectedHunkIds((current) => allSelected ? current.filter((id) => !hunkIds.includes(id)) : [...new Set([...current, ...hunkIds])]);
+      setSelectedFileIds((current) => current.filter((id) => id !== patchFile.id));
+      return;
+    }
+    setSelectedFileIds((current) => current.includes(patchFile.id) ? current.filter((id) => id !== patchFile.id) : [...current, patchFile.id]);
+  };
+  const toggleHunk = (fileId: string, hunkId: string) => {
+    setSelectedFileIds((current) => current.filter((id) => id !== fileId));
+    setSelectedHunkIds((current) => current.includes(hunkId) ? current.filter((id) => id !== hunkId) : [...current, hunkId]);
+  };
+
+  return (
+    <ToolCard title={proposal.title || "Proposed patch"} tone={statusTone}>
+      <p className="text-[12px] leading-5 text-ink-700">{proposal.summary}</p>
+      <div className="truncate font-mono text-[10px] text-muted" title={proposal.repoRoot}>{proposal.repoRoot}</div>
+      <div className="flex flex-wrap gap-1.5">
+        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${riskClass}`}>{proposal.riskLevel} risk</span>
+        <Pill>{proposal.files.length} file{proposal.files.length === 1 ? "" : "s"}</Pill>
+        <Pill>{proposal.status}</Pill>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {proposal.files.map((file) => <span key={file} className="rounded-md bg-gray-100 px-2 py-1 font-mono text-[10px] text-ink-700">{file}</span>)}
+      </div>
+      {proposal.status === "pending" ? (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-[10px] text-muted">
+            <span>Select files or individual hunks to apply</span>
+            <span>{selectedCount} selected</span>
+          </div>
+          {proposal.patchFiles.map((patchFile) => {
+            const hunkIds = patchFile.hunks.map((hunk) => hunk.id);
+            const allHunksSelected = hunkIds.length > 0 && hunkIds.every((id) => selectedHunkSet.has(id));
+            const someHunksSelected = hunkIds.some((id) => selectedHunkSet.has(id));
+            const fileSelected = patchFile.hunkSelectable ? allHunksSelected : selectedFileSet.has(patchFile.id);
+            return (
+              <div key={patchFile.id} className="overflow-hidden rounded-lg border border-gray-200 bg-white/80">
+                <label className="flex cursor-pointer items-center gap-2 border-b border-gray-100 px-3 py-2 text-[11px] font-semibold text-ink-700">
+                  <input ref={(element) => { if (element) element.indeterminate = patchFile.hunkSelectable && someHunksSelected && !allHunksSelected; }} type="checkbox" checked={fileSelected} onChange={() => toggleFile(patchFile)} className="accent-[var(--color-accent)]" />
+                  <span className="min-w-0 flex-1 truncate font-mono" title={patchFile.path}>{patchFile.path}</span>
+                  <span className="font-normal text-muted">{patchFile.hunkSelectable ? `${patchFile.hunks.length} hunk${patchFile.hunks.length === 1 ? "" : "s"}` : "whole file"}</span>
+                </label>
+                {patchFile.hunkSelectable ? patchFile.hunks.map((hunk) => (
+                  <div key={hunk.id} className="border-b border-gray-100 last:border-b-0">
+                    <label className="flex cursor-pointer items-center gap-2 bg-gray-50/80 px-3 py-1.5 font-mono text-[10px] text-ink-600">
+                      <input type="checkbox" checked={selectedHunkSet.has(hunk.id)} onChange={() => toggleHunk(patchFile.id, hunk.id)} className="accent-[var(--color-accent)]" />
+                      <span className="truncate">{hunk.header}</span>
+                    </label>
+                    <DiffBlock diff={hunk.patch} />
+                  </div>
+                )) : <DiffBlock diff={patchFile.patch} />}
+              </div>
+            );
+          })}
+        </div>
+      ) : <DiffBlock diff={proposal.status === "rejected" ? proposal.patch : proposal.appliedPatch ?? proposal.patch} />}
+      {proposal.conflict ? (
+        <div className="space-y-2 rounded-lg border border-red-200 bg-red-50/70 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-semibold text-red-800">Patch conflicts with the current repository</span>
+            <span className="text-[10px] text-red-600">{new Date(proposal.conflict.detectedAt).toLocaleString()}</span>
+          </div>
+          <p className="text-[10px] leading-4 text-red-700">Review the conflicting units and current working-tree changes below. The agent can call <span className="font-mono">LiveRegeneratePatch</span> to create a linked replacement against the latest files.</p>
+          {proposal.conflict.files.map((file) => (
+            <details key={file.id} open={file.status !== "clean"} className="overflow-hidden rounded-md border border-red-200 bg-white/80">
+              <summary className="flex cursor-pointer items-center gap-2 px-2.5 py-2 text-[10px]">
+                <span className={`h-2 w-2 rounded-full ${file.status === "clean" ? "bg-emerald-500" : file.status === "partial" ? "bg-amber-500" : "bg-red-500"}`} />
+                <span className="min-w-0 flex-1 truncate font-mono font-semibold text-ink-700">{file.path}</span>
+                <span className="uppercase text-muted">{file.status}</span>
+              </summary>
+              <div className="space-y-2 border-t border-red-100 p-2">
+                {file.hunks.length > 0 ? (
+                  <div className="space-y-1">
+                    {file.hunks.map((hunk) => (
+                      <div key={hunk.id} className="flex items-center gap-2 rounded bg-gray-50 px-2 py-1 font-mono text-[9px] text-ink-600">
+                        <span className={`h-1.5 w-1.5 rounded-full ${hunk.status === "clean" ? "bg-emerald-500" : "bg-red-500"}`} />
+                        <span className="min-w-0 flex-1 truncate">{hunk.header ?? hunk.id}</span>
+                        <span>{hunk.status}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                {file.currentDiff ? <div><div className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-muted">Current working tree</div><DiffBlock diff={file.currentDiff} /></div> : null}
+                {file.message ? <CompactDetails label="Conflict details"><CodeBlock text={file.message} max="max-h-40" /></CompactDetails> : null}
+              </div>
+            </details>
+          ))}
+        </div>
+      ) : null}
+      {proposal.validationPlan.length > 0 ? (
+        <details className="rounded-lg border border-gray-200 bg-white/80">
+          <summary className="cursor-pointer px-3 py-2 text-[11px] font-medium text-muted">Validation plan</summary>
+          <ul className="space-y-1 border-t border-gray-100 px-5 py-2 text-[11px] text-ink-700">
+            {proposal.validationPlan.map((step, index) => <li key={index} className="list-disc">{step}</li>)}
+          </ul>
+        </details>
+      ) : null}
+      {error ? <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-700">{error}</div> : null}
+      {proposal.status === "pending" ? (
+        <div className="space-y-2 border-t border-gray-200 pt-3">
+          {rejecting ? (
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input aria-label="Reason for rejection" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Reason for rejection (optional)" className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs outline-none focus:border-[var(--color-accent)]" />
+              <button type="button" onClick={() => void reject()} disabled={Boolean(action)} className="rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">{action === "reject" ? "Rejecting…" : "Confirm reject"}</button>
+              <button type="button" onClick={() => setRejecting(false)} disabled={Boolean(action)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-ink-600">Cancel</button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-end gap-2">
+              <button type="button" onClick={() => setRejecting(true)} disabled={Boolean(action)} className="rounded-lg border border-red-200 px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50">Reject</button>
+              <button type="button" onClick={() => void apply()} disabled={Boolean(action) || selectedCount === 0} className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-xs font-semibold text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-50">{action === "apply" ? "Checking & applying…" : "Approve & apply selected"}</button>
+            </div>
+          )}
+          <p className="text-right text-[10px] text-muted">Unselected changes are discarded. Approval checks the selected patch against current repository state before writing.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <div className={`rounded-lg px-3 py-2 text-xs font-medium ${proposal.status === "applied" || proposal.status === "partially_applied" ? "bg-emerald-50 text-emerald-700" : proposal.status === "undone" || proposal.status === "superseded" ? "bg-gray-100 text-ink-600" : "bg-red-50 text-red-700"}`}>
+            {proposal.status === "applied"
+              ? "✓ Patch applied"
+              : proposal.status === "partially_applied"
+                ? "✓ Selected changes applied; unselected changes were not applied"
+                : proposal.status === "undone"
+                  ? "↶ Applied patch was undone"
+                  : proposal.status === "superseded"
+                    ? `Superseded by regenerated proposal ${proposal.supersededByProposalId ?? ""}`
+                    : `Patch rejected${proposal.rejectionReason ? `: ${proposal.rejectionReason}` : ""}`}
+          </div>
+          {proposal.status === "applied" || proposal.status === "partially_applied" ? (
+            confirmingUndo ? (
+              <div className="flex flex-col items-end gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+                <span className="text-[11px] text-amber-800">Undo only succeeds if no affected file changed after application.</span>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setConfirmingUndo(false)} disabled={Boolean(action)} className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-800 disabled:opacity-50">Cancel</button>
+                  <button type="button" onClick={() => void undo()} disabled={Boolean(action)} className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">{action === "undo" ? "Checking & undoing…" : "Confirm undo"}</button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex justify-end">
+                <button type="button" onClick={() => setConfirmingUndo(true)} disabled={Boolean(action)} className="rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-50 disabled:opacity-50">Undo applied patch</button>
+              </div>
+            )
+          ) : null}
+        </div>
+      )}
+    </ToolCard>
+  );
+}
+
 function ToolOutputView({ name, output, tone }: { name: string; output: string; tone: Tone }) {
   if (name === "AskUserQuestion") return null;
   const parsed = parseJsonRecord(output);
+  if ((name === "LiveProposePatch" || name === "LiveRegeneratePatch") && typeof parsed?.proposalId === "string") return <LivePatchReviewCard output={output} />;
   if (!parsed) {
     if (name === "Read" || name === "ReadLSP") return <ReadOutputCard output={output} tone={tone} />;
     if (name === "Edit" || name === "MultiEdit") return <EditOutputCard output={output} tone={tone} />;
@@ -697,6 +1105,7 @@ function ToolOutputView({ name, output, tone }: { name: string; output: string; 
   if (name === "Grep") return <GrepOutputCard data={parsed} tone={tone} />;
   if (name === "CodeSearch" || name === "CodeGetDefinition" || name === "CodeFindReferences" || name === "CodeFileOutline") return <CodeSearchOutputCard data={parsed} tone={tone} />;
   if (name === "CodeDiagnostics") return <DiagnosticsOutputCard data={parsed} tone={tone} />;
+  if (name === "RunTimeline") return <RunTimelineOutputCard data={parsed} tone={tone} />;
   if (name === "GitDiffSummary") return <GitDiffOutputCard data={parsed} tone={tone} />;
   if (name === "GitChangedByAgent") return <GitChangedOutputCard data={parsed} tone={tone} />;
   if (name === "ProjectRunScript") return <ProjectRunOutputCard data={parsed} tone={tone} />;
@@ -707,7 +1116,8 @@ export const ToolExecutionBlock = memo(function ToolExecutionBlock({ name, statu
   const isRunning = status === "running";
   const isError = status === "failed";
   const isTodoWrite = name === "TodoWrite";
-  const [expanded, setExpanded] = useState(isTodoWrite);
+  const isPatchProposal = name === "LiveProposePatch";
+  const [expanded, setExpanded] = useState(isTodoWrite || isPatchProposal);
   const todos = useMemo(() => (isTodoWrite ? parseTodoInput(input ?? null) : null), [isTodoWrite, input]);
 
 

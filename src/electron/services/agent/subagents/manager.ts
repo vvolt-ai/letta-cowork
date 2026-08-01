@@ -188,6 +188,7 @@ async function runSubagentInner(
                         signal: opts.signal,
                         agentId: targetAgentId,
                         conversationId,
+                        toolCallId: req.toolCallId,
                     });
                     return {
                         tool_call_id: req.toolCallId,
@@ -222,6 +223,7 @@ async function runSubagentInner(
                         signal: opts.signal,
                         agentId: targetAgentId,
                         conversationId,
+                        toolCallId: call.toolCallId,
                     });
                     return {
                         tool_call_id: call.toolCallId,

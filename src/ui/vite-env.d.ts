@@ -5,6 +5,64 @@ declare const SHOW_CHANNELS: boolean | undefined;
 declare const SHOW_EMAIL_OPTION: boolean | undefined;
 
 // Window electron API types
+interface ProjectFileEntry {
+  name: string;
+  path: string;
+  kind: "file" | "directory";
+  size?: number;
+}
+
+interface ProjectFilePreview {
+  path: string;
+  content: string;
+  size: number;
+  truncated: boolean;
+}
+
+interface LivePatchProposalView {
+  id: string;
+  title: string;
+  summary: string;
+  repoRoot: string;
+  patch: string;
+  files: string[];
+  riskLevel: "low" | "medium" | "high";
+  validationPlan: string[];
+  status: "pending" | "applied" | "partially_applied" | "rejected" | "undone" | "superseded";
+  createdAt: string;
+  updatedAt: string;
+  rejectionReason?: string;
+  appliedPatch?: string;
+  appliedFiles?: string[];
+  appliedFileIds?: string[];
+  appliedHunkIds?: string[];
+  appliedAt?: string;
+  undoneAt?: string;
+  supersedesProposalId?: string;
+  supersededByProposalId?: string;
+  conflict?: {
+    detectedAt: string;
+    message: string;
+    selectedFileIds: string[];
+    selectedHunkIds: string[];
+    files: Array<{
+      id: string;
+      path: string;
+      status: "clean" | "partial" | "conflict";
+      message?: string;
+      currentDiff?: string;
+      hunks: Array<{ id: string; header?: string; status: "clean" | "conflict"; message?: string }>;
+    }>;
+  };
+  patchFiles: Array<{
+    id: string;
+    path: string;
+    patch: string;
+    hunkSelectable: boolean;
+    hunks: Array<{ id: string; header: string; patch: string }>;
+  }>;
+}
+
 interface Window {
   electron: {
     // Statistics
@@ -19,6 +77,8 @@ interface Window {
     // Directory
     getRecentCwds: (limit?: number) => Promise<string[]>;
     selectDirectory: () => Promise<string | null>;
+    listProjectFiles: (rootPath: string, directoryPath?: string) => Promise<ProjectFileEntry[]>;
+    readProjectFile: (rootPath: string, filePath: string) => Promise<ProjectFilePreview>;
 
     // External
     openExternal: (url: string) => Promise<void>;
@@ -74,6 +134,10 @@ interface Window {
     registerLettaCodeTools: (enabled: boolean) => Promise<{ registered: string[]; skipped: string[] }>;
     attachLettaCodeToolsToAgent: (agentId: string) => Promise<{ attached: string[]; failed: string[] }>;
     listAgentMemoryFiles: () => Promise<any>;
+    getLivePatchProposal: (proposalId: string) => Promise<LivePatchProposalView>;
+    applyLivePatchProposal: (proposalId: string, selection?: { fileIds?: string[]; hunkIds?: string[] }) => Promise<{ proposal: LivePatchProposalView; output: string }>;
+    undoLivePatchProposal: (proposalId: string) => Promise<{ proposal: LivePatchProposalView; output: string }>;
+    rejectLivePatchProposal: (proposalId: string, reason?: string) => Promise<LivePatchProposalView>;
     updateLettaEnv: (values: any) => Promise<any>;
     isAdmin: () => Promise<boolean>;
 

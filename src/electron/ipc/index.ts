@@ -38,6 +38,8 @@ import { registerAttachmentHandlers } from "./handlers/attachment-handlers.js";
 import { registerSchedulerHandlers } from "./handlers/scheduler-handlers.js";
 import { registerSkillSyncHandlers } from "./handlers/skill-sync-handlers.js";
 import { registerAgentMigrationHandlers } from "./handlers/agent-migration-handlers.js";
+import { registerLivePatchHandlers } from "./handlers/live-patch-handlers.js";
+import { registerProjectFilesHandlers } from "./handlers/project-files-handlers.js";
 
 // Re-export session handlers for backward compatibility
 export { handleClientEvent, recoverPendingApprovalsForSession, cancelRecoveredRun, cleanupAllSessions };
@@ -520,6 +522,8 @@ export function registerAllIpcHandlers(mainWindow: BrowserWindow): void {
     registerSchedulerHandlers();
     registerSkillSyncHandlers();
     registerAgentMigrationHandlers();
+    registerLivePatchHandlers();
+    registerProjectFilesHandlers();
 }
 
 /**

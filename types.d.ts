@@ -208,12 +208,76 @@ interface EmailListParams {
     threadedMails?: boolean;
 }
 
+interface ProjectFileEntry {
+    name: string;
+    path: string;
+    kind: "file" | "directory";
+    size?: number;
+}
+
+interface ProjectFilePreview {
+    path: string;
+    content: string;
+    size: number;
+    truncated: boolean;
+}
+
+interface LivePatchProposalView {
+    id: string;
+    title: string;
+    summary: string;
+    repoRoot: string;
+    patch: string;
+    files: string[];
+    riskLevel: "low" | "medium" | "high";
+    validationPlan: string[];
+    status: "pending" | "applied" | "partially_applied" | "rejected" | "undone" | "superseded";
+    createdAt: string;
+    updatedAt: string;
+    rejectionReason?: string;
+    appliedPatch?: string;
+    appliedFiles?: string[];
+    appliedFileIds?: string[];
+    appliedHunkIds?: string[];
+    appliedAt?: string;
+    undoneAt?: string;
+    supersedesProposalId?: string;
+    supersededByProposalId?: string;
+    conflict?: {
+        detectedAt: string;
+        message: string;
+        selectedFileIds: string[];
+        selectedHunkIds: string[];
+        files: Array<{
+            id: string;
+            path: string;
+            status: "clean" | "partial" | "conflict";
+            message?: string;
+            currentDiff?: string;
+            hunks: Array<{ id: string; header?: string; status: "clean" | "conflict"; message?: string }>;
+        }>;
+    };
+    patchFiles: Array<{
+        id: string;
+        path: string;
+        patch: string;
+        hunkSelectable: boolean;
+        hunks: Array<{ id: string; header: string; patch: string }>;
+    }>;
+}
+
 type EventPayloadMapping = {
     statistics: Statistics;
     getStaticData: StaticData;
     "generate-session-title": string;
     "get-recent-cwds": string[];
     "select-directory": string | null;
+    "project-files:list": ProjectFileEntry[];
+    "project-files:read": ProjectFilePreview;
+    "live-patch:get": LivePatchProposalView;
+    "live-patch:apply": { proposal: LivePatchProposalView; output: string };
+    "live-patch:undo": { proposal: LivePatchProposalView; output: string };
+    "live-patch:reject": LivePatchProposalView;
     "fetch-folders": any;
     "fetch-emails": any;
     "fetch-accounts": any;

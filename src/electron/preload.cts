@@ -32,6 +32,10 @@ electron.contextBridge.exposeInMainWorld("electron", {
         ipcInvoke("get-recent-cwds", limit),
     selectDirectory: () =>
         ipcInvoke("select-directory"),
+    listProjectFiles: (rootPath: string, directoryPath = "") =>
+        ipcInvoke("project-files:list", rootPath, directoryPath),
+    readProjectFile: (rootPath: string, filePath: string) =>
+        ipcInvoke("project-files:read", rootPath, filePath),
 
     // ✅ ADD THIS
     openExternal: (url: string) => electron.ipcRenderer.invoke("open-external", url),
@@ -215,6 +219,16 @@ electron.contextBridge.exposeInMainWorld("electron", {
     /** List which letta-code tools are already registered on the server */
     listLettaCodeTools: (): Promise<Array<{ name: string; id: string; registered: boolean }>> =>
         electron.ipcRenderer.invoke("list-letta-code-tools"),
+
+    // Live patch review — proposal-owned IDs only; raw patches and paths cannot be submitted over IPC.
+    getLivePatchProposal: (proposalId: string) =>
+        electron.ipcRenderer.invoke("live-patch:get", proposalId),
+    applyLivePatchProposal: (proposalId: string, selection?: { fileIds?: string[]; hunkIds?: string[] }) =>
+        electron.ipcRenderer.invoke("live-patch:apply", proposalId, selection),
+    undoLivePatchProposal: (proposalId: string) =>
+        electron.ipcRenderer.invoke("live-patch:undo", proposalId),
+    rejectLivePatchProposal: (proposalId: string, reason?: string) =>
+        electron.ipcRenderer.invoke("live-patch:reject", proposalId, reason),
 
     // ============================================
     // Vera Cowork API Integration

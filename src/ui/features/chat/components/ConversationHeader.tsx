@@ -8,7 +8,9 @@ interface ConversationHeaderProps {
   sessionId?: string;
   status: AgentDisplayStatus;
   activityOpen?: boolean;
+  projectOpen?: boolean;
   onToggleActivity?: () => void;
+  onToggleProject?: () => void;
   onViewRuns?: () => void;
 }
 
@@ -22,7 +24,7 @@ const STATUS_LABELS: Record<AgentDisplayStatus, { label: string; color: string }
   error: { label: "Error", color: "text-[var(--color-status-error)]" },
 };
 
-export const ConversationHeader = memo(function ConversationHeader({ title, agentName, agentId, sessionId, status, activityOpen = true, onToggleActivity, onViewRuns }: ConversationHeaderProps) {
+export const ConversationHeader = memo(function ConversationHeader({ title, agentName, agentId, sessionId, status, activityOpen = true, projectOpen = false, onToggleActivity, onToggleProject, onViewRuns }: ConversationHeaderProps) {
   const statusMeta = STATUS_LABELS[status] ?? STATUS_LABELS.idle;
   const toggleLabel = activityOpen ? "Hide activity" : "Show activity";
   const toggleAria = activityOpen ? "Hide activity panel" : "Show activity panel";
@@ -56,6 +58,22 @@ export const ConversationHeader = memo(function ConversationHeader({ title, agen
           </div>
 
         <div className="flex items-center justify-self-end gap-1.5">
+          {onToggleProject ? (
+            <button
+              type="button"
+              onClick={onToggleProject}
+              aria-pressed={projectOpen}
+              className={`hidden h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition lg:inline-flex ${projectOpen ? "border-[var(--color-accent)] bg-[var(--color-accent-light)] text-[var(--color-accent)]" : "border-[var(--color-border)] bg-[var(--color-surface)] text-ink-600 hover:bg-[var(--color-surface-hover)] hover:text-ink-900"}`}
+              title={projectOpen ? "Hide project files" : "Show project files"}
+            >
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M3 6.5h6l2 2h10v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                <path d="M3 8.5v-3a2 2 0 0 1 2-2h4l2 2h4" />
+              </svg>
+              Files
+            </button>
+          ) : null}
+
           {/* View Runs Button — opens Runs Debugger scoped to this conversation */}
           {onViewRuns && sessionId && (
             <button
