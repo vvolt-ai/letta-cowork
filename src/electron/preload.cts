@@ -84,8 +84,8 @@ electron.contextBridge.exposeInMainWorld("electron", {
         electron.ipcRenderer.invoke("search-emails", accountId, params),
     getLettaEnv: () =>
         electron.ipcRenderer.invoke("get-letta-env"),
-    listLettaAgents: () =>
-        electron.ipcRenderer.invoke("list-letta-agents"),
+    listLettaAgents: (queryText?: string) =>
+        electron.ipcRenderer.invoke("list-letta-agents", queryText),
     listLettaModels: () =>
         electron.ipcRenderer.invoke("list-letta-models"),
     getLettaAgent: (agentId: string) =>

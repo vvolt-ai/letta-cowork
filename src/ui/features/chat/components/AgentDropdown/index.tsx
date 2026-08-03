@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 interface Agent {
   id: string;
@@ -14,11 +14,14 @@ interface AgentDropdownProps {
 
 export function AgentDropdown({ value, onChange, disabled = false }: AgentDropdownProps) {
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [searchResults, setSearchResults] = useState<Agent[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
   const prevValueRef = useRef<string>(value);
+  const requestIdRef = useRef(0);
 
   // Force close dropdown when value changes (user selects an agent)
   useEffect(() => {
@@ -28,17 +31,24 @@ export function AgentDropdown({ value, onChange, disabled = false }: AgentDropdo
     prevValueRef.current = value;
   }, [value]);
 
-  const fetchAgents = async () => {
+  const fetchAgents = async (queryText = "") => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     setError(null);
     try {
-      const fetchedAgents = await window.electron.listLettaAgents();
-      setAgents(fetchedAgents);
+      const fetchedAgents = await window.electron.listLettaAgents(queryText);
+      if (requestId !== requestIdRef.current) return;
+      if (queryText) setSearchResults(fetchedAgents);
+      else {
+        setAgents(fetchedAgents);
+        setSearchResults(null);
+      }
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       console.error("Failed to fetch agents:", err);
       setError("Failed to load agents");
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   };
 
@@ -48,6 +58,24 @@ export function AgentDropdown({ value, onChange, disabled = false }: AgentDropdo
       fetchAgents();
     }
   }, []);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSearchQuery("");
+      setSearchResults(null);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const queryText = searchQuery.trim();
+    if (!queryText) {
+      setSearchResults(null);
+      return;
+    }
+    const timer = window.setTimeout(() => void fetchAgents(queryText), 250);
+    return () => window.clearTimeout(timer);
+  }, [isOpen, searchQuery]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -65,7 +93,20 @@ export function AgentDropdown({ value, onChange, disabled = false }: AgentDropdo
     e.stopPropagation();
     return !disabled && setIsOpen(!isOpen)
   }
-  const selectedAgent = agents.find((a) => a.id === value);
+  const selectedAgent = agents.find((agent) => agent.id === value)
+    ?? searchResults?.find((agent) => agent.id === value);
+  const locallyFilteredAgents = useMemo(() => {
+    const query = searchQuery.trim().toLocaleLowerCase();
+    if (!query) return agents;
+    return agents.filter((agent) =>
+      [agent.name, agent.id, agent.description]
+        .filter(Boolean)
+        .some((field) => field!.toLocaleLowerCase().includes(query)),
+    );
+  }, [agents, searchQuery]);
+  const displayedAgents = searchQuery.trim() && searchResults !== null
+    ? searchResults
+    : locallyFilteredAgents;
 
   return (
     <div className="relative w-full min-w-0" ref={dropdownRef}>
@@ -96,7 +137,7 @@ export function AgentDropdown({ value, onChange, disabled = false }: AgentDropdo
           <div className="flex items-center justify-between border-b border-border bg-surface-tertiary px-3 py-2">
             <span className="text-xs font-medium text-ink-600">Available Agents</span>
             <button
-              onClick={fetchAgents}
+              onClick={() => void fetchAgents(searchQuery.trim())}
               disabled={loading}
               className="flex items-center gap-1 rounded px-2 py-1 text-xs text-ink-600 hover:bg-surface hover:text-accent disabled:opacity-50"
               title="Refresh agents list"
@@ -112,6 +153,18 @@ export function AgentDropdown({ value, onChange, disabled = false }: AgentDropdo
               Refresh
             </button>
           </div>
+          <div className="border-b border-border p-2">
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search agents by name…"
+              aria-label="Search agents"
+              autoFocus
+              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink-800 outline-none placeholder:text-ink-400 focus:border-accent/40 focus:ring-1 focus:ring-accent/20"
+              onClick={(event) => event.stopPropagation()}
+            />
+          </div>
           {loading && agents.length === 0 && (
             <div className="flex items-center justify-center p-4 text-sm text-ink-500">
               Loading agents...
@@ -121,7 +174,7 @@ export function AgentDropdown({ value, onChange, disabled = false }: AgentDropdo
             <div className="flex items-center justify-between p-3 text-sm text-error">
               <span>{error}</span>
               <button
-                onClick={fetchAgents}
+                onClick={() => void fetchAgents(searchQuery.trim())}
                 className="text-xs text-accent hover:text-accent-hover"
               >
                 Retry
@@ -131,9 +184,12 @@ export function AgentDropdown({ value, onChange, disabled = false }: AgentDropdo
           {!loading && !error && agents.length === 0 && (
             <div className="p-4 text-sm text-ink-500">No agents found</div>
           )}
-          {!loading && !error && agents.length > 0 && (
+          {!loading && !error && agents.length > 0 && displayedAgents.length === 0 && (
+            <div className="p-4 text-sm text-ink-500">No agents match “{searchQuery.trim()}”</div>
+          )}
+          {!error && displayedAgents.length > 0 && (
             <ul>
-              {agents.map((agent) => (
+              {displayedAgents.map((agent) => (
                 <li key={agent.id}>
                   <button
                     type="button"

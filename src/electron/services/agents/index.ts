@@ -60,36 +60,40 @@ function createLettaClient(): Letta {
   });
 }
 
-export async function listLettaAgents(): Promise<LettaAgent[]> {
-  console.log('[lettaAgents] listLettaAgents called');
+export async function listLettaAgents(queryText = ""): Promise<LettaAgent[]> {
+  console.log("[lettaAgents] listLettaAgents called", { queryText });
   const client = createLettaClient();
-  
-  try {
-    console.log('[lettaAgents] Fetching agents from Letta API...');
-    const response = await client.agents.list();
-    // Get the data from the paginated response
-    const agents = await response;
-    console.log('[lettaAgents] Received', agents.items?.length || 0, 'agents');
 
-    return agents.items
-      .map((agent) => {
-        const raw: any = agent;
-        const models = Array.isArray(raw.models) ? raw.models : undefined;
-        const availableModels = Array.isArray(raw.available_models) ? raw.available_models : undefined;
-        console.log(`[lettaAgents] Agent: ${agent.name} (${agent.id})`);
-        return {
-          id: agent.id,
-          name: agent.name,
-          description: agent.description,
-          createdAt: agent.created_at,
-          metadata: agent.metadata,
-          tags: agent.tags,
-          model: raw.model ?? null,
-          models: models ?? null,
-          availableModels: availableModels ?? null,
-          inferenceConfig: (raw.inference_config as Record<string, unknown> | undefined) ?? null,
-        } satisfies LettaAgent;
+  try {
+    console.log("[lettaAgents] Fetching agents from Letta API...");
+    const agents: LettaAgent[] = [];
+    const request = client.agents.list({
+      limit: 100,
+      query_text: queryText.trim() || undefined,
+    });
+
+    // The SDK's async iterator follows every cursor. Reading response.items only
+    // returns the first page and silently hides older agents.
+    for await (const agent of request) {
+      const raw: any = agent;
+      const models = Array.isArray(raw.models) ? raw.models : undefined;
+      const availableModels = Array.isArray(raw.available_models) ? raw.available_models : undefined;
+      agents.push({
+        id: agent.id,
+        name: agent.name,
+        description: agent.description,
+        createdAt: agent.created_at,
+        metadata: agent.metadata,
+        tags: agent.tags,
+        model: raw.model ?? null,
+        models: models ?? null,
+        availableModels: availableModels ?? null,
+        inferenceConfig: (raw.inference_config as Record<string, unknown> | undefined) ?? null,
       });
+    }
+
+    console.log("[lettaAgents] Received", agents.length, "agents");
+    return agents;
   } catch (error) {
     console.error("[lettaAgents] Failed to list agents:", error);
     throw new Error("Failed to fetch agents from Letta");

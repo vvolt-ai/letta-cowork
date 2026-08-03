@@ -125,9 +125,20 @@ export const SessionsTab = memo(function SessionsTab({
     [normalizedSessionList]
   );
 
+  const [agentSearchQuery, setAgentSearchQuery] = useState("");
   const [showEmailConversations, setShowEmailConversations] = useState(false);
   const [emailSenderFilter, setEmailSenderFilter] = useState("all");
   const [emailDateFilter, setEmailDateFilter] = useState<EmailConversationDateFilter>("all");
+
+  const filteredSessionGroups = useMemo(() => {
+    const query = agentSearchQuery.trim().toLocaleLowerCase();
+    if (!query) return sessionsGroupedByAgent;
+    return sessionsGroupedByAgent.filter((group) =>
+      [group.agentName, group.agentId]
+        .filter(Boolean)
+        .some((field) => field!.toLocaleLowerCase().includes(query)),
+    );
+  }, [agentSearchQuery, sessionsGroupedByAgent]);
 
   const autoEmailSessionEntries = useMemo(
     () => autoEmailSessions.map((session) => ({ session, metadata: getAutoEmailSessionMetadata(session) })),
@@ -262,6 +273,16 @@ export const SessionsTab = memo(function SessionsTab({
         <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">Agents</span>
         <span className="rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-medium text-muted">{regularSessions.length}</span>
       </div>
+      <div className="px-3 pb-2">
+        <input
+          type="search"
+          value={agentSearchQuery}
+          onChange={(event) => setAgentSearchQuery(event.target.value)}
+          placeholder="Search agents…"
+          aria-label="Search agents"
+          className="w-full rounded-xl border border-ink-900/10 bg-white/65 px-3 py-2 text-xs text-ink-800 outline-none placeholder:text-muted-light focus:border-accent/50 focus:ring-1 focus:ring-accent/20"
+        />
+      </div>
       {/* New conversation link */}
       <div className="px-3 pb-3">
         <button
@@ -273,9 +294,9 @@ export const SessionsTab = memo(function SessionsTab({
         </button>
       </div>
       <div>
-        {sessionsGroupedByAgent.length > 0 ? (
+        {filteredSessionGroups.length > 0 ? (
           <div className="flex flex-col">
-            {sessionsGroupedByAgent.map((group) => (
+            {filteredSessionGroups.map((group) => (
               <AgentGroup
                 key={group.agentId || "unknown"}
                 agentId={group.agentId}
@@ -292,7 +313,7 @@ export const SessionsTab = memo(function SessionsTab({
           </div>
         ) : (
           <div className="px-3 py-4 text-center text-xs text-muted">
-            No conversations yet.
+            {sessionsGroupedByAgent.length > 0 ? `No agents match “${agentSearchQuery.trim()}”` : "No conversations yet."}
           </div>
         )}
       </div>

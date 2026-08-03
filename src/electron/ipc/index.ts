@@ -120,9 +120,9 @@ export function registerAllIpcHandlers(mainWindow: BrowserWindow): void {
     });
 
     // Agent handlers
-    ipcMain.handle("list-letta-agents", async () => {
+    ipcMain.handle("list-letta-agents", async (_event, queryText?: string) => {
         try {
-            return await listLettaAgents();
+            return await listLettaAgents(queryText);
         } catch (error) {
             console.error("Failed to list agents:", error);
             throw error;
