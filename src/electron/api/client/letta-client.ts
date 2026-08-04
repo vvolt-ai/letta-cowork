@@ -762,6 +762,21 @@ export class VeraCoworkApiClient extends BaseHttpClient {
     return McpEndpoints.testServer(this, id);
   }
 
+  async mcpFetchVisibleTools(input: {
+    serverSlug?: string;
+    query?: string;
+    limit?: number;
+  }): Promise<McpToolRunResult> {
+    return McpEndpoints.fetchVisibleTools(this, input);
+  }
+
+  async mcpInvokeVisibleTool(
+    toolName: string,
+    args: Record<string, unknown>,
+  ): Promise<McpToolRunResult> {
+    return McpEndpoints.invokeVisibleTool(this, toolName, args);
+  }
+
   async mcpListAttachments(agentId: string): Promise<McpAttachment[]> {
     return McpEndpoints.listAttachments(this, agentId);
   }

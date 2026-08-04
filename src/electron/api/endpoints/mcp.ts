@@ -155,7 +155,35 @@ export class McpEndpoints {
     );
   }
 
-  // Agent attachments
+  // Connector-centric runtime catalog
+
+  /**
+   * Fetch connector summaries or matching tool definitions from Vera's
+   * persisted catalog without opening an upstream MCP connection.
+   */
+  static async fetchVisibleTools(
+    client: BaseHttpClient,
+    input: { serverSlug?: string; query?: string; limit?: number },
+  ): Promise<McpToolRunResult> {
+    return client.request<McpToolRunResult>("/mcp/tools/fetch", {
+      method: "POST",
+      body: input,
+    });
+  }
+
+  /** Invoke a connector tool within the authenticated Vera scope. */
+  static async invokeVisibleTool(
+    client: BaseHttpClient,
+    toolName: string,
+    args: Record<string, unknown>,
+  ): Promise<McpToolRunResult> {
+    return client.request<McpToolRunResult>("/mcp/tools/invoke", {
+      method: "POST",
+      body: { toolName, args },
+    });
+  }
+
+  // Legacy agent attachments
 
   static async listAttachments(
     client: BaseHttpClient,
