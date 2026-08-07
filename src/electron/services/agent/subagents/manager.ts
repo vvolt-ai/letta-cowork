@@ -10,10 +10,10 @@
  * mirrors letta-code's "context budget" justification for delegating
  * to subagents.
  *
- * Tool access: subagents get the FULL client_tools wire list — same
- * Bash/Read/Edit/Glob/Grep/etc. the parent has. Restricting the
- * subagent's toolset would require a separate `subagentToolset`
- * config; not implemented yet.
+ * Tool access: subagents inherit ordinary client tools from the parent,
+ * including Bash/Read/Edit/Glob/Grep. `Task` itself is intentionally omitted:
+ * a delegated worker must not recursively spawn the same agent while its
+ * synchronous parent waits for it to finish.
  *
  * What this does NOT do (yet):
  *   • run_in_background — block-and-return only; TaskOutput/TaskStop
@@ -28,6 +28,7 @@
  */
 
 import type { Letta } from "@letta-ai/letta-client";
+import { Buffer } from "node:buffer";
 import {
     getClientToolsForWire,
     isClientTool,
@@ -37,6 +38,14 @@ import { runWithResourceLocks } from "./parallelism.js";
 
 const MAX_TURNS = 25; // safety cap mirroring our main session pump
 const DEFAULT_MAX_CONCURRENT_SUBAGENTS = 10;
+const DEFAULT_SUBAGENT_TIMEOUT_MS = 3 * 60_000;
+const RESPONSE_STATE_HEADER = "X-Letta-Response-State";
+const RESPONSE_STATE_CACHE_SCOPE = "approval_boundary";
+
+// Task is a one-level delegation boundary. Leaving it in the child toolset
+// causes prompts such as "use the recall subagent" to recursively create the
+// same agent while every parent Task blocks waiting for its child.
+const SUBAGENT_BLOCKED_TOOLS = new Set(["Task"]);
 
 let activeSubagentRuns = 0;
 
@@ -102,9 +111,37 @@ export async function runSubagent(
     opts: RunSubagentOptions
 ): Promise<RunSubagentResult> {
     acquireSubagentSlot(opts.description);
+    const controller = new AbortController();
+    let timedOut = false;
+    const timeoutMs = getSubagentTimeoutMs();
+    const onParentAbort = () => controller.abort();
+    if (opts.signal.aborted) {
+        controller.abort();
+    } else {
+        opts.signal.addEventListener("abort", onParentAbort, { once: true });
+    }
+    const timeout = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+    }, timeoutMs);
+
     try {
-        return await runSubagentInner(client, opts);
+        const result = await runSubagentInner(client, {
+            ...opts,
+            signal: controller.signal,
+        });
+        if (timedOut) {
+            throw createSubagentTimeoutError(opts.description, timeoutMs);
+        }
+        return result;
+    } catch (error) {
+        if (timedOut) {
+            throw createSubagentTimeoutError(opts.description, timeoutMs);
+        }
+        throw error;
     } finally {
+        clearTimeout(timeout);
+        opts.signal.removeEventListener("abort", onParentAbort);
         releaseSubagentSlot();
     }
 }
@@ -134,25 +171,35 @@ async function runSubagentInner(
     }
 
     // 2. Drive the multi-turn pump (mirrors WsSession.send → runOneStreamTurn)
-    const wireTools = getClientToolsForWire();
+    const wireTools = getClientToolsForWire().filter(
+        (tool) => !SUBAGENT_BLOCKED_TOOLS.has(tool.name)
+    );
     let nextMessages: unknown[] = [
         { role: "user", content: opts.prompt },
     ];
     let toolCallCount = 0;
     let turnCount = 0;
     const finalChunks: string[] = [];
+    let responseStateId: string | null = null;
+    let reuseResponseState = false;
 
     while (turnCount < MAX_TURNS) {
         if (opts.signal.aborted) break;
         turnCount++;
 
+        console.log(
+            `[Subagent] ${opts.description}: turn ${turnCount}/${MAX_TURNS} conversation=${conversationId}`
+        );
         const turn = await runOneTurn({
             client,
             conversationId,
             messages: nextMessages,
             wireTools,
             signal: opts.signal,
+            responseStateId: reuseResponseState ? responseStateId : null,
         });
+        responseStateId = turn.responseStateId;
+        reuseResponseState = false;
         if (opts.signal.aborted) break;
 
         // Accumulate any final assistant text
@@ -206,6 +253,9 @@ async function runSubagentInner(
                 status: e.status,
             }));
             nextMessages = [{ type: "approval", approvals: approvalEntries }];
+            // Resume the exact response that requested these client tools.
+            // Without this token, Letta can replay the original child turn.
+            reuseResponseState = true;
             continue;
         }
 
@@ -257,6 +307,7 @@ interface TurnResult {
     toolCalls: PendingToolCall[];
     approvalRequests: PendingApproval[];
     assistantText: string;
+    responseStateId: string | null;
 }
 
 async function runOneTurn(args: {
@@ -265,35 +316,56 @@ async function runOneTurn(args: {
     messages: unknown[];
     wireTools: unknown[];
     signal: AbortSignal;
+    responseStateId: string | null;
 }): Promise<TurnResult> {
     const calls = new Map<string, PendingToolCall>();
     const approvalsByTcid = new Map<string, PendingApproval>();
     let assistantText = "";
+    let responseStateId: string | null = null;
+    const headers: Record<string, string> = {};
+    if (args.responseStateId) {
+        headers[RESPONSE_STATE_HEADER] = encodeResponseStateHeader(args.responseStateId);
+    }
 
     const stream = (await (
         args.client.conversations as unknown as {
             messages: {
                 create: (
                     convId: string,
-                    body: Record<string, unknown>
+                    body: Record<string, unknown>,
+                    options?: {
+                        headers?: Record<string, string>;
+                        signal?: AbortSignal;
+                    }
                 ) => Promise<AsyncIterable<unknown>>;
             };
         }
-    ).messages.create(args.conversationId, {
-        messages: args.messages,
-        streaming: true,
-        stream_tokens: true,
-        include_pings: true,
-        background: true,
-        client_skills: [],
-        client_tools: args.wireTools,
-        include_compaction_messages: true,
-    })) as AsyncIterable<unknown>;
+    ).messages.create(
+        args.conversationId,
+        {
+            messages: args.messages,
+            streaming: true,
+            stream_tokens: true,
+            include_pings: true,
+            background: true,
+            client_skills: [],
+            client_tools: args.wireTools,
+            include_compaction_messages: true,
+        },
+        {
+            ...(Object.keys(headers).length > 0 ? { headers } : {}),
+            signal: args.signal,
+        }
+    )) as AsyncIterable<unknown>;
 
     for await (const ev of stream) {
         if (args.signal.aborted) break;
         const e = ev as Record<string, unknown>;
         const messageType = String(e.message_type ?? "");
+        const capturedResponseStateId = getResponseStateId(e);
+        if (capturedResponseStateId) {
+            responseStateId = capturedResponseStateId;
+        }
 
         if (messageType === "assistant_message") {
             const text = extractText(e.content) || extractText(e.text);
@@ -365,10 +437,53 @@ async function runOneTurn(args: {
         toolCalls: Array.from(calls.values()),
         approvalRequests: Array.from(approvalsByTcid.values()),
         assistantText,
+        responseStateId,
     };
 }
 
 // ───────────────────────── helpers ───────────────────────────────────
+
+function getSubagentTimeoutMs(): number {
+    const configured = Number.parseInt(
+        process.env.COWORK_SUBAGENT_TIMEOUT_MS ?? "",
+        10
+    );
+    return Number.isFinite(configured) && configured > 0
+        ? configured
+        : DEFAULT_SUBAGENT_TIMEOUT_MS;
+}
+
+function createSubagentTimeoutError(
+    description: string,
+    timeoutMs: number
+): Error {
+    return new Error(
+        `Subagent timed out after ${timeoutMs} ms while running '${description}'`
+    );
+}
+
+function getResponseStateId(event: Record<string, unknown>): string | null {
+    if (
+        event.message_type !== "response_state" ||
+        event.cache_scope !== RESPONSE_STATE_CACHE_SCOPE
+    ) {
+        return null;
+    }
+    return typeof event.response_id === "string" && event.response_id
+        ? event.response_id
+        : null;
+}
+
+function encodeResponseStateHeader(previousResponseId: string): string {
+    return Buffer.from(
+        JSON.stringify({
+            v: 1,
+            cache_scope: RESPONSE_STATE_CACHE_SCOPE,
+            previous_response_id: previousResponseId,
+        }),
+        "utf8"
+    ).toString("base64url");
+}
 
 function parseArgs(raw: string): Record<string, unknown> {
     if (!raw) return {};
