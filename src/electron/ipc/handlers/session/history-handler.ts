@@ -19,6 +19,14 @@ function isValidLettaId(id: string | undefined): boolean {
 }
 
 /**
+ * Letta history cursors are canonical message IDs. UI-only message identities
+ * such as `<tool-call-id>::result` must never be sent as API cursors.
+ */
+function isValidHistoryCursor(cursor: string | undefined): cursor is string {
+    return Boolean(cursor && cursor.length >= 44 && !cursor.includes("::"));
+}
+
+/**
  * Map Letta messages to stream messages format
  */
 function mapLettaMessagesToStreamMessages(rawMessages: LettaMessage[]): StreamMessage[] {
@@ -65,10 +73,11 @@ export async function handleGetSessionHistory(
     before?: string
 ): Promise<void> {
     const conversationId = sessionId;
-    const requestedBefore = before;
+    const requestedBefore = isValidHistoryCursor(before) ? before : undefined;
+    const discardedBefore = before && !requestedBefore ? before : undefined;
     const status = getSession(conversationId)?.status || "idle";
 
-    debug("session.history: request", { conversationId, limit, requestedBefore });
+    debug("session.history: request", { conversationId, limit, requestedBefore, discardedBefore });
 
     // Guard: Only call Letta API with valid Letta conversation IDs
     if (!isValidLettaId(conversationId)) {
@@ -121,10 +130,12 @@ export async function handleGetSessionHistory(
         // has_more. A short page is not reliable evidence of exhaustion because the
         // server can return partial pages. Keep pagination available until a request
         // for an older cursor actually returns no raw records.
-        const nextBefore = items.at(-1)?.id ?? normalised.nextBefore;
+        // Keep API pagination state separate from normalized display-message IDs.
+        // The SDK's ArrayPage items carry canonical Letta message IDs.
+        const nextBefore = items.at(-1)?.id;
         const hasMore = typeof responseHasMore === "boolean"
-            ? responseHasMore
-            : items.length > 0 && nextBefore !== requestedBefore;
+            ? responseHasMore && Boolean(nextBefore)
+            : Boolean(nextBefore) && nextBefore !== requestedBefore;
 
         debug("session.history: response", {
             conversationId, requestedBefore, returned: messages.length,

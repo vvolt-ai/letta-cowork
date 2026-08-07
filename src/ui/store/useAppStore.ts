@@ -1055,6 +1055,21 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
 
         set((state) => {
           const existing = state.sessions[sessionId] ?? createSession(sessionId);
+
+          // A failed page must not replace a canonical pagination cursor with a
+          // display-message ID derived from the locally merged transcript.
+          if (historyError) {
+            return {
+              sessions: {
+                ...state.sessions,
+                [sessionId]: {
+                  ...existing,
+                  isLoadingHistory: false,
+                },
+              },
+            };
+          }
+
           const incoming = (historyMessages as ConversationStreamMessage[]) ?? [];
 
           // Drop optimistic local messages that never received a server id.
@@ -1083,7 +1098,9 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
             ? mergeConversationHistory(incoming, existingMessages)
             : mergeConversationHistory(existingMessages, incoming);
 
-          const oldestMessageId = nextBefore ?? (mergedMessages[0] ? getConversationMessageId(mergedMessages[0]) ?? null : null);
+          // `nextBefore` is an opaque API cursor. Never substitute a normalized
+          // UI message identity such as `<tool-call-id>::result`.
+          const oldestMessageId = nextBefore ?? null;
 
           return {
             sessions: {

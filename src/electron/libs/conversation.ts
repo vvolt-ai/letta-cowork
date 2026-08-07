@@ -404,8 +404,9 @@ export function normaliseHistoryBatch(rawMessages: LettaMessage[], limit: number
   const limited = ordered.slice(-limit);
   const hasMore = ordered.length > limited.length;
   const messagesChronological = limited;
-  const oldest = messagesChronological[0];
-  const nextBefore = oldest ? (oldest.uuid || (oldest as any).id) : undefined;
+  // Pagination cursors must remain canonical Letta message IDs. Normalized
+  // tool messages may use synthetic UUIDs for display/deduplication.
+  const nextBefore = rawMessages.at(-1)?.id;
 
   console.debug("[conversation] normaliseHistoryBatch", {
     requestedLimit: limit,
