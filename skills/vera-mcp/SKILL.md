@@ -5,9 +5,33 @@ description: Use Vera's native read-only MCP tools for authenticated identity, v
 
 # Vera Native MCP
 
-Use the mounted Vera MCP tools directly. These tools are the preferred path for the supported Vera operations because the server applies the authenticated user's organization, ownership, sharing, and knowledge ACL boundaries.
+This skill is self-contained. Call Vera's native MCP endpoint through the bundled `scripts/call-mcp.mjs` client; do not look for, add, mount, refresh, or attach MCP server tools. Vera applies the authenticated user's organization, ownership, sharing, and knowledge ACL boundaries.
 
-Do not use Bash, `curl`, raw database access, or internal REST routes when the corresponding Vera MCP tool is available.
+The client reads the current agent's `VERA_TOKEN` environment secret and never accepts a token as an argument. It uses `VERA_MCP_URL` when set, otherwise `/mcp` under `VERA_SERVER_URL` or `COWORK_SERVER_URL`, and finally the published Vera server default. Never print, echo, log, or ask the user to paste the token in chat.
+
+## Calling a tool
+
+Resolve the script relative to this `SKILL.md`. For the documented global installation, the path is:
+
+```bash
+node "$HOME/.letta/skills/vera-mcp/scripts/call-mcp.mjs" <tool-name> <<'JSON'
+{ "argument": "value" }
+JSON
+```
+
+Pass exactly one allowed tool name as the command argument and one JSON object on standard input. Use `{}` for tools with no arguments. Do not put JSON or secrets in command-line arguments. Treat the script's standard output as the MCP tool result and a nonzero exit as failure.
+
+Example:
+
+```bash
+node "$HOME/.letta/skills/vera-mcp/scripts/call-mcp.mjs" vera_whoami <<'JSON'
+{}
+JSON
+```
+
+Using Bash solely to run this bundled client is the intended workflow. Do not replace it with `curl`, raw database access, or internal REST routes.
+
+If this skill was installed somewhere other than `~/.letta/skills/vera-mcp`, use the actual directory containing this file as the base path.
 
 ## Available tools
 
@@ -21,7 +45,7 @@ Do not use Bash, `curl`, raw database access, or internal REST routes when the c
 | `vera_list_schedule_runs` | Read a bounded page of run history for one owned schedule. |
 | `vera_search_knowledge` | Search only knowledge documents allowed by Vera's ACL. |
 
-If the MCP client prefixes tool names, use the discovered tool whose name ends with the exact name above.
+The bundled client accepts only these exact tool names; do not add an MCP client prefix.
 
 All current Vera-native tools are read-only.
 
@@ -127,7 +151,10 @@ Do not use this skill for:
 
 ## Error handling
 
-- **401 or unavailable tools:** ask the user to refresh or reattach the Vera MCP server. Never ask them to paste a token into chat.
+- **`VERA_TOKEN` unavailable:** tell the user to run `/secret set VERA_TOKEN ...` for the current Letta Code agent and start a new session. Never request the token in chat.
+- **401/403:** report that the saved token is invalid, expired, revoked, or lacks access. Do not retry through another route.
+- **Client script missing:** the skill package is incomplete; reinstall the whole skill directory, including `scripts/call-mcp.mjs`. Do not attach an MCP server as a workaround.
+- **Endpoint unreachable:** report the connection failure. Use the configured Vera server URL when provided; do not expose the token while troubleshooting.
 - **Resource not found:** refresh the relevant list and verify the UUID; do not bypass ACLs with another API.
 - **Empty knowledge results:** refine the query or filters and clearly state the authorized search found no match.
 - **Truncated response:** narrow the search, lower the time range, or paginate schedule runs.
@@ -135,4 +162,4 @@ Do not use this skill for:
 
 ## Connection reference
 
-The native endpoint is stateless Streamable HTTP at `POST /mcp`. It accepts a Vera user token or personal Vera MCP token. Personal MCP tokens are user-owned, expiring, revocable, and accepted only on approved MCP routes; they are not general Vera REST credentials. Never place token plaintext in skill files, source code, logs, screenshots, or chat.
+The bundled client calls the stateless Streamable HTTP endpoint at `POST /mcp` using the current agent's `VERA_TOKEN`. Personal MCP tokens are user-owned, expiring, revocable, and accepted only on approved MCP routes; they are not general Vera REST credentials. Never place token plaintext in skill files, source code, logs, screenshots, or chat.

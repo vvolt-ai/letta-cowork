@@ -5,7 +5,33 @@ description: Use Vera's governed Neo4j MCP tools to discover accessible graph in
 
 # Vera Neo4j MCP
 
-Use the mounted Vera Neo4j MCP tools directly. Do not use Bash, `curl`, a Neo4j password, or a direct database driver when the MCP tools are available.
+This skill is self-contained. Call Vera's Neo4j MCP endpoint through the bundled `scripts/call-mcp.mjs` client; do not look for, add, mount, refresh, or attach MCP server tools.
+
+The client reads the current agent's `VERA_TOKEN` environment secret and never accepts a token as an argument. It uses `VERA_NEO4J_MCP_URL` when set, otherwise `/neo4j-mcp` under `VERA_SERVER_URL` or `COWORK_SERVER_URL`, and finally the published Vera server default. Never print, echo, log, or ask the user to paste the token in chat.
+
+## Calling a tool
+
+Resolve the script relative to this `SKILL.md`. For the documented global installation, the path is:
+
+```bash
+node "$HOME/.letta/skills/neo4j-mcp/scripts/call-mcp.mjs" <tool-name> <<'JSON'
+{ "argument": "value" }
+JSON
+```
+
+Pass exactly one allowed tool name as the command argument and one JSON object on standard input. Use `{}` for tools with no arguments. Do not put JSON or secrets in command-line arguments. Treat the script's standard output as the MCP tool result and a nonzero exit as failure.
+
+Example:
+
+```bash
+node "$HOME/.letta/skills/neo4j-mcp/scripts/call-mcp.mjs" neo4j_list_instances <<'JSON'
+{}
+JSON
+```
+
+Using Bash solely to run this bundled client is the intended workflow. Do not replace it with `curl`, a direct database driver, raw Neo4j credentials, or internal REST routes.
+
+If this skill was installed somewhere other than `~/.letta/skills/neo4j-mcp`, use the actual directory containing this file as the base path.
 
 ## Available tools
 
@@ -17,7 +43,7 @@ Use the mounted Vera Neo4j MCP tools directly. Do not use Bash, `curl`, a Neo4j 
 | `neo4j_explain` | Return an execution plan without running the query. |
 | `neo4j_write` | Run an explicitly authorized mutation when effective access permits it. |
 
-If the MCP client prefixes tool names, use the discovered tool whose name ends with the exact name above.
+The bundled client accepts only these exact tool names; do not add an MCP client prefix.
 
 ## Standard workflow
 
@@ -91,8 +117,11 @@ These controls do not replace least-privilege database credentials or human auth
 - **Write denied:** report that effective access or the instance mode is read-only. Do not retry through another route.
 - **Schema mismatch:** refresh schema and correct the query; do not invent labels or properties.
 - **Query rejected:** explain the blocked class and propose a safer bounded query.
-- **Authentication/tool unavailable:** ask the user to attach or refresh the Vera Neo4j MCP server. Never request the token in chat.
+- **`VERA_TOKEN` unavailable:** tell the user to run `/secret set VERA_TOKEN ...` for the current Letta Code agent and start a new session. Never request the token in chat.
+- **401/403:** report that the saved token is invalid, expired, revoked, or lacks access. Do not retry through another route.
+- **Client script missing:** the skill package is incomplete; reinstall the whole skill directory, including `scripts/call-mcp.mjs`. Do not attach an MCP server as a workaround.
+- **Endpoint unreachable:** report the connection failure. Use the configured Vera server URL when provided; do not expose the token while troubleshooting.
 
 ## Connection reference
 
-The native endpoint is stateless Streamable HTTP at `POST /neo4j-mcp`. It accepts a Vera user token or personal Vera MCP token and preserves the token owner's user, organization, and access grants. Credentials and connection URIs are never exposed through the MCP tools.
+The bundled client calls the stateless Streamable HTTP endpoint at `POST /neo4j-mcp` using the current agent's `VERA_TOKEN`. The endpoint preserves the token owner's user, organization, and access grants. Neo4j credentials and connection URIs are never exposed through the MCP tools.
