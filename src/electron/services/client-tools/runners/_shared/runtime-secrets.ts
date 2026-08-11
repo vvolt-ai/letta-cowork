@@ -1,18 +1,34 @@
-/**
- * Redact exact runtime-secret values before subprocess output is returned to
- * the agent/model. This is a last-resort output boundary; callers must still
- * avoid intentionally printing secrets.
- */
-export function redactRuntimeSecrets(
-    text: string,
-    runtimeEnv: Readonly<Record<string, string>> | undefined
-): string {
-    if (!text || !runtimeEnv) return text;
+import { AsyncLocalStorage } from "node:async_hooks";
 
-    let redacted = text;
-    const values = [...new Set(Object.values(runtimeEnv).filter(Boolean))].sort(
+const runtimeSecretStorage = new AsyncLocalStorage<readonly string[]>();
+
+export function normalizeRuntimeSecretValues(
+    values: Iterable<string | null | undefined>
+): string[] {
+    return [...new Set(Array.from(values).filter((value): value is string => Boolean(value)))].sort(
         (a, b) => b.length - a.length
     );
+}
+
+export function runWithRuntimeSecrets<T>(
+    values: Iterable<string | null | undefined>,
+    fn: () => T
+): T {
+    return runtimeSecretStorage.run(normalizeRuntimeSecretValues(values), fn);
+}
+
+/** Redact exact runtime-secret values at model and persistence boundaries. */
+export function redactRuntimeSecrets(
+    text: string,
+    runtimeEnv?: Readonly<Record<string, string>>
+): string {
+    if (!text) return text;
+
+    let redacted = text;
+    const values = normalizeRuntimeSecretValues([
+        ...Object.values(runtimeEnv ?? {}),
+        ...(runtimeSecretStorage.getStore() ?? []),
+    ]);
     for (const value of values) {
         redacted = redacted.split(value).join("[REDACTED_SECRET]");
     }

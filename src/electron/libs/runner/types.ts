@@ -3,7 +3,7 @@
  */
 
 import type { ServerEvent } from "../../types.js";
-import type { PendingPermission } from "../runtime-state.js";
+import type { PendingPermission, SessionPermissionGrants } from "../runtime-state.js";
 import type {
   MessageContentItem,
   SDKInitMessage,
@@ -20,6 +20,7 @@ export type RunnerSession = {
   status: string;
   cwd?: string;
   pendingPermissions: Map<string, PendingPermission>;
+  permissionGrants?: SessionPermissionGrants;
 };
 
 /** Session surface shared by the SDK and Cowork's REST-streaming adapter. */
@@ -42,7 +43,7 @@ export type RunnerOptions = {
   resumeConversationId?: string;
   preferredAgentId?: string;
   model?: string;
-  permissionMode?: "standard" | "acceptEdits" | "unrestricted";
+  permissionMode?: "standard" | "acceptEdits" | "unrestricted" | "strict";
   onEvent: (event: ServerEvent) => void;
   onSessionUpdate?: (updates: { lettaConversationId?: string }) => void;
 };

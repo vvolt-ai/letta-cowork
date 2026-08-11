@@ -116,16 +116,16 @@ export type ServerEvent =
 
 // Client -> Server events
 export type ClientEvent =
-  | { type: "session.start"; payload: { title: string; prompt: string; content?: MessageContentItem[]; attachments?: ChatAttachment[]; cwd?: string; allowedTools?: string; agentId?: string; model?: string; permissionMode?: "standard" | "acceptEdits" | "unrestricted"; background?: boolean; isEmailSession?: boolean } }
-  | { type: "session.continue"; payload: { sessionId: string; prompt: string; content?: MessageContentItem[]; attachments?: ChatAttachment[]; cwd?: string; model?: string; permissionMode?: "standard" | "acceptEdits" | "unrestricted" } }
-  | { type: "session.stopAndContinue"; payload: { sessionId: string; prompt: string; content?: MessageContentItem[]; attachments?: ChatAttachment[]; cwd?: string; model?: string; permissionMode?: "standard" | "acceptEdits" | "unrestricted" } }
+  | { type: "session.start"; payload: { title: string; prompt: string; content?: MessageContentItem[]; attachments?: ChatAttachment[]; cwd?: string; allowedTools?: string; agentId?: string; model?: string; permissionMode?: "standard" | "acceptEdits" | "unrestricted" | "strict"; background?: boolean; isEmailSession?: boolean } }
+  | { type: "session.continue"; payload: { sessionId: string; prompt: string; content?: MessageContentItem[]; attachments?: ChatAttachment[]; cwd?: string; model?: string; permissionMode?: "standard" | "acceptEdits" | "unrestricted" | "strict" } }
+  | { type: "session.stopAndContinue"; payload: { sessionId: string; prompt: string; content?: MessageContentItem[]; attachments?: ChatAttachment[]; cwd?: string; model?: string; permissionMode?: "standard" | "acceptEdits" | "unrestricted" | "strict" } }
   | { type: "session.stop"; payload: { sessionId: string } }
   | { type: "session.delete"; payload: { sessionId: string } }
   | { type: "session.cancelPending"; payload: Record<string, never> }
   | { type: "session.list" }
   | { type: "session.history"; payload: { sessionId: string; limit?: number; before?: string } }
   | { type: "session.rename"; payload: { sessionId: string; title: string } }
-  | { type: "permission.response"; payload: { sessionId: string; toolUseId: string; result: CanUseToolResponse } };
+  | { type: "permission.response"; payload: { sessionId: string; toolUseId: string; result: CanUseToolResponse; scope?: "once" | "tool" | "session" } };
 
 export type Folder = {
   folderName: string,

@@ -1,14 +1,13 @@
 import { defineConfig, loadEnv, type UserConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
-import tsconfigPaths from 'vite-tsconfig-paths';
 
 export default defineConfig(({ mode }): UserConfig => {
 	const env = loadEnv(mode, process.cwd(), '');
-	const port = parseInt(env.PORT); // MUST BE LOWERCASE
+	const port = Number.parseInt(env.port || '5173', 10); // MUST BE LOWERCASE
 
 	return {
-		plugins: [react(), tailwindcss(), tsconfigPaths()],
+		plugins: [react(), tailwindcss()],
 		base: './',
 		build: {
 			outDir: 'dist-react',
@@ -25,6 +24,9 @@ export default defineConfig(({ mode }): UserConfig => {
 					},
 				},
 			},
+		},
+		resolve: {
+			tsconfigPaths: true,
 		},
 		server: {
 			port, // MUST BE LOWERCASE

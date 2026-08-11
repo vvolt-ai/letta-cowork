@@ -20,6 +20,12 @@ export interface LettaModel {
   model_type?: string;
 }
 
+interface LettaProvider {
+  id: string;
+  name: string;
+  provider_category?: "base" | "byok" | null;
+}
+
 export interface LettaConversation {
   id: string;
   agentId: string;
@@ -58,6 +64,49 @@ function createLettaClient(): Letta {
     baseURL,
     apiKey: apiKey || null,
   });
+}
+
+function getLettaApiConfig(): { baseURL: string; apiKey: string } {
+  return {
+    baseURL: (process.env.LETTA_BASE_URL || "https://api.letta.com").trim().replace(/\/$/, ""),
+    apiKey: (process.env.LETTA_API_KEY || "").trim(),
+  };
+}
+
+async function refreshByokProviders(): Promise<void> {
+  const { baseURL, apiKey } = getLettaApiConfig();
+  if (!apiKey) return;
+
+  const headers = {
+    Authorization: `Bearer ${apiKey}`,
+    "Content-Type": "application/json",
+    "X-Letta-Source": "vera-cowork",
+  };
+
+  try {
+    const response = await fetch(`${baseURL}/v1/providers`, { headers });
+    if (!response.ok) return;
+    const providers = await response.json() as LettaProvider[];
+    if (!Array.isArray(providers)) return;
+
+    await Promise.allSettled(
+      providers
+        .filter((provider) => provider.provider_category === "byok")
+        .map((provider) =>
+          fetch(`${baseURL}/v1/providers/${encodeURIComponent(provider.id)}/refresh`, {
+            method: "PATCH",
+            headers,
+          })
+        )
+    );
+  } catch (error) {
+    // Provider refresh is best-effort. Older/self-hosted servers may not expose
+    // the Cloud BYOK endpoints, but their normal model catalog should still load.
+    console.warn(
+      "[lettaModels] BYOK provider refresh skipped:",
+      error instanceof Error ? error.message : String(error)
+    );
+  }
 }
 
 export async function listLettaAgents(queryText = ""): Promise<LettaAgent[]> {
@@ -129,6 +178,10 @@ export async function getLettaAgent(agentId: string): Promise<LettaAgent | null>
 }
 
 export async function listLettaModels(): Promise<LettaModel[]> {
+  // Letta Cloud discovers models exposed by BYOK endpoints during refresh.
+  // Refresh first so a newly connected OpenAI-compatible provider appears in
+  // Cowork's model picker immediately.
+  await refreshByokProviders();
   const client = createLettaClient();
   
   try {

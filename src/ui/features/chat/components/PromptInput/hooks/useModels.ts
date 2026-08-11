@@ -139,10 +139,16 @@ export function useModels(options: UseModelsOptions): UseModelsResult {
       }
     };
 
+    const handleCatalogChanged = () => {
+      void fetchCatalog();
+    };
+
     fetchCatalog();
+    window.addEventListener("letta-model-catalog-changed", handleCatalogChanged);
 
     return () => {
       cancelled = true;
+      window.removeEventListener("letta-model-catalog-changed", handleCatalogChanged);
     };
   }, []);
 

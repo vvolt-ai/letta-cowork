@@ -4,7 +4,7 @@
  */
 
 import { emit } from "./session-creation.js";
-import { getSession } from "../../../libs/runtime-state.js";
+import { getSession, resolveSessionPermission } from "../../../libs/runtime-state.js";
 import { getAgentRunApprovalCandidates, cancelAgentRunById, approveRunById } from "../../../services/agents/index.js";
 import { getStoredSessions } from "../../../services/settings/index.js";
 
@@ -16,15 +16,13 @@ import type { CanUseToolResponse } from "@letta-ai/letta-agent-sdk";
 export function handlePermissionResult(
     sessionId: string,
     toolUseId: string,
-    result: CanUseToolResponse
+    result: CanUseToolResponse,
+    scope: "once" | "tool" | "session" = "once"
 ): void {
     const session = getSession(sessionId);
     if (!session) return;
 
-    const pending = session.pendingPermissions.get(toolUseId);
-    if (pending) {
-        pending.resolve(result);
-    }
+    resolveSessionPermission(session, toolUseId, result, scope);
 }
 
 /**

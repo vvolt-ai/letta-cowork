@@ -7,7 +7,11 @@ interface ActivityPanelProps {
   permissionRequests: PermissionRequest[];
   coworkSettings: CoworkSettings;
   isEmailConnected: boolean;
-  onPermissionResult?: (toolUseId: string, result: CanUseToolResponse) => void;
+  onPermissionResult?: (
+    toolUseId: string,
+    result: CanUseToolResponse,
+    scope?: "once" | "tool" | "session"
+  ) => void;
 }
 
 function PermissionsPanel({
@@ -15,7 +19,11 @@ function PermissionsPanel({
   onPermissionResult,
 }: {
   permissionRequests: PermissionRequest[];
-  onPermissionResult?: (toolUseId: string, result: CanUseToolResponse) => void;
+  onPermissionResult?: (
+    toolUseId: string,
+    result: CanUseToolResponse,
+    scope?: "once" | "tool" | "session"
+  ) => void;
 }) {
   return (
     <section className="space-y-2">
@@ -50,23 +58,43 @@ function PermissionsPanel({
                 </div>
               ) : null}
               {onPermissionResult ? (
-                <div className="mt-3 flex gap-2">
+                <div className="mt-3 grid grid-cols-2 gap-2">
                   <button
-                    onClick={() => onPermissionResult(request.toolUseId, { behavior: "allow" })}
-                    className="flex-1 rounded-md bg-[var(--color-status-completed)] px-2 py-1 text-[11px] font-semibold text-white transition hover:bg-[var(--color-status-completed)]/90"
+                    onClick={() => onPermissionResult(request.toolUseId, { behavior: "allow" }, "once")}
+                    className="rounded-md bg-[var(--color-status-completed)] px-2 py-1.5 text-[11px] font-semibold text-white transition hover:bg-[var(--color-status-completed)]/90"
                     disabled={request.source === "recovered"}
                     title={request.source === "recovered" ? "Recovered approvals are currently informational only" : undefined}
                   >
-                    Approve
+                    Allow once
                   </button>
                   <button
-                    onClick={() => onPermissionResult(request.toolUseId, { behavior: "deny", message: "Denied by user" })}
-                    className="flex-1 rounded-md border border-[var(--color-status-error)]/40 bg-[var(--color-status-error)]/10 px-2 py-1 text-[11px] font-semibold text-[var(--color-status-error)] hover:bg-[var(--color-status-error)]/20"
+                    onClick={() => onPermissionResult(request.toolUseId, { behavior: "deny", message: "Denied by user" }, "once")}
+                    className="rounded-md border border-[var(--color-status-error)]/40 bg-[var(--color-status-error)]/10 px-2 py-1.5 text-[11px] font-semibold text-[var(--color-status-error)] hover:bg-[var(--color-status-error)]/20"
                     disabled={request.source === "recovered"}
                     title={request.source === "recovered" ? "Recovered approvals are currently informational only" : undefined}
                   >
                     Deny
                   </button>
+                  {request.toolName !== "AskUserQuestion" ? (
+                    <>
+                      <button
+                        onClick={() => onPermissionResult(request.toolUseId, { behavior: "allow" }, "tool")}
+                        className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg-000)] px-2 py-1.5 text-[11px] font-semibold text-ink-700 transition hover:bg-[var(--color-bg-100)]"
+                        disabled={request.source === "recovered"}
+                        title={`Allow ${request.toolName} without asking again in this session`}
+                      >
+                        Always allow {request.toolName}
+                      </button>
+                      <button
+                        onClick={() => onPermissionResult(request.toolUseId, { behavior: "allow" }, "session")}
+                        className="rounded-md border border-[var(--color-accent)]/30 bg-[var(--color-accent-light)] px-2 py-1.5 text-[11px] font-semibold text-[var(--color-accent)] transition hover:bg-[var(--color-accent-light)]/70"
+                        disabled={request.source === "recovered"}
+                        title="Allow every tool without asking again in this session"
+                      >
+                        Allow all this session
+                      </button>
+                    </>
+                  ) : null}
                 </div>
               ) : null}
             </div>

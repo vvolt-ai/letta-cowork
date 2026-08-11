@@ -9,6 +9,7 @@ import { log, debug, broadcast } from "./utils.js";
 import { runLetta, clearAgentCache, type RunnerHandle } from "../../../libs/runner/index.js";
 import {
     createRuntimeSession,
+    createSessionPermissionGrants,
     updateSession,
     type PendingPermission,
     type SessionStatus,
@@ -81,6 +82,7 @@ export async function handleStartSession(
     });
 
     const pendingPermissions = new Map<string, PendingPermission>();
+    const permissionGrants = createSessionPermissionGrants();
     const safePrompt = prompt ?? "";
     const safeTitle = (title?.trim() ?? "") || generateTitleFromPrompt(safePrompt);
 
@@ -92,7 +94,8 @@ export async function handleStartSession(
             title: safeTitle,
             status: "running",
             cwd,
-            pendingPermissions
+            pendingPermissions,
+            permissionGrants,
         };
 
         const handle = await runLetta({
@@ -114,7 +117,14 @@ export async function handleStartSession(
 
                     const sessionTitle = safeTitle;
 
-                    createRuntimeSession(conversationId);
+                    // Keep the exact permission map captured by canUseTool. Creating a
+                    // fresh map here makes approval responses invisible to the waiting
+                    // runner and leaves standard-mode sessions stuck forever.
+                    createRuntimeSession(
+                        conversationId,
+                        pendingPermissions,
+                        permissionGrants
+                    );
                     updateSession(conversationId, { status: "running", title: sessionTitle });
 
                     const resolvedAgentId = agentId || process.env.LETTA_AGENT_ID || "";

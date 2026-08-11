@@ -3,7 +3,7 @@
  * Central point for registering all IPC handlers
  */
 
-import { exec, spawn, type ChildProcess } from "child_process";
+import { spawn, type ChildProcess } from "child_process";
 import { randomUUID } from "crypto";
 import path from "path";
 import { ipcMain, dialog, shell } from "electron";
@@ -264,21 +264,48 @@ export function registerAllIpcHandlers(mainWindow: BrowserWindow): void {
         return await listRegisteredLettaCodeTools();
     });
 
-    // Letta CLI: exec-based (returns full output)
+    // Letta CLI: spawn-based (returns full output). Never construct a shell
+    // command here: connect commands can contain provider keys and URLs.
     ipcMain.handle("run-letta-cli", async (_event, args: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> => {
         return new Promise((resolve) => {
             if (!localCli) {
                 resolve({ stdout: "", stderr: "letta CLI not found", exitCode: 1 });
                 return;
             }
-            const cmd = `node "${localCli}" ${args.map((a) => JSON.stringify(a)).join(" ")}`;
             const cliEnv = { ...process.env, CI: "true", NO_COLOR: "1", FORCE_COLOR: "0", TERM: "dumb", NO_UPDATE_NOTIFIER: "1" };
-            exec(cmd, { env: cliEnv, timeout: 30_000 }, (error, stdout, stderr) => {
+            const child = spawn("node", [localCli, ...args], {
+                env: cliEnv,
+                windowsHide: true,
+                stdio: ["ignore", "pipe", "pipe"],
+            });
+            let stdout = "";
+            let stderr = "";
+            let settled = false;
+            const timeoutMs = args[0] === "connect" ? 120_000 : 30_000;
+            const finish = (exitCode: number) => {
+                if (settled) return;
+                settled = true;
                 resolve({
-                    stdout: stdout ?? "",
-                    stderr: stderr ?? (error?.message ?? ""),
-                    exitCode: error?.code != null ? Number(error.code) : (error ? 1 : 0),
+                    stdout,
+                    stderr,
+                    exitCode,
                 });
+            };
+            const timeout = setTimeout(() => {
+                stderr += `${stderr ? "\n" : ""}Command timed out after ${timeoutMs / 1000} seconds`;
+                child.kill("SIGTERM");
+                finish(1);
+            }, timeoutMs);
+            child.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString(); });
+            child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
+            child.on("close", (code) => {
+                clearTimeout(timeout);
+                finish(code ?? 0);
+            });
+            child.on("error", (error) => {
+                clearTimeout(timeout);
+                stderr += `${stderr ? "\n" : ""}${error.message}`;
+                finish(1);
             });
         });
     });

@@ -43,7 +43,7 @@ export interface SessionStartOptions {
     cwd?: string;
     agentId?: string;
     model?: string;
-    permissionMode?: "standard" | "acceptEdits" | "unrestricted";
+    permissionMode?: "standard" | "acceptEdits" | "unrestricted" | "strict";
     title?: string;
     background?: boolean;
     isEmailSession?: boolean;
@@ -59,7 +59,7 @@ export interface SessionContinueOptions {
     attachments?: unknown[];
     cwd?: string;
     model?: string;
-    permissionMode?: "standard" | "acceptEdits" | "unrestricted";
+    permissionMode?: "standard" | "acceptEdits" | "unrestricted" | "strict";
 }
 
 /**

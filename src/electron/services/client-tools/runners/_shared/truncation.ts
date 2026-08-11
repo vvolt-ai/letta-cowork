@@ -16,11 +16,15 @@ export const LIMITS = {
   // File reading limits
   READ_MAX_LINES: 2_000, // Max lines per file read
   READ_MAX_CHARS_PER_LINE: 2_000, // Max characters per line
+  READ_OUTPUT_CHARS: 30_000, // Max total characters returned by Read
 
   // Search/discovery limits
   GREP_OUTPUT_CHARS: 10_000, // Max characters for grep results
   GLOB_MAX_FILES: 2_000, // Max number of file paths
   LS_MAX_ENTRIES: 1_000, // Max directory entries
+
+  // Backstop above per-tool 30K limits so their notices pass unchanged.
+  TOOL_RETURN_MAX_CHARS: 32_000,
 } as const;
 
 /**

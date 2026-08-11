@@ -38,6 +38,7 @@ import {
     runClientTool,
 } from "../../../services/client-tools/index.js";
 import { debug } from "../logger.js";
+import { createTerminalEofGuard } from "./stream-terminal-eof-guard.js";
 
 import type {
     SDKAssistantMessage,
@@ -59,7 +60,7 @@ import type {
 
 export interface WsSessionOptions {
     cwd?: string;
-    permissionMode?: "standard" | "acceptEdits" | "unrestricted";
+    permissionMode?: "standard" | "acceptEdits" | "unrestricted" | "strict";
     canUseTool?: (
         toolName: string,
         input: unknown
@@ -216,6 +217,7 @@ export class WsSession {
         }
 
         const client = getClient();
+        const selectedModel = this.opts.model?.trim() || undefined;
 
         // Resolve agent id (constructor → env → fail).
         if (!this._agentId) {
@@ -237,7 +239,10 @@ export class WsSession {
                 client.conversations as unknown as {
                     create: (body: Record<string, unknown>) => Promise<unknown>;
                 }
-            ).create({ agent_id: this._agentId })) as { id?: string };
+            ).create({
+                agent_id: this._agentId,
+                ...(selectedModel ? { model: selectedModel } : {}),
+            })) as { id?: string };
             if (!created.id) {
                 throw new Error(
                     "WsSession.initialize: conversation creation returned no id"
@@ -246,6 +251,23 @@ export class WsSession {
             this._conversationId = created.id;
             debug("WsSession: created conversation", {
                 conversationId: this._conversationId,
+                model: selectedModel,
+            });
+        } else if (selectedModel) {
+            // A continuation creates a fresh WsSession around the existing
+            // conversation. Apply the current picker value as a conversation-
+            // scoped override before sending, without mutating the agent default.
+            await (
+                client.conversations as unknown as {
+                    update: (
+                        conversationId: string,
+                        body: Record<string, unknown>
+                    ) => Promise<unknown>;
+                }
+            ).update(this._conversationId, { model: selectedModel });
+            debug("WsSession: applied conversation model override", {
+                conversationId: this._conversationId,
+                model: selectedModel,
             });
         }
 
@@ -1046,7 +1068,31 @@ export class WsSession {
             }
         )) as Stream<LettaStreamingResponse>;
 
-        for await (const event of stream as AsyncIterable<LettaStreamingResponse>) {
+        let terminalStopReason: string | null = null;
+        const terminalEofGuard = createTerminalEofGuard({
+            getStopReason: () => terminalStopReason,
+            abortHttpRead: () =>
+                (stream as unknown as { controller?: AbortController }).controller?.abort(),
+            warn: (message) =>
+                debug("WsSession: stream_terminal_eof_guard_fired", {
+                    message,
+                    conversationId,
+                }),
+        });
+
+        const guardedStream = (async function* () {
+            try {
+                yield* stream as AsyncIterable<LettaStreamingResponse>;
+            } catch (error) {
+                // The guard aborts only the HTTP reader after semantic termination.
+                // Suppress that expected abort; all other stream errors remain fatal.
+                if (!terminalEofGuard.fired()) throw error;
+            } finally {
+                terminalEofGuard.clear();
+            }
+        })();
+
+        for await (const event of guardedStream) {
             if (ctrl.signal.aborted) break;
             this.handleStreamingEvent(event);
 
@@ -1086,6 +1132,8 @@ export class WsSession {
                 const stopReasonRaw = String(
                     (e as { stop_reason?: unknown }).stop_reason ?? ""
                 );
+                terminalStopReason = stopReasonRaw || "unknown";
+                terminalEofGuard.arm();
                 console.log(
                     `[WsSession] stream stop_reason event: '${stopReasonRaw}'`
                 );

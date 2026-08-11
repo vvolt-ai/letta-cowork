@@ -22,7 +22,7 @@ import type { CanUseToolResponse } from "@letta-ai/letta-agent-sdk";
  */
 export type SessionOptions = {
   cwd: string;
-  permissionMode: "standard" | "acceptEdits" | "unrestricted";
+  permissionMode: "standard" | "acceptEdits" | "unrestricted" | "strict";
   canUseTool: (toolName: string, input: unknown) => Promise<CanUseToolResponse>;
   systemInfoReminder: boolean;
   model?: string;

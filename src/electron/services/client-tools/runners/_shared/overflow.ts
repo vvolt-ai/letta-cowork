@@ -9,6 +9,8 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
+import { redactRuntimeSecrets } from "./runtime-secrets.js";
+
 /**
  * Configuration options for tool output overflow behavior.
  * Can be controlled via environment variables.
@@ -89,8 +91,9 @@ export function writeOverflowFile(
 
   const filePath = path.join(overflowDir, filename);
 
-  // Write the content to the file
-  fs.writeFileSync(filePath, content, "utf-8");
+  // Overflow is written before the model-facing result boundary, so scrub
+  // runtime secrets here as well to avoid persisting values the model never sees.
+  fs.writeFileSync(filePath, redactRuntimeSecrets(content), "utf-8");
 
   return filePath;
 }

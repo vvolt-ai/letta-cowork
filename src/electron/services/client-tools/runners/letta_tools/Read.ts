@@ -7,7 +7,7 @@ import { expandFilePath } from "../_shared/filePath.js";
 import { resizeImageIfNeeded } from "../_shared/imageResize.js";
 import { OVERFLOW_CONFIG, writeOverflowFile } from "../_shared/overflow.js";
 import { getCurrentWorkingDirectory } from "../_shared/runtime-context.js";
-import { LIMITS } from "../_shared/truncation.js";
+import { LIMITS, truncateByChars } from "../_shared/truncation.js";
 import { validateRequiredParams } from "../_shared/validation.js";
 
 import type {
@@ -164,6 +164,14 @@ function formatWithLineNumbers(
 
   let result = formattedLines.join("\n");
 
+  // Line and per-line caps alone can still return roughly 4M characters.
+  let wasTruncatedByTotalChars = false;
+  if (result.length > LIMITS.READ_OUTPUT_CHARS) {
+    wasTruncatedByTotalChars = true;
+    // Raw file content is written to overflow below, so avoid a duplicate write.
+    result = truncateByChars(result, LIMITS.READ_OUTPUT_CHARS, "Read").content;
+  }
+
   // Add truncation notices if applicable
   const notices: string[] = [];
   const wasTruncatedByLineCount = actualEndLine < originalLineCount;
@@ -171,7 +179,7 @@ function formatWithLineNumbers(
   // Write to overflow file if content was truncated and overflow is enabled
   let overflowPath: string | undefined;
   if (
-    (wasTruncatedByLineCount || linesWereTruncatedInLength) &&
+    (wasTruncatedByLineCount || linesWereTruncatedInLength || wasTruncatedByTotalChars) &&
     OVERFLOW_CONFIG.ENABLED &&
     workingDirectory
   ) {
@@ -194,6 +202,10 @@ function formatWithLineNumbers(
     notices.push(
       `\n\n[Some lines exceeded ${LIMITS.READ_MAX_CHARS_PER_LINE.toLocaleString()} characters and were truncated.]`,
     );
+  }
+
+  if (wasTruncatedByTotalChars) {
+    notices.push("\n\n[Use offset and limit parameters to read the file in smaller sections.]");
   }
 
   if (overflowPath) {

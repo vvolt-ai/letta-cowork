@@ -18,6 +18,11 @@ import { productivityTools } from "./runners/productivity.js";
 import { listSkillsTool, skillTool } from "./runners/skill.js";
 import { appendToolTrace, runTimelineTool, toolTraceSearchTool } from "./runners/tool-traces.js";
 import { veraMcpTools } from "./runners/veraMcp.js";
+import {
+    redactRuntimeSecrets,
+    runWithRuntimeSecrets,
+} from "./runners/_shared/runtime-secrets.js";
+import { clampToolReturnContent } from "./runners/_shared/tool-return-clamp.js";
 import { emitExtensionToolStart } from "../extensions/extension-events.js";
 
 import type { ToolTraceStatus } from "./runners/tool-traces.js";
@@ -127,7 +132,10 @@ export async function runClientTool(
                     isError: true,
                 };
             } else {
-                result = await def.run(argsToRun, ctx);
+                result = await runWithRuntimeSecrets(
+                    Object.values(ctx.runtimeEnv ?? {}),
+                    () => def.run(argsToRun, ctx)
+                );
                 status = result.isError ? "error" : "success";
             }
         } catch (err) {
@@ -139,6 +147,16 @@ export async function runClientTool(
             };
         }
     }
+
+    const runtimeSecrets = Object.values(ctx.runtimeEnv ?? {});
+    result = {
+        ...result,
+        output: clampToolReturnContent(
+            redactRuntimeSecrets(result.output, ctx.runtimeEnv),
+            name,
+            runtimeSecrets
+        ),
+    };
 
     try {
         await appendToolTrace({

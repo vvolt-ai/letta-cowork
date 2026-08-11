@@ -50,20 +50,29 @@ function isReadOnlyRequest(toolName: string, input: unknown): boolean {
 export function createCanUseToolHandler(
   session: RunnerSession,
   sendPermissionRequest: SendPermissionRequest,
-  permissionMode: "standard" | "acceptEdits" | "unrestricted" = "unrestricted"
+  permissionMode: "standard" | "acceptEdits" | "unrestricted" | "strict" = "unrestricted"
 ): (toolName: string, input: unknown) => Promise<CanUseToolResponse> {
   return async (toolName: string, input: unknown): Promise<CanUseToolResponse> => {
-    const requiresPrompt = toolName === "AskUserQuestion"
+    // AskUserQuestion needs an actual human answer, so it can never inherit an
+    // automatic session grant. Every other tool may be granted for this session.
+    const isGrantedForSession = toolName !== "AskUserQuestion"
+      && Boolean(
+        session.permissionGrants?.allowAll
+        || session.permissionGrants?.allowedTools.has(toolName)
+      );
+    const requiresPrompt = !isGrantedForSession && (
+      permissionMode === "strict"
+      || toolName === "AskUserQuestion"
       || (permissionMode === "standard" && !isReadOnlyRequest(toolName, input))
-      || (permissionMode === "acceptEdits" && !isReadOnlyRequest(toolName, input) && !EDIT_TOOLS.has(toolName));
+      || (permissionMode === "acceptEdits" && !isReadOnlyRequest(toolName, input) && !EDIT_TOOLS.has(toolName))
+    );
 
     if (!requiresPrompt) {
       return { behavior: "allow" as const };
     }
 
     const toolUseId = crypto.randomUUID();
-    sendPermissionRequest(toolUseId, toolName, input);
-    return new Promise<CanUseToolResponse>((resolve) => {
+    const decision = new Promise<CanUseToolResponse>((resolve) => {
       session.pendingPermissions.set(toolUseId, {
         toolUseId,
         toolName,
@@ -74,5 +83,10 @@ export function createCanUseToolHandler(
         }
       });
     });
+
+    // Register the resolver before notifying the renderer. This closes the race
+    // where a fast permission response arrives before pendingPermissions is ready.
+    sendPermissionRequest(toolUseId, toolName, input);
+    return decision;
   };
 }

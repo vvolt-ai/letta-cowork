@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "@letta-ai/letta-agent-sdk": "^0.6.3",
+    "@letta-ai/letta-code": "0.30.18",
     "@radix-ui/react-dialog": "^1.1.23",
     "@radix-ui/react-dropdown-menu": "^2.1.24",
     "@slack/bolt": "^5.0.0",
@@ -54,7 +55,6 @@
     "remark-gfm": "^4.0.1",
     "tailwindcss": "^4.3.3",
     "typescript-lsp": "npm:typescript@^6.0.3",
-    "vite-tsconfig-paths": "^6.1.1",
     "ws": "^8.21.3",
     "zustand": "^5.0.14"
   },

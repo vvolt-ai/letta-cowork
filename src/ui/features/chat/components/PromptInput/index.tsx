@@ -265,6 +265,7 @@ export const PromptInput = memo(function PromptInput({
             <option value="standard">Default approvals</option>
             <option value="acceptEdits">Auto-allow edits</option>
             <option value="unrestricted">Full access</option>
+            <option value="strict">Strict (ask for every tool)</option>
           </select>
           <svg viewBox="0 0 24 24" className="pointer-events-none absolute right-0 h-3 w-3 text-muted" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="m7 10 5 5 5-5" />

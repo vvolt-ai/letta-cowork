@@ -62,3 +62,8 @@ Every channel-originated event should preserve provider-native IDs and routing c
 - sender id/name;
 - timestamp;
 - policy mode and reply flag.
+
+## Permission-state identity
+
+For interactive `standard` / `acceptEdits` runs, the runtime session must retain the same `pendingPermissions` map captured by `createCanUseToolHandler`. Replacing that map when the real conversation ID arrives makes renderer approval responses miss the waiting resolver and hangs the turn. Register each resolver in the map before emitting `permission.request` to avoid a fast-response race.
+Session approval choices support three scopes: allow once, always allow that tool for the current runtime session, and allow all tools for the current runtime session. Session grants are in-memory, survive later turns in the same runtime session, release matching already-pending parallel requests, and never auto-answer `AskUserQuestion`.

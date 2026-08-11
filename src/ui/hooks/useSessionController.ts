@@ -68,13 +68,34 @@ export function useSessionController({ connected, sendEvent }: UseSessionControl
     sendEvent({ type: "session.delete", payload: { sessionId } });
   }, [sendEvent]);
 
-  const handlePermissionResult = useCallback((toolUseId: string, result: CanUseToolResponse) => {
+  const handlePermissionResult = useCallback((
+    toolUseId: string,
+    result: CanUseToolResponse,
+    scope: "once" | "tool" | "session" = "once"
+  ) => {
     if (!activeSessionId || !activeSession) return;
     // Recovered runs are now auto-approved on resume; this path should rarely be reached.
     // If it does (race condition), let the normal permission response flow handle it.
-    sendEvent({ type: "permission.response", payload: { sessionId: activeSessionId, toolUseId, result } });
-    resolvePermissionRequest(activeSessionId, toolUseId);
-  }, [activeSession, activeSessionId, resolvePermissionRequest, sendEvent, setGlobalError]);
+    sendEvent({
+      type: "permission.response",
+      payload: { sessionId: activeSessionId, toolUseId, result, scope },
+    });
+
+    const selectedRequest = activeSession.permissionRequests.find(
+      (request) => request.toolUseId === toolUseId
+    );
+    const resolvedRequests = result.behavior !== "allow" || scope === "once"
+      ? activeSession.permissionRequests.filter((request) => request.toolUseId === toolUseId)
+      : scope === "session"
+        ? activeSession.permissionRequests.filter((request) => request.toolName !== "AskUserQuestion")
+        : activeSession.permissionRequests.filter(
+          (request) => request.toolName === selectedRequest?.toolName
+        );
+
+    for (const request of resolvedRequests) {
+      resolvePermissionRequest(activeSessionId, request.toolUseId);
+    }
+  }, [activeSession, activeSessionId, resolvePermissionRequest, sendEvent]);
 
   // Check if Letta environment is configured
   const isLettaEnvConfigured = useCallback(async (agentIdOverride?: string) => {

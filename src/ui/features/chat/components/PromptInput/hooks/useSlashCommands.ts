@@ -38,11 +38,48 @@ export const SLASH_COMMAND_SUGGESTIONS: SlashCommandSuggestion[] = [
   { command: "/context", description: "Show context window usage", insertText: "/context", status: "supported" },
   { command: "/usage", description: "Show session usage statistics and balance", insertText: "/usage", status: "supported" },
   { command: "/feedback", description: "Send feedback to the Letta team", insertText: "/feedback ", status: "supported" },
-  { command: "/connect chatgpt", description: "Connect ChatGPT Pro/Plus", insertText: "/connect chatgpt", status: "info" },
+  { command: "/connect openai-compatible", description: "Connect an OpenAI-compatible model provider", insertText: "/connect openai-compatible --base-url ", status: "supported" },
+  { command: "/connect chatgpt", description: "Connect ChatGPT Pro/Plus", insertText: "/connect chatgpt", status: "supported" },
   { command: "/disconnect chatgpt", description: "Disconnect ChatGPT Pro/Plus", insertText: "/disconnect chatgpt", status: "info" },
   { command: "/bg", description: "Show background shell processes", insertText: "/bg", status: "supported" },
   { command: "/exit", description: "Exit this session to support with our chat", insertText: "/exit", status: "info" },
 ];
+
+function parseCliArgs(input: string): string[] {
+  return (
+    input.match(/[^\s"']+|"[^"]*"|'[^']*'/g)?.map((arg) => arg.replace(/^["']|["']$/g, "")) ??
+    input.split(/\s+/).filter(Boolean)
+  );
+}
+
+const SECRET_CLI_FLAGS = new Set(["--api-key", "--secret-key", "--access-key"]);
+
+function redactSensitiveCliArgs(args: string[]): string[] {
+  let redactNext = false;
+  return args.map((arg) => {
+    if (redactNext) {
+      redactNext = false;
+      return "[REDACTED]";
+    }
+    const flag = arg.split("=", 1)[0]?.toLowerCase() ?? "";
+    if (!SECRET_CLI_FLAGS.has(flag)) return arg;
+    if (arg.includes("=")) return `${arg.slice(0, arg.indexOf("=") + 1)}[REDACTED]`;
+    redactNext = true;
+    return arg;
+  });
+}
+
+function redactSensitiveCliOutput(output: string, args: string[]): string {
+  const secrets: string[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index] ?? "";
+    const flag = arg.split("=", 1)[0]?.toLowerCase() ?? "";
+    if (!SECRET_CLI_FLAGS.has(flag)) continue;
+    const value = arg.includes("=") ? arg.slice(arg.indexOf("=") + 1) : args[index + 1];
+    if (value) secrets.push(value);
+  }
+  return secrets.reduce((text, secret) => text.split(secret).join("[REDACTED]"), output);
+}
 
 export interface UseSlashCommandsOptions {
   activeSessionId: string | null;
@@ -97,26 +134,70 @@ export function useSlashCommands(options: UseSlashCommandsOptions): UseSlashComm
             setPrompt("");
             return true;
           }
-          const cliArgs =
-            args.match(/[^\s"']+|"[^"]*"|'[^']*'/g)?.map((a) => a.replace(/^["']|["']$/g, "")) ??
-            args.split(/\s+/);
+          const cliArgs = parseCliArgs(args);
+          const displayArgs = redactSensitiveCliArgs(cliArgs);
           setGlobalError(null);
+          setPrompt("");
           try {
             const { stdout, stderr, exitCode } = await window.electron.runLettaCli(cliArgs);
-            const rawOutput = (stdout || stderr || "(no output)").trim();
-            const formattedOutput = formatLettaCliOutput(cliArgs, rawOutput);
+            const rawOutput = redactSensitiveCliOutput(
+              (stdout || stderr || "(no output)").trim(),
+              cliArgs
+            );
+            const formattedOutput = formatLettaCliOutput(displayArgs, rawOutput);
             appendCliResult(activeSessionId, {
               type: "cli_result",
               id: `cli-${Date.now()}`,
-              command: args,
+              command: displayArgs.join(" "),
               output: formattedOutput || "(no output)",
               exitCode,
               createdAt: Date.now(),
             });
-            setPrompt("");
           } catch (err) {
             setGlobalError(`/letta failed: ${String(err)}`);
+          }
+          return true;
+        }
+        case "/connect": {
+          if (!args) {
+            setGlobalError(
+              "Usage: /connect openai-compatible --base-url <url> --api-key <key>"
+            );
             setPrompt("");
+            return true;
+          }
+          if (!activeSessionId) {
+            setGlobalError("Start or select a session before using /connect.");
+            setPrompt("");
+            return true;
+          }
+
+          const cliArgs = ["connect", ...parseCliArgs(args)];
+          const displayArgs = redactSensitiveCliArgs(cliArgs);
+          setGlobalError(null);
+          // Clear the renderer input before awaiting so provider credentials do
+          // not remain visible in component state while the request runs.
+          setPrompt("");
+          try {
+            const { stdout, stderr, exitCode } = await window.electron.runLettaCli(cliArgs);
+            const rawOutput = redactSensitiveCliOutput(
+              (stdout || stderr || "(no output)").trim(),
+              cliArgs
+            );
+            const formattedOutput = formatLettaCliOutput(displayArgs, rawOutput);
+            appendCliResult(activeSessionId, {
+              type: "cli_result",
+              id: `cli-${Date.now()}`,
+              command: displayArgs.join(" "),
+              output: formattedOutput || "(no output)",
+              exitCode,
+              createdAt: Date.now(),
+            });
+            if (exitCode === 0) {
+              window.dispatchEvent(new Event("letta-model-catalog-changed"));
+            }
+          } catch (err) {
+            setGlobalError(`/connect failed: ${String(err)}`);
           }
           return true;
         }

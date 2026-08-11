@@ -111,6 +111,7 @@ export async function handleContinueSession(
                     status: "running",
                     cwd,
                     pendingPermissions: runtimeSession.pendingPermissions,
+                    permissionGrants: runtimeSession.permissionGrants,
                 },
                 resumeConversationId: conversationId,
                 onEvent: (e) => {
@@ -143,7 +144,11 @@ export async function handleContinueSession(
                             payload: { sessionId: conversationId },
                         });
 
-                        createRuntimeSession(actualConversationId);
+                        createRuntimeSession(
+                            actualConversationId,
+                            runtimeSession.pendingPermissions,
+                            runtimeSession.permissionGrants
+                        );
                         updateSession(actualConversationId, { status: "running" });
 
                         emit({

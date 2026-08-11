@@ -24,7 +24,7 @@ export type PermissionRequest = {
   requestedAt?: number;
 };
 
-export type PermissionMode = "standard" | "acceptEdits" | "unrestricted";
+export type PermissionMode = "standard" | "acceptEdits" | "unrestricted" | "strict";
 
 export type AgentDisplayStatus =
   | "idle"

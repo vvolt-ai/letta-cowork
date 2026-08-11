@@ -82,12 +82,13 @@ export async function handleSessionEvent(event: ClientEvent): Promise<void> {
     }
 
     if (event.type === "permission.response") {
-        const { sessionId, toolUseId, result } = event.payload as {
+        const { sessionId, toolUseId, result, scope } = event.payload as {
             sessionId: string;
             toolUseId: string;
             result: CanUseToolResponse;
+            scope?: "once" | "tool" | "session";
         };
-        handlePermissionResult(sessionId, toolUseId, result);
+        handlePermissionResult(sessionId, toolUseId, result, scope);
         return;
     }
 
