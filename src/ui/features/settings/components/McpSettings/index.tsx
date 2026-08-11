@@ -1,6 +1,8 @@
 import { useState } from "react";
-import { useMcpServers } from "./useMcpServers";
+
 import { McpServerFormDialog } from "./McpServerFormDialog";
+import { useMcpServers } from "./useMcpServers";
+
 import type { McpServer, UpdateMcpServerInput, CreateMcpServerInput } from "./types";
 
 /**
@@ -242,7 +244,7 @@ function LoadingRow() {
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
 function truncate(s: string, n: number): string {
-  return s.length > n ? s.slice(0, n - 1) + "…" : s;
+  return s.length > n ? `${s.slice(0, n - 1)  }…` : s;
 }
 
 function formatRelative(iso: string): string {

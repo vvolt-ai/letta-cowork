@@ -2,9 +2,9 @@
  * Types for EventCard components
  */
 
-import type { StreamMessage, SDKAssistantMessage, CliResultMessage } from "../../types";
-import type { ReasoningStep, ToolExecution, AgentDisplayStatus } from "../../store/useAppStore";
 import type { IndexedMessage } from "../../hooks/useMessageWindow";
+import type { ReasoningStep, ToolExecution, AgentDisplayStatus } from "../../store/useAppStore";
+import type { StreamMessage, SDKAssistantMessage, CliResultMessage } from "../../types";
 
 export type ToolStatus = "pending" | "success" | "error";
 

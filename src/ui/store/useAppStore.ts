@@ -1,5 +1,9 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+
+import { truncateInput } from "../utils/chat";
+import { mergeConversationHistory, getConversationMessageId, type ConversationStreamMessage } from "../utils/conversation";
+
 import type {
   ServerEvent,
   ClientEvent,
@@ -8,8 +12,6 @@ import type {
   SDKAssistantMessage,
   CliResultMessage,
 } from "../types";
-import { mergeConversationHistory, getConversationMessageId, type ConversationStreamMessage } from "../utils/conversation";
-import { truncateInput } from "../utils/chat";
 
 export type PermissionRequest = {
   toolUseId: string;

@@ -1,5 +1,5 @@
-import type { JsonSchema } from "../client-tools/types.js";
 import type { ExtensionEventHandler, ExtensionEventName } from "./extension-events.js";
+import type { JsonSchema } from "../client-tools/types.js";
 
 export const COWORK_EXTENSION_API_VERSION = 1 as const;
 export const COWORK_EXTENSION_MANIFEST_FILE = "cowork.extension.json";

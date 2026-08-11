@@ -4,9 +4,10 @@
    ZOHO API CLIENT (Direct Zoho Mail API)
 ============================================================ */
 
+import { Agent, setGlobalDispatcher, FormData as UndiciFormData } from 'undici';
+
 import { BASE_URL, getAccessToken, getRefreshToken, removeToken, saveAccessToken } from "./helper.js";
 import { storeEmailTokensOnServer } from "../api/index.js";
-import { Agent, setGlobalDispatcher, FormData as UndiciFormData } from 'undici';
 
 // Set global undici agent with longer connection timeout
 setGlobalDispatcher(new Agent({

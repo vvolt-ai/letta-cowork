@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
+import { useEffect, useState } from "react";
+
 import { AgentDropdown } from "../../../../features/chat/components/AgentDropdown";
 
 type LettaEnvForm = {

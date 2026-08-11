@@ -1,21 +1,23 @@
 import { existsSync, readdirSync } from "node:fs";
+import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { basename, extname, isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { createRequire } from "node:module";
+
 import { app } from "electron";
-import { registerClientTool } from "../client-tools/index.js";
-import type {
-    ClientToolDefinition,
-    JsonSchema,
-    ToolRunContext,
-    ToolRunResult,
-} from "../client-tools/types.js";
+
 import {
     registerExtensionEventHandler,
     type ExtensionEventHandler,
     type ExtensionEventName,
 } from "./extension-events.js";
+import { registerClientTool } from "../client-tools/index.js";
+
+import type {
+    ClientToolDefinition,
+    JsonSchema,
+    ToolRunResult,
+} from "../client-tools/types.js";
 
 const EXTENSION_FILE_EXTENSIONS = new Set([".js", ".mjs", ".cjs"]);
 const requireExtension = createRequire(import.meta.url);

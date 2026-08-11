@@ -1,6 +1,7 @@
-import type { TelegramConfig, TelegramBridgeStatus } from "./telegramConfig";
 import { defaultTelegramConfig } from "./telegramConfig";
 import { AgentDropdown } from "../../../chat/components/AgentDropdown";
+
+import type { TelegramConfig, TelegramBridgeStatus } from "./telegramConfig";
 
 // Re-export for convenience
 export { defaultTelegramConfig };

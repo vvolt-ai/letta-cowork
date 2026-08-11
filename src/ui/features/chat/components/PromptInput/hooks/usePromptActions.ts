@@ -3,9 +3,11 @@
  */
 
 import { useCallback, useEffect, useRef } from "react";
-import type { ChatAttachment, ClientEvent, MessageContentItem } from "../../../../../types";
+
 import { useAppStore } from "../../../../../store/useAppStore";
 import { generateSessionTitle } from "../../../../../utils/session";
+
+import type { ChatAttachment, ClientEvent, MessageContentItem } from "../../../../../types";
 
 const DEFAULT_ALLOWED_TOOLS = "Read,Edit,Bash";
 

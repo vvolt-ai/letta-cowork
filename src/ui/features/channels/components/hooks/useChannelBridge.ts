@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Channel, ChannelStatus, ChannelsManagerProps } from '../types';
+
+import { type Channel, type ChannelStatus, type ChannelsManagerProps } from '../types';
 
 const getApi = () => (window as any).electron;
 

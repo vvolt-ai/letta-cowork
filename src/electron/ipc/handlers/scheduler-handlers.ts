@@ -9,9 +9,11 @@
  */
 
 import { ipcMain } from "electron";
+
 import { getVeraCoworkApiClient } from "../../api/index.js";
-import type { CreateScheduledTaskDto } from "../../api/endpoints/scheduler.js";
 import { schedulerService } from "../../services/scheduler/index.js";
+
+import type { CreateScheduledTaskDto } from "../../api/endpoints/scheduler.js";
 
 function api() {
   return getVeraCoworkApiClient();

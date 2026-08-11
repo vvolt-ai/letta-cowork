@@ -1,7 +1,9 @@
 import { memo } from "react";
+
+import { DecisionPanel } from "../../system/components/DecisionPanel";
+
 import type { PermissionRequest } from "../../../store/useAppStore";
 import type { CanUseToolResponse } from "../../../types";
-import { DecisionPanel } from "../../system/components/DecisionPanel";
 
 interface PermissionRequestsPanelProps {
   requests: PermissionRequest[];

@@ -1,7 +1,8 @@
+import { EmailFilters } from "./EmailFilters";
+import { EmailListItem } from "./EmailListItem";
+
 import type { ZohoEmail } from "../../../../types";
 import type { ProcessedEmailData, EmailStatusInfo } from "../../types";
-import { EmailListItem } from "./EmailListItem";
-import { EmailFilters } from "./EmailFilters";
 
 interface EmailListProps {
   emails: ZohoEmail[];

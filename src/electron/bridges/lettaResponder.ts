@@ -1,11 +1,13 @@
 import {
+  createAgent,
   createSession,
   resumeSession,
   type LettaCodeSession,
   type MessageContentItem,
   type SDKMessage,
   type SendMessage,
-} from "@letta-ai/letta-code-sdk";
+} from "@letta-ai/letta-agent-sdk";
+
 import type { UploadedBridgeAttachment } from "./attachmentUploads.js";
 
 type ChannelName = "whatsapp" | "telegram" | "slack" | "discord";
@@ -134,13 +136,12 @@ export class LettaResponder {
   private activeConversationId: string | null = null;
   private activeAgentId: string | null = null;
 
-  private createOrResumeSession(targetAgentId?: string): LettaCodeSession {
+  private async createOrResumeSession(targetAgentId?: string): Promise<LettaCodeSession> {
     const effectiveAgentId = targetAgentId?.trim() || process.env.LETTA_AGENT_ID?.trim() || undefined;
     const sessionOptions = {
       cwd: process.cwd(),
-      permissionMode: "bypassPermissions" as const,
+      permissionMode: "unrestricted" as const,
       canUseTool: async () => ({ behavior: "allow" as const }),
-      systemInfoReminder: false,
     };
 
     if (this.activeConversationId) {
@@ -149,7 +150,8 @@ export class LettaResponder {
     if (effectiveAgentId) {
       return createSession(effectiveAgentId, sessionOptions);
     }
-    return createSession(undefined, sessionOptions);
+    const agentId = await createAgent();
+    return resumeSession(agentId, sessionOptions);
   }
 
   private extractTextFromStreamedMessage(message: SDKMessage, accumulator: StreamedText): void {
@@ -169,7 +171,7 @@ export class LettaResponder {
   }
 
   async respond(input: LettaInboundMessage): Promise<string> {
-    const session = this.createOrResumeSession(input.agentId);
+    const session = await this.createOrResumeSession(input.agentId);
     this.activeSession = session;
 
     const warnings = [...(input.warnings ?? [])];

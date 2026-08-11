@@ -1,6 +1,7 @@
 import { constants } from "node:fs";
 import { access, open, readdir, realpath, stat } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
+
 import { ipcMainHandle } from "../../utils/index.js";
 
 const HIDDEN_DIRECTORIES = new Set([".git", "node_modules", ".next", "dist", "dist-react", "build", "coverage"]);

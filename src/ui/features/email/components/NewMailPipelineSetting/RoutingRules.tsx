@@ -1,5 +1,6 @@
-import { AgentDropdown } from "../../../../features/chat/components/AgentDropdown";
 import { SettingsSection } from "./SettingsSection";
+import { AgentDropdown } from "../../../../features/chat/components/AgentDropdown";
+
 import type { RoutingRule } from "../../types";
 
 interface RoutingRulesProps {

@@ -3,6 +3,7 @@
  */
 
 import { Letta } from "@letta-ai/letta-client";
+
 import { debug } from "./logger.js";
 
 /**

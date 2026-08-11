@@ -1,4 +1,4 @@
-import { ChannelType, CHANNEL_LABELS, CHANNEL_STEPS } from "../ChannelSettings";
+import { type ChannelType, CHANNEL_LABELS, CHANNEL_STEPS } from "../ChannelSettings";
 
 interface SetupStepIndicatorProps {
   activeChannel: ChannelType;

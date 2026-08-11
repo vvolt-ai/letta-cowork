@@ -3,9 +3,10 @@
  * Handles processed email endpoints from Vera Cowork server
  */
 
-import type { Request, Response } from "express";
 import { getProcessedEmailDetailsFromServer, getProcessedEmailByMessageId } from "../../api/index.js";
+
 import type { ExpressHandler, ProcessedEmailsQuery } from "./types.js";
+import type { Request, Response } from "express";
 
 /**
  * Get processed email records from Vera Cowork server

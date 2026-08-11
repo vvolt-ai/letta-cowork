@@ -2,7 +2,6 @@
  * Type definitions for session IPC handlers
  */
 
-import type { BrowserWindow } from "electron";
 import type { RunnerHandle } from "../../../libs/runner/index.js";
 import type { PendingPermission } from "../../../libs/runtime-state.js";
 

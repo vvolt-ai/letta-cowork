@@ -1,5 +1,5 @@
 
-import { ChannelStatus as ChannelStatusType } from './types';
+import { type ChannelStatus as ChannelStatusType } from './types';
 
 interface ChannelStatusProps {
   status?: ChannelStatusType;

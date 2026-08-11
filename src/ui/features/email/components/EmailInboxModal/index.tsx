@@ -1,11 +1,13 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useMemo, useState } from "react";
-import type { EmailInboxModalProps } from "../../types";
-import type { ZohoEmail } from "../../../../types";
+
 import { useEmailInbox } from "./hooks/useEmailInbox";
+import { SendToAgentConfirmationModal } from "./SendToAgentConfirmationModal";
 import { ZohoMailEmbed, type ZohoMailNavigation } from "./ZohoMailEmbed";
 import { ConversationViewer } from "../../../chat/components/ConversationViewer";
-import { SendToAgentConfirmationModal } from "./SendToAgentConfirmationModal";
+
+import type { ZohoEmail } from "../../../../types";
+import type { EmailInboxModalProps } from "../../types";
 
 /**
  * Email Inbox Modal - Zoho-first, full-screen

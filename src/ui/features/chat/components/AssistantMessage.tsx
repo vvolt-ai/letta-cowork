@@ -1,6 +1,8 @@
 import { memo, useCallback, useState } from "react";
-import type { SDKAssistantMessage, MessageContentItem } from "@letta-ai/letta-code-sdk";
+
 import MDContent from "../../../render/markdown";
+
+import type { SDKAssistantMessage, MessageContentItem } from "@letta-ai/letta-agent-sdk";
 
 function extractText(content: SDKAssistantMessage["content"]): string {
   if (!content) return "";

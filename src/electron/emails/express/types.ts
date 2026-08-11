@@ -3,7 +3,7 @@
  * Type definitions for the local OAuth server request/response handlers
  */
 
-import { Request, Response } from "express";
+import { type Request, type Response } from "express";
 
 /**
  * Express request handler function type

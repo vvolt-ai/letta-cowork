@@ -10,7 +10,7 @@
  * `client.conversations.messages.create(conversationId, {streaming:true})`,
  * which returns an async-iterable Stream<LettaStreamingResponse>.
  *
- * Public surface mirrors `@letta-ai/letta-code-sdk`'s `Session` so the
+ * Public surface mirrors the Letta Agent SDK session methods Cowork uses so the
  * existing runner / event-handler / abort-handler all keep working
  * without changes.
  *
@@ -19,27 +19,26 @@
  * routing or fan-out to worry about.
  */
 
-import { Letta } from "@letta-ai/letta-client";
 import { Buffer } from "node:buffer";
-import type { Stream } from "@letta-ai/letta-client/core/streaming";
-import type {
-    LettaStreamingResponse,
-    ToolReturn,
-} from "@letta-ai/letta-client/resources/agents/messages";
-import {
-    getClientToolsForWire,
-    isClientTool,
-    runClientTool,
-} from "../../../services/client-tools/index.js";
-import { clearPendingApprovals } from "../../../services/agents/approval-recovery.js";
-import { runWithResourceLocks } from "../../../services/agent/subagents/parallelism.js";
-import { getVeraCoworkApiClient } from "../../../api/index.js";
+
+import { Letta } from "@letta-ai/letta-client";
+
 import { PlanModeManager } from "./plan-mode/mode-manager.js";
 import {
     buildTurnReminders,
     createReminderState,
     type ReminderState,
 } from "./plan-mode/reminders.js";
+import { getVeraCoworkApiClient } from "../../../api/index.js";
+import { runWithResourceLocks } from "../../../services/agent/subagents/parallelism.js";
+import { clearPendingApprovals } from "../../../services/agents/approval-recovery.js";
+import {
+    getClientToolsForWire,
+    isClientTool,
+    runClientTool,
+} from "../../../services/client-tools/index.js";
+import { debug } from "../logger.js";
+
 import type {
     SDKAssistantMessage,
     SDKErrorMessage,
@@ -51,8 +50,12 @@ import type {
     SDKToolResultMessage,
     SendMessage,
     CanUseToolResponse,
-} from "@letta-ai/letta-code-sdk";
-import { debug } from "../logger.js";
+} from "@letta-ai/letta-agent-sdk";
+import type { Stream } from "@letta-ai/letta-client/core/streaming";
+import type {
+    LettaStreamingResponse,
+    ToolReturn,
+} from "@letta-ai/letta-client/resources/agents/messages";
 
 export interface WsSessionOptions {
     cwd?: string;
@@ -471,7 +474,7 @@ export class WsSession {
             // are available immediately without placing them in global state.
             const runtimeEnv = await this.loadRuntimeEnv();
 
-            // eslint-disable-next-line no-constant-condition
+
             while (true) {
                 try {
                 let nextMessages: unknown[] = initialMessages;

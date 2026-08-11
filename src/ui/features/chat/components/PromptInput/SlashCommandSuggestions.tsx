@@ -3,6 +3,7 @@
  */
 
 import { memo } from "react";
+
 import type { SlashCommandSuggestion } from "./hooks/useSlashCommands";
 
 export interface SlashCommandSuggestionsProps {

@@ -1,4 +1,3 @@
-import type { ChannelType, ChannelConfig } from "../ChannelSettings";
 import {
   WhatsAppSettings,
   TelegramSettings,
@@ -7,7 +6,8 @@ import {
   CommonChannelSettings,
   CHANNEL_LABELS,
 } from "../ChannelSettings";
-import type {
+
+import type { ChannelType, ChannelConfig ,
   WhatsAppConfig,
   WhatsAppBridgeStatus,
   TelegramConfig,

@@ -27,14 +27,16 @@
  *     string but not enqueued onto the parent session's stream queue.
  */
 
-import type { Letta } from "@letta-ai/letta-client";
 import { Buffer } from "node:buffer";
+
+import { runWithResourceLocks } from "./parallelism.js";
 import {
     getClientToolsForWire,
     isClientTool,
     runClientTool,
 } from "../../client-tools/index.js";
-import { runWithResourceLocks } from "./parallelism.js";
+
+import type { Letta } from "@letta-ai/letta-client";
 
 const MAX_TURNS = 25; // safety cap mirroring our main session pump
 const DEFAULT_MAX_CONCURRENT_SUBAGENTS = 10;

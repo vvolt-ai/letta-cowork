@@ -7,13 +7,14 @@
  */
 
 import cron from "node-cron";
-import type { ScheduledTask as CronScheduledTask } from "node-cron";
+
 import type {
   ScheduledTask,
   ScheduleRun,
   CreateScheduleRunDto,
   UpdateScheduleRunDto,
 } from "../../api/endpoints/scheduler.js";
+import type { ScheduledTask as CronScheduledTask } from "node-cron";
 
 type OnRunSession = (agentId: string, conversationId: string | null, prompt: string) => Promise<{
   output: string | null;

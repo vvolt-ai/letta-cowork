@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
 import type { ServerEvent, StreamMessage } from "../types";
 
 const PARTIAL_MESSAGE_RESET_DELAY_MS = 500;

@@ -24,9 +24,11 @@
  */
 
 import { randomUUID } from "node:crypto";
+
+import { debug } from "../../libs/runner/logger.js";
+
 import type { Letta } from "@letta-ai/letta-client";
 import type { Message } from "@letta-ai/letta-client/resources/agents/messages";
-import { debug } from "../../libs/runner/logger.js";
 
 export interface PendingApproval {
     toolCallId: string;

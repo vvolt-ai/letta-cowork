@@ -10,16 +10,17 @@
  */
 
 import { bashTool } from "./runners/bash.js";
-import { lettaCodeTools } from "./runners/letta_tools/index.js";
-import { listSkillsTool, skillTool } from "./runners/skill.js";
-import { productivityTools } from "./runners/productivity.js";
-import { codingTools } from "./runners/coding.js";
-import { odooMcpTools } from "./runners/odooMcp.js";
-import { veraMcpTools } from "./runners/veraMcp.js";
 import { browserTools } from "./runners/browser.js";
+import { codingTools } from "./runners/coding.js";
+import { lettaCodeTools } from "./runners/letta_tools/index.js";
+import { odooMcpTools } from "./runners/odooMcp.js";
+import { productivityTools } from "./runners/productivity.js";
+import { listSkillsTool, skillTool } from "./runners/skill.js";
 import { appendToolTrace, runTimelineTool, toolTraceSearchTool } from "./runners/tool-traces.js";
-import type { ToolTraceStatus } from "./runners/tool-traces.js";
+import { veraMcpTools } from "./runners/veraMcp.js";
 import { emitExtensionToolStart } from "../extensions/extension-events.js";
+
+import type { ToolTraceStatus } from "./runners/tool-traces.js";
 import type {
     ClientToolDefinition,
     ClientToolWireDef,

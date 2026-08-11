@@ -3,18 +3,20 @@
  * Handles continuing existing sessions
  */
 
-import { runLetta } from "../../../libs/runner/index.js";
-import type { MessageContentItem } from "@letta-ai/letta-code-sdk";
-import { createRuntimeSession, updateSession, deleteSession, getSession } from "../../../libs/runtime-state.js";
-import { getStoredSessions } from "../../../services/settings/index.js";
-import { log, debug } from "./utils.js";
-import type { SessionContinueOptions } from "./types.js";
+import { enqueueConversationTurn } from "./conversation-turn-queue.js";
 import {
     runnerHandles,
     emit,
     trackRunnerHandle,
 } from "./session-creation.js";
-import { enqueueConversationTurn } from "./conversation-turn-queue.js";
+import { log, debug } from "./utils.js";
+import { runLetta } from "../../../libs/runner/index.js";
+import { createRuntimeSession, updateSession, deleteSession, getSession } from "../../../libs/runtime-state.js";
+import { getStoredSessions } from "../../../services/settings/index.js";
+
+import type { SessionContinueOptions } from "./types.js";
+import type { MessageContentItem } from "@letta-ai/letta-agent-sdk";
+
 
 /**
  * Handle session.continue event

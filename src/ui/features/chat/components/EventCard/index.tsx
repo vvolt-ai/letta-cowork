@@ -6,12 +6,14 @@
  */
 
 import { useState } from "react";
-import type { StreamMessage, SDKMessage, CanUseToolResponse } from "../../../../types";
-import type { PermissionRequest } from "../../../../store/useAppStore";
-import { BackgroundHeader, getBackgroundLabel } from "./EventHeader";
-import { ToolResultCard, AssistantCard, ReasoningCard } from "./EventContent";
+
 import { ToolCallCard } from "./EventActions";
+import { ToolResultCard, AssistantCard, ReasoningCard } from "./EventContent";
+import { BackgroundHeader, getBackgroundLabel } from "./EventHeader";
 import { InitCard, UserPromptCard } from "./EventMeta";
+
+import type { PermissionRequest } from "../../../../store/useAppStore";
+import type { StreamMessage, SDKMessage, CanUseToolResponse } from "../../../../types";
 import type { UserPromptCardMessage } from "../../types";
 
 // ============================================================================

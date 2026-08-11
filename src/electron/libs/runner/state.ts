@@ -2,8 +2,9 @@
  * Active sessions tracking, abort controllers, and agent cache.
  */
 
-import type { Session as LettaSession } from "@letta-ai/letta-code-sdk";
 import { debug } from "./logger.js";
+
+import type { RunnerLettaSession as LettaSession } from "./types.js";
 
 /**
  * Track all active sessions for abort handling.

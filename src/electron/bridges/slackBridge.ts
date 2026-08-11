@@ -1,7 +1,9 @@
 import SlackBolt from "@slack/bolt";
+
 const { App, LogLevel } = SlackBolt;
 type SlackApp = InstanceType<typeof App>;
-import { LettaResponder, LettaInboundMessage } from "./lettaResponder.js";
+import { LettaResponder, type LettaInboundMessage } from "./lettaResponder.js";
+
 import type { SlackBridgeConfig } from "./channelConfig.js";
 
 type SlackStatusState = "stopped" | "starting" | "running" | "error";
@@ -159,7 +161,7 @@ export class SlackBridge {
     const inboundMessage: LettaInboundMessage = {
       channel: "slack",
       senderId: sender,
-      text: text,
+      text,
       agentId: this.config.defaultAgentId || undefined,
     };
 
@@ -245,7 +247,7 @@ export class SlackBridge {
     const inboundMessage: LettaInboundMessage = {
       channel: "slack",
       senderId: sender,
-      text: text,
+      text,
       agentId: this.config.defaultAgentId || undefined,
     };
 

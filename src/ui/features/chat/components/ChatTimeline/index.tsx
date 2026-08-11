@@ -4,13 +4,15 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import type { ChatTimelineProps } from "../../types";
+
 import { useChatTimeline } from "./hooks/useChatTimeline";
-import { TimelineMessage } from "./TimelineMessage";
 import { TimelineLoading } from "./TimelineLoading";
-import { AssistantMessage } from "../AssistantMessage";
-import { AgentDropdown } from "../AgentDropdown";
+import { TimelineMessage } from "./TimelineMessage";
 import { useAppStore } from "../../../../store/useAppStore";
+import { AgentDropdown } from "../AgentDropdown";
+import { AssistantMessage } from "../AssistantMessage";
+
+import type { ChatTimelineProps } from "../../types";
 
 export type { ChatTimelineProps, TimelineEntry } from "../../types";
 

@@ -1,18 +1,19 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
-import {
-  Channel,
-  ConfigDataState,
-  CredentialField,
-  DiscordConfig,
-  LettaAgent,
-  OrganizationUser,
-  PROVIDERS,
-  TelegramConfig,
-  WeChatConfig,
-  WhatsAppConfig,
-} from './types';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+
 import { DiscordConfigFields, TelegramConfigFields, WhatsAppConfigFields } from './ProviderConfigFields';
+import {
+  type Channel,
+  type ConfigDataState,
+  type CredentialField,
+  type DiscordConfig,
+  type LettaAgent,
+  type OrganizationUser,
+  PROVIDERS,
+  type TelegramConfig,
+  type WeChatConfig,
+  type WhatsAppConfig,
+} from './types';
 
 const getApi = () => (window as any).electron;
 

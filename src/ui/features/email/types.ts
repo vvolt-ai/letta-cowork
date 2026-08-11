@@ -1,6 +1,6 @@
-import type { ZohoEmail } from "../../types";
-import type { AgentDisplayStatus } from "../../store/useAppStore";
 import type { ProcessedUnreadEmailDebugInfo } from "../../../electron/services/settings/index.js";
+import type { AgentDisplayStatus } from "../../store/useAppStore";
+import type { ZohoEmail } from "../../types";
 
 /**
  * Email Inbox Types

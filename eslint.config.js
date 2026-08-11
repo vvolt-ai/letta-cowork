@@ -51,6 +51,12 @@ export default tseslint.config(
     rules: {
       // React hooks rules
       ...reactHooks.configs.recommended.rules,
+      // React Compiler diagnostics are migration guidance for this existing app.
+      // Keep them visible without blocking lint until the affected state flows are refactored.
+      'react-hooks/set-state-in-effect': 'warn',
+      'react-hooks/static-components': 'warn',
+      'react-hooks/refs': 'warn',
+      'react-hooks/immutability': 'warn',
 
       // React refresh
       'react-refresh/only-export-components': [
@@ -122,6 +128,11 @@ export default tseslint.config(
       'curly': ['warn', 'multi-line', 'consistent'],
       'no-throw-literal': 'error',
       'prefer-promise-reject-errors': 'error',
+      // Intentional feature gates may use constant expressions while UI is staged.
+      'no-constant-condition': 'warn',
+      'no-constant-binary-expression': 'warn',
+      // Some renderer blocks resolve optional icon packages at runtime.
+      '@typescript-eslint/no-require-imports': 'warn',
     },
     settings: {
       'import/resolver': {

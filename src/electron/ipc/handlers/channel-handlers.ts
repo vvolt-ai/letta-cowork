@@ -4,6 +4,7 @@
  */
 
 import { ipcMain } from "electron";
+
 import {
     getBridgesConfig,
     getWhatsAppBridgeStatus,
@@ -21,6 +22,7 @@ import {
     stopSlackBridge,
     updateBridgesConfig,
 } from "../../bridges/channelBridgeManager.js";
+
 import type { ChannelBridgeConfig } from "../../bridges/channelConfig.js";
 
 /**

@@ -15,6 +15,7 @@
  */
 
 import { relative } from "node:path";
+
 import type { PermissionMode, PlanModeManager } from "./mode-manager.js";
 
 const SYSTEM_REMINDER_OPEN = "<system-reminder>";

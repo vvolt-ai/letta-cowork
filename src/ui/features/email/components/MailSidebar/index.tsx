@@ -1,5 +1,6 @@
 import React from "react";
-import { ZohoEmail } from "../../../../types";
+
+import { type ZohoEmail } from "../../../../types";
 
 interface MailSidebarProps {
     emails: ZohoEmail[];

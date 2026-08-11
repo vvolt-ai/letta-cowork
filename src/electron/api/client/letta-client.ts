@@ -7,10 +7,12 @@
 
 import { BaseHttpClient } from "./base-client.js";
 import { ChannelEndpoints } from "../endpoints/channels.js";
-import { EmailEndpoints } from "../endpoints/emails.js";
-import { SchedulerEndpoints } from "../endpoints/scheduler.js";
-import { McpEndpoints } from "../endpoints/mcp.js";
 import { ConnectorEndpoints } from "../endpoints/connectors.js";
+import { EmailEndpoints } from "../endpoints/emails.js";
+import { McpEndpoints } from "../endpoints/mcp.js";
+import { SchedulerEndpoints } from "../endpoints/scheduler.js";
+
+import type { InstallConnectorPluginInput } from "../endpoints/connectors.js";
 import type {
   McpServer,
   McpServerWithTools,
@@ -20,8 +22,6 @@ import type {
   UpdateMcpServerInput,
   McpToolRunResult,
 } from "../endpoints/mcp.js";
-import type { ScheduledTask, ScheduleRun, CreateScheduledTaskDto, CreateScheduleRunDto } from "../endpoints/scheduler.js";
-import type { InstallConnectorPluginInput } from "../endpoints/connectors.js";
 import type { 
   AuthTokens, 
   Channel, 

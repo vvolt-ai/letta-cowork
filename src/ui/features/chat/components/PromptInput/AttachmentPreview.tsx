@@ -3,8 +3,10 @@
  */
 
 import { memo } from "react";
-import type { AttachmentDraft } from "./hooks/useAttachments";
+
 import { formatBytes } from "./utils/formatPrompt";
+
+import type { AttachmentDraft } from "./hooks/useAttachments";
 
 export interface AttachmentPreviewProps {
   attachments: AttachmentDraft[];

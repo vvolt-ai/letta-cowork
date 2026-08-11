@@ -1,6 +1,6 @@
-import { Channel, LettaAgent, WhatsAppConfig, TelegramConfig, DiscordConfig } from './types';
 import { getProviderIcon } from './ChannelCard';
 import { WhatsAppConfigFields, TelegramConfigFields, DiscordConfigFields } from './ProviderConfigFields';
+import { type Channel, type LettaAgent, type WhatsAppConfig, type TelegramConfig, type DiscordConfig } from './types';
 
 interface ConfigModalProps {
   channel: Channel;

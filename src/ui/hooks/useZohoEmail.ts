@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+
 import type { FolderResponse, ZohoEmailResponse, EmailListParams } from "../types";
 
 const DEFAULT_FOLDER_ID = "2467477000000008014";

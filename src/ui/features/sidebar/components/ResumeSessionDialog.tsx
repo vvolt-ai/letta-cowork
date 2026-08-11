@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
+import { useState, useRef, useEffect } from "react";
 
 interface ResumeSessionDialogProps {
   open: boolean;

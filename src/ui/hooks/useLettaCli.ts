@@ -54,7 +54,9 @@ function loadHistory(): string[] {
 function saveHistory(history: string[]) {
   try {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(-MAX_HISTORY)));
-  } catch {}
+  } catch {
+    // localStorage can be unavailable in restricted renderer contexts.
+  }
 }
 
 // ── Hook ─────────────────────────────────────────────────────────────────────

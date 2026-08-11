@@ -1,6 +1,8 @@
-import { isDev } from "./index.js"
 import path from "path"
+
 import { app } from "electron"
+
+import { isDev } from "./index.js"
 
 export function getPreloadPath() {
     return path.join(

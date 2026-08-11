@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { AgentDropdown } from "../AgentDropdown";
+
 import { useAppStore } from "../../../../store/useAppStore";
+import { AgentDropdown } from "../AgentDropdown";
 
 interface Model {
   name: string;

@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import * as path from "node:path";
 import { promisify } from "node:util";
+
 import { ensureRipgrep } from "../_shared/ripgrepManager.js";
 import { getCurrentWorkingDirectory } from "../_shared/runtime-context.js";
 import { LIMITS, truncateByChars } from "../_shared/truncation.js";

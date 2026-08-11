@@ -3,12 +3,10 @@
  * Central point for registering all IPC handlers
  */
 
+import { exec, spawn, type ChildProcess } from "child_process";
+import { randomUUID } from "crypto";
+import path from "path";
 import { ipcMain, dialog, shell } from "electron";
-import type { BrowserWindow } from "electron";
-import type { ClientEvent } from "../types.js";
-import { ipcMainHandle } from "../utils/index.js";
-import { getStaticData, pollResources } from "../utils/test-helper.js";
-import { getLettaEnvConfig, updateLettaEnvConfig, type LettaEnvConfig } from "../services/env/index.js";
 import {
     listLettaAgents,
     listLettaModels,
@@ -23,23 +21,25 @@ import {
     type ListAgentRunsParams,
 } from "../services/agents/index.js";
 import { listAgentMemoryFiles } from "../services/memoryService.js";
-import { downloadSkillsFromGitHub } from "../services/skills/index.js";
-import { registerLettaCodeTools, attachLettaCodeToolsToAgent, listRegisteredLettaCodeTools } from "../services/tools/index.js";
-import { exec, spawn, type ChildProcess } from "child_process";
-import { randomUUID } from "crypto";
-import path from "path";
-import { isDev } from "../utils/index.js";
+import {  ipcMainHandle } from "../utils/index.js";
 
 // Import individual handler registrators
-import { handleSessionEvent, recoverPendingApprovalsForSession, cancelRecoveredRun, cleanupAllSessions } from "./handlers/session/index.js";
-import { registerChannelHandlers, initializeBridges } from "./handlers/channel-handlers.js";
 import { registerEmailHandlers } from "./handlers/email-handlers.js";
 import { registerAttachmentHandlers } from "./handlers/attachment-handlers.js";
 import { registerSchedulerHandlers } from "./handlers/scheduler-handlers.js";
 import { registerSkillSyncHandlers } from "./handlers/skill-sync-handlers.js";
 import { registerAgentMigrationHandlers } from "./handlers/agent-migration-handlers.js";
+import { registerChannelHandlers, initializeBridges } from "./handlers/channel-handlers.js";
+import { getLettaEnvConfig, updateLettaEnvConfig, type LettaEnvConfig } from "../services/env/index.js";
 import { registerLivePatchHandlers } from "./handlers/live-patch-handlers.js";
 import { registerProjectFilesHandlers } from "./handlers/project-files-handlers.js";
+import { registerLettaCodeTools, attachLettaCodeToolsToAgent, listRegisteredLettaCodeTools } from "../services/tools/index.js";
+import { downloadSkillsFromGitHub } from "../services/skills/index.js";
+import { handleSessionEvent, recoverPendingApprovalsForSession, cancelRecoveredRun, cleanupAllSessions } from "./handlers/session/index.js";
+import { getStaticData, pollResources } from "../utils/test-helper.js";
+
+import type { ClientEvent } from "../types.js";
+import type { BrowserWindow } from "electron";
 
 // Re-export session handlers for backward compatibility
 export { handleClientEvent, recoverPendingApprovalsForSession, cancelRecoveredRun, cleanupAllSessions };

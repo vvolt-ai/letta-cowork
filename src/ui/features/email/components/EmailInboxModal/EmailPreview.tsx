@@ -1,9 +1,10 @@
-import type { ZohoEmail } from "../../../../types";
-import type { ProcessedEmailData } from "../../types";
-import { extractContent, isHtmlContent } from "../../types";
 import { EmailActionButtons } from "./EmailActionButtons";
 import { ZohoMailEmbed, type ZohoMailNavigation } from "./ZohoMailEmbed";
 import MDContent from "../../../../render/markdown";
+import { extractContent, isHtmlContent } from "../../types";
+
+import type { ZohoEmail } from "../../../../types";
+import type { ProcessedEmailData } from "../../types";
 
 interface EmailPreviewProps {
   email: ZohoEmail;

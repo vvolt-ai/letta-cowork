@@ -2,8 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
-import type { ClientToolDefinition, ToolRunContext, ToolRunResult } from '../types.js';
+
 import { redactRuntimeSecrets } from './_shared/runtime-secrets.js';
+
+import type { ClientToolDefinition, ToolRunContext, ToolRunResult } from '../types.js';
 
 const TRACE_VERSION = 1;
 const TRACE_DIR = join(homedir(), '.letta', 'cowork-tools', 'tool-traces');

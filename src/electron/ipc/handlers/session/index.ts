@@ -3,10 +3,10 @@
  * Handles session lifecycle events: start, stop, continue, delete, list, history
  */
 
-import type { ClientEvent } from "../../../types.js";
-import { debug } from "./utils.js";
+import { handleAbortSession, handleAbortAllSessions } from "./abort-handlers.js";
+import { handleGetSessionHistory } from "./history-handler.js";
+import { handlePermissionResult, recoverPendingApprovalsForSession, cancelRecoveredRun } from "./permission-handlers.js";
 import { handleStartSession } from "./session-creation.js";
-import { handleContinueSession } from "./session-resumption.js";
 import {
     handleStopSession,
     handleDeleteSession,
@@ -15,10 +15,11 @@ import {
     handleRenameSession,
     cleanupAllSessions,
 } from "./session-lifecycle.js";
-import { handleGetSessionHistory } from "./history-handler.js";
-import { handlePermissionResult, recoverPendingApprovalsForSession, cancelRecoveredRun } from "./permission-handlers.js";
-import { handleAbortSession, handleAbortAllSessions } from "./abort-handlers.js";
-import type { CanUseToolResponse } from "@letta-ai/letta-code-sdk";
+import { handleContinueSession } from "./session-resumption.js";
+import { debug } from "./utils.js";
+
+import type { ClientEvent } from "../../../types.js";
+import type { CanUseToolResponse } from "@letta-ai/letta-agent-sdk";
 
 // Re-export for external use
 export { cleanupAllSessions, recoverPendingApprovalsForSession, cancelRecoveredRun };

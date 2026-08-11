@@ -1,5 +1,6 @@
-import path from "path";
 import { unlink } from "fs/promises";
+import path from "path";
+
 import { uploadFilePathToManager, type FileManagerUploadResult } from "../emails/fileManager.js";
 
 export type UploadedBridgeAttachmentKind = "image" | "file";

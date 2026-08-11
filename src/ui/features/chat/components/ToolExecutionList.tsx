@@ -1,6 +1,8 @@
 import { memo } from "react";
-import type { ToolExecution } from "../../../store/useAppStore";
+
 import { formatDuration, truncateInput } from "../../../utils/chat";
+
+import type { ToolExecution } from "../../../store/useAppStore";
 
 interface ToolExecutionListProps {
   tools: ToolExecution[];

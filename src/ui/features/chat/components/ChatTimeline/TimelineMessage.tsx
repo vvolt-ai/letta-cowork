@@ -2,13 +2,14 @@
  * Renders individual timeline message entries
  */
 
-import type { TimelineEntry } from "../../types";
-import { UserMessage } from "../UserMessage";
+import { ActivityStreamBlock } from "../ActivityStreamBlock";
 import { AssistantMessage } from "../AssistantMessage";
 import { ReasoningBlock } from "../ReasoningBlock";
 import { ToolExecutionBlock } from "../ToolBlocks";
 import { ToolGroupBlock } from "../ToolGroupBlock";
-import { ActivityStreamBlock } from "../ActivityStreamBlock";
+import { UserMessage } from "../UserMessage";
+
+import type { TimelineEntry } from "../../types";
 
 export type TimelineMessageProps = {
   entry: TimelineEntry;

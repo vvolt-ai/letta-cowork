@@ -264,7 +264,7 @@ export async function attachLettaCodeToolsToAgent(agentId: string): Promise<{ at
     const failed: string[] = [];
 
     // Get current tool IDs from server
-    let toolMap: Record<string, string> = {};
+    const toolMap: Record<string, string> = {};
     try {
         const allTools = await (client.tools as any).list({ limit: 200 });
         const items: any[] = allTools?.items ?? allTools ?? [];

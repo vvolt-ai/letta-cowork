@@ -1,11 +1,13 @@
-import { BrowserWindow, ipcMain } from "electron";
+import { type BrowserWindow, ipcMain } from "electron";
+
+import { RemoteRunnerClient } from "./remoteRunnerClient.js";
 import {
   getRemoteAccessSettings,
   updateRemoteAccessSettings,
   resetRemoteAccessSettings,
   type RemoteAccessSettings,
 } from "../settings/index.js";
-import { RemoteRunnerClient } from "./remoteRunnerClient.js";
+
 import type { RemoteAccessState } from "./types.js";
 
 let client: RemoteRunnerClient | null = null;

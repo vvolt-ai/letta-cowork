@@ -1,10 +1,12 @@
 import * as Dialog from "@radix-ui/react-dialog";
-import type { ChannelType } from "../ChannelSettings";
+
+import { ChannelConfigForm } from "./ChannelConfigForm";
 import { useChannelSetup } from "./hooks/useChannelSetup";
 import { ProviderSelection } from "./ProviderSelection";
-import { ChannelConfigForm } from "./ChannelConfigForm";
-import { SetupStepIndicator } from "./SetupStepIndicator";
 import { SetupConfirmation } from "./SetupConfirmation";
+import { SetupStepIndicator } from "./SetupStepIndicator";
+
+import type { ChannelType } from "../ChannelSettings";
 
 interface ChannelSetupDialogProps {
   open: boolean;

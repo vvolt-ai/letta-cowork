@@ -3,11 +3,12 @@
  * Handles permission requests and responses
  */
 
-import { getSession } from "../../../libs/runtime-state.js";
-import { getStoredSessions } from "../../../services/settings/index.js";
-import { getAgentRunApprovalCandidates, cancelAgentRunById, approveRunById } from "../../../services/agents/index.js";
 import { emit } from "./session-creation.js";
-import type { CanUseToolResponse } from "@letta-ai/letta-code-sdk";
+import { getSession } from "../../../libs/runtime-state.js";
+import { getAgentRunApprovalCandidates, cancelAgentRunById, approveRunById } from "../../../services/agents/index.js";
+import { getStoredSessions } from "../../../services/settings/index.js";
+
+import type { CanUseToolResponse } from "@letta-ai/letta-agent-sdk";
 
 /**
  * Handle permission.response event

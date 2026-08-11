@@ -1,5 +1,5 @@
-import { Channel, CredentialField } from './types';
 import { getProviderIcon } from './ChannelCard';
+import { type Channel, type CredentialField } from './types';
 
 // Helper functions for credential fields
 function getCredentialFields(provider: string): CredentialField[] {

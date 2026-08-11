@@ -1,6 +1,7 @@
-import type { WhatsAppConfig, WhatsAppBridgeStatus } from "./whatsappConfig";
 import { defaultWhatsAppConfig } from "./whatsappConfig";
 import { AgentDropdown } from "../../../chat/components/AgentDropdown";
+
+import type { WhatsAppConfig, WhatsAppBridgeStatus } from "./whatsappConfig";
 
 // Re-export for convenience
 export { defaultWhatsAppConfig };

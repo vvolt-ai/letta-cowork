@@ -14,7 +14,7 @@ export function isMeaningfulToolString(text: string): boolean {
   const trimmed = text.trim();
   if (!trimmed) return false;
   if (trimmed === "?" || trimmed === "??") return false;
-  if (/^[\s"'`]*[\]\[{}()]+[\s"'`]*$/.test(trimmed)) return false;
+  if (/^[\s"'`]*[\][{}()]+[\s"'`]*$/.test(trimmed)) return false;
   const stripped = trimmed.replace(/["'`]/g, "");
   if (!stripped) return false;
   const meaningless = new Set(["{}", "[]", "{", "}", "[", "]", "()"]);

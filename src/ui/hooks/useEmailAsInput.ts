@@ -1,6 +1,8 @@
 import { useCallback, useState } from "react";
-import type { ZohoEmail, UploadedEmailAttachment } from "../types";
+
 import { useAppStore } from "../store/useAppStore";
+
+import type { ZohoEmail, UploadedEmailAttachment } from "../types";
 
 interface EmailWithAttachments {
   emailContent: {

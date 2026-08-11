@@ -3,21 +3,23 @@
  * Handles starting new sessions
  */
 
+import { cancelAllQueuedConversationTurns } from "./conversation-turn-queue.js";
+import { generateTitleFromPrompt } from "./title-generator.js";
+import { log, debug, broadcast } from "./utils.js";
 import { runLetta, clearAgentCache, type RunnerHandle } from "../../../libs/runner/index.js";
-import type { MessageContentItem } from "@letta-ai/letta-code-sdk";
 import {
     createRuntimeSession,
     updateSession,
     type PendingPermission,
     type SessionStatus,
 } from "../../../libs/runtime-state.js";
-import { addStoredSession, updateStoredSession } from "../../../services/settings/index.js";
 import { getLettaAgent } from "../../../services/agents/index.js";
-import { log, debug, broadcast } from "./utils.js";
-import { generateTitleFromPrompt } from "./title-generator.js";
+import { addStoredSession, updateStoredSession } from "../../../services/settings/index.js";
+
 import type { ServerEvent, SessionStartOptions } from "./types.js";
 import type { RunnerSession } from "../../../libs/runner/types.js";
-import { cancelAllQueuedConversationTurns } from "./conversation-turn-queue.js";
+import type { MessageContentItem } from "@letta-ai/letta-agent-sdk";
+
 
 // Track active runner handles by real Letta conversation IDs (shared across handlers)
 export const runnerHandles = new Map<string, RunnerHandle>();

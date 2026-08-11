@@ -1,4 +1,4 @@
-import { WhatsAppConfig, TelegramConfig, DiscordConfig } from './types';
+import { type WhatsAppConfig, type TelegramConfig, type DiscordConfig } from './types';
 
 // WhatsApp-specific config fields
 export function WhatsAppConfigFields({

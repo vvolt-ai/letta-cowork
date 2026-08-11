@@ -2,10 +2,11 @@
  * Event processing and dispatching for the runner.
  */
 
-import type { SDKMessage } from "@letta-ai/letta-code-sdk";
-import type { ServerEvent } from "../../types.js";
-import { debug } from "./logger.js";
 import { createLettaClient } from "./client.js";
+import { debug } from "./logger.js";
+
+import type { ServerEvent } from "../../types.js";
+import type { SDKMessage } from "@letta-ai/letta-agent-sdk";
 
 /**
  * Create an event sender for streaming messages.
@@ -64,7 +65,7 @@ export function sendSessionStatus(
  */
 export function logMessageDetails(message: SDKMessage, messageCount: number): void {
   debug("received message", {
-    message: message,
+    message,
     type: message.type,
     count: messageCount,
     toolName: (message as any).toolName ?? (message as any).name ?? (message as any).tool_name,

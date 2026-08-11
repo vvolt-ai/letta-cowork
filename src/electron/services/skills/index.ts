@@ -1,5 +1,5 @@
-import { join, dirname } from "path";
 import { mkdir, writeFile } from "fs/promises";
+import { join, dirname } from "path";
 
 // this mirrors the constant used by the letta CLI/SDK (see inside node_modules/.../letta.js)
 export const GLOBAL_SKILLS_DIR2 = join(
@@ -129,7 +129,7 @@ export async function downloadSkillsFromGitHub(
 
     const resultDirs: string[] = [];
 
-    for (let h of list) {
+    for (const h of list) {
         if (!h) continue;
         const { handle: normalized, guessedBranch } = normalizeHandle(h);
         const parts = normalized.split("/");

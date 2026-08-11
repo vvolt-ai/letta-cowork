@@ -3,10 +3,8 @@
  */
 
 import { useMemo } from "react";
-import type { ActivityTimelineEntry, IndexedMessage, TimelineEntry, ToolTimelineEntry } from "../../../types";
-import type { SDKAssistantMessage, SDKToolResultMessage } from "../../../../../types";
-import type { ReasoningStep, ToolExecution } from "../../../../../store/useAppStore";
-import type { AgentDisplayStatus } from "../../../../../store/useAppStore";
+
+import { truncateInput } from "../../../../../utils/chat";
 import {
   normalizeReasoning,
   isGenericToolName,
@@ -19,7 +17,10 @@ import {
   toolExecutionToTimelineEntry,
   buildToolGroupKey,
 } from "../utils/groupMessages";
-import { truncateInput } from "../../../../../utils/chat";
+
+import type { ReasoningStep, ToolExecution , AgentDisplayStatus } from "../../../../../store/useAppStore";
+import type { SDKAssistantMessage, SDKToolResultMessage } from "../../../../../types";
+import type { ActivityTimelineEntry, IndexedMessage, TimelineEntry, ToolTimelineEntry } from "../../../types";
 
 export type UseChatTimelineParams = {
   messages: IndexedMessage[];

@@ -1,4 +1,5 @@
 import { SettingsSection } from "./SettingsSection";
+
 import type { ProcessedUnreadEmailDebugInfo } from "../../types";
 
 const formatTimestamp = (timestamp?: number): string => {

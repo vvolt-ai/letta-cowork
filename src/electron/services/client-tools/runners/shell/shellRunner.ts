@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
-import { isUsableDirectory } from "../_shared/runtime-context.js";
+
 import { noteExpectedWorktreeForLauncher } from "./worktree-ownership-shim.js";
+import { isUsableDirectory } from "../_shared/runtime-context.js";
 
 export class ShellExecutionError extends Error {
   code?: string;

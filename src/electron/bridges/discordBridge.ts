@@ -1,10 +1,13 @@
 import { writeFileSync } from "fs";
 import { join } from "path";
-import { Client, GatewayIntentBits, Message, TextBasedChannel } from "discord.js";
-import { LettaResponder, LettaInboundMessage } from "./lettaResponder.js";
-import type { DiscordBridgeConfig } from "./channelConfig.js";
+
+import { Client, GatewayIntentBits, type Message, type TextBasedChannel } from "discord.js";
+
 import { uploadLocalFilesToManager } from "./attachmentUploads.js";
+import { LettaResponder, type LettaInboundMessage } from "./lettaResponder.js";
+
 import type { UploadDescriptor } from "./attachmentUploads.js";
+import type { DiscordBridgeConfig } from "./channelConfig.js";
 
 type DiscordStatusState = "stopped" | "starting" | "running" | "error";
 

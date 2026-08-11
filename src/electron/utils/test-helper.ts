@@ -1,7 +1,9 @@
-import osUtils from "os-utils";
 import fs from "fs"
 import os from "os"
-import { BrowserWindow } from "electron";
+
+import { type BrowserWindow } from "electron";
+import osUtils from "os-utils";
+
 import { ipcWebContentsSend } from "./index.js";
 
 const POLLING_INTERVAL = 500;

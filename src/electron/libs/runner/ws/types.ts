@@ -3,7 +3,7 @@
  *
  * The wire shapes follow letta-code's protocol_v2 exactly. The
  * outbound surface (what the runner emits) mirrors
- * @letta-ai/letta-code-sdk's SDKMessage union so the existing
+ * the Letta Agent SDK's SDKMessage union so the existing
  * event-handler code keeps working unchanged.
  */
 

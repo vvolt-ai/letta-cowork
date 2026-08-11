@@ -3,7 +3,8 @@
  * Main entry point for the local OAuth server
  */
 
-import { BrowserWindow } from "electron";
+import { type BrowserWindow } from "electron";
+
 import { createExpressServer, startExpressServer } from "./server.js";
 
 // Re-export types for consumers

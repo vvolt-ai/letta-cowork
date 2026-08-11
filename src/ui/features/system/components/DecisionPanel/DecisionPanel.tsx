@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import type { CanUseToolResponse } from "../../../../types";
+
 import type { PermissionRequest } from "../../../../store/useAppStore";
+import type { CanUseToolResponse } from "../../../../types";
 
 type AskUserQuestionInput = {
   questions?: Array<{

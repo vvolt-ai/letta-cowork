@@ -1,25 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
 import {
-  ChannelType,
-  ChannelConfig,
-  ChannelConfigMap,
+  type ChannelType,
+  type ChannelConfig,
+  type ChannelConfigMap,
   DEFAULT_CONFIG,
   CHANNEL_LABELS,
   CHANNEL_STEPS,
   CHANNEL_DOCS_URLS,
-  WhatsAppConfig,
-  WhatsAppBridgeStatus,
+  type WhatsAppConfig,
+  type WhatsAppBridgeStatus,
   defaultWhatsAppConfig,
-  TelegramConfig,
-  TelegramBridgeStatus,
+  type TelegramConfig,
+  type TelegramBridgeStatus,
   defaultTelegramConfig,
-  SlackConfig,
-  SlackBridgeStatus,
+  type SlackConfig,
+  type SlackBridgeStatus,
   defaultSlackConfig,
-  DiscordConfig,
-  DiscordBridgeStatus,
+  type DiscordConfig,
+  type DiscordBridgeStatus,
   defaultDiscordConfig,
-  ChannelBridgeConfig,
+  type ChannelBridgeConfig,
 } from "../../ChannelSettings";
 
 const createDefaultMap = (): ChannelConfigMap => ({

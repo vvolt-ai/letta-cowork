@@ -6,6 +6,7 @@
  */
 
 import { ipcMain } from "electron";
+
 import {
     migrateAgentToV1,
     refreshAgentSystemPrompt,

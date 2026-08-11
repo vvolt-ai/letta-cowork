@@ -1,5 +1,6 @@
-import type { ChannelConfig, ChannelType } from "./channelConfig";
 import { AgentDropdown } from "../../../chat/components/AgentDropdown";
+
+import type { ChannelConfig, ChannelType } from "./channelConfig";
 
 interface CommonChannelSettingsProps {
   config: ChannelConfig;

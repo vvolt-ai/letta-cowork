@@ -2,22 +2,10 @@
  * Main runner module - orchestrates Letta session execution.
  */
 
-import type { Session as LettaSession } from "@letta-ai/letta-code-sdk";
-import { log, debug, timing } from "./logger.js";
-import { getAgentName } from "./client.js";
-import {
-  setCurrentAbortController,
-  getCurrentAbortController,
-  getCachedAgentId,
-} from "./state.js";
-import { createCanUseToolHandler } from "./permission-handler.js";
-import type { SendPermissionRequest } from "./permission-handler.js";
+import { readFile } from "node:fs/promises";
+
 import { createAbortHandler } from "./abort-handler.js";
-import {
-  createOrResumeSession,
-  initializeSession,
-  cleanupSession,
-} from "./session-manager.js";
+import { getAgentName } from "./client.js";
 import {
   createMessageSender,
   createPermissionRequestSender,
@@ -25,9 +13,23 @@ import {
   logMessageDetails,
   handleResultMessage,
 } from "./event-handler.js";
-import type { RunnerOptions, RunnerHandle } from "./types.js";
+import { log, debug, timing } from "./logger.js";
+import { createCanUseToolHandler } from "./permission-handler.js";
+import {
+  createOrResumeSession,
+  initializeSession,
+  cleanupSession,
+} from "./session-manager.js";
+import {
+  setCurrentAbortController,
+  getCurrentAbortController,
+  getCachedAgentId,
+} from "./state.js";
+
+import type { SendPermissionRequest } from "./permission-handler.js";
+import type { RunnerLettaSession as LettaSession , RunnerOptions, RunnerHandle } from "./types.js";
 import type { WsSession } from "./ws/session.js";
-import { readFile } from "node:fs/promises";
+
 
 // Re-export types
 export type { RunnerSession, RunnerOptions, RunnerHandle } from "./types.js";
@@ -258,7 +260,7 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
         stack: (error as Error).stack,
         agentId: targetAgentId || getCachedAgentId() || process.env.LETTA_AGENT_ID,
         baseURL: process.env.LETTA_BASE_URL,
-        apiKeyMasked: process.env.LETTA_API_KEY ? process.env.LETTA_API_KEY.substring(0, 10) + "..." : "not set",
+        apiKeyMasked: process.env.LETTA_API_KEY ? `${process.env.LETTA_API_KEY.substring(0, 10)  }...` : "not set",
       };
       log("ERROR in runLetta", errorDetails);
 

@@ -1,4 +1,4 @@
-import { ChannelType, CHANNEL_LABELS } from "../ChannelSettings";
+import { type ChannelType, CHANNEL_LABELS } from "../ChannelSettings";
 
 interface ProviderSelectionProps {
   availableChannels: ChannelType[];

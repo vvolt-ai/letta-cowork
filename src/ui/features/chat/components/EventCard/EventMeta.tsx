@@ -3,6 +3,7 @@
  */
 
 import { HeaderLabel, StatusDot } from "./EventHeader";
+
 import type { SDKInitMessage } from "../../../../types";
 import type { UserPromptCardMessage } from "../../types";
 

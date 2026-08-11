@@ -1,4 +1,5 @@
 import { BrowserWindow } from "electron";
+
 import {
   getChannelBridgeConfig,
   writeChannelBridgeConfig,
@@ -8,10 +9,10 @@ import {
   type DiscordBridgeConfig,
   type SlackBridgeConfig,
 } from "./channelConfig.js";
-import { WhatsAppBridge, type WhatsAppBridgeStatus } from "./whatsappBridge.js";
-import { TelegramBridge, type TelegramBridgeStatus } from "./telegramBridge.js";
 import { DiscordBridge, type DiscordBridgeStatus } from "./discordBridge.js";
 import { SlackBridge, type SlackBridgeStatus } from "./slackBridge.js";
+import { TelegramBridge, type TelegramBridgeStatus } from "./telegramBridge.js";
+import { WhatsAppBridge, type WhatsAppBridgeStatus } from "./whatsappBridge.js";
 
 type BridgeStatusEvent = {
   type: "whatsapp-bridge-status";

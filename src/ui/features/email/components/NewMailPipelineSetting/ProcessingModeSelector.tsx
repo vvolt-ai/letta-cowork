@@ -1,4 +1,5 @@
 import { SettingsSection } from "./SettingsSection";
+
 import type { AutoSyncProcessingMode } from "../../types";
 
 interface ProcessingModeSelectorProps {

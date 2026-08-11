@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
+
 import { readCoworkAuth } from "./cowork-auth.js";
 import { clearAuth, normalizeServerUrl, readState, writeState } from "./state.js";
 

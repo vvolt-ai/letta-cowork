@@ -1,11 +1,13 @@
-import { ipcMain, WebContents, WebFrameMain } from "electron";
-import { getUIPath } from "./path-resolver.js";
 import { pathToFileURL } from "url";
+
+import { ipcMain, type WebContents, type WebFrameMain } from "electron";
+
+import { getUIPath } from "./path-resolver.js";
 export const DEV_PORT = 5173;
 
 // Checks if you are in development mode
 export function isDev(): boolean {
-    return process.env.NODE_ENV == "development";
+    return process.env.NODE_ENV === "development";
 }
 
 // Making IPC Typesafe

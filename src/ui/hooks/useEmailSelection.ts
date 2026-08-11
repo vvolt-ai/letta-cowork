@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+
 import type { ZohoEmail } from "../types";
 
 interface UseEmailSelectionArgs {

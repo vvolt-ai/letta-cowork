@@ -6,8 +6,9 @@
  * conversationId).
  */
 
-import type { Session as LettaSession } from "@letta-ai/letta-code-sdk";
 import { WsSession, type WsSessionOptions } from "./session.js";
+
+import type { RunnerLettaSession as LettaSession } from "../types.js";
 export { WsSession } from "./session.js";
 export { shutdownListener } from "./listener.js";
 

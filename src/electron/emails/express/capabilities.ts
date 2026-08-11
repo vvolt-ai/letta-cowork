@@ -3,9 +3,10 @@
  * Endpoint documentation for AI agents
  */
 
-import type { Request, Response } from "express";
-import type { ExpressHandler, AgentCapabilitiesResponse } from "./types.js";
 import { SERVER_CONFIG } from "./config.js";
+
+import type { ExpressHandler, AgentCapabilitiesResponse } from "./types.js";
+import type { Request, Response } from "express";
 
 /**
  * Get agent capabilities documentation

@@ -1,10 +1,10 @@
 import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-import { promises as fs } from "node:fs";
-import { existsSync } from "node:fs";
+import { promises as fs , existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import type { ClientToolDefinition, ToolRunContext, ToolRunResult } from "../types.js";
+import { promisify } from "node:util";
+
+import type { ClientToolDefinition, ToolRunResult } from "../types.js";
 
 const execFileAsync = promisify(execFile);
 const MAX_OUTPUT = 32_000;
@@ -75,7 +75,7 @@ export const projectContextTool: ClientToolDefinition = {
       const start = typeof args.path === "string" && args.path.trim() ? resolve(args.path) : cwd();
       const root = await gitRoot(start);
       let branch = "";
-      try { branch = (await run("git", ["branch", "--show-current"], { cwd: root })).trim(); } catch {}
+      try { branch = (await run("git", ["branch", "--show-current"], { cwd: root })).trim(); } catch { /* Detached HEAD or non-Git directory. */ }
       const entries = existsSync(root) ? (await fs.readdir(root)).slice(0, 80) : [];
       const pkgPath = join(root, "package.json");
       let scripts: Record<string, string> | undefined;

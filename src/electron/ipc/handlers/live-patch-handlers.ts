@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import { ipcMainHandle } from '../../utils/index.js';
+
 import { runClientTool } from '../../services/client-tools/index.js';
 import { getLivePatchProposal } from '../../services/client-tools/runners/coding.js';
+import { ipcMainHandle } from '../../utils/index.js';
 
 function rendererToolContext() {
   return {

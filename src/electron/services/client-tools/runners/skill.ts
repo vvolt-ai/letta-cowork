@@ -13,9 +13,9 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
+
 import type {
     ClientToolDefinition,
-    ToolRunContext,
     ToolRunResult,
 } from "../types.js";
 
@@ -81,7 +81,7 @@ interface ParsedSkill {
 
 function parseSkillContents(raw: string): ParsedSkill {
     const fmMatch = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
-    let frontmatter: Record<string, string> = {};
+    const frontmatter: Record<string, string> = {};
     let body = raw;
     if (fmMatch) {
         body = fmMatch[2] ?? "";

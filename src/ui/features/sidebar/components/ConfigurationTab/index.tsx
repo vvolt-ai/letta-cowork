@@ -1,6 +1,7 @@
 import { memo, useEffect, useState } from "react";
-import { IntegrationList } from "../IntegrationList";
+
 import { ChannelsManager } from "../../../channels/components/ChannelsManager";
+import { IntegrationList } from "../IntegrationList";
 
 interface ConfigurationTabProps {
   section?: "all" | "profile" | "communication" | "agent-tools" | "remote-access" | "administration";

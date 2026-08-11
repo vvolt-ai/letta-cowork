@@ -15,9 +15,10 @@
  * other processes on the same machine.
  */
 
-import type { Request, Response } from "express";
-import type { ExpressHandler } from "./types.js";
 import { runScheduledPrompt } from "../../services/scheduler/run-scheduled-prompt.js";
+
+import type { ExpressHandler } from "./types.js";
+import type { Request, Response } from "express";
 
 interface RespondBody {
   text?: string;

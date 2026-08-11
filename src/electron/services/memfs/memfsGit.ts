@@ -40,11 +40,11 @@
  */
 
 import { execFile } from "child_process";
-import { promisify } from "util";
-import { promises as fs } from "fs";
-import { existsSync, renameSync, rmSync } from "fs";
+import { promises as fs , existsSync, renameSync, rmSync } from "fs";
 import { homedir, platform } from "os";
 import { join, dirname, relative } from "path";
+import { promisify } from "util";
+
 import { PRE_COMMIT_HOOK_SCRIPT } from "./preCommitHook.js";
 
 const execFileAsync = promisify(execFile);

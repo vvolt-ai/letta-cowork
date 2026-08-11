@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ZohoEmail } from "../../../../types";
+
 import { buildZohoSearchKey, filterEmails } from "../EmailInboxModal/hooks/useEmailFilters";
+
+import type { ZohoEmail } from "../../../../types";
 
 interface SidebarEmailListProps {
   emails: ZohoEmail[];

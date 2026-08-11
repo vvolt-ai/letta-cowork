@@ -3,8 +3,8 @@
  * Handles Letta API proxy endpoints for conversations and agents
  */
 
-import type { Request, Response } from "express";
 import type { ExpressHandler, LettaConversationQuery, LettaMessagesQuery } from "./types.js";
+import type { Request, Response } from "express";
 
 /**
  * Get Letta API key from environment

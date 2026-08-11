@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+
 import type { ServerEvent, ClientEvent } from "../types";
 
 export function useIPC(onEvent: (event: ServerEvent) => void) {

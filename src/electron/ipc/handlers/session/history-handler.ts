@@ -3,10 +3,11 @@
  * Handles fetching session message history
  */
 
+import { emit } from "./session-creation.js";
+import { debug, createLettaClient, extractMessageText } from "./utils.js";
 import { normaliseHistoryBatch, type LettaMessage } from "../../../libs/conversation.js";
 import { getSession } from "../../../libs/runtime-state.js";
-import { debug, createLettaClient, extractMessageText } from "./utils.js";
-import { emit } from "./session-creation.js";
+
 import type { StreamMessage } from "../../../types.js";
 
 /**

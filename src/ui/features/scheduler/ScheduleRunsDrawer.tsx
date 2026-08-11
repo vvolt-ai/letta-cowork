@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import type { ScheduleRun, ScheduledTask } from "./types";
+
 import MDContent from "../../render/markdown";
+
+import type { ScheduleRun, ScheduledTask } from "./types";
 
 interface Props {
   task: ScheduledTask | null;

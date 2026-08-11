@@ -3,9 +3,10 @@
  * Handles email-related endpoints: fetchEmails, fetchEmailById, searchEmails
  */
 
-import type { Request, Response } from "express";
 import { fetchEmails, fetchEmailById, searchEmails } from "../fetchEmails.js";
+
 import type { ExpressHandler, FetchEmailsQuery, FetchEmailByIdQuery, SearchEmailsQuery } from "./types.js";
+import type { Request, Response } from "express";
 
 /**
  * Fetch emails from a folder

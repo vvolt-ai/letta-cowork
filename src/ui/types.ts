@@ -14,7 +14,7 @@ export type {
   SDKStreamEventMessage,
   CanUseToolResponse,
   MessageContentItem,
-} from "@letta-ai/letta-code-sdk";
+} from "@letta-ai/letta-agent-sdk";
 
 export type ChatAttachmentKind = "image" | "file";
 
@@ -47,7 +47,7 @@ export type UserPromptMessage = {
 };
 
 // Import for union type and local use
-import type { SDKMessage, CanUseToolResponse, MessageContentItem } from "@letta-ai/letta-code-sdk";
+import type { SDKMessage, CanUseToolResponse, MessageContentItem } from "@letta-ai/letta-agent-sdk";
 
 export type CliResultMessage = {
   type: "cli_result";
@@ -121,7 +121,7 @@ export type ClientEvent =
   | { type: "session.stopAndContinue"; payload: { sessionId: string; prompt: string; content?: MessageContentItem[]; attachments?: ChatAttachment[]; cwd?: string; model?: string; permissionMode?: "standard" | "acceptEdits" | "unrestricted" } }
   | { type: "session.stop"; payload: { sessionId: string } }
   | { type: "session.delete"; payload: { sessionId: string } }
-  | { type: "session.cancelPending"; payload: {} }
+  | { type: "session.cancelPending"; payload: Record<string, never> }
   | { type: "session.list" }
   | { type: "session.history"; payload: { sessionId: string; limit?: number; before?: string } }
   | { type: "session.rename"; payload: { sessionId: string; title: string } }

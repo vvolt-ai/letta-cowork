@@ -1,11 +1,12 @@
-import type { Request } from "express";
-import type { ExpressHandler } from "./types.js";
 import {
   createEmailDraft,
   sendComposedEmail,
   type EmailAttachmentInput,
   type EmailComposePayload,
 } from "../fetchEmails.js";
+
+import type { ExpressHandler } from "./types.js";
+import type { Request } from "express";
 
 interface ComposeRequestBody {
   to?: string[] | string;

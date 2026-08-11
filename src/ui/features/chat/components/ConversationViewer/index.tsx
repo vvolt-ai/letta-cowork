@@ -1,9 +1,10 @@
 import { memo, useEffect, useRef } from "react";
-import { useAppStore } from "../../../../store/useAppStore";
 import { useShallow } from "zustand/react/shallow";
+
+import { useMessageWindow } from "../../../../hooks/useMessageWindow";
+import { useAppStore } from "../../../../store/useAppStore";
 import { ChatTimeline } from "../ChatTimeline";
 import { PromptInput } from "../PromptInput";
-import { useMessageWindow } from "../../../../hooks/useMessageWindow";
 
 interface ConversationViewerProps {
   sessionId: string;

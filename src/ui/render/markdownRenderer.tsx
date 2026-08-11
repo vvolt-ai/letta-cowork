@@ -86,7 +86,6 @@ export default function MarkdownRenderer({ text }: { text: string }) {
           />
         ),
         img: ({ alt, ...rest }) => (
-          // eslint-disable-next-line jsx-a11y/alt-text
           <img
             alt={alt ?? ""}
             className="my-3 max-w-full rounded-lg border border-gray-200"

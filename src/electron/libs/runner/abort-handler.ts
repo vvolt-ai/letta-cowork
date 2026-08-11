@@ -2,9 +2,8 @@
  * Abort/cancellation logic for the runner.
  */
 
-import type { Session as LettaSession } from "@letta-ai/letta-code-sdk";
-import { debug } from "./logger.js";
 import { createLettaClient } from "./client.js";
+import { debug } from "./logger.js";
 import {
   getActiveSessions,
   getSession,
@@ -13,6 +12,8 @@ import {
   getCurrentAbortController,
   clearActiveSessions,
 } from "./state.js";
+
+import type { RunnerLettaSession as LettaSession } from "./types.js";
 
 /**
  * Abort all active sessions.

@@ -1,6 +1,8 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import type { ActivityTimelineEntry } from "../types";
+
 import { ToolExecutionBlock } from "./ToolBlocks";
+
+import type { ActivityTimelineEntry } from "../types";
 
 interface ActivityStreamBlockProps {
   entries: ActivityTimelineEntry[];

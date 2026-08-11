@@ -3,19 +3,19 @@
  * Handles stop, delete, list, rename, and cancel pending operations
  */
 
-import { deleteSession, updateSession, getSession } from "../../../libs/runtime-state.js";
-import { getStoredSessions, removeStoredSession, updateStoredSession, type StoredSession } from "../../../services/settings/index.js";
-import { debug, createLettaClient } from "./utils.js";
+import {
+    cancelQueuedConversationTurns,
+    enqueueConversationTurn,
+} from "./conversation-turn-queue.js";
 import {
     runnerHandles,
     emit,
     cancelAllRunners,
 } from "./session-creation.js";
-import {
-    cancelQueuedConversationTurns,
-    enqueueConversationTurn,
-} from "./conversation-turn-queue.js";
+import { debug, createLettaClient } from "./utils.js";
 import { abortSessionById, abortAllSessions } from "../../../libs/runner/index.js";
+import { deleteSession, updateSession, getSession } from "../../../libs/runtime-state.js";
+import { getStoredSessions, removeStoredSession, updateStoredSession, type StoredSession } from "../../../services/settings/index.js";
 
 /**
  * Handle session.stop event

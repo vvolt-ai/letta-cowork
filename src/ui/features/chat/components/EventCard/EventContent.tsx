@@ -3,9 +3,11 @@
  */
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import type { SDKToolResultMessage, SDKAssistantMessage, SDKReasoningMessage } from "../../../../types";
+
 import { HeaderLabel, StatusDot } from "./EventHeader";
 import { setToolStatus } from "./hooks/useEventCard";
+
+import type { SDKToolResultMessage, SDKAssistantMessage, SDKReasoningMessage } from "../../../../types";
 
 // ============================================================================
 // Utility Functions

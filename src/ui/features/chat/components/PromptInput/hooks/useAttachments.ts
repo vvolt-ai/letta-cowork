@@ -3,6 +3,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
 import { uploadFileToManager, type UploadedFile } from "../../../../../services/fileUploads";
 import {
   createAttachmentId,

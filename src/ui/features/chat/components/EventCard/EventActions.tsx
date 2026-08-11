@@ -3,20 +3,21 @@
  */
 
 import { useEffect } from "react";
-import type { SDKToolCallMessage, CanUseToolResponse } from "../../../../types";
-import type { PermissionRequest } from "../../../../store/useAppStore";
-import { StatusDot } from "./EventHeader";
+
+import { StatusDot ,
+  getToolStatusVariant,
+  isToolPending,
+  shouldShowToolDot,
+} from "./EventHeader";
 import {
   useToolStatus,
   getAskUserQuestionSignature,
   initToolStatus,
 } from "./hooks/useEventCard";
+
 import type { StatusDotVariant } from "./EventHeader";
-import {
-  getToolStatusVariant,
-  isToolPending,
-  shouldShowToolDot,
-} from "./EventHeader";
+import type { PermissionRequest } from "../../../../store/useAppStore";
+import type { SDKToolCallMessage, CanUseToolResponse } from "../../../../types";
 import type { AskUserQuestionInput } from "../../types";
 
 // ============================================================================

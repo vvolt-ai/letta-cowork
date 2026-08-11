@@ -1,6 +1,7 @@
 import { app, BrowserWindow, nativeImage } from "electron";
-import { getPreloadPath, getUIPath, getIconPath } from "../utils/path-resolver.js";
+
 import { isDev, DEV_PORT } from "../utils/index.js";
+import { getPreloadPath, getUIPath, getIconPath } from "../utils/path-resolver.js";
 
 let mainWindow: BrowserWindow | null = null;
 

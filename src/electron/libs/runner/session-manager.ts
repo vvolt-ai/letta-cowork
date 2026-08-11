@@ -2,20 +2,20 @@
  * Session creation, resumption, and lifecycle management.
  */
 
-import type { Session as LettaSession } from "@letta-ai/letta-code-sdk";
-// Engine swap: was @letta-ai/letta-code-sdk's CLI-subprocess-backed
-// createSession/resumeSession. Now backed by letta-code's WebSocket
-// listener pattern (./ws/), keeping the same Session contract so the
-// rest of the runner is unchanged.
+import { log, debug } from "./logger.js";
+import { DEFAULT_CWD, storeSession, removeSession, setActiveLettaSession, getCachedAgentId, setCachedAgentId, getActiveLettaSession } from "./state.js";
 import {
   createWsSession as createSession,
   resumeWsSession as resumeSession,
 } from "./ws/index.js";
-import { log, debug } from "./logger.js";
-import { DEFAULT_CWD, storeSession, removeSession, setActiveLettaSession, getCachedAgentId, setCachedAgentId, getActiveLettaSession } from "./state.js";
-import type { RunnerSession, RunnerOptions } from "./types.js";
-import type { CanUseToolResponse } from "@letta-ai/letta-code-sdk";
-import type { SendPermissionRequest } from "./permission-handler.js";
+
+import type { RunnerLettaSession as LettaSession , RunnerSession, RunnerOptions } from "./types.js";
+// Engine swap: was the SDK's CLI-subprocess-backed
+// createSession/resumeSession. Now backed by letta-code's WebSocket
+// listener pattern (./ws/), keeping the same Session contract so the
+// rest of the runner is unchanged.
+
+import type { CanUseToolResponse } from "@letta-ai/letta-agent-sdk";
 
 /**
  * Session options for creating/resuming sessions.
@@ -55,7 +55,7 @@ export function createSessionOptions(
     permissionMode: permissionMode ?? "unrestricted",
     canUseTool,
     systemInfoReminder: false,
-    model: model,
+    model,
     memfs: true,
     memfsStartup: "background" as const,
   };

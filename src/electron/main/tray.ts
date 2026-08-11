@@ -1,6 +1,7 @@
 import { app, Menu, nativeImage, Tray } from "electron";
-import { getIconPath } from "../utils/path-resolver.js";
+
 import { getMainWindow } from "./window.js";
+import { getIconPath } from "../utils/path-resolver.js";
 
 let tray: Tray | null = null;
 

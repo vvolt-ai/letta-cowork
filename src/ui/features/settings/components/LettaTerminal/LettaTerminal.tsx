@@ -1,4 +1,5 @@
-import { memo, useCallback, useEffect, useRef, useState, KeyboardEvent, type CSSProperties } from "react";
+import { memo, useCallback, useEffect, useRef, useState, type KeyboardEvent, type CSSProperties } from "react";
+
 import { useLettaCli, type OutputLine } from "../../../../hooks/useLettaCli";
 
 // ── Sub-components ────────────────────────────────────────────────────────────

@@ -6,19 +6,17 @@
  */
 
 import { ipcMain } from "electron";
+
 import {
   getVeraCoworkApiClient,
   setVeraCoworkApiUrl,
   setAuthExpiredCallback,
-  type Channel,
-  type ChannelRuntimeStatus,
-  type AuthTokens,
 } from "../../api/index.js";
-import { ensureSchedulerInitialized, teardownScheduler } from "../../services/scheduler/bootstrap.js";
 import {
   restartRemoteAccessService,
   stopRemoteAccessService,
 } from "../../services/remote-access/remoteAccessService.js";
+import { ensureSchedulerInitialized, teardownScheduler } from "../../services/scheduler/bootstrap.js";
 
 // Types for IPC events
 export interface ApiConfig {

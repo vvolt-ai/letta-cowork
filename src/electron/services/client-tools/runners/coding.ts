@@ -1,12 +1,13 @@
 import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, statSync } from "node:fs";
-import { promises as fs } from "node:fs";
+import { existsSync, statSync , promises as fs } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
-import type { ClientToolDefinition, ToolRunContext, ToolRunResult } from "../types.js";
+
 import { redactRuntimeSecrets } from "./_shared/runtime-secrets.js";
+
+import type { ClientToolDefinition, ToolRunContext, ToolRunResult } from "../types.js";
 
 const execFileAsync = promisify(execFile);
 const MAX_OUTPUT = 32_000;
@@ -304,7 +305,7 @@ function languageFamily(file: string): "python" | "go" | "rust" | "javascript" {
 }
 
 function sourceStem(file: string): string {
-  const stem = file.replace(/\.[^.\/]+$/, "").replace(/(?:\.|_)(?:test|spec)$/, "").replace(/\.e2e-spec$/, "");
+  const stem = file.replace(/\.[^./]+$/, "").replace(/(?:\.|_)(?:test|spec)$/, "").replace(/\.e2e-spec$/, "");
   const name = basename(stem).replace(/^test_/, "");
   return join(dirname(stem), name);
 }
@@ -1854,6 +1855,8 @@ const testRunByNameTool: ClientToolDefinition = {
 
 function markdownText(value: unknown, fallback: string): string {
   const text = typeof value === "string" && value.trim() ? value.trim() : fallback;
+  // Control characters are intentionally stripped from generated Markdown labels.
+  // eslint-disable-next-line no-control-regex
   return text.replace(/[\u0000-\u001f\u007f|`]+/g, " ").replace(/\s+/g, " ").trim();
 }
 

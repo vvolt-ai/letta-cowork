@@ -1,6 +1,8 @@
 import { useCallback, useEffect } from "react";
-import type { CanUseToolResponse, ClientEvent } from "../types";
+
 import { useAppStore } from "../store/useAppStore";
+
+import type { CanUseToolResponse, ClientEvent } from "../types";
 
 interface UseSessionControllerArgs {
   connected: boolean;

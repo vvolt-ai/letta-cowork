@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
-import { AgentDropdown } from "../../../../features/chat/components/AgentDropdown";
+
 import { SettingsSection } from "./SettingsSection";
+import { AgentDropdown } from "../../../../features/chat/components/AgentDropdown";
 
 interface AgentSelectorProps {
   autoSyncAgentIds: string[];

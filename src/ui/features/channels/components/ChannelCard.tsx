@@ -1,7 +1,7 @@
 
-import { Channel, ChannelStatus as ChannelStatusType, PROVIDERS, WhatsAppConfig } from './types';
-import { ChannelStatus } from './ChannelStatus';
 import { ChannelActions } from './ChannelActions';
+import { ChannelStatus } from './ChannelStatus';
+import { type Channel, type ChannelStatus as ChannelStatusType, PROVIDERS, type WhatsAppConfig } from './types';
 
 interface ChannelCardProps {
   channel: Channel;

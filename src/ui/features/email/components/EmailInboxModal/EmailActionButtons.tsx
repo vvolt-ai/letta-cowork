@@ -1,6 +1,8 @@
 import { useState } from "react";
-import type { ZohoEmail } from "../../../../types";
+
 import { SendToAgentConfirmationModal } from "./SendToAgentConfirmationModal";
+
+import type { ZohoEmail } from "../../../../types";
 
 interface EmailActionButtonsProps {
   email: ZohoEmail;

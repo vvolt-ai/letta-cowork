@@ -1,13 +1,15 @@
 import { memo, useEffect, useMemo, useState } from "react";
-import type { CanUseToolResponse, ClientEvent } from "../../../types";
-import { useAppStore } from "../../../store/useAppStore";
-import type { AgentDisplayStatus, PermissionRequest, ReasoningStep, ToolExecution } from "../../../store/useAppStore";
-import type { IndexedMessage } from "../../../hooks/useMessageWindow";
-import { PromptInput } from "./PromptInput";
-import { ConversationHeader } from "./ConversationHeader";
+
 import { ChatTimeline } from "./ChatTimeline";
+import { ConversationHeader } from "./ConversationHeader";
 import { PlanModePanel } from "./PlanModePanel";
+import { PromptInput } from "./PromptInput";
+import { useAppStore } from "../../../store/useAppStore";
 import { DecisionPanel } from "../../system/components/DecisionPanel";
+
+import type { IndexedMessage } from "../../../hooks/useMessageWindow";
+import type { AgentDisplayStatus, PermissionRequest, ReasoningStep, ToolExecution } from "../../../store/useAppStore";
+import type { CanUseToolResponse, ClientEvent } from "../../../types";
 
 interface ChatWorkspaceProps {
   title?: string;

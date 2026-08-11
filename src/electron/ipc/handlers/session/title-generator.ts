@@ -20,11 +20,11 @@ export function generateTitleFromPrompt(prompt: string): string {
         const words = title.split(/\s+/);
         title = "";
         for (const word of words) {
-            if ((title + " " + word).trim().length > 50) break;
-            title = (title + " " + word).trim();
+            if ((`${title  } ${  word}`).trim().length > 50) break;
+            title = (`${title  } ${  word}`).trim();
         }
         if (title.length === 0) {
-            title = firstSentence.slice(0, 47) + "...";
+            title = `${firstSentence.slice(0, 47)  }...`;
         }
     }
 

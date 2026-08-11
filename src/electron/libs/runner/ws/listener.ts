@@ -13,13 +13,16 @@
  * `control_request` envelopes).
  */
 
-import os from "os";
-import { app } from "electron";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { join } from "path";
 import { randomUUID } from "crypto";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import os from "os";
+import { join } from "path";
+
+import { app } from "electron";
 import WebSocket from "ws";
+
 import { debug } from "../logger.js";
+
 import type {
     FrameSubscriber,
     RuntimeScope,

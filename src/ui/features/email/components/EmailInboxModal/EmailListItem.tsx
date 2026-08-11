@@ -1,5 +1,6 @@
-import type { ZohoEmail } from "../../../../types";
 import { isUnreadEmail, formatDate, type EmailStatusInfo } from "../../types";
+
+import type { ZohoEmail } from "../../../../types";
 
 interface EmailListItemProps {
   email: ZohoEmail;

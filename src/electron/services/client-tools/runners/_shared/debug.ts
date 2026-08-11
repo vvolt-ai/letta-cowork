@@ -11,13 +11,13 @@ const enabled = (() => {
 
 export function debugLog(_namespace: string, fmt: string, ...rest: unknown[]): void {
     if (!enabled) return;
-    // eslint-disable-next-line no-console
+
     console.log(`[${_namespace}]`, fmt, ...rest);
 }
 
 export function debugWarn(_namespace: string, fmt: string, ...rest: unknown[]): void {
     if (!enabled) return;
-    // eslint-disable-next-line no-console
+
     console.warn(`[${_namespace}]`, fmt, ...rest);
 }
 

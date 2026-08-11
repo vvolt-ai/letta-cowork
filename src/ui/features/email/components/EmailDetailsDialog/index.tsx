@@ -1,6 +1,8 @@
 import * as Dialog from "@radix-ui/react-dialog";
-import type { ZohoEmail } from "../../../../types";
+
 import MDContent from "../../../../render/markdown";
+
+import type { ZohoEmail } from "../../../../types";
 
 interface EmailDetailsDialogProps {
   open: boolean;

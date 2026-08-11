@@ -4,6 +4,7 @@
  */
 
 import { ipcMain } from "electron";
+
 import {
     checkAlreadyConnected,
     connectEmail,

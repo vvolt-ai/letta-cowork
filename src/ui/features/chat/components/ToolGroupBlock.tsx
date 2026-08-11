@@ -13,6 +13,7 @@
  */
 
 import { memo, useEffect, useMemo, useState } from "react";
+
 import type { ToolGroupTimelineEntry } from "../types";
 
 interface ToolGroupBlockProps {

@@ -2,9 +2,8 @@
  * Tool permission handling for the runner.
  */
 
-import type { CanUseToolResponse } from "@letta-ai/letta-code-sdk";
-import type { PendingPermission } from "../runtime-state.js";
 import type { RunnerSession } from "./types.js";
+import type { CanUseToolResponse } from "@letta-ai/letta-agent-sdk";
 
 /**
  * Send a permission request event.

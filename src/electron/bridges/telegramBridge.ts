@@ -1,8 +1,10 @@
 import { mkdirSync, writeFileSync } from "fs";
 import { extname, join } from "path";
+
 import { LettaResponder } from "./lettaResponder.js";
-import type { TelegramBridgeConfig } from "./channelConfig.js";
 import { attachFilesToAgentFolder } from "../services/filesystem/index.js";
+
+import type { TelegramBridgeConfig } from "./channelConfig.js";
 
 type TelegramStatusState = "stopped" | "starting" | "connected" | "reconnecting" | "error";
 
@@ -582,7 +584,7 @@ export class TelegramBridge {
 
     const fileName = document.file_name || "unknown";
     const mimeType = document.mime_type || "application/octet-stream";
-    const ext = "." + (fileName.split(".").pop() || "bin");
+    const ext = `.${  fileName.split(".").pop() || "bin"}`;
 
     try {
       const fileResp = await this.apiCall<TelegramGetFileResponse>("getFile", {

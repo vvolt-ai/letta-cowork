@@ -3,8 +3,8 @@
  * Proxies local express requests to Vera Cowork server Odoo endpoints.
  */
 
-import type { Request, Response } from 'express';
 import { getVeraCoworkApiClient } from '../../api/index.js';
+
 import type {
   ExpressHandler,
   OdooSearchBody,
@@ -13,6 +13,7 @@ import type {
   OdooFieldsBody,
   OdooRunToolBody,
 } from './types.js';
+import type { Request, Response } from 'express';
 
 async function proxyOdooRequest(
   path: string,

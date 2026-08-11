@@ -3,18 +3,18 @@
  * Handles session lifecycle events: start, stop, continue, delete, list, history
  */
 
+import { Letta } from "@letta-ai/letta-client";
 import { BrowserWindow } from "electron";
-import type { ClientEvent, ServerEvent, StreamMessage } from "../../types.js";
-import { runLetta, type RunnerHandle, getCurrentAgentId, clearAgentCache, abortSessionById, abortAllSessions } from "../../libs/runner/index.js";
-import type { PendingPermission } from "../../libs/runtime-state.js";
+
+import { normaliseHistoryBatch, type LettaMessage } from "../../libs/conversation.js";
+import { runLetta, type RunnerHandle, clearAgentCache, abortSessionById, abortAllSessions } from "../../libs/runner/index.js";
 import {
     createRuntimeSession,
     getSession,
     updateSession,
     deleteSession,
 } from "../../libs/runtime-state.js";
-import { Letta } from "@letta-ai/letta-client";
-import { normaliseHistoryBatch, type LettaMessage } from "../../libs/conversation.js";
+import { getLettaAgent, getAgentRunApprovalCandidates, cancelAgentRunById, approveRunById } from "../../services/agents/index.js";
 import {
     getStoredSessions,
     addStoredSession,
@@ -22,7 +22,9 @@ import {
     updateStoredSession,
     type StoredSession,
 } from "../../services/settings/index.js";
-import { getLettaAgent, getAgentRunApprovalCandidates, cancelAgentRunById, approveRunById } from "../../services/agents/index.js";
+
+import type { PendingPermission } from "../../libs/runtime-state.js";
+import type { ClientEvent, ServerEvent, StreamMessage } from "../../types.js";
 
 const DEBUG = process.env.DEBUG_IPC === "true";
 
@@ -44,11 +46,11 @@ function generateTitleFromPrompt(prompt: string): string {
         const words = title.split(/\s+/);
         title = "";
         for (const word of words) {
-            if ((title + " " + word).trim().length > 50) break;
-            title = (title + " " + word).trim();
+            if ((`${title  } ${  word}`).trim().length > 50) break;
+            title = (`${title  } ${  word}`).trim();
         }
         if (title.length === 0) {
-            title = firstSentence.slice(0, 47) + "...";
+            title = `${firstSentence.slice(0, 47)  }...`;
         }
     }
 

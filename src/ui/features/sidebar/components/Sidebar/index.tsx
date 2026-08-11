@@ -1,12 +1,15 @@
 import { memo, useCallback, useEffect, useState } from "react";
+
 import { useAppStore } from "../../../../store/useAppStore";
-import type { ZohoEmail } from "../../../../types";
 import { EmailInboxModal } from "../../../email/components/EmailInboxModal";
 import { NewMailPipelineSetting, ResumeSessionDialog } from "../index";
-import type { AutoSyncProcessingMode } from "../../types";
+
 // veraLogo kept for future use
 // import veraLogo from "../../../../assets/vera-logo.svg";
 import { SessionsTab } from "../SessionsTab";
+
+import type { ZohoEmail } from "../../../../types";
+import type { AutoSyncProcessingMode } from "../../types";
 
 export interface SidebarProps {
   connected: boolean;

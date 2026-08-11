@@ -2,10 +2,10 @@
  * Shared types for IPC handlers
  */
 
-import type { BrowserWindow } from "electron";
 import type { RunnerHandle } from "../libs/runner/index.js";
 import type { PendingPermission } from "../libs/runtime-state.js";
 import type { ServerEvent } from "../types.js";
+import type { BrowserWindow } from "electron";
 
 /**
  * Session runtime state

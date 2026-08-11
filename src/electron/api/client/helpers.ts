@@ -4,9 +4,10 @@
  * Singleton management and convenience functions for processed email operations.
  */
 
-import type { AutoSyncEmailConfig, ProcessedEmailRecord, EmailTokens } from "../types.js";
 import { VeraCoworkApiClient } from "./letta-client.js";
 import { ProcessedEmailEndpoints } from "../endpoints/processed-emails.js";
+
+import type { AutoSyncEmailConfig, ProcessedEmailRecord, EmailTokens } from "../types.js";
 
 // ============================================
 // Singleton Instance Management

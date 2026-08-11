@@ -3,10 +3,11 @@
  * Handles attachment-related endpoints: downloadAttachment, uploadToAgent
  */
 
-import type { Request, Response } from "express";
-import { downloadEmailAttachment, uploadEmailAttachmentToAgent } from "../fetchEmails.js";
 import { getCurrentAgentId } from "../../libs/runner/index.js";
+import { downloadEmailAttachment, uploadEmailAttachmentToAgent } from "../fetchEmails.js";
+
 import type { ExpressHandler, DownloadAttachmentQuery, UploadToAgentQuery } from "./types.js";
+import type { Request, Response } from "express";
 
 /**
  * Download attachment for a specific email

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useCallback } from "react";
-import type { ClientEvent, ZohoEmail, UploadedEmailAttachment, ChatAttachment, SessionStatus } from "../types";
+
 import { useAppStore } from "../store/useAppStore";
+
+import type { ClientEvent, ZohoEmail, UploadedEmailAttachment, ChatAttachment, SessionStatus } from "../types";
 
 const PROCESSED_EMAILS_KEY_PREFIX = "auto_sync_processed_unread";
 const AUTO_SYNC_SESSION_TIMEOUT_MS = 10 * 60 * 1000;

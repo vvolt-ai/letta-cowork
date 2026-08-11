@@ -1,10 +1,13 @@
 import { mkdirSync, writeFileSync } from "fs";
 import { dirname, extname, join } from "path";
-import { LettaResponder } from "./lettaResponder.js";
-import type { WhatsAppBridgeConfig } from "./channelConfig.js";
+
 import QRCode from "qrcode";
+
 import { uploadLocalFilesToManager } from "./attachmentUploads.js";
+import { LettaResponder } from "./lettaResponder.js";
+
 import type { UploadOutcome } from "./attachmentUploads.js";
+import type { WhatsAppBridgeConfig } from "./channelConfig.js";
 
 type WhatsAppStatusState = "stopped" | "starting" | "qr" | "connected" | "reconnecting" | "error";
 
@@ -782,7 +785,7 @@ export class WhatsAppBridge {
     const messagePayload = message.message || {};
     const mimeType = getDocumentMimeType(messagePayload);
     const fileName = getDocumentFileName(messagePayload);
-    const ext = "." + (fileName.split(".").pop() || "bin");
+    const ext = `.${  fileName.split(".").pop() || "bin"}`;
 
     let localFilePath: string | null = null;
     try {

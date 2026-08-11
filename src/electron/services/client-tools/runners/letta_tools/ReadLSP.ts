@@ -2,8 +2,8 @@
  * LSP-enhanced Read tool - wraps the base Read tool and adds LSP diagnostics
  * TypeScript/JavaScript files use the bundled project-aware language service.
  */
-import { getCurrentWorkingDirectory } from "../_shared/runtime-context.js";
 import { read as baseRead, type ToolReturnContent } from "./Read.js";
+import { getCurrentWorkingDirectory } from "../_shared/runtime-context.js";
 
 // Format a single diagnostic in opencode style: "ERROR [line:col] message"
 function formatDiagnostic(diag: {

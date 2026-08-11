@@ -1,9 +1,11 @@
 import { promises as fs } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { Browser, BrowserContext, ConsoleMessage, Page, Request } from "playwright";
+
 import { chromium } from "playwright";
+
 import type { ClientToolDefinition, ToolRunResult } from "../types.js";
+import type { Browser, BrowserContext, ConsoleMessage, Page, Request } from "playwright";
 
 const ARTIFACT_DIR = join(homedir(), ".letta", "cowork-tools", "browser-artifacts");
 const MAX_TEXT = 24_000;
@@ -136,7 +138,7 @@ async function pageSnapshot(page: Page): Promise<string> {
       const testId = el.getAttribute("data-testid");
       const role = el.getAttribute("role");
       const disabled = el.hasAttribute("disabled") || el.getAttribute("aria-disabled") === "true";
-      const selector = testId ? `[data-testid=\"${testId}\"]` : el.id ? `#${el.id}` : tag;
+      const selector = testId ? `[data-testid="${testId}"]` : el.id ? `#${el.id}` : tag;
       return { tag, role, label: label.trim().slice(0, 120), selector, disabled };
     });
   }).catch(() => []);

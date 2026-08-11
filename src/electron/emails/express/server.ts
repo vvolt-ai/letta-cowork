@@ -3,19 +3,20 @@
  * Creates and configures the Express server with all routes
  */
 
-import { BrowserWindow } from "electron";
+import { type BrowserWindow } from "electron";
 import express from "express";
+
 import { OAUTH_PORT } from "../helper.js";
-import { oauthCallbackHandler } from "./oauth-handler.js";
-import { fetchEmailsHandler, fetchEmailByIdHandler, searchEmailsHandler } from "./email-handlers.js";
 import { fetchAccountHandler, fetchFoldersHandler } from "./account-handlers.js";
 import { downloadAttachmentHandler, uploadToAgentHandler } from "./attachment-handlers.js";
-import { processedEmailsHandler } from "./processed-email-handlers.js";
-import { lettaConversationHandler, lettaMessagesHandler, lettaAgentHandler } from "./letta-handlers.js";
-import { lettaRespondHandler } from "./respond-handler.js";
-import { draftEmailHandler, sendEmailHandler } from "./email-compose-handlers.js";
 import { agentCapabilitiesHandler } from "./capabilities.js";
+import { draftEmailHandler, sendEmailHandler } from "./email-compose-handlers.js";
+import { fetchEmailsHandler, fetchEmailByIdHandler, searchEmailsHandler } from "./email-handlers.js";
+import { lettaConversationHandler, lettaMessagesHandler, lettaAgentHandler } from "./letta-handlers.js";
 import { neo4jExplainHandler, neo4jRunQueryHandler, neo4jRunReadQueryHandler } from './neo4j-handlers.js';
+import { oauthCallbackHandler } from "./oauth-handler.js";
+import { processedEmailsHandler } from "./processed-email-handlers.js";
+import { lettaRespondHandler } from "./respond-handler.js";
 
 /**
  * Create and configure the Express server

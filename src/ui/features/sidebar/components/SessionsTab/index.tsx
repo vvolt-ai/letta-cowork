@@ -1,16 +1,19 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
+
 import { useAppStore } from "../../../../store/useAppStore";
-import { SidebarSection } from "../SidebarSection";
-import { AgentGroup } from "../AgentGroup";
-import { ConversationList } from "../ConversationList";
-import type { SidebarSessionSummary, EmailConversationDateFilter } from "../../types";
 import {
   getAutoEmailSessionMetadata,
   getAutoEmailSessionSubject,
   isAutoEmailSession,
   sanitizeSessionTitle,
 } from "../../../../utils/session";
+import { AgentGroup } from "../AgentGroup";
+import { ConversationList } from "../ConversationList";
+import { SidebarSection } from "../SidebarSection";
+
+import type { SidebarSessionSummary, EmailConversationDateFilter } from "../../types";
+
 
 const selectSidebarSessionTokens = (state: ReturnType<typeof useAppStore.getState>): string[] => {
   return Object.values(state.sessions)

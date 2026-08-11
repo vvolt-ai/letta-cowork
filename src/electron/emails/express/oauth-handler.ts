@@ -3,12 +3,14 @@
  * Handles OAuth callback endpoint for Zoho Mail authentication
  */
 
-import { BrowserWindow } from "electron";
-import type { Request, Response } from "express";
-import { BASE_URL, saveAccessToken, saveRefreshToken, saveAccountId, saveInboxFolderId } from "../helper.js";
-import { fetchAccounts, fetchFolders } from "../fetchEmails.js";
+import { type BrowserWindow } from "electron";
+
 import { storeEmailTokensOnServer } from "../../api/index.js";
+import { fetchAccounts, fetchFolders } from "../fetchEmails.js";
+import { BASE_URL, saveAccessToken, saveRefreshToken, saveAccountId, saveInboxFolderId } from "../helper.js";
+
 import type { ExpressHandler, OAuthCallbackQuery, OAuthTokenResponse } from "./types.js";
+import type { Request, Response } from "express";
 
 /**
  * Handle OAuth callback from Zoho
@@ -97,8 +99,8 @@ async function saveAccountAndFolderIds(accessToken: string, refreshToken: string
             // Update server tokens with account and folder IDs
             try {
               await storeEmailTokensOnServer({
-                accessToken: accessToken,
-                refreshToken: refreshToken,
+                accessToken,
+                refreshToken,
                 tokenExpiresAt: Date.now() + 3600000,
                 accountId: firstAccount.accountId,
                 folderId: inboxFolder.folderId,

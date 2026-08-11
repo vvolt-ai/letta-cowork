@@ -1,5 +1,5 @@
 
-import { Channel, ChannelStatus, WhatsAppConfig } from './types';
+import { type Channel, type ChannelStatus, type WhatsAppConfig } from './types';
 
 interface ChannelActionsProps {
   channel: Channel;

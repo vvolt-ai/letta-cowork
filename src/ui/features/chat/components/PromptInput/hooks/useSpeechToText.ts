@@ -101,7 +101,7 @@ export function useSpeechToText({
 
       if (final) {
         const text = final.trim();
-        if (text) onFinalTranscript(text + " ");
+        if (text) onFinalTranscript(`${text  } `);
         onInterimTranscript?.("");
       }
     };

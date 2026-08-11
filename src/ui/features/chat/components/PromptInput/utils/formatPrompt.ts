@@ -98,7 +98,9 @@ export function formatLettaCliOutput(cliArgs: string[], rawOutput: string): stri
       const cleaned = sanitizeLettaOutput(body);
       return JSON.stringify(cleaned, null, 2);
     }
-  } catch {}
+  } catch {
+    // Preserve the raw CLI output when it is not valid JSON.
+  }
 
   return rawOutput || "(no output)";
 }

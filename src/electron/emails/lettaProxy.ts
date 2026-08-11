@@ -1,5 +1,6 @@
-import type { Request, Response } from "express";
 import { Letta } from "@letta-ai/letta-client";
+
+import type { Request, Response } from "express";
 
 function createLettaClient(): Letta {
   const baseURL = (process.env.LETTA_BASE_URL || "https://api.letta.com").trim();

@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
-import type { ZohoEmail } from "../../../../../types";
-import { useAppStore, type SessionView, type AgentDisplayStatus } from "../../../../../store/useAppStore";
 import { useShallow } from "zustand/react/shallow";
+
+import { useAppStore, type SessionView, type AgentDisplayStatus } from "../../../../../store/useAppStore";
 import {
   SCROLL_THRESHOLD,
   DEFAULT_LIST_WIDTH,
@@ -9,6 +9,8 @@ import {
   type ProcessedEmailData,
   type EmailStatusInfo,
 } from "../../../types";
+
+import type { ZohoEmail } from "../../../../../types";
 
 interface UseEmailInboxProps {
   open: boolean;

@@ -10,11 +10,6 @@
  * `$AGENT_ID` / `$MEMORY_DIR` / etc. resolve identically to bash.
  */
 
-import type {
-    ClientToolDefinition,
-    ToolRunContext,
-    ToolRunResult,
-} from "../types.js";
 import {
     consumeWorkingDirectoryRecovery,
     getCurrentWorkingDirectory,
@@ -23,6 +18,12 @@ import { redactRuntimeSecrets } from "./_shared/runtime-secrets.js";
 import { getShellEnv } from "./shell/shellEnv.js";
 import { buildShellLaunchers } from "./shell/shellLaunchers.js";
 import { type ShellExecutionError, spawnWithLauncher } from "./shell/shellRunner.js";
+
+import type {
+    ClientToolDefinition,
+    ToolRunContext,
+    ToolRunResult,
+} from "../types.js";
 
 const DEFAULT_TIMEOUT_MS = 2 * 60 * 1000;
 const MAX_TIMEOUT_MS = 10 * 60 * 1000;
@@ -183,8 +184,8 @@ async function runBash(
         output = redactRuntimeSecrets(output, ctx.runtimeEnv);
         if (output.length > MAX_OUTPUT_CHARS) {
             output =
-                output.slice(0, MAX_OUTPUT_CHARS) +
-                `\n[output truncated to ${MAX_OUTPUT_CHARS} chars]`;
+                `${output.slice(0, MAX_OUTPUT_CHARS)
+                }\n[output truncated to ${MAX_OUTPUT_CHARS} chars]`;
         }
         if (!output) output = "(Command completed with no output)";
 
@@ -219,8 +220,8 @@ async function runBash(
         msg = redactRuntimeSecrets(msg, ctx.runtimeEnv);
         if (msg.length > MAX_OUTPUT_CHARS) {
             msg =
-                msg.slice(0, MAX_OUTPUT_CHARS) +
-                `\n[output truncated to ${MAX_OUTPUT_CHARS} chars]`;
+                `${msg.slice(0, MAX_OUTPUT_CHARS)
+                }\n[output truncated to ${MAX_OUTPUT_CHARS} chars]`;
         }
         return {
             output: `${recoveryNote}${msg.trim() || "Command failed with unknown error"}`,

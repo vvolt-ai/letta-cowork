@@ -2,8 +2,9 @@
  * Utility functions for session IPC handlers
  */
 
-import { BrowserWindow } from "electron";
 import { Letta } from "@letta-ai/letta-client";
+import { BrowserWindow } from "electron";
+
 import type { ServerEvent } from "./types.js";
 
 const DEBUG = process.env.DEBUG_IPC === "true";

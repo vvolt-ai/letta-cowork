@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { useShallow } from "zustand/react/shallow";
+
 import { useAppStore } from "../store/useAppStore";
 
 export function useCoworkSettings() {

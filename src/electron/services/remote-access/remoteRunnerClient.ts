@@ -1,8 +1,11 @@
 import os from "node:os";
+
 import { WebSocket } from "ws";
+
+import { RemoteToolDispatcher } from "./remoteToolDispatcher.js";
 import { getVeraCoworkApiClient } from "../../api/index.js";
 import { getClientToolsForWire } from "../client-tools/index.js";
-import { RemoteToolDispatcher } from "./remoteToolDispatcher.js";
+
 import type {
   RemoteAccessSettings,
   RemoteAccessState,

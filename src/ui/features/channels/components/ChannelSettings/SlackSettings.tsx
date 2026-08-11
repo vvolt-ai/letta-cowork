@@ -1,6 +1,7 @@
-import type { SlackConfig, SlackBridgeStatus } from "./slackConfig";
 import { defaultSlackConfig } from "./slackConfig";
 import { AgentDropdown } from "../../../chat/components/AgentDropdown";
+
+import type { SlackConfig, SlackBridgeStatus } from "./slackConfig";
 
 // Re-export for convenience
 export { defaultSlackConfig };

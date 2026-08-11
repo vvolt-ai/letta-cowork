@@ -1,8 +1,9 @@
 import { execFileSync } from "child_process";
-import { config as dotenvConfig } from "dotenv";
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
+
+import { config as dotenvConfig } from "dotenv";
 
 export type LettaEnvConfig = {
   LETTA_API_KEY: string;
@@ -99,12 +100,12 @@ export function initializeLettaEnv(): void {
     process.env.EMAIL_SERVER_BASE_URL = DEFAULT_EMAIL_SERVER_BASE_URL;
   }
 
-  if (!process.env.LETTA_BASE_URL || process.env.IS_ADMIN != 'true') {
+  if (!process.env.LETTA_BASE_URL || process.env.IS_ADMIN !== 'true') {
     process.env.LETTA_BASE_URL = "https://api.letta.com";
   }
 
 
-  if (!process.env.LETTA_API_KEY || process.env.IS_ADMIN != 'true') {
+  if (!process.env.LETTA_API_KEY || process.env.IS_ADMIN !== 'true') {
     process.env.LETTA_API_KEY = "sk-let-NDI0MzRjNzEtZDAwNS00MzQzLTg4NzYtNTY0MzI5OTc2MDg0OjI3Y2IzNzZlLWExMDItNDM2NC05NjQ3LWM1YjdlYzI4NTMwNQ==";
   }
 

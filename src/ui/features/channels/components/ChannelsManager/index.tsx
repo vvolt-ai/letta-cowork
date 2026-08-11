@@ -1,12 +1,13 @@
 import { useEffect } from 'react';
-import { ChannelsManagerProps } from '../types';
-import { useChannelBridge } from '../hooks/useChannelBridge';
-import { useChannelManager } from '../hooks/useChannelManager';
+
 import { ChannelList } from '../ChannelList';
-import { CreateChannelModal } from '../CreateChannelModal';
-import { CredentialsModal } from '../CredentialsModal';
 import { ConfigModal } from '../ConfigModal';
 import { ConnectorMarketplace } from '../ConnectorMarketplace';
+import { CreateChannelModal } from '../CreateChannelModal';
+import { CredentialsModal } from '../CredentialsModal';
+import { useChannelBridge } from '../hooks/useChannelBridge';
+import { useChannelManager } from '../hooks/useChannelManager';
+import { type ChannelsManagerProps } from '../types';
 
 export function ChannelsManager({ onAuthError, embedded = false }: ChannelsManagerProps) {
   const {

@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
+
 import { runClientTool, isClientTool } from "../client-tools/index.js";
+
 import type { RemoteAccessSettings } from "./types.js";
 
 const FILE_PATH_ARG_KEYS = ["file_path", "path", "directory", "cwd", "pattern"];
@@ -14,7 +16,7 @@ const BLOCKED_BASH_PATTERNS = [
 ];
 const SECRET_OUTPUT_PATTERNS: Array<[RegExp, string]> = [
   [/([A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY)[A-Z0-9_]*\s*[=:]\s*)[^\s\n]+/gi, "$1[REDACTED]"],
-  [/(Bearer\s+)[A-Za-z0-9._\-]+/gi, "$1[REDACTED]"],
+  [/(Bearer\s+)[A-Za-z0-9._-]+/gi, "$1[REDACTED]"],
 ];
 
 export class RemoteToolDispatcher {

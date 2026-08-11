@@ -90,10 +90,10 @@ export type { SlackConfig, SlackBridgeStatus } from "./slackConfig";
 export type { DiscordConfig, DiscordBridgeStatus } from "./discordConfig";
 
 // Re-export config types
-import type { WhatsAppConfig } from "./whatsappConfig";
-import type { TelegramConfig } from "./telegramConfig";
-import type { SlackConfig } from "./slackConfig";
 import type { DiscordConfig } from "./discordConfig";
+import type { SlackConfig } from "./slackConfig";
+import type { TelegramConfig } from "./telegramConfig";
+import type { WhatsAppConfig } from "./whatsappConfig";
 
 export interface ChannelBridgeConfig {
   whatsapp: WhatsAppConfig;

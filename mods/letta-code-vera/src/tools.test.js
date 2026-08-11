@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+
 import { isProhibitedEmailAction, registerTools } from "./tools.js";
 
 function registeredTools(client) {

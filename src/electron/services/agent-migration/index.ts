@@ -21,6 +21,7 @@
  */
 
 import { Letta } from "@letta-ai/letta-client";
+
 import { buildLettaSystemPrompt } from "./buildSystemPrompt.js";
 
 function getClient(): Letta {

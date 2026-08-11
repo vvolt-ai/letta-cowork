@@ -3,9 +3,10 @@
  * Handles account-related endpoints: fetchAccount, fetchFolders
  */
 
-import type { Request, Response } from "express";
 import { fetchAccounts, fetchFolders } from "../fetchEmails.js";
+
 import type { ExpressHandler } from "./types.js";
+import type { Request, Response } from "express";
 
 /**
  * Fetch all connected Zoho mail accounts

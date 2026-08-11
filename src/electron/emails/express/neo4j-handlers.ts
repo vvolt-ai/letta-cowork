@@ -3,9 +3,10 @@
  * Proxies local express requests to Vera Cowork server Neo4j endpoints.
  */
 
-import type { Request, Response } from 'express';
 import { getVeraCoworkApiClient } from '../../api/index.js';
+
 import type { ExpressHandler, Neo4jQueryBody } from './types.js';
+import type { Request, Response } from 'express';
 
 async function proxyNeo4jRequest(
   path: string,

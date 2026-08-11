@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, extname, isAbsolute, relative, resolve } from "node:path";
+
 import * as ts from "typescript-lsp";
 
 export type Diagnostic = {
@@ -89,7 +90,19 @@ function createProject(key: string, configPath: string | undefined, seedPath: st
         files: isSupportedFile(seedPath) ? [seedPath] : [],
       };
 
-  let project!: ProjectState;
+  const project: ProjectState = {
+    key,
+    root: parsed.root,
+    configPath,
+    options: parsed.options,
+    rootFiles: new Set(parsed.files),
+    extraFiles: new Set(),
+    manualVersions: new Map(),
+    observedVersions: new Map(),
+    service: undefined as unknown as ts.LanguageService,
+    projectVersion: 0,
+    lastUsed: Date.now(),
+  };
   const host: ts.LanguageServiceHost = {
     getCompilationSettings: () => project.options,
     getScriptFileNames: () => [...project.rootFiles, ...project.extraFiles],
@@ -114,19 +127,6 @@ function createProject(key: string, configPath: string | undefined, seedPath: st
     getNewLine: () => ts.sys.newLine,
   };
 
-  project = {
-    key,
-    root: parsed.root,
-    configPath,
-    options: parsed.options,
-    rootFiles: new Set(parsed.files),
-    extraFiles: new Set(),
-    manualVersions: new Map(),
-    observedVersions: new Map(),
-    service: undefined as unknown as ts.LanguageService,
-    projectVersion: 0,
-    lastUsed: Date.now(),
-  };
   project.service = ts.createLanguageService(host, ts.createDocumentRegistry());
   return project;
 }

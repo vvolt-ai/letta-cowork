@@ -1,12 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { app, shell } from "electron";
-import path from "path";
 import fs from "fs";
+import path from "path";
 import { fileURLToPath } from "url";
-import { BASE_URL, clearEmailCredentials, getAccessToken, getAccountId, getInboxFolderId, getRefreshToken, saveAccountId, saveInboxFolderId } from "./helper.js";
+
+import { app, shell } from "electron";
 import { FormData, File } from 'undici';
-import { getVeraCoworkApiClient } from "../api/index.js";
+
+import { BASE_URL, clearEmailCredentials, getAccessToken, getAccountId, getInboxFolderId, getRefreshToken, saveAccountId, saveInboxFolderId } from "./helper.js";
 import { serverApiRequest, zohoApiRequest } from "./zohoApi.js";
+import { getVeraCoworkApiClient } from "../api/index.js";
+
 import type {
   AttachmentInfoResponse,
   AccountsResponse,

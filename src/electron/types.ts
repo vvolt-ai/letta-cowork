@@ -13,7 +13,7 @@ export type {
   SDKResultMessage,
   CanUseToolResponse,
   MessageContentItem,
-} from "@letta-ai/letta-code-sdk";
+} from "@letta-ai/letta-agent-sdk";
 
 export type ChatAttachmentKind = "image" | "file";
 
@@ -34,7 +34,7 @@ export type UserPromptMessage = {
 };
 
 // Import for union type and local use
-import type { SDKMessage, CanUseToolResponse, MessageContentItem } from "@letta-ai/letta-code-sdk";
+import type { SDKMessage, CanUseToolResponse, MessageContentItem } from "@letta-ai/letta-agent-sdk";
 
 export type StreamMessage = SDKMessage | UserPromptMessage;
 
@@ -73,7 +73,7 @@ export type ServerEvent =
       };
     }
   | { type: "session.deleted"; payload: { sessionId: string } }
-  | { type: "session.pendingCancelled"; payload: {} }
+  | { type: "session.pendingCancelled"; payload: Record<string, never> }
   | { type: "permission.request"; payload: { sessionId: string; toolUseId: string; toolName: string; input: unknown; source?: "live" | "recovered"; runId?: string; conversationId?: string; isStuckRun?: boolean; requestedAt?: number } }
   | { type: "runner.error"; payload: { sessionId?: string; message: string } }
   | { type: "plan_mode_state"; payload: { sessionId: string; mode: "plan" | "unrestricted"; planFilePath: string | null } }
@@ -100,8 +100,8 @@ export type ClientEvent =
   | { type: "session.stop"; payload: { sessionId: string } }
   | { type: "session.delete"; payload: { sessionId: string } }
   | { type: "session.abort"; payload: { sessionId: string } }
-  | { type: "session.abortAll"; payload: {} }
-  | { type: "session.cancelPending"; payload: {} }
+  | { type: "session.abortAll"; payload: Record<string, never> }
+  | { type: "session.cancelPending"; payload: Record<string, never> }
   | { type: "session.list" }
   | { type: "session.history"; payload: { sessionId: string; limit?: number; before?: string } }
   | { type: "session.rename"; payload: { sessionId: string; title: string } }

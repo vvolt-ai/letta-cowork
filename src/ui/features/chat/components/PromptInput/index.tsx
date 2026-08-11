@@ -3,19 +3,21 @@
  */
 
 import { memo, useCallback, useEffect, useRef, useState } from "react";
-import type { ChatAttachment, ClientEvent, MessageContentItem } from "../../../../types";
-import { useAppStore, type AppState, type PermissionMode } from "../../../../store/useAppStore";
+
 
 import { AttachmentPreview } from "./AttachmentPreview";
-import { SlashCommandSuggestions } from "./SlashCommandSuggestions";
-import { ModelSelector } from "./ModelSelector";
-import { PromptTextArea } from "./PromptTextArea";
 import { useAttachments } from "./hooks/useAttachments";
 import { useModels } from "./hooks/useModels";
 import { usePromptActions } from "./hooks/usePromptActions";
 import { useSlashSuggestions } from "./hooks/useSlashCommands";
-import { buildTextWithLinks } from "./utils/formatPrompt";
 import { useSpeechToText } from "./hooks/useSpeechToText";
+import { ModelSelector } from "./ModelSelector";
+import { PromptTextArea } from "./PromptTextArea";
+import { SlashCommandSuggestions } from "./SlashCommandSuggestions";
+import { buildTextWithLinks } from "./utils/formatPrompt";
+import { useAppStore, type AppState, type PermissionMode } from "../../../../store/useAppStore";
+
+import type { ChatAttachment, ClientEvent, MessageContentItem } from "../../../../types";
 
 const MAX_HEIGHT = 12 * 21;
 const MIN_HEIGHT = 52;
@@ -74,7 +76,7 @@ export const PromptInput = memo(function PromptInput({
   const { isListening: isMicListening, toggle: toggleMic, error: micError, isSupported: isMicSupported } = useSpeechToText({
     onFinalTranscript: (text) => {
       const prev = promptSnapshotRef.current;
-      setPrompt(prev.endsWith(" ") || prev === "" ? prev + text : prev + " " + text);
+      setPrompt(prev.endsWith(" ") || prev === "" ? prev + text : `${prev  } ${  text}`);
     },
     onInterimTranscript: setInterimTranscript,
   });

@@ -3,6 +3,7 @@
  */
 
 import { useCallback, useMemo, useState } from "react";
+
 import { formatLettaCliOutput } from "../utils/formatPrompt";
 
 export interface SlashCommandSuggestion {

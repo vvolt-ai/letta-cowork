@@ -1135,7 +1135,7 @@ export const ToolExecutionBlock = memo(function ToolExecutionBlock({ name, statu
   }, [isRunning, logs, output]);
 
   const label = toolDisplayLabel(name, summary);
-  const collapsedSummary = summary && !/^[{\[]/.test(summary.trim()) ? summary : null;
+  const collapsedSummary = summary && !/^[{[]/.test(summary.trim()) ? summary : null;
   const rowToneClass = isError
     ? "text-red-600 hover:bg-red-50"
     : isRunning

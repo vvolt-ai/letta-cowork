@@ -3,11 +3,11 @@
  * Initializes the application and wires together all components
  */
 
-import { app } from "electron";
 import path from "path";
 
+import { app } from "electron";
+
 // Initialize environment before importing other modules
-import { initializeLettaEnv } from "../services/env/index.js";
 initializeLettaEnv();
 
 // PATH fix: ensure common tool dirs are reachable inside packaged Electron
@@ -62,16 +62,17 @@ try {
 }
 
 // Import modular components
-import { createMainWindow, getMainWindow, setMainWindow } from "./window.js";
 import { setupLifecycleHandlers, registerGlobalShortcuts } from "./lifecycle.js";
 import { setupMenu } from "./menu.js";
 import { setupTray } from "./tray.js";
-import { registerAllIpcHandlers, startResourcePolling, initializeBridges } from "../ipc/index.js";
+import { createMainWindow, getMainWindow, setMainWindow } from "./window.js";
 import { expressServer } from "../emails/express/index.js";
 import { initializeApiIpcHandlers, setupApiStatusBridge } from "../ipc/handlers/api-handlers.js";
-import { installRequiredSkills } from "../services/skillInstaller.js";
-import { initializeRemoteAccessService } from "../services/remote-access/remoteAccessService.js";
+import { registerAllIpcHandlers, startResourcePolling, initializeBridges } from "../ipc/index.js";
+import { initializeLettaEnv } from "../services/env/index.js";
 import { initializeCoworkExtensions } from "../services/extensions/extension-loader.js";
+import { initializeRemoteAccessService } from "../services/remote-access/remoteAccessService.js";
+import { installRequiredSkills } from "../services/skillInstaller.js";
 
 const singleInstanceLock = app.requestSingleInstanceLock();
 

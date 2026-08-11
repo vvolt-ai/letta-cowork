@@ -1,6 +1,6 @@
 
-import { Channel, ChannelStatus as ChannelStatusType } from './types';
 import { ChannelCard } from './ChannelCard';
+import { type Channel, type ChannelStatus as ChannelStatusType } from './types';
 
 interface ChannelListProps {
   channels: Channel[];

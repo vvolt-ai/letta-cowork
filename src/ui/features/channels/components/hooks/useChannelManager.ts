@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
-import { Channel, LettaAgent, ConfigDataState } from '../types';
+
+import { type Channel, type LettaAgent, type ConfigDataState } from '../types';
 
 const getApi = () => (window as any).electron;
 

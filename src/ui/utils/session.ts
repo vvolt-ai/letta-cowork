@@ -1,5 +1,5 @@
-import type { ChatAttachment } from "../types";
 import type { SessionView } from "../store/useAppStore";
+import type { ChatAttachment } from "../types";
 
 const MAX_TITLE_LENGTH = 60;
 const AUTO_EMAIL_SESSION_PREFIX = "Auto Email:";

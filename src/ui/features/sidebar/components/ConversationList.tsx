@@ -1,5 +1,6 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { useEffect, useRef, useState } from "react";
+
 import type { SessionView, AgentDisplayStatus } from "../../../store/useAppStore";
 
 type ConversationListSession = Pick<SessionView, "id" | "title" | "updatedAt" | "lastPrompt"> & {

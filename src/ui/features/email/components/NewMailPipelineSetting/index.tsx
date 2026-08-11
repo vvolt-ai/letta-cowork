@@ -1,12 +1,14 @@
 import * as Dialog from "@radix-ui/react-dialog";
+
 import { AgentSelector } from "./AgentSelector";
-import { RoutingRules } from "./RoutingRules";
-import { ProcessingModeSelector } from "./ProcessingModeSelector";
-import { SyncSettings } from "./SyncSettings";
-import { MailboxRecovery } from "./MailboxRecovery";
-import { RecentActivity } from "./RecentActivity";
 import { useMailPipeline } from "./hooks/useMailPipeline";
 import { useRoutingRules } from "./hooks/useRoutingRules";
+import { MailboxRecovery } from "./MailboxRecovery";
+import { ProcessingModeSelector } from "./ProcessingModeSelector";
+import { RecentActivity } from "./RecentActivity";
+import { RoutingRules } from "./RoutingRules";
+import { SyncSettings } from "./SyncSettings";
+
 import type { NewMailPipelineSettingProps } from "../../types";
 
 export function NewMailPipelineSetting({

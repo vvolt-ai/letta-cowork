@@ -1,4 +1,5 @@
 import { SettingsSection } from "./SettingsSection";
+
 import type { ProcessedEmailEntry } from "../../types";
 
 const formatTimestamp = (timestamp?: number): string => {

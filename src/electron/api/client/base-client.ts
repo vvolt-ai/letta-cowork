@@ -5,10 +5,11 @@
  * automatic token refresh, and error handling.
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
 import { execSync } from "child_process";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
 import { homedir } from "os";
 import { dirname, join } from "path";
+
 import type { AuthTokens, RequestOptions } from "../types.js";
 
 // Storage path for tokens

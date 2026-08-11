@@ -1,9 +1,11 @@
-import { app, globalShortcut } from "electron";
 import { execSync } from "child_process";
-import { isDev, DEV_PORT } from "../utils/index.js";
-import { stopPolling } from "../utils/test-helper.js";
+
+import { app, globalShortcut } from "electron";
+
 import { cleanupAllSessions } from "../ipc/index.js";
 import { shutdownListener as shutdownWsListener } from "../libs/runner/ws/index.js";
+import { isDev, DEV_PORT } from "../utils/index.js";
+import { stopPolling } from "../utils/test-helper.js";
 
 let cleanupComplete = false;
 
