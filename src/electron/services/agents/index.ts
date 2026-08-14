@@ -14,9 +14,14 @@ export interface LettaAgent {
 }
 
 export interface LettaModel {
+  /** Model handle sent to the conversation runtime (for example, lc-zai/glm-5). */
   name: string;
+  /** Provider-local model name retained for legacy selection migration. */
+  model_name?: string | null;
   display_name?: string | null;
   provider_type: string;
+  provider_name?: string | null;
+  provider_category?: "base" | "byok" | null;
   model_type?: string;
 }
 
@@ -73,6 +78,97 @@ function getLettaApiConfig(): { baseURL: string; apiKey: string } {
   };
 }
 
+function mapLettaAgent(agent: any): LettaAgent | null {
+  const id = agent?.id || agent?.agent_id;
+  if (typeof id !== "string" || !id) return null;
+
+  const models = Array.isArray(agent.models) ? agent.models : undefined;
+  const availableModels = Array.isArray(agent.available_models) ? agent.available_models : undefined;
+  return {
+    id,
+    name: agent.name || agent.display_name || id,
+    description: agent.description ?? null,
+    createdAt: agent.created_at ?? null,
+    metadata: agent.metadata ?? null,
+    tags: Array.isArray(agent.tags) ? agent.tags : undefined,
+    model: agent.model ?? null,
+    models: models ?? null,
+    availableModels: availableModels ?? null,
+    inferenceConfig: (agent.inference_config as Record<string, unknown> | undefined) ?? null,
+  };
+}
+
+async function listOwnedLettaAgents(queryText: string): Promise<LettaAgent[]> {
+  const client = createLettaClient();
+  const agents: LettaAgent[] = [];
+  const request = client.agents.list({
+    limit: 100,
+    query_text: queryText || undefined,
+  });
+
+  // The SDK async iterator follows every cursor. Reading response.items only
+  // returns the first page and silently hides older agents.
+  for await (const agent of request) {
+    const mapped = mapLettaAgent(agent);
+    if (mapped) agents.push(mapped);
+  }
+  return agents;
+}
+
+export async function listSharedLettaAgents(queryText: string): Promise<LettaAgent[]> {
+  const { baseURL, apiKey } = getLettaApiConfig();
+  if (!apiKey) return [];
+
+  // The SDK does not yet expose this Cloud endpoint. Keep the configured base
+  // URL authoritative while avoiding /v1/v1 for callers that include /v1.
+  const apiRoot = baseURL.replace(/\/v1$/, "");
+  const agents: LettaAgent[] = [];
+  const seenCursors = new Set<string>();
+  let after: string | null = null;
+
+  for (let page = 0; page < 100; page += 1) {
+    const params = new URLSearchParams({ limit: "100" });
+    if (queryText) params.set("queryText", queryText);
+    if (after) params.set("after", after);
+
+    const response = await fetch(`${apiRoot}/v1/shared-agents?${params}`, {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        Accept: "application/json",
+        "X-Letta-Source": "vera-cowork",
+      },
+    });
+
+    // Older/self-hosted Letta deployments may not implement organization
+    // sharing. Preserve owned-agent discovery in that specific case.
+    if (response.status === 404) return [];
+    if (!response.ok) {
+      throw new Error(`Shared agents request failed with status ${response.status}`);
+    }
+
+    const body = await response.json() as {
+      agents?: unknown[];
+      nextCursor?: string | null;
+      next_cursor?: string | null;
+    };
+    if (!Array.isArray(body.agents)) {
+      throw new Error("Shared agents response did not include an agents array");
+    }
+
+    for (const agent of body.agents) {
+      const mapped = mapLettaAgent(agent);
+      if (mapped) agents.push(mapped);
+    }
+
+    const nextCursor = body.nextCursor ?? body.next_cursor ?? null;
+    if (!nextCursor || seenCursors.has(nextCursor)) break;
+    seenCursors.add(nextCursor);
+    after = nextCursor;
+  }
+
+  return agents;
+}
+
 async function refreshByokProviders(): Promise<void> {
   const { baseURL, apiKey } = getLettaApiConfig();
   if (!apiKey) return;
@@ -110,38 +206,26 @@ async function refreshByokProviders(): Promise<void> {
 }
 
 export async function listLettaAgents(queryText = ""): Promise<LettaAgent[]> {
-  console.log("[lettaAgents] listLettaAgents called", { queryText });
-  const client = createLettaClient();
+  const normalizedQuery = queryText.trim();
+  console.log("[lettaAgents] listLettaAgents called", { queryText: normalizedQuery });
 
   try {
-    console.log("[lettaAgents] Fetching agents from Letta API...");
-    const agents: LettaAgent[] = [];
-    const request = client.agents.list({
-      limit: 100,
-      query_text: queryText.trim() || undefined,
+    console.log("[lettaAgents] Fetching owned and organization-shared agents...");
+    const [ownedAgents, sharedAgents] = await Promise.all([
+      listOwnedLettaAgents(normalizedQuery),
+      listSharedLettaAgents(normalizedQuery),
+    ]);
+    const agents = Array.from(
+      new Map(
+        [...ownedAgents, ...sharedAgents].map((agent) => [agent.id, agent]),
+      ).values(),
+    );
+
+    console.log("[lettaAgents] Received", {
+      owned: ownedAgents.length,
+      shared: sharedAgents.length,
+      deduplicated: agents.length,
     });
-
-    // The SDK's async iterator follows every cursor. Reading response.items only
-    // returns the first page and silently hides older agents.
-    for await (const agent of request) {
-      const raw: any = agent;
-      const models = Array.isArray(raw.models) ? raw.models : undefined;
-      const availableModels = Array.isArray(raw.available_models) ? raw.available_models : undefined;
-      agents.push({
-        id: agent.id,
-        name: agent.name,
-        description: agent.description,
-        createdAt: agent.created_at,
-        metadata: agent.metadata,
-        tags: agent.tags,
-        model: raw.model ?? null,
-        models: models ?? null,
-        availableModels: availableModels ?? null,
-        inferenceConfig: (raw.inference_config as Record<string, unknown> | undefined) ?? null,
-      });
-    }
-
-    console.log("[lettaAgents] Received", agents.length, "agents");
     return agents;
   } catch (error) {
     console.error("[lettaAgents] Failed to list agents:", error);
@@ -177,6 +261,29 @@ export async function getLettaAgent(agentId: string): Promise<LettaAgent | null>
   }
 }
 
+export function mapLettaModel(model: Letta.Model): LettaModel {
+  const raw = model as Letta.Model & {
+    handle?: string;
+    provider_name?: string | null;
+    provider_category?: "base" | "byok" | null;
+  };
+  const handle = raw.handle?.trim() || raw.name;
+
+  return {
+    // The API's `name` is only the provider-local model name (for example,
+    // "glm-5"). Conversation model overrides require the fully qualified
+    // `handle` (for example, "lc-zai/glm-5"). Using the bare name can resolve
+    // to an unconfigured base provider and fail with a misleading 404.
+    name: handle,
+    model_name: raw.name,
+    display_name: raw.display_name,
+    provider_type: raw.provider_type,
+    provider_name: raw.provider_name,
+    provider_category: raw.provider_category,
+    model_type: raw.model_type,
+  };
+}
+
 export async function listLettaModels(): Promise<LettaModel[]> {
   // Letta Cloud discovers models exposed by BYOK endpoints during refresh.
   // Refresh first so a newly connected OpenAI-compatible provider appears in
@@ -190,12 +297,7 @@ export async function listLettaModels(): Promise<LettaModel[]> {
     // Filter to only show LLM models (not embedding models)
     return models
       .filter((model) => model.model_type === 'llm' || !model.model_type)
-      .map((model) => ({
-        name: model.name,
-        display_name: model.display_name,
-        provider_type: model.provider_type,
-        model_type: model.model_type,
-      }));
+      .map(mapLettaModel);
   } catch (error) {
     console.error("Failed to list models:", error);
     throw new Error("Failed to fetch models from Letta");

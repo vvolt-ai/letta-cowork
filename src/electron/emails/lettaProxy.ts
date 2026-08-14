@@ -2,6 +2,8 @@ import { Letta } from "@letta-ai/letta-client";
 
 import type { Request, Response } from "express";
 
+import { listLettaAgents } from "../services/agents/index.js";
+
 function createLettaClient(): Letta {
   const baseURL = (process.env.LETTA_BASE_URL || "https://api.letta.com").trim();
   const apiKey = (process.env.LETTA_API_KEY || "").trim();
@@ -30,9 +32,7 @@ function requireAgentId(req: Request, res: Response): string | null {
 
 export async function listAgentsHandler(_req: Request, res: Response): Promise<void> {
   try {
-    const client = createLettaClient();
-    const response = await client.agents.list({ limit: 50 });
-    res.json(response?.items ?? []);
+    res.json(await listLettaAgents());
   } catch (error) {
     console.error("[lettaProxy] listAgentsHandler failed", error);
     res.status(500).json(sanitizeError(error));

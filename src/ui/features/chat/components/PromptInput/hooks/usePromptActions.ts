@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef } from "react";
 
 import { useAppStore } from "../../../../../store/useAppStore";
 import { generateSessionTitle } from "../../../../../utils/session";
+import { useSlashCommands } from "./useSlashCommands";
 
 import type { ChatAttachment, ClientEvent, MessageContentItem } from "../../../../../types";
 
@@ -54,6 +55,7 @@ export function usePromptActions(
   const setPendingStart = useAppStore((state) => state.setPendingStart);
   const setGlobalError = useAppStore((state) => state.setGlobalError);
   const setActiveSessionId = useAppStore((state) => state.setActiveSessionId);
+  const appendCliResult = useAppStore((state) => state.appendCliResult);
   const startTimeoutRef = useRef<number | null>(null);
 
   // Check if the current UI turn is actively processing.
@@ -260,93 +262,18 @@ export function usePromptActions(
     [activeSession?.cwd, activeSession?.lastPrompt, activeSessionId, overrideSessionId, permissionMode, prompt, selectedModel, sendEvent, setPrompt]
   );
 
-  const handleSlashCommand = useCallback(
-    async (rawPrompt: string): Promise<boolean> => {
-      const trimmed = rawPrompt.trim();
-      if (!trimmed.startsWith("/")) return false;
-
-      const [rawCommand, ...argParts] = trimmed.split(/\s+/);
-      const normalized = rawCommand.toLowerCase();
-      const args = argParts.join(" ").trim();
-
-      switch (normalized) {
-        case "/new":
-        case "/clear": {
-          setActiveSessionId(null, false);
-          setPrompt(args);
-          setGlobalError(
-            normalized === "/clear"
-              ? "Started a fresh conversation context."
-              : "Opened a new conversation."
-          );
-          return true;
-        }
-        case "/memory": {
-          onOpenMemory?.();
-          return true;
-        }
-        case "/search": {
-          setGlobalError(
-            args
-              ? `Message search UI is not wired yet in Vera Cowork. Requested search: ${args}`
-              : "Message search UI is not wired yet in Vera Cowork."
-          );
-          return true;
-        }
-        case "/remember": {
-          if (!args) {
-            setGlobalError("Usage: /remember <text>");
-            return true;
-          }
-          await handleSend({ text: `Please remember this for future conversations:\n\n${args}` });
-          return true;
-        }
-        case "/description": {
-          if (!args) {
-            setGlobalError("Usage: /description <text>");
-            return true;
-          }
-          await handleSend({
-            text: `Please update the current agent description to:\n\n${args}`,
-          });
-          return true;
-        }
-        case "/context": {
-          await handleSend({
-            text: "Show the current context window usage and explain how full it is.",
-          });
-          return true;
-        }
-        case "/usage": {
-          await handleSend({
-            text: "Show current usage statistics and balance information if available.",
-          });
-          return true;
-        }
-        case "/feedback": {
-          await handleSend({
-            text: `Please help me prepare feedback for the Letta team about this issue or idea:\n\n${
-              args || "<add feedback details here>"
-            }`,
-          });
-          return true;
-        }
-        case "/bg": {
-          await handleSend({
-            text: "Show any background shell or agent processes that are currently running, if available.",
-          });
-          return true;
-        }
-        default: {
-          setGlobalError(
-            `Command ${normalized} is not yet supported directly in Vera Cowork.`
-          );
-          return true;
-        }
-      }
-    },
-    [handleSend, onOpenMemory, setActiveSessionId, setGlobalError, setPrompt]
-  );
+  // Keep one slash-command dispatcher. PromptInput previously used a second,
+  // older switch in this hook, so newly added commands such as /connect were
+  // visible in suggestions but always fell through as unsupported.
+  const { handleSlashCommand } = useSlashCommands({
+    activeSessionId: activeSessionId ?? null,
+    handleSend,
+    onOpenMemory,
+    setActiveSessionId,
+    setGlobalError,
+    setPrompt,
+    appendCliResult,
+  });
 
   const handleStartFromModal = useCallback(() => {
     if (!cwd.trim()) {

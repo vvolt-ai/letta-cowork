@@ -5,9 +5,13 @@
 import { memo } from "react";
 
 export interface ModelOption {
+  /** Fully qualified model handle used for runtime selection. */
   name: string;
+  model_name?: string | null;
   display_name?: string | null;
   provider_type: string;
+  provider_name?: string | null;
+  provider_category?: "base" | "byok" | null;
 }
 
 export interface ModelSelectorProps {
@@ -43,12 +47,15 @@ export const ModelSelector = memo(function ModelSelector({
         >
           <option value="">Default (agent model)</option>
           {hasSelectedModelOption ? <option value={selectedModel}>{selectedModel}</option> : null}
-          {models.map((model) => (
-            <option key={model.name} value={model.name}>
-              {(model.display_name || model.name) +
-                (model.provider_type ? ` · ${model.provider_type}` : "")}
-            </option>
-          ))}
+          {models.map((model) => {
+            const providerLabel = model.provider_name || model.provider_type;
+            return (
+              <option key={model.name} value={model.name}>
+                {(model.display_name || model.name) +
+                  (providerLabel ? ` · ${providerLabel}` : "")}
+              </option>
+            );
+          })}
         </select>
         {modelsLoading ? <span className="text-muted">Loading…</span> : null}
       </div>

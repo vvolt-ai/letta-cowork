@@ -7,9 +7,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useAppStore } from "../../../../../store/useAppStore";
 
 export interface ModelOption {
+  /** Fully qualified model handle used for runtime selection. */
   name: string;
+  /** Provider-local name, used only to migrate old bare-name selections. */
+  model_name?: string | null;
   display_name?: string | null;
   provider_type: string;
+  provider_name?: string | null;
+  provider_category?: "base" | "byok" | null;
 }
 
 const MODEL_KEY_REGEX = /model/i;
@@ -151,6 +156,19 @@ export function useModels(options: UseModelsOptions): UseModelsResult {
       window.removeEventListener("letta-model-catalog-changed", handleCatalogChanged);
     };
   }, []);
+
+  // Migrate selections persisted by older Cowork builds, which incorrectly
+  // stored the provider-local model name instead of the qualified handle.
+  useEffect(() => {
+    if (!selectedModel || allModels.some((model) => model.name === selectedModel)) return;
+
+    const connectedMatches = allModels.filter(
+      (model) => model.provider_category === "byok" && model.model_name === selectedModel
+    );
+    if (connectedMatches.length === 1) {
+      setSelectedModel(connectedMatches[0].name);
+    }
+  }, [allModels, selectedModel, setSelectedModel]);
 
   // Reset touched on agent change
   useEffect(() => {
