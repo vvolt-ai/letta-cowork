@@ -80,7 +80,7 @@ export function McpSettings() {
       {loading ? (
         <LoadingRow />
       ) : error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+        <div className="rounded-xl border border-error/30 bg-[var(--color-error-light)] p-3 text-sm text-error">
           {error}
         </div>
       ) : servers.length === 0 ? (
@@ -92,12 +92,12 @@ export function McpSettings() {
             return (
               <article key={server.id} className={`flex flex-col gap-4 p-4 lg:flex-row lg:items-center ${index ? "border-t border-[var(--color-border)]" : ""}`}>
                 <div className="flex min-w-0 flex-1 items-start gap-3">
-                  <span className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${server.enabled ? "bg-emerald-50 text-emerald-600" : "bg-[var(--color-surface-secondary)] text-muted"}`}><svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01"/></svg></span>
+                  <span className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${server.enabled ? "bg-[var(--color-success-light)] text-success" : "bg-[var(--color-surface-secondary)] text-muted"}`}><svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01"/></svg></span>
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-semibold text-ink-900">{server.name}</h3>
                       <span className="rounded-full bg-[var(--color-surface-secondary)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">{server.transport}</span>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${server.ownerUserId === null ? "bg-blue-50 text-blue-700" : "bg-violet-50 text-violet-700"}`}>{server.ownerUserId === null ? "Organization" : "Private"}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${server.ownerUserId === null ? "bg-[var(--color-info-light)] text-info" : "bg-[var(--color-accent-subtle)] text-[var(--color-accent)]"}`}>{server.ownerUserId === null ? "Organization" : "Private"}</span>
                     </div>
                     <p className="mt-1 truncate font-mono text-xs text-muted">{server.url}</p>
                     <div className="mt-1.5 text-xs"><ServerStatus server={server} status={status} /></div>
@@ -129,10 +129,10 @@ function ServerStatus({
   server: McpServer;
   status: ReturnType<typeof useMcpServers>["testStatus"][string] | undefined;
 }) {
-  if (status?.state === "running") return <span className="text-slate-500">Testing…</span>;
+  if (status?.state === "running") return <span className="text-muted">Testing…</span>;
   if (status?.state === "ok") {
     return (
-      <span className="text-green-700">
+      <span className="text-success">
         ✓ {status.message ?? "OK"}
         {typeof status.toolCount === "number" && ` (${status.toolCount} tools)`}
       </span>
@@ -140,7 +140,7 @@ function ServerStatus({
   }
   if (status?.state === "error") {
     return (
-      <span className="text-red-700 whitespace-normal break-words" title={status.message}>
+      <span className="whitespace-normal break-words text-error" title={status.message}>
         ✗ {truncate(status.message ?? "Error", 160)}
       </span>
     );
@@ -148,19 +148,19 @@ function ServerStatus({
   // No live status — fall back to server.lastError / lastConnectedAt
   if (server.lastError) {
     return (
-      <span className="text-red-700 whitespace-normal break-words" title={server.lastError}>
+      <span className="whitespace-normal break-words text-error" title={server.lastError}>
         ✗ {truncate(server.lastError, 160)}
       </span>
     );
   }
   if (server.lastConnectedAt) {
     return (
-      <span className="text-slate-500">
+      <span className="text-muted">
         Last seen {formatRelative(server.lastConnectedAt)}
       </span>
     );
   }
-  return <span className="text-slate-400">Not tested</span>;
+  return <span className="text-muted-light">Not tested</span>;
 }
 
 interface ActionButtonProps {
@@ -171,11 +171,11 @@ interface ActionButtonProps {
 }
 
 function ActionButton({ onClick, title, variant = "default", children }: ActionButtonProps) {
-  const base = "px-2 py-1 text-xs rounded border";
+  const base = "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors";
   const variantClass =
     variant === "danger"
-      ? "border-red-200 text-red-700 hover:bg-red-50"
-      : "border-slate-200 text-slate-700 hover:bg-slate-50";
+      ? "border-error/40 bg-[var(--color-error-light)]/40 text-error hover:bg-[var(--color-error-light)]"
+      : "border-[var(--color-border-hover)] bg-[var(--color-surface-secondary)] text-ink-700 hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-hover)] hover:text-ink-900";
   return (
     <button onClick={onClick} title={title} className={`${base} ${variantClass}`}>
       {children}
@@ -197,11 +197,11 @@ interface IconButtonProps {
 
 function IconButton({ onClick, title, variant = "default", children }: IconButtonProps) {
   const base =
-    "inline-flex items-center justify-center h-7 w-7 rounded border transition-colors";
+    "inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-colors";
   const variantClass =
     variant === "danger"
-      ? "border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
-      : "border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900";
+      ? "border-error/40 bg-[var(--color-error-light)]/30 text-error hover:bg-[var(--color-error-light)]"
+      : "border-[var(--color-border-hover)] bg-[var(--color-surface-secondary)] text-ink-600 hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-hover)] hover:text-ink-900";
   return (
     <button
       type="button"
@@ -217,11 +217,11 @@ function IconButton({ onClick, title, variant = "default", children }: IconButto
 
 function EmptyState({ onAdd }: { onAdd: () => void }) {
   return (
-    <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-lg">
-      <p className="text-slate-500 mb-3">No MCP servers configured yet.</p>
+    <div className="rounded-xl border-2 border-dashed border-[var(--color-border)] py-12 text-center">
+      <p className="mb-3 text-muted">No MCP servers configured yet.</p>
       <button
         onClick={onAdd}
-        className="px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+        className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:brightness-95"
       >
         + Add your first MCP server
       </button>
@@ -231,7 +231,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
 
 function LoadingRow() {
   return (
-    <div className="flex items-center justify-center py-8 text-slate-500">
+    <div className="flex items-center justify-center py-8 text-muted">
       <svg className="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <circle className="opacity-25" cx="12" cy="12" r="10" />
         <path className="opacity-75" d="M4 12a8 8 0 018-8" />

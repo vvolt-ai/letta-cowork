@@ -91,7 +91,7 @@ function ActionCard({
       onClick={onClick}
       className="group flex min-h-[68px] w-full items-start gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-left shadow-[var(--shadow-soft)] transition hover:border-[var(--color-accent)]/50 hover:bg-[var(--color-surface-secondary)]"
     >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 transition group-hover:bg-blue-100">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--color-info-light)] text-info transition group-hover:brightness-105">
         {icon}
       </span>
       <span className="min-w-0 flex-1">
@@ -373,13 +373,13 @@ export const ConfigurationTab = memo(function ConfigurationTab({
               <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
                 <span className="text-muted">Include country code.</span>
                 {!phoneNumberChanged && verifiedPhoneNumber ? (
-                  <span className="font-medium text-green-600">Verified</span>
+                  <span className="font-medium text-success">Verified</span>
                 ) : (
                   <button
                     type="button"
                     onClick={handleRequestMobileOtp}
                     disabled={mobileOtpSending || !profile.phoneNumber.trim() || !phoneNumberChanged}
-                    className="rounded-md border border-blue-200 px-2.5 py-1 font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400"
+                    className="rounded-md border border-[var(--color-border-hover)] bg-[var(--color-surface-secondary)] px-2.5 py-1 font-medium text-ink-700 hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {mobileOtpSending ? 'Sending...' : 'Send OTP'}
                   </button>
@@ -390,13 +390,13 @@ export const ConfigurationTab = memo(function ConfigurationTab({
                       value={mobileOtp}
                       onChange={(event) => setMobileOtp(event.target.value)}
                       placeholder="Enter OTP"
-                      className="h-7 w-28 rounded-md border border-gray-300 px-2 text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="h-7 w-28 rounded-md border border-[var(--color-border)] bg-[var(--color-bg-000)] px-2 text-xs text-ink-900 focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
                     />
                     <button
                       type="button"
                       onClick={handleVerifyMobileOtp}
                       disabled={mobileOtpVerifying || !mobileOtp.trim()}
-                      className="rounded-md bg-[var(--color-accent)] px-2.5 py-1 font-medium text-white hover:brightness-95 disabled:cursor-not-allowed disabled:bg-gray-300"
+                      className="rounded-md bg-[var(--color-accent)] px-2.5 py-1 font-medium text-white hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {mobileOtpVerifying ? 'Verifying...' : 'Verify'}
                     </button>
@@ -404,7 +404,7 @@ export const ConfigurationTab = memo(function ConfigurationTab({
                 ) : null}
               </div>
               {mobileOtpMessage ? (
-                <p className={`mt-1 text-xs ${mobileOtpMessage.includes('sent') || mobileOtpMessage.includes('verified') ? 'text-green-600' : 'text-red-600'}`}>
+                <p className={`mt-1 text-xs ${mobileOtpMessage.includes('sent') || mobileOtpMessage.includes('verified') ? 'text-success' : 'text-error'}`}>
                   {mobileOtpMessage}
                 </p>
               ) : null}
@@ -415,12 +415,12 @@ export const ConfigurationTab = memo(function ConfigurationTab({
             <button
               onClick={handleSaveProfile}
               disabled={profileSaving || !profile.firstName.trim()}
-              className="rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-white hover:brightness-95 disabled:cursor-not-allowed disabled:bg-gray-300"
+              className="rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-white hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {profileSaving ? 'Saving...' : 'Save profile'}
             </button>
             {profileMessage ? (
-              <span className={`text-sm ${profileMessage === 'Profile saved' ? 'text-green-600' : 'text-red-600'}`}>
+              <span className={`text-sm ${profileMessage === 'Profile saved' ? 'text-success' : 'text-error'}`}>
                 {profileMessage}
               </span>
             ) : null}
@@ -481,21 +481,21 @@ export const ConfigurationTab = memo(function ConfigurationTab({
         <Panel>
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-medium text-gray-900">Remote runner</p>
+              <p className="text-sm font-medium text-ink-900">Remote runner</p>
               <p className="mt-0.5 text-xs leading-5 text-muted">
                 Status: <span className="font-semibold">{remoteState?.status ?? 'loading'}</span>
                 {remoteState?.environmentId ? ` · ${remoteState.environmentId}` : ''}
               </p>
-              {remoteState?.lastError ? <p className="mt-1 text-xs text-red-600">{remoteState.lastError}</p> : null}
+              {remoteState?.lastError ? <p className="mt-1 text-xs text-error">{remoteState.lastError}</p> : null}
             </div>
             <button
               onClick={() => handleSaveRemoteAccess({ enabled: !(remoteState?.settings.enabled ?? false) })}
               disabled={remoteSaving || !remoteState}
               className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                remoteState?.settings.enabled ? 'bg-blue-500' : 'bg-gray-200'
+                remoteState?.settings.enabled ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-bg-400)]'
               } disabled:opacity-50`}
             >
-              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-[var(--color-brand-content)] shadow-sm transition-transform ${
                 remoteState?.settings.enabled ? 'translate-x-6' : 'translate-x-1'
               }`} />
             </button>
@@ -508,7 +508,7 @@ export const ConfigurationTab = memo(function ConfigurationTab({
                 value={remoteState?.settings.environmentName ?? ''}
                 onChange={(event) => setRemoteState((prev) => prev ? { ...prev, settings: { ...prev.settings, environmentName: event.target.value } } : prev)}
                 placeholder="Bhavesh MacBook"
-                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-000)] px-3 py-2 text-sm text-ink-900 focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
               />
             </label>
             <label className="block">
@@ -518,21 +518,21 @@ export const ConfigurationTab = memo(function ConfigurationTab({
                 onChange={(event) => setRemoteDirsText(event.target.value)}
                 placeholder="One absolute directory per line"
                 rows={3}
-                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-000)] px-3 py-2 font-mono text-xs text-ink-900 focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
               />
               <p className="mt-1 text-xs text-muted">Tools can only read/run inside these directories.</p>
             </label>
             <div className="flex items-center gap-3">
               <button
                 onClick={handleAddRemoteDirectory}
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-ink-700 hover:bg-gray-50"
+                className="rounded-lg border border-[var(--color-border-hover)] bg-[var(--color-surface-secondary)] px-3 py-2 text-sm font-medium text-ink-700 hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-hover)]"
               >
                 Add directory
               </button>
               <button
                 onClick={() => handleSaveRemoteAccess()}
                 disabled={remoteSaving || !remoteState}
-                className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:brightness-95 disabled:cursor-not-allowed disabled:bg-gray-300"
+                className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {remoteSaving ? 'Saving...' : 'Save remote access'}
               </button>

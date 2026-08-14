@@ -22,7 +22,7 @@ export function McpServersDialog({ open, onOpenChange }: McpServersDialogProps) 
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-ink-900/50 backdrop-blur-sm" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-[60] w-full max-w-4xl -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[var(--color-border)] bg-white shadow-2xl focus:outline-none flex flex-col max-h-[85vh]">
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-[60] w-full max-w-4xl -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl focus:outline-none flex flex-col max-h-[85vh]">
           <div className="flex items-center justify-between border-b border-[var(--color-border)] px-5 py-3">
             <Dialog.Title className="text-base font-semibold text-ink-900">
               MCP Servers

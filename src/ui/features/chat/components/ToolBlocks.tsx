@@ -225,10 +225,10 @@ function labelFor(key: string): string {
 }
 
 function toneClasses(tone: Tone): string {
-  if (tone === "error") return "border-red-200 bg-red-50/70 text-red-950";
-  if (tone === "running") return "border-blue-200 bg-blue-50/70 text-blue-950";
-  if (tone === "success") return "border-emerald-200 bg-emerald-50/60 text-emerald-950";
-  return "border-gray-200 bg-white text-ink-900";
+  if (tone === "error") return "border-error/30 bg-[var(--color-error-light)] text-ink-900";
+  if (tone === "running") return "border-info/30 bg-[var(--color-info-light)] text-ink-900";
+  if (tone === "success") return "border-success/30 bg-[var(--color-success-light)] text-ink-900";
+  return "border-[var(--color-tool-border)] bg-[var(--color-tool-bg)] text-ink-900";
 }
 
 function ToolCard({ title, tone = "neutral", children }: { title: string; tone?: Tone; children: ReactNode }) {
@@ -252,12 +252,12 @@ function InlineField({ label, value, mono = true }: { label: string; value: unkn
 }
 
 function Pill({ children }: { children: ReactNode }) {
-  return <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[11px] font-medium text-ink-600">{children}</span>;
+  return <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-0.5 text-[11px] font-medium text-ink-600">{children}</span>;
 }
 
 function CodeBlock({ text, max = "max-h-80" }: { text: string; max?: string }) {
   return (
-    <pre className={`${max} overflow-auto whitespace-pre-wrap break-words rounded-lg border border-gray-200 bg-white/90 px-3 py-2 font-mono text-[11px] leading-5 text-ink-900`}>
+    <pre className={`${max} overflow-auto whitespace-pre-wrap break-words rounded-lg border border-[var(--color-tool-border)] bg-[var(--color-surface)]/90 px-3 py-2 font-mono text-[11px] leading-5 text-ink-900`}>
       {text}
     </pre>
   );
@@ -265,9 +265,9 @@ function CodeBlock({ text, max = "max-h-80" }: { text: string; max?: string }) {
 
 function CompactDetails({ label = "Parameters", children }: { label?: string; children: ReactNode }) {
   return (
-    <details className="rounded-lg border border-gray-200 bg-white/80">
+    <details className="rounded-lg border border-[var(--color-tool-border)] bg-[var(--color-surface)]/80">
       <summary className="cursor-pointer px-3 py-2 text-[11px] font-medium text-muted hover:text-ink-700">{label}</summary>
-      <div className="space-y-2 border-t border-gray-100 p-3">{children}</div>
+      <div className="space-y-2 border-t border-[var(--color-tool-border)] p-3">{children}</div>
     </details>
   );
 }
@@ -287,9 +287,9 @@ function DiffLine({ line }: { line: string }) {
 
 function DiffBlock({ diff }: { diff: string }) {
   return (
-    <details className="overflow-hidden rounded-lg border border-gray-200 bg-white" open>
+    <details className="overflow-hidden rounded-lg border border-[var(--color-tool-border)] bg-[var(--color-surface)]" open>
       <summary className="cursor-pointer px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted hover:text-ink-700">Diff</summary>
-      <div className="max-h-96 overflow-auto border-t border-gray-200 bg-gray-50 py-2 font-mono text-[11px] leading-5">
+      <div className="max-h-96 overflow-auto border-t border-[var(--color-tool-border)] bg-[var(--color-tool-bg)] py-2 font-mono text-[11px] leading-5">
         {diff.split("\n").map((line, index) => <DiffLine key={`${index}-${line.slice(0, 24)}`} line={line} />)}
       </div>
     </details>
@@ -300,9 +300,9 @@ function AdvancedDetails({ data, omit }: { data: JsonRecord; omit: string[] }) {
   const entries = Object.entries(data).filter(([key, value]) => !omit.includes(key) && asText(value).length > 0);
   if (entries.length === 0) return null;
   return (
-    <details className="rounded-lg border border-gray-200 bg-white/70">
+    <details className="rounded-lg border border-[var(--color-tool-border)] bg-[var(--color-surface)]/70">
       <summary className="cursor-pointer px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted hover:text-ink-700">Advanced</summary>
-      <div className="grid gap-2 border-t border-gray-200 p-2 sm:grid-cols-2">
+      <div className="grid gap-2 border-t border-[var(--color-tool-border)] p-2 sm:grid-cols-2">
         {entries.map(([key, value]) => <InlineField key={key} label={labelFor(key)} value={value} />)}
       </div>
     </details>
@@ -393,7 +393,7 @@ function MultiEditInputCard({ data }: { data: JsonRecord }) {
             <summary className="cursor-pointer px-3 py-2 text-[11px] font-medium text-ink-700">
               Edit {index + 1}{edit.replace_all ? " · replace all" : ""}
             </summary>
-            <div className="grid gap-2 border-t border-gray-100 p-2 lg:grid-cols-2">
+            <div className="grid gap-2 border-t border-[var(--color-tool-border)] p-2 lg:grid-cols-2">
               <div>
                 <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-red-600">Old</div>
                 <CodeBlock text={asText(edit.old_string)} max="max-h-48" />
@@ -515,7 +515,7 @@ function FileList({ title, files, tone = "neutral" }: { title: string; files: st
   if (files.length === 0) return null;
   const dot = tone === "error" ? "bg-red-500" : tone === "success" ? "bg-emerald-500" : "bg-gray-400";
   return (
-    <div className="rounded-lg border border-gray-200 bg-white/90">
+    <div className="rounded-lg border border-[var(--color-tool-border)] bg-[var(--color-surface)]/90">
       <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2">
         <div className="flex items-center gap-2 text-[12px] font-medium text-ink-800">
           <span className={`h-2 w-2 rounded-full ${dot}`} />
@@ -525,7 +525,7 @@ function FileList({ title, files, tone = "neutral" }: { title: string; files: st
       </div>
       <div className="max-h-56 overflow-auto py-1">
         {files.map((file) => (
-          <div key={file} className="truncate px-3 py-1.5 font-mono text-[12px] leading-5 text-ink-800 hover:bg-gray-50" title={file}>
+          <div key={file} className="truncate px-3 py-1.5 font-mono text-[12px] leading-5 text-ink-800 hover:bg-[var(--color-surface-hover)]" title={file}>
             {file}
           </div>
         ))}
@@ -986,7 +986,7 @@ function LivePatchReviewCard({ output }: { output: string }) {
                 </label>
                 {patchFile.hunkSelectable ? patchFile.hunks.map((hunk) => (
                   <div key={hunk.id} className="border-b border-gray-100 last:border-b-0">
-                    <label className="flex cursor-pointer items-center gap-2 bg-gray-50/80 px-3 py-1.5 font-mono text-[10px] text-ink-600">
+                    <label className="flex cursor-pointer items-center gap-2 bg-[var(--color-tool-bg)]/80 px-3 py-1.5 font-mono text-[10px] text-ink-600">
                       <input type="checkbox" checked={selectedHunkSet.has(hunk.id)} onChange={() => toggleHunk(patchFile.id, hunk.id)} className="accent-[var(--color-accent)]" />
                       <span className="truncate">{hunk.header}</span>
                     </label>
@@ -1016,7 +1016,7 @@ function LivePatchReviewCard({ output }: { output: string }) {
                 {file.hunks.length > 0 ? (
                   <div className="space-y-1">
                     {file.hunks.map((hunk) => (
-                      <div key={hunk.id} className="flex items-center gap-2 rounded bg-gray-50 px-2 py-1 font-mono text-[9px] text-ink-600">
+                      <div key={hunk.id} className="flex items-center gap-2 rounded bg-[var(--color-tool-bg)] px-2 py-1 font-mono text-[9px] text-ink-600">
                         <span className={`h-1.5 w-1.5 rounded-full ${hunk.status === "clean" ? "bg-emerald-500" : "bg-red-500"}`} />
                         <span className="min-w-0 flex-1 truncate">{hunk.header ?? hunk.id}</span>
                         <span>{hunk.status}</span>
@@ -1032,16 +1032,16 @@ function LivePatchReviewCard({ output }: { output: string }) {
         </div>
       ) : null}
       {proposal.validationPlan.length > 0 ? (
-        <details className="rounded-lg border border-gray-200 bg-white/80">
+        <details className="rounded-lg border border-[var(--color-tool-border)] bg-[var(--color-surface)]/80">
           <summary className="cursor-pointer px-3 py-2 text-[11px] font-medium text-muted">Validation plan</summary>
-          <ul className="space-y-1 border-t border-gray-100 px-5 py-2 text-[11px] text-ink-700">
+          <ul className="space-y-1 border-t border-[var(--color-tool-border)] px-5 py-2 text-[11px] text-ink-700">
             {proposal.validationPlan.map((step, index) => <li key={index} className="list-disc">{step}</li>)}
           </ul>
         </details>
       ) : null}
       {error ? <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-700">{error}</div> : null}
       {proposal.status === "pending" ? (
-        <div className="space-y-2 border-t border-gray-200 pt-3">
+        <div className="space-y-2 border-t border-[var(--color-tool-border)] pt-3">
           {rejecting ? (
             <div className="flex flex-col gap-2 sm:flex-row">
               <input aria-label="Reason for rejection" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Reason for rejection (optional)" className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs outline-none focus:border-[var(--color-accent)]" />

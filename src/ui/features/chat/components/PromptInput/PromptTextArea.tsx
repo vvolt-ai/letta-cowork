@@ -159,7 +159,7 @@ export const PromptTextArea = memo(function PromptTextArea({
           <button
             type="button"
             onClick={onStopAndResend}
-            className="rounded-full border border-orange-300 bg-orange-50 px-3 py-1.5 text-xs font-medium text-orange-700 transition hover:border-orange-400 hover:bg-orange-100"
+            className="rounded-full border border-warning/40 bg-[var(--color-warning-light)] px-3 py-1.5 text-xs font-medium text-warning transition hover:border-warning/70 hover:brightness-105"
           >
             Stop & resend with this added
           </button>

@@ -73,8 +73,8 @@ export function EnvironmentSettings() {
         <button type="button" onClick={() => void load()} disabled={loading || saving} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs font-semibold text-ink-600 transition hover:bg-[var(--color-surface-secondary)] disabled:opacity-50">Refresh</button>
       </div>
 
-      {error ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
-      {success ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</div> : null}
+      {error ? <div className="rounded-xl border border-error/30 bg-[var(--color-error-light)] px-4 py-3 text-sm text-error">{error}</div> : null}
+      {success ? <div className="rounded-xl border border-success/30 bg-[var(--color-success-light)] px-4 py-3 text-sm text-success">{success}</div> : null}
 
       <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-soft)]">
         <div className="grid gap-5 p-5 md:grid-cols-2">

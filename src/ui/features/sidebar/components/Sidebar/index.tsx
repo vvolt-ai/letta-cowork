@@ -142,7 +142,7 @@ export const Sidebar = memo(function Sidebar({
         <div className="space-y-2">
         <button
           onClick={onOpenSettings}
-          className="group flex w-full items-center gap-3 rounded-2xl border border-white/60 bg-white/55 p-3 text-left shadow-sm transition hover:bg-white hover:shadow-md"
+          className="group flex w-full items-center gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]/80 p-3 text-left shadow-sm transition hover:border-[var(--color-border-hover)] hover:bg-[var(--color-surface-hover)] hover:shadow-md"
         >
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
           <svg className="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.75">
@@ -159,7 +159,7 @@ export const Sidebar = memo(function Sidebar({
         <button
           type="button"
           onClick={handleOpenEmailView}
-          className="group flex w-full items-center gap-3 rounded-2xl border border-white/60 bg-white/55 p-3 text-left shadow-sm transition hover:bg-white hover:shadow-md"
+          className="group flex w-full items-center gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]/80 p-3 text-left shadow-sm transition hover:border-[var(--color-border-hover)] hover:bg-[var(--color-surface-hover)] hover:shadow-md"
         >
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
             <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
@@ -222,7 +222,7 @@ export const Sidebar = memo(function Sidebar({
       {/* User Section */}
       {userEmail && (
         <div className="mt-auto flex-shrink-0 border-t border-[var(--color-border)] p-3">
-          <div className="flex items-center justify-between rounded-2xl bg-white/60 px-3 py-2 shadow-sm">
+          <div className="flex items-center justify-between rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]/80 px-3 py-2 shadow-sm">
             <div className="flex items-center gap-2">
               <div className="h-8 w-8 rounded-full bg-[var(--color-accent)] flex items-center justify-center text-white text-sm font-medium">
                 {userEmail.charAt(0).toUpperCase()}
@@ -237,7 +237,7 @@ export const Sidebar = memo(function Sidebar({
             {onLogout && (
               <button
                 onClick={onLogout}
-                className="text-xs text-ink-500 hover:text-ink-700 hover:bg-ink-900/5 px-2 py-1 rounded transition"
+                className="rounded px-2 py-1 text-xs text-ink-500 transition hover:bg-[var(--color-surface-hover)] hover:text-ink-700"
                 title="Logout"
               >
                 Logout

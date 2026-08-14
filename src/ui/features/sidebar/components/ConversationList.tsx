@@ -184,7 +184,7 @@ export function ConversationList({
 
   if (sessions.length === 0) {
     return (
-      <div className="mx-3 rounded-2xl border border-dashed border-[var(--color-border)] bg-white/45 px-4 py-5 text-center text-xs leading-5 text-muted">{emptyMessage}</div>
+      <div className="mx-3 rounded-2xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]/60 px-4 py-5 text-center text-xs leading-5 text-muted">{emptyMessage}</div>
     );
   }
 
@@ -206,8 +206,8 @@ export function ConversationList({
             key={session.id}
             className={`group relative flex cursor-pointer items-center gap-2 rounded-2xl px-3 py-2 transition ${
               isActive
-                ? "bg-white text-ink-900 shadow-sm ring-1 ring-[var(--color-accent)]/10"
-                : "text-ink-600 hover:bg-white/70 hover:text-ink-800 hover:shadow-sm"
+                ? "bg-[var(--color-surface)] text-ink-900 shadow-sm ring-1 ring-[var(--color-accent)]/20"
+                : "text-ink-600 hover:bg-[var(--color-surface-hover)] hover:text-ink-800 hover:shadow-sm"
             }`}
             role="button"
             tabIndex={0}
@@ -274,7 +274,7 @@ export function ConversationList({
                 <DropdownMenu.Root>
                   <DropdownMenu.Trigger asChild>
                     <button
-                      className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-ink-400 shadow-sm hover:text-ink-700"
+                      className="flex h-7 w-7 items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-ink-400 shadow-sm hover:bg-[var(--color-surface-hover)] hover:text-ink-700"
                       onClick={(event) => event.stopPropagation()}
                       onPointerDown={(event) => event.stopPropagation()}
                       aria-label="Conversation menu"

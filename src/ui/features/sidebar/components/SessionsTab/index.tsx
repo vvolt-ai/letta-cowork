@@ -274,7 +274,7 @@ export const SessionsTab = memo(function SessionsTab({
       {/* Section header */}
       <div className="flex items-center justify-between px-4 pb-2 pt-2">
         <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">Agents</span>
-        <span className="rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-medium text-muted">{regularSessions.length}</span>
+        <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]/80 px-2 py-0.5 text-[10px] font-medium text-muted">{regularSessions.length}</span>
       </div>
       <div className="px-3 pb-2">
         <input
@@ -283,14 +283,14 @@ export const SessionsTab = memo(function SessionsTab({
           onChange={(event) => setAgentSearchQuery(event.target.value)}
           placeholder="Search agents…"
           aria-label="Search agents"
-          className="w-full rounded-xl border border-ink-900/10 bg-white/65 px-3 py-2 text-xs text-ink-800 outline-none placeholder:text-muted-light focus:border-accent/50 focus:ring-1 focus:ring-accent/20"
+          className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]/80 px-3 py-2 text-xs text-ink-800 outline-none placeholder:text-muted-light focus:border-accent/50 focus:ring-1 focus:ring-accent/20"
         />
       </div>
       {/* New conversation link */}
       <div className="px-3 pb-3">
         <button
           onClick={() => onNewSession()}
-          className="flex w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-[var(--color-border)] bg-white/45 px-3 py-2 text-[13px] font-medium text-muted transition hover:border-[var(--color-accent)] hover:bg-white hover:text-ink-800 hover:shadow-sm"
+          className="flex w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]/60 px-3 py-2 text-[13px] font-medium text-muted transition hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-hover)] hover:text-ink-800 hover:shadow-sm"
         >
           <span className="text-base leading-none">+</span>
           <span>New conversation</span>

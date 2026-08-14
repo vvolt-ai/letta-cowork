@@ -77,7 +77,7 @@ export function SettingsWorkspace({ activeSection, onSectionChange, onClose, chi
                       onClick={() => onSectionChange(item.id)}
                       className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${active ? "bg-[var(--color-surface)] text-ink-900 shadow-sm" : "text-ink-600 hover:bg-[var(--color-sidebar-hover)] hover:text-ink-900"}`}
                     >
-                      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${active ? "bg-[var(--color-accent-subtle)] text-[var(--color-accent)]" : "bg-black/[0.035] text-ink-500"}`}>
+                      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${active ? "bg-[var(--color-accent-subtle)] text-[var(--color-accent)]" : "bg-[var(--color-surface-tertiary)] text-ink-500"}`}>
                         <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{item.icon}</svg>
                       </span>
                       <span className="min-w-0">

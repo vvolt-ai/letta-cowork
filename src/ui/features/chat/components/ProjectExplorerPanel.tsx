@@ -214,10 +214,10 @@ export function ProjectExplorerPanel({ rootPath, onClose }: ProjectExplorerPanel
         </div>
         {error ? <div role="alert" className="m-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-700">{error}</div> : null}
         {loadingPreview ? <div className="px-4 py-5 text-xs text-muted">Opening file…</div> : preview ? (
-          <div className="min-h-0 flex-1 overflow-auto bg-[#fbfbfc]">
+          <div className="min-h-0 flex-1 overflow-auto bg-[var(--color-bg-000)]">
             {(preview.truncated || lineLimited) ? <div className="sticky top-0 z-10 border-b border-amber-200 bg-amber-50 px-3 py-1.5 text-[10px] text-amber-800">Preview truncated for performance.</div> : null}
             <div className="grid min-w-max grid-cols-[auto_1fr] font-mono text-[11px] leading-[18px]">
-              <pre className="select-none border-r border-gray-200 bg-gray-50 px-2 py-2 text-right text-gray-400">{previewLines.map((_, index) => index + 1).join("\n")}</pre>
+              <pre className="select-none border-r border-[var(--color-border)] bg-[var(--color-surface-secondary)] px-2 py-2 text-right text-ink-400">{previewLines.map((_, index) => index + 1).join("\n")}</pre>
               <pre className="m-0 whitespace-pre px-3 py-2 text-ink-800">{previewLines.join("\n")}</pre>
             </div>
           </div>

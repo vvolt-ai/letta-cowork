@@ -121,7 +121,7 @@ export const ToolGroupBlock = memo(function ToolGroupBlock({ group }: ToolGroupB
           setUserOverride(!expanded);
           setExpanded((v) => !v);
         }}
-        className="flex w-full items-center gap-2 rounded-lg px-1.5 py-1 text-left transition hover:bg-gray-50"
+        className="flex w-full items-center gap-2 rounded-lg px-1.5 py-1 text-left transition hover:bg-[var(--color-surface-hover)]"
       >
         <span className={`inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center ${iconClass}`}>
           {aggregateStatus === "running" ? (
@@ -158,13 +158,13 @@ export const ToolGroupBlock = memo(function ToolGroupBlock({ group }: ToolGroupB
       </button>
 
       {expanded ? (
-        <div className="mt-1 ml-5 overflow-hidden rounded-xl border border-[var(--color-border)] bg-white/70">
+        <div className="mt-1 ml-5 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]/70">
           {children.map((child) => {
             const childFailed = child.status === "failed";
             const childRunning = child.status === "running";
             const childSummary = summarizeChildInput(child.name, child.input) ?? child.output ?? child.logs?.[0] ?? "No details";
             return (
-              <div key={child.id} className="grid grid-cols-[18px_minmax(120px,180px)_1fr] items-center gap-2 border-b border-gray-100 px-3 py-1.5 last:border-b-0">
+              <div key={child.id} className="grid grid-cols-[18px_minmax(120px,180px)_1fr] items-center gap-2 border-b border-[var(--color-border)]/70 px-3 py-1.5 last:border-b-0">
                 <span className={`text-[12px] ${childFailed ? "text-red-500" : childRunning ? "text-blue-500" : "text-green-500"}`}>
                   {childRunning ? "•" : childFailed ? "!" : "✓"}
                 </span>

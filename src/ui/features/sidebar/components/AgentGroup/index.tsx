@@ -91,7 +91,7 @@ export function AgentGroup({
         {onNewSession && (
           <button
             onClick={(e) => { e.stopPropagation(); onNewSession(agentId); }}
-            className="shrink-0 rounded-full p-1 text-muted opacity-0 transition hover:bg-white hover:text-ink-700 hover:shadow-sm group-hover:opacity-100"
+            className="shrink-0 rounded-full p-1 text-muted opacity-0 transition hover:bg-[var(--color-surface-hover)] hover:text-ink-700 hover:shadow-sm group-hover:opacity-100"
             title="New conversation"
             aria-label="New conversation"
           >

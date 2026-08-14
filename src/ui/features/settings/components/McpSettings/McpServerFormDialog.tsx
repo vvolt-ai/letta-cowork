@@ -105,7 +105,7 @@ export function McpServerFormDialog({ open, editing, onClose, onSubmit }: Props)
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <button type="button" className="absolute inset-0 bg-ink-900/45 backdrop-blur-sm" onClick={onClose} aria-label="Close MCP form" />
-      <form onSubmit={handleSubmit} className="relative flex max-h-[88vh] w-full max-w-[680px] flex-col overflow-hidden rounded-3xl border border-white/70 bg-[var(--color-surface)] shadow-2xl">
+      <form onSubmit={handleSubmit} className="relative flex max-h-[88vh] w-full max-w-[680px] flex-col overflow-hidden rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl">
           <div className="flex items-start justify-between border-b border-[var(--color-border)] px-6 py-5">
             <div>
               <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--color-accent-subtle)] text-[var(--color-accent)]"><svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01"/></svg></div>
@@ -180,8 +180,8 @@ export function McpServerFormDialog({ open, editing, onClose, onSubmit }: Props)
 
             <div className="flex items-center justify-between gap-4 py-2">
               <div>
-                <p className="font-medium text-gray-900 text-sm">Share with organization</p>
-                <p className="text-xs text-gray-500">
+                <p className="text-sm font-medium text-ink-900">Share with organization</p>
+                <p className="text-xs text-muted">
                   When off, only you can attach this server to agents. Turn on if your
                   team should be able to attach it too.
                 </p>
@@ -196,8 +196,8 @@ export function McpServerFormDialog({ open, editing, onClose, onSubmit }: Props)
 
             <div className="flex items-center justify-between gap-4 py-2">
               <div>
-                <p className="font-medium text-gray-900 text-sm">Enabled</p>
-                <p className="text-xs text-gray-500">
+                <p className="text-sm font-medium text-ink-900">Enabled</p>
+                <p className="text-xs text-muted">
                   Disable to keep the config but stop the server from being used by agents.
                 </p>
               </div>
@@ -210,7 +210,7 @@ export function McpServerFormDialog({ open, editing, onClose, onSubmit }: Props)
             </div>
 
             {error && (
-              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">
+              <div className="rounded border border-error/30 bg-[var(--color-error-light)] p-2 text-sm text-error">
                 {error}
               </div>
             )}
@@ -364,9 +364,9 @@ interface FieldProps {
 function Field({ label, hint, children }: FieldProps) {
   return (
     <label className="block">
-      <span className="text-sm font-medium text-gray-700">{label}</span>
+      <span className="text-sm font-medium text-ink-700">{label}</span>
       {children}
-      {hint && <span className="text-xs text-gray-500 mt-1 block">{hint}</span>}
+      {hint && <span className="mt-1 block text-xs text-muted">{hint}</span>}
     </label>
   );
 }
@@ -395,9 +395,9 @@ function CheckboxToggle({
         className="peer sr-only"
         aria-label={ariaLabel}
       />
-      <span className="absolute inset-0 rounded-full bg-gray-200 transition-colors peer-checked:bg-blue-500 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-blue-500" />
+      <span className="absolute inset-0 rounded-full bg-[var(--color-bg-400)] transition-colors peer-checked:bg-[var(--color-accent)] peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--color-accent)]" />
       <span
-        className="relative inline-block h-4 w-4 translate-x-1 rounded-full bg-white transition-transform peer-checked:translate-x-6"
+        className="relative inline-block h-4 w-4 translate-x-1 rounded-full bg-[var(--color-brand-content)] shadow-sm transition-transform peer-checked:translate-x-6"
       />
     </label>
   );

@@ -19,7 +19,7 @@ function CopyButton({ getText, label = "Copy" }: { getText: () => string; label?
     <button
       type="button"
       onClick={onCopy}
-      className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white/80 px-2 py-0.5 text-[11px] font-medium text-ink-700 backdrop-blur transition-colors hover:bg-white hover:text-ink-900"
+      className="inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)]/90 px-2 py-0.5 text-[11px] font-medium text-ink-700 backdrop-blur transition-colors hover:bg-[var(--color-surface-hover)] hover:text-ink-900"
       aria-label={label}
     >
       {copied ? (
@@ -47,8 +47,8 @@ function CodeBlock({ language, children }: { language: string | null; children: 
   const getText = useCallback(() => ref.current?.innerText ?? "", []);
 
   return (
-    <div className="group relative my-4 overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
-      <div className="flex items-center justify-between border-b border-gray-200 bg-gray-100/70 px-3 py-1.5">
+    <div className="group relative my-4 overflow-hidden rounded-xl border border-[var(--color-tool-border)] bg-[var(--color-tool-bg)]">
+      <div className="flex items-center justify-between border-b border-[var(--color-tool-border)] bg-[var(--color-surface-tertiary)]/80 px-3 py-1.5">
         <span className="font-mono text-[11px] uppercase tracking-wider text-ink-500">
           {language || "text"}
         </span>
@@ -88,7 +88,7 @@ export default function MarkdownRenderer({ text }: { text: string }) {
         img: ({ alt, ...rest }) => (
           <img
             alt={alt ?? ""}
-            className="my-3 max-w-full rounded-lg border border-gray-200"
+            className="my-3 max-w-full rounded-lg border border-[var(--color-border)]"
             {...rest}
           />
         ),
@@ -113,11 +113,11 @@ export default function MarkdownRenderer({ text }: { text: string }) {
         em: (props) => <em className="italic text-ink-800" {...props} />,
         blockquote: (props) => (
           <blockquote
-            className="my-4 border-l-4 border-[var(--color-accent)]/40 bg-gray-50/60 pl-4 py-2 text-[15px] leading-[1.75] text-ink-700 italic rounded-r-md"
+            className="my-4 rounded-r-md border-l-4 border-[var(--color-accent)]/40 bg-[var(--color-surface-secondary)]/70 py-2 pl-4 text-[15px] italic leading-[1.75] text-ink-700"
             {...props}
           />
         ),
-        hr: () => <hr className="my-6 border-t border-gray-200" />,
+        hr: () => <hr className="my-6 border-t border-[var(--color-border)]" />,
         pre: ({ children }) => {
           // Pull language out of the inner <code> if present.
           let language: string | null = null;
@@ -139,7 +139,7 @@ export default function MarkdownRenderer({ text }: { text: string }) {
 
           return isInline ? (
             <code
-              className="rounded-md bg-gray-100 border border-gray-200 px-1.5 py-0.5 font-mono text-[13px] text-ink-800"
+              className="rounded-md border border-[var(--color-tool-border)] bg-[var(--color-tool-bg)] px-1.5 py-0.5 font-mono text-[13px] text-ink-800"
               {...rest}
             >
               {children}
@@ -151,14 +151,14 @@ export default function MarkdownRenderer({ text }: { text: string }) {
           );
         },
         table: (props) => (
-          <div className="my-4 w-full overflow-x-auto rounded-xl border border-gray-200">
+          <div className="my-4 w-full overflow-x-auto rounded-xl border border-[var(--color-border)]">
             <table className="min-w-full text-[14px] text-ink-800 border-collapse" {...props} />
           </div>
         ),
-        thead: (props) => <thead className="bg-gray-50 text-ink-900 font-semibold" {...props} />,
-        th: (props) => <th className="px-4 py-2.5 text-left font-semibold border-b border-gray-200" {...props} />,
-        td: (props) => <td className="px-4 py-2.5 border-b border-gray-100 last:border-b-0" {...props} />,
-        tr: (props) => <tr className="hover:bg-gray-50/50 transition-colors" {...props} />,
+        thead: (props) => <thead className="bg-[var(--color-surface-secondary)] text-ink-900 font-semibold" {...props} />,
+        th: (props) => <th className="border-b border-[var(--color-border)] px-4 py-2.5 text-left font-semibold" {...props} />,
+        td: (props) => <td className="border-b border-[var(--color-border)]/70 px-4 py-2.5 last:border-b-0" {...props} />,
+        tr: (props) => <tr className="transition-colors hover:bg-[var(--color-surface-hover)]/60" {...props} />,
       }}
     >
       {text}

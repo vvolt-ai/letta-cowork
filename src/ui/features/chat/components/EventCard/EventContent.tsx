@@ -69,7 +69,7 @@ function DiffLine({ line }: { line: string }) {
 
 function SectionCard({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-3">
+    <div className="rounded-lg border border-[var(--color-tool-border)] bg-[var(--color-surface)] p-3">
       <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">{title}</div>
       <div className="mt-2">{children}</div>
     </div>
@@ -89,7 +89,7 @@ function KeyValueGrid({ data, omit = [] }: { data: JsonRecord; omit?: string[] }
   return (
     <div className="grid gap-2 sm:grid-cols-2">
       {entries.map(([key, value]) => (
-        <div key={key} className="rounded-md bg-gray-50 px-2.5 py-2">
+        <div key={key} className="rounded-md bg-[var(--color-tool-bg)] px-2.5 py-2">
           <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">{key}</div>
           <pre className="mt-1 max-h-36 overflow-auto whitespace-pre-wrap break-words font-mono text-xs text-ink-800">{formatJsonValue(value)}</pre>
         </div>
@@ -103,7 +103,7 @@ function OutputBlock({ title = "Output", value }: { title?: string; value: unkno
   if (!text || text === "—") return null;
   return (
     <SectionCard title={title}>
-      <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap break-words rounded-md bg-gray-50 p-2 font-mono text-xs leading-5 text-ink-800">{text}</pre>
+      <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap break-words rounded-md bg-[var(--color-tool-bg)] p-2 font-mono text-xs leading-5 text-ink-800">{text}</pre>
     </SectionCard>
   );
 }
@@ -129,11 +129,11 @@ function GitDiffSummaryCard({ summary }: { summary: GitDiffSummaryOutput }) {
       ) : null}
 
       {summary.diff ? (
-        <details className="rounded-lg border border-gray-200 bg-white" open>
+        <details className="rounded-lg border border-[var(--color-tool-border)] bg-[var(--color-surface)]" open>
           <summary className="cursor-pointer px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted hover:text-ink-700">
             Diff
           </summary>
-          <div className="max-h-[520px] overflow-auto border-t border-gray-200 bg-gray-50 py-2 font-mono text-xs leading-5">
+          <div className="max-h-[520px] overflow-auto border-t border-[var(--color-tool-border)] bg-[var(--color-tool-bg)] py-2 font-mono text-xs leading-5">
             {diffLines.map((line, index) => <DiffLine key={`${index}-${line.slice(0, 24)}`} line={line} />)}
           </div>
         </details>

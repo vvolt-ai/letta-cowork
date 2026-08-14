@@ -195,7 +195,7 @@ export const ChatWorkspace = memo(function ChatWorkspace({
                           setIsCancellingRecoveredRun(false);
                         });
                     }}
-                    className="rounded-full border border-orange-300 bg-orange-50 px-3 py-1.5 text-[11px] font-medium text-orange-700 transition hover:border-orange-400 hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-70"
+                    className="rounded-full border border-warning/40 bg-[var(--color-warning-light)] px-3 py-1.5 text-[11px] font-medium text-warning transition hover:border-warning/70 hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-70"
                     disabled={isCancellingRecoveredRun}
                   >
                     {isCancellingRecoveredRun ? "Cancelling stuck run…" : "Cancel stuck run"}
@@ -238,9 +238,9 @@ export const ChatWorkspace = memo(function ChatWorkspace({
           ) : null}
 
           {recoveredRequests.length > 0 ? (
-            <div className="mb-4 rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+            <div className="mb-4 rounded-2xl border border-warning/30 bg-[var(--color-warning-light)] px-4 py-3 text-sm text-ink-800">
               <div className="font-medium">Recovered pending approval detected</div>
-              <div className="mt-1 text-xs text-orange-700">
+              <div className="mt-1 text-xs text-ink-700">
                 This conversation has a Letta run that appears to still be waiting for approval after reconnect. You can inspect it in the activity panel or cancel the stuck run.
               </div>
             </div>
@@ -339,7 +339,7 @@ export const ChatWorkspace = memo(function ChatWorkspace({
           className={`pointer-events-auto absolute right-5 z-40 flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-medium shadow-md transition lg:right-10 ${
             hasNewMessages
               ? "border border-[var(--color-accent)] bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)]"
-              : "border border-[var(--color-border)] bg-white text-ink-700 hover:bg-gray-50"
+              : "border border-[var(--color-border)] bg-[var(--color-surface)] text-ink-700 hover:bg-[var(--color-surface-hover)]"
           }`}
         >
           <svg
