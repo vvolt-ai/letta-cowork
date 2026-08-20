@@ -184,7 +184,10 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
       // Get agent name for display (uses cache if available)
       let agentName: string | undefined = "Unknown Agent";
       try {
-        const name = await getAgentName(lettaSession.agentId || getCachedAgentId() || targetAgentId || undefined);
+        const name = await getAgentName(
+          lettaSession.agentId || getCachedAgentId() || targetAgentId || undefined,
+          options.lettaConnectionId,
+        );
         agentName = name || agentName;
       } catch (e) {
         console.log("[runner] Failed to get agent name:", e);

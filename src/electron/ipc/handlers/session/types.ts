@@ -42,6 +42,7 @@ export interface SessionStartOptions {
     attachments?: unknown[];
     cwd?: string;
     agentId?: string;
+    lettaConnectionId?: string;
     model?: string;
     permissionMode?: "standard" | "acceptEdits" | "unrestricted" | "strict";
     title?: string;
@@ -58,6 +59,8 @@ export interface SessionContinueOptions {
     content?: unknown;
     attachments?: unknown[];
     cwd?: string;
+    agentId?: string;
+    lettaConnectionId?: string;
     model?: string;
     permissionMode?: "standard" | "acceptEdits" | "unrestricted" | "strict";
 }

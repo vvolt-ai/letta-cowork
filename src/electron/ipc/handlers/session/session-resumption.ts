@@ -12,7 +12,7 @@ import {
 import { log, debug } from "./utils.js";
 import { runLetta } from "../../../libs/runner/index.js";
 import { createRuntimeSession, updateSession, deleteSession, getSession } from "../../../libs/runtime-state.js";
-import { getStoredSessions } from "../../../services/settings/index.js";
+import { addStoredSession, getStoredSessions } from "../../../services/settings/index.js";
 
 import type { SessionContinueOptions } from "./types.js";
 import type { MessageContentItem } from "@letta-ai/letta-agent-sdk";
@@ -25,7 +25,7 @@ import type { MessageContentItem } from "@letta-ai/letta-agent-sdk";
 export async function handleContinueSession(
     options: SessionContinueOptions
 ): Promise<void> {
-    const { sessionId: conversationId, prompt, content, attachments, cwd, model, permissionMode } = options;
+    const { sessionId: conversationId, prompt, content, attachments, cwd, agentId, lettaConnectionId, model, permissionMode } = options;
 
     // Validate we have a real conversation ID
     if (!conversationId || !/^(agent-|conv-|conversation-|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/.test(conversationId)) {
@@ -66,11 +66,21 @@ export async function handleContinueSession(
             });
         }
 
-        const storedSession = runtimeSession.title
-            ? undefined
-            : getStoredSessions().find((session) => session.id === conversationId);
+        const storedSession = getStoredSessions().find(
+            (session) => session.id === conversationId
+        );
         const resolvedTitle =
             runtimeSession.title ?? storedSession?.title ?? conversationId;
+        if (!storedSession && agentId) {
+            addStoredSession({
+                id: conversationId,
+                agentId,
+                lettaConnectionId,
+                title: resolvedTitle,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+            });
+        }
 
         runtimeSession =
             updateSession(conversationId, {
@@ -114,6 +124,7 @@ export async function handleContinueSession(
                     permissionGrants: runtimeSession.permissionGrants,
                 },
                 resumeConversationId: conversationId,
+                lettaConnectionId: lettaConnectionId ?? storedSession?.lettaConnectionId,
                 onEvent: (e) => {
                     if (
                         actualConversationId !== conversationId &&

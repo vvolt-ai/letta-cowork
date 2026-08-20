@@ -72,7 +72,7 @@ export function emit(event: ServerEvent): void {
 export async function handleStartSession(
     options: SessionStartOptions
 ): Promise<void> {
-    const { prompt, content, attachments, cwd, agentId, model, permissionMode, title, background, isEmailSession } = options;
+    const { prompt, content, attachments, cwd, agentId, lettaConnectionId, model, permissionMode, title, background, isEmailSession } = options;
     clearAgentCache();
 
     debug("session.start: starting new session", {
@@ -102,6 +102,7 @@ export async function handleStartSession(
             prompt: safePrompt,
             content: content as MessageContentItem[] | undefined,
             preferredAgentId: agentId,
+            lettaConnectionId,
             model,
             permissionMode,
             session: sessionConfig,
@@ -130,6 +131,7 @@ export async function handleStartSession(
                     const resolvedAgentId = agentId || process.env.LETTA_AGENT_ID || "";
                     addStoredSession({
                         id: conversationId, agentId: resolvedAgentId, agentName: undefined,
+                        lettaConnectionId,
                         title: sessionTitle, createdAt: Date.now(), updatedAt: Date.now(),
                         isEmailSession: isEmailSession ?? false,
                     });

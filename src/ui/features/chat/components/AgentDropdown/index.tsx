@@ -9,10 +9,11 @@ interface Agent {
 interface AgentDropdownProps {
   value: string;
   onChange: (agentId: string) => void;
+  connectionId?: string;
   disabled?: boolean;
 }
 
-export function AgentDropdown({ value, onChange, disabled = false }: AgentDropdownProps) {
+export function AgentDropdown({ value, onChange, connectionId, disabled = false }: AgentDropdownProps) {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [searchResults, setSearchResults] = useState<Agent[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -36,7 +37,7 @@ export function AgentDropdown({ value, onChange, disabled = false }: AgentDropdo
     setLoading(true);
     setError(null);
     try {
-      const fetchedAgents = await window.electron.listLettaAgents(queryText);
+      const fetchedAgents = await window.electron.listLettaAgents(queryText, connectionId);
       if (requestId !== requestIdRef.current) return;
       if (queryText) setSearchResults(fetchedAgents);
       else {
@@ -53,11 +54,11 @@ export function AgentDropdown({ value, onChange, disabled = false }: AgentDropdo
   };
 
   useEffect(() => {
-    // Load agents immediately on mount so selected value is displayed
-    if (agents.length === 0) {
-      fetchAgents();
-    }
-  }, []);
+    // Reload whenever the selected Letta account changes.
+    setAgents([]);
+    setSearchResults(null);
+    void fetchAgents();
+  }, [connectionId]);
 
   useEffect(() => {
     if (!isOpen) {

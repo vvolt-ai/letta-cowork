@@ -113,7 +113,10 @@ export async function handleDeleteSession(sessionId: string): Promise<void> {
             runnerHandles.delete(sessionId);
         }
 
-        const lettaClient = createLettaClient();
+        const connectionId = getStoredSessions().find(
+            (session) => session.id === sessionId
+        )?.lettaConnectionId;
+        const lettaClient = createLettaClient(connectionId);
         if (lettaClient && sessionId) {
             try {
                 await lettaClient.conversations.delete(sessionId);

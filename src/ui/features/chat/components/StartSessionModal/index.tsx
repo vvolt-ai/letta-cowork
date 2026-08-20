@@ -9,6 +9,14 @@ interface Model {
   provider_type: string;
 }
 
+interface LettaConnectionOption {
+  id: string;
+  scope: "organization" | "personal";
+  name: string;
+  isDefault: boolean;
+  isActive: boolean;
+}
+
 interface LettaConversationOption {
   id: string;
   agentId: string;
@@ -123,7 +131,7 @@ interface StartSessionModalProps {
   pendingStart: boolean;
   onCwdChange: (value: string) => void;
   onPromptChange: (value: string) => void;
-  onStart: (agentId: string, model?: string, conversationId?: string) => void;
+  onStart: (agentId: string, model?: string, conversationId?: string, connectionId?: string) => void;
   onClose: () => void;
 }
 
@@ -138,6 +146,9 @@ export function StartSessionModal({
 }: StartSessionModalProps) {
   const [recentCwds, setRecentCwds] = useState<string[]>([]);
   const sessions = useAppStore((state) => state.sessions);
+  const [connections, setConnections] = useState<LettaConnectionOption[]>([]);
+  const [connectionsLoading, setConnectionsLoading] = useState(true);
+  const [selectedConnectionId, setSelectedConnectionId] = useState<string>("");
   const [selectedAgentId, setSelectedAgentId] = useState<string>("");
   const [selectedConversationId, setSelectedConversationId] = useState<string>(NEW_CONVERSATION_VALUE);
   const [conversations, setConversations] = useState<LettaConversationOption[]>([]);
@@ -170,6 +181,24 @@ export function StartSessionModal({
     setSelectedModel(storeSelectedModel);
   }, [modelTouched, selectedAgentId, storeSelectedModel]);
 
+  useEffect(() => {
+    let cancelled = false;
+    window.electron.listLettaConnections()
+      .then((available) => {
+        if (cancelled) return;
+        setConnections(available);
+      })
+      .catch((error) => {
+        if (!cancelled) console.error("Failed to load Letta accounts:", error);
+      })
+      .finally(() => {
+        if (!cancelled) setConnectionsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Load default agent ID from Letta environment
   useEffect(() => {
     window.electron.getLettaEnv().then((env) => {
@@ -183,6 +212,12 @@ export function StartSessionModal({
     setModelTouched(false);
     setSelectedConversationId(NEW_CONVERSATION_VALUE);
   }, [selectedAgentId]);
+
+  useEffect(() => {
+    setSelectedAgentId("");
+    setSelectedConversationId(NEW_CONVERSATION_VALUE);
+    setConversations([]);
+  }, [selectedConnectionId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -200,7 +235,10 @@ export function StartSessionModal({
 
       setConversationsLoading(true);
       try {
-        const fetched = await window.electron.listLettaConversations(agentId);
+        const fetched = await window.electron.listLettaConversations(
+          agentId,
+          selectedConnectionId || undefined,
+        );
         if (cancelled) return;
         setConversations(fetched ?? []);
       } catch (error) {
@@ -220,14 +258,16 @@ export function StartSessionModal({
     return () => {
       cancelled = true;
     };
-  }, [selectedAgentId]);
+  }, [selectedAgentId, selectedConnectionId]);
 
   useEffect(() => {
     let cancelled = false;
 
     const fetchCatalog = async () => {
       try {
-        const fetchedModels = await window.electron.listLettaModels();
+        const fetchedModels = await window.electron.listLettaModels(
+          selectedConnectionId || undefined,
+        );
         if (cancelled) return;
         setAllModels(fetchedModels);
         setModels((current) => (current.length > 0 ? current : fetchedModels));
@@ -243,7 +283,7 @@ export function StartSessionModal({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [selectedConnectionId]);
 
   useEffect(() => {
     if (storeSelectedModel) {
@@ -256,7 +296,10 @@ export function StartSessionModal({
         const env = await window.electron.getLettaEnv();
         const envAgentId = env?.LETTA_AGENT_ID?.trim();
         if (!envAgentId || !window.electron.getLettaAgent) return;
-        const agent = await window.electron.getLettaAgent(envAgentId);
+        const agent = await window.electron.getLettaAgent(
+          envAgentId,
+          selectedConnectionId || undefined,
+        );
         if (cancelled) return;
         const names = extractAgentModelNames(agent);
         const preferred = typeof agent?.model === "string" && agent.model?.trim()
@@ -277,7 +320,7 @@ export function StartSessionModal({
     return () => {
       cancelled = true;
     };
-  }, [storeSelectedModel]);
+  }, [storeSelectedModel, selectedConnectionId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -297,7 +340,10 @@ export function StartSessionModal({
 
       setModelsLoading(true);
       try {
-        const agent = await window.electron.getLettaAgent(selectedAgentId);
+        const agent = await window.electron.getLettaAgent(
+          selectedAgentId,
+          selectedConnectionId || undefined,
+        );
         if (cancelled) return;
         const names = extractAgentModelNames(agent);
         const derived = mapModelNamesToOptions(names, allModels);
@@ -333,7 +379,7 @@ export function StartSessionModal({
     return () => {
       cancelled = true;
     };
-  }, [selectedAgentId, allModels, modelTouched, selectedModel, setSelectedModel]);
+  }, [selectedAgentId, selectedConnectionId, allModels, modelTouched, selectedModel, setSelectedModel]);
 
   const handleSelectDirectory = async () => {
     const result = await window.electron.selectDirectory();
@@ -391,11 +437,32 @@ export function StartSessionModal({
             )}
           </label>
           <label className="grid gap-1.5">
+            <span className="text-xs font-medium text-muted">Letta account</span>
+            <select
+              className="w-full min-w-0 rounded-xl border border-ink-900/10 bg-surface-secondary px-4 py-2.5 text-sm text-ink-800 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20 transition-colors"
+              value={selectedConnectionId}
+              onChange={(event) => setSelectedConnectionId(event.target.value)}
+              disabled={pendingStart || connectionsLoading}
+            >
+              <option value="">Organization default</option>
+              {connections.map((connection) => (
+                <option key={connection.id} value={connection.id}>
+                  {connection.name} — {connection.scope === "organization" ? "Organization" : "Personal"}
+                  {connection.isDefault ? " (default)" : ""}
+                </option>
+              ))}
+            </select>
+            <span className="text-[11px] text-muted">
+              Credentials stay on Vera Server; Cowork receives only agent access.
+            </span>
+          </label>
+          <label className="grid gap-1.5">
             <span className="text-xs font-medium text-muted">Agent</span>
             <AgentDropdown
               value={selectedAgentId}
               onChange={setSelectedAgentId}
-              disabled={pendingStart}
+              connectionId={selectedConnectionId || undefined}
+              disabled={pendingStart || connectionsLoading}
             />
           </label>
           <label className="grid min-w-0 gap-1.5">
@@ -484,6 +551,7 @@ export function StartSessionModal({
                 selectedAgentId,
                 isCreatingNewConversation ? selectedModel : undefined,
                 isCreatingNewConversation ? undefined : selectedConversationId,
+                selectedConnectionId || undefined,
               );
             }}
             disabled={pendingStart || !cwd.trim() || !prompt.trim() || selectedConversationRunning || (isCreatingNewConversation && !selectedAgentId.trim())}

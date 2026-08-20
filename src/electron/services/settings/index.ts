@@ -38,6 +38,7 @@ export interface StoredSession {
   id: string; // conversation ID (conv-xxx)
   agentId: string;
   agentName?: string;
+  lettaConnectionId?: string;
   title: string;
   createdAt: number; // Unix timestamp
   updatedAt: number; // Unix timestamp

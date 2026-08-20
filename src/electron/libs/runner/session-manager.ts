@@ -26,6 +26,7 @@ export type SessionOptions = {
   canUseTool: (toolName: string, input: unknown) => Promise<CanUseToolResponse>;
   systemInfoReminder: boolean;
   model?: string;
+  lettaConnectionId?: string;
   memfs: boolean;
   memfsStartup: "background";
 };
@@ -46,7 +47,8 @@ export function createSessionOptions(
   session: RunnerSession,
   model: string | undefined,
   permissionMode: RunnerOptions["permissionMode"],
-  canUseTool: (toolName: string, input: unknown) => Promise<CanUseToolResponse>
+  canUseTool: (toolName: string, input: unknown) => Promise<CanUseToolResponse>,
+  lettaConnectionId?: string,
 ): SessionOptions {
   return {
     cwd: session.cwd ?? DEFAULT_CWD,
@@ -56,6 +58,7 @@ export function createSessionOptions(
     canUseTool,
     systemInfoReminder: false,
     model,
+    lettaConnectionId,
     memfs: true,
     memfsStartup: "background" as const,
   };
@@ -71,7 +74,13 @@ export function createOrResumeSession(
   const { session, resumeConversationId, preferredAgentId, model } = options;
   const targetAgentId = preferredAgentId?.trim() || undefined;
   const cachedAgentId = getCachedAgentId();
-  const sessionOptions = createSessionOptions(session, model, options.permissionMode, canUseTool);
+  const sessionOptions = createSessionOptions(
+    session,
+    model,
+    options.permissionMode,
+    canUseTool,
+    options.lettaConnectionId,
+  );
 
   if (resumeConversationId && isValidLettaId(resumeConversationId)) {
     // Resume specific conversation

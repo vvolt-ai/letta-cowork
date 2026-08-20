@@ -39,14 +39,20 @@ export async function recoverPendingApprovalsForSession(
     conversationId: string;
     requestedAt?: string;
 }>> {
+    const storedSession = getStoredSessions().find((session) => session.id === sessionId);
     const resolvedAgentId = agentId
         || getSession(sessionId)?.agentId
-        || getStoredSessions().find((session) => session.id === sessionId)?.agentId;
+        || storedSession?.agentId;
+    const connectionId = storedSession?.lettaConnectionId;
 
     if (!resolvedAgentId) return [];
 
     try {
-        const candidates = await getAgentRunApprovalCandidates(resolvedAgentId, sessionId);
+        const candidates = await getAgentRunApprovalCandidates(
+            resolvedAgentId,
+            sessionId,
+            connectionId
+        );
 
         if (candidates.length === 0) return [];
 
@@ -67,7 +73,7 @@ export async function recoverPendingApprovalsForSession(
         // and falls back to cancel if none succeed.
         const results = await Promise.allSettled(
             candidates.map((candidate) =>
-                approveRunById(candidate.runId)
+                approveRunById(candidate.runId, connectionId)
                     .then((res) => {
                         console.log(`[recoverPendingApprovals] Run ${candidate.runId} resolved via ${res.method}`);
                         return res;
@@ -75,7 +81,7 @@ export async function recoverPendingApprovalsForSession(
                     .catch((err) => {
                         console.warn(`[recoverPendingApprovals] Failed to approve run ${candidate.runId}:`, err);
                         // Last-resort cancel
-                        return cancelAgentRunById(candidate.runId).catch(() => null);
+                        return cancelAgentRunById(candidate.runId, connectionId).catch(() => null);
                     })
             )
         );

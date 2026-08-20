@@ -211,16 +211,16 @@ Copy `.env.example` to `.env`:
 cp .env.example .env
 ```
 
-Get your Letta API key from [app.letta.com/settings](https://app.letta.com/settings), then edit `.env` and add your API key:
+Sign in to Vera from Cowork to use every active organization connection plus your personal Letta connections. Cowork selects the account and agent per session and sends Letta SDK traffic through Vera's authenticated runtime proxy; the underlying Letta API keys remain server-side.
+
+A local API key is supported only as an offline/self-hosted fallback:
 
 ```bash
-# Letta Cloud (recommended for most users)
-LETTA_API_KEY=your-api-key-here
-LETTA_BASE_URL=https://api.letta.com  # This is the default
+LETTA_API_KEY=your-local-or-development-key
+LETTA_BASE_URL=https://api.letta.com
 
-# Optional: Use a specific agent (defaults to LRU agent)
+# Optional local fallback agent
 # LETTA_AGENT_ID=agent-xxx
-# LETTA_SKIP_DEFAULT_AGENTS="true"
 ```
 
 **Local Development** (for advanced users running Letta server locally):
@@ -237,7 +237,7 @@ LETTA_BASE_URL=https://api.letta.com  # This is the default
 EMAIL_SERVER_BASE_URL=http://localhost:8000
 ```
 
-**Note:** The app defaults to Letta Cloud (`https://api.letta.com`). For local development, see `.env.example` for localhost configuration.
+**Note:** A signed-in Vera account is the normal runtime path. For local development without Vera, see `.env.example` for direct Letta configuration.
 
 ---
 
@@ -327,9 +327,9 @@ Each messaging platform can be configured through the UI:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `LETTA_API_KEY` | Letta API key | Required |
-| `LETTA_BASE_URL` | Letta API endpoint | `https://api.letta.com` |
-| `LETTA_AGENT_ID` | Specific agent to use | LRU agent |
+| `LETTA_API_KEY` | Optional direct Letta key for offline/local fallback | Not required when signed in to Vera |
+| `LETTA_BASE_URL` | Direct fallback Letta endpoint | `https://api.letta.com` |
+| `LETTA_AGENT_ID` | Optional direct fallback agent | Selected in Cowork |
 | `EMAIL_SERVER_BASE_URL` | Email server URL | `http://localhost:8000` |
 | `DEBUG_IPC` | Enable IPC debugging | `false` |
 | `LETTA_NO_SYNC` | Disable sync | `false` |

@@ -30,6 +30,7 @@ import {
     type ReminderState,
 } from "./plan-mode/reminders.js";
 import { getVeraCoworkApiClient } from "../../../api/index.js";
+import { createLettaRuntimeClient } from "../../../services/letta-runtime/index.js";
 import { runWithResourceLocks } from "../../../services/agent/subagents/parallelism.js";
 import { clearPendingApprovals } from "../../../services/agents/approval-recovery.js";
 import {
@@ -67,15 +68,12 @@ export interface WsSessionOptions {
     ) => Promise<CanUseToolResponse>;
     systemInfoReminder?: boolean;
     model?: string;
+    lettaConnectionId?: string;
     /** Pre-known conversation id (resume path). */
     conversationId?: string;
     /** Pre-known agent id. */
     agentId?: string;
 }
-
-let cachedClient: Letta | null = null;
-let cachedKey = "";
-let cachedBase = "";
 
 const RESPONSE_STATE_HEADER = "X-Letta-Response-State";
 const RESPONSE_STATE_CACHE_SCOPE = "approval_boundary";
@@ -109,19 +107,8 @@ function encodeResponseStateHeader(previousResponseId: string): string {
     ).toString("base64url");
 }
 
-function getClient(): Letta {
-    const apiKey = (process.env.LETTA_API_KEY ?? "").trim();
-    const baseURL = (
-        process.env.LETTA_BASE_URL || "https://api.letta.com"
-    ).trim();
-    if (!apiKey) throw new Error("LETTA_API_KEY is not configured");
-    if (cachedClient && cachedKey === apiKey && cachedBase === baseURL) {
-        return cachedClient;
-    }
-    cachedKey = apiKey;
-    cachedBase = baseURL;
-    cachedClient = new Letta({ apiKey, baseURL });
-    return cachedClient;
+function getClient(connectionId?: string): Letta {
+    return createLettaRuntimeClient(connectionId);
 }
 
 export class WsSession {
@@ -216,7 +203,7 @@ export class WsSession {
             return this.buildInitMessage();
         }
 
-        const client = getClient();
+        const client = getClient(this.opts.lettaConnectionId);
         const selectedModel = this.opts.model?.trim() || undefined;
 
         // Resolve agent id (constructor → env → fail).
@@ -978,7 +965,7 @@ export class WsSession {
         if (!this._agentId || !this._conversationId) return;
         try {
             await clearPendingApprovals(
-                getClient(),
+                getClient(this.opts.lettaConnectionId),
                 this._conversationId,
                 options.fast === false ? { drainTimeoutMs: 15_000 } : { drainTimeoutMs: 2_000 }
             );
@@ -1004,7 +991,7 @@ export class WsSession {
         approvalRequests: PendingApproval[];
         sawRequiresApprovalStop: boolean;
     }> {
-        const client = getClient();
+        const client = getClient(this.opts.lettaConnectionId);
         const conversationId = this._conversationId!;
         const calls = new Map<string, PendingToolCall>();
         // Dedupe approvals by tool_call_id — argument fragments stream in
@@ -1259,7 +1246,7 @@ export class WsSession {
         signal: AbortSignal,
         timeoutMs = 5 * 60_000
     ): Promise<boolean> {
-        const client = getClient() as unknown as {
+        const client = getClient(this.opts.lettaConnectionId) as unknown as {
             runs?: {
                 retrieve?: (id: string) => Promise<{ status?: string }>;
             };
@@ -1285,7 +1272,7 @@ export class WsSession {
 
     private async cancelServerWork(): Promise<void> {
         if (!this._conversationId) return;
-        const client = getClient() as unknown as {
+        const client = getClient(this.opts.lettaConnectionId) as unknown as {
             conversations?: {
                 cancel?: (id: string) => Promise<unknown>;
             };

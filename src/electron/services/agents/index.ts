@@ -1,4 +1,14 @@
-import { Letta } from "@letta-ai/letta-client";
+import { getVeraCoworkApiClient } from "../../api/index.js";
+import { createLettaRuntimeClient, getLettaRuntimeConfig } from "../letta-runtime/index.js";
+
+export interface LettaConnection {
+  id: string;
+  scope: "organization" | "personal";
+  name: string;
+  isDefault: boolean;
+  isActive: boolean;
+  lettaBaseUrl?: string | null;
+}
 
 export interface LettaAgent {
   id: string;
@@ -61,21 +71,12 @@ export interface LettaRunStatus {
   createdAt?: string;
 }
 
-function createLettaClient(): Letta {
-  const baseURL = (process.env.LETTA_BASE_URL || "https://api.letta.com").trim();
-  const apiKey = (process.env.LETTA_API_KEY || "").trim();
-
-  return new Letta({
-    baseURL,
-    apiKey: apiKey || null,
-  });
+function createLettaClient(connectionId?: string) {
+  return createLettaRuntimeClient(connectionId);
 }
 
-function getLettaApiConfig(): { baseURL: string; apiKey: string } {
-  return {
-    baseURL: (process.env.LETTA_BASE_URL || "https://api.letta.com").trim().replace(/\/$/, ""),
-    apiKey: (process.env.LETTA_API_KEY || "").trim(),
-  };
+function getLettaApiConfig(connectionId?: string) {
+  return getLettaRuntimeConfig(connectionId);
 }
 
 function mapLettaAgent(agent: any): LettaAgent | null {
@@ -98,8 +99,8 @@ function mapLettaAgent(agent: any): LettaAgent | null {
   };
 }
 
-async function listOwnedLettaAgents(queryText: string): Promise<LettaAgent[]> {
-  const client = createLettaClient();
+async function listOwnedLettaAgents(queryText: string, connectionId?: string): Promise<LettaAgent[]> {
+  const client = createLettaClient(connectionId);
   const agents: LettaAgent[] = [];
   const request = client.agents.list({
     limit: 100,
@@ -115,8 +116,8 @@ async function listOwnedLettaAgents(queryText: string): Promise<LettaAgent[]> {
   return agents;
 }
 
-export async function listSharedLettaAgents(queryText: string): Promise<LettaAgent[]> {
-  const { baseURL, apiKey } = getLettaApiConfig();
+export async function listSharedLettaAgents(queryText: string, connectionId?: string): Promise<LettaAgent[]> {
+  const { baseURL, apiKey, defaultHeaders, fetch: runtimeFetch = fetch } = getLettaApiConfig(connectionId);
   if (!apiKey) return [];
 
   // The SDK does not yet expose this Cloud endpoint. Keep the configured base
@@ -131,8 +132,9 @@ export async function listSharedLettaAgents(queryText: string): Promise<LettaAge
     if (queryText) params.set("queryText", queryText);
     if (after) params.set("after", after);
 
-    const response = await fetch(`${apiRoot}/v1/shared-agents?${params}`, {
+    const response = await runtimeFetch(`${apiRoot}/v1/shared-agents?${params}`, {
       headers: {
+        ...defaultHeaders,
         Authorization: `Bearer ${apiKey}`,
         Accept: "application/json",
         "X-Letta-Source": "vera-cowork",
@@ -169,18 +171,19 @@ export async function listSharedLettaAgents(queryText: string): Promise<LettaAge
   return agents;
 }
 
-async function refreshByokProviders(): Promise<void> {
-  const { baseURL, apiKey } = getLettaApiConfig();
+async function refreshByokProviders(connectionId?: string): Promise<void> {
+  const { baseURL, apiKey, defaultHeaders, fetch: runtimeFetch = fetch } = getLettaApiConfig(connectionId);
   if (!apiKey) return;
 
   const headers = {
+    ...defaultHeaders,
     Authorization: `Bearer ${apiKey}`,
     "Content-Type": "application/json",
     "X-Letta-Source": "vera-cowork",
   };
 
   try {
-    const response = await fetch(`${baseURL}/v1/providers`, { headers });
+    const response = await runtimeFetch(`${baseURL}/v1/providers`, { headers });
     if (!response.ok) return;
     const providers = await response.json() as LettaProvider[];
     if (!Array.isArray(providers)) return;
@@ -189,7 +192,7 @@ async function refreshByokProviders(): Promise<void> {
       providers
         .filter((provider) => provider.provider_category === "byok")
         .map((provider) =>
-          fetch(`${baseURL}/v1/providers/${encodeURIComponent(provider.id)}/refresh`, {
+          runtimeFetch(`${baseURL}/v1/providers/${encodeURIComponent(provider.id)}/refresh`, {
             method: "PATCH",
             headers,
           })
@@ -205,15 +208,22 @@ async function refreshByokProviders(): Promise<void> {
   }
 }
 
-export async function listLettaAgents(queryText = ""): Promise<LettaAgent[]> {
+export async function listLettaConnections(): Promise<LettaConnection[]> {
+  const api = getVeraCoworkApiClient();
+  if (!api.accessToken) return [];
+  const connections = await api.request<LettaConnection[]>("/letta/connections");
+  return connections.filter((connection) => connection.isActive);
+}
+
+export async function listLettaAgents(queryText = "", connectionId?: string): Promise<LettaAgent[]> {
   const normalizedQuery = queryText.trim();
   console.log("[lettaAgents] listLettaAgents called", { queryText: normalizedQuery });
 
   try {
     console.log("[lettaAgents] Fetching owned and organization-shared agents...");
     const [ownedAgents, sharedAgents] = await Promise.all([
-      listOwnedLettaAgents(normalizedQuery),
-      listSharedLettaAgents(normalizedQuery),
+      listOwnedLettaAgents(normalizedQuery, connectionId),
+      listSharedLettaAgents(normalizedQuery, connectionId),
     ]);
     const agents = Array.from(
       new Map(
@@ -233,9 +243,9 @@ export async function listLettaAgents(queryText = ""): Promise<LettaAgent[]> {
   }
 }
 
-export async function getLettaAgent(agentId: string): Promise<LettaAgent | null> {
+export async function getLettaAgent(agentId: string, connectionId?: string): Promise<LettaAgent | null> {
   console.log("[lettaAgents] getLettaAgent called with agentId:", agentId);
-  const client = createLettaClient();
+  const client = createLettaClient(connectionId);
   
   try {
     const agent = await client.agents.retrieve(agentId);
@@ -284,16 +294,16 @@ export function mapLettaModel(model: Letta.Model): LettaModel {
   };
 }
 
-export async function listLettaModels(): Promise<LettaModel[]> {
+export async function listLettaModels(connectionId?: string): Promise<LettaModel[]> {
   // Letta Cloud discovers models exposed by BYOK endpoints during refresh.
   // Refresh first so a newly connected OpenAI-compatible provider appears in
   // Cowork's model picker immediately.
-  await refreshByokProviders();
-  const client = createLettaClient();
+  await refreshByokProviders(connectionId);
+  const client = createLettaClient(connectionId);
   
   try {
     const response = await client.models.list();
-    const models: Letta.Model[] = await response;
+    const models: any[] = await response;
     // Filter to only show LLM models (not embedding models)
     return models
       .filter((model) => model.model_type === 'llm' || !model.model_type)
@@ -304,8 +314,8 @@ export async function listLettaModels(): Promise<LettaModel[]> {
   }
 }
 
-export async function listLettaConversations(agentId: string): Promise<LettaConversation[]> {
-  const client = createLettaClient();
+export async function listLettaConversations(agentId: string, connectionId?: string): Promise<LettaConversation[]> {
+  const client = createLettaClient(connectionId);
 
   try {
     const response = await client.conversations.list({
@@ -394,8 +404,12 @@ function normalizeApprovalCandidatesFromRun(run: any): ApprovalCandidate[] {
   }];
 }
 
-export async function getAgentRunApprovalCandidates(agentId: string, conversationId?: string): Promise<ApprovalCandidate[]> {
-  const client = createLettaClient();
+export async function getAgentRunApprovalCandidates(
+  agentId: string,
+  conversationId?: string,
+  connectionId?: string,
+): Promise<ApprovalCandidate[]> {
+  const client = createLettaClient(connectionId);
 
   try {
     // Use client.runs.list() with agentId filter instead of client.agents.runs.list()
@@ -416,8 +430,8 @@ export async function getAgentRunApprovalCandidates(agentId: string, conversatio
   }
 }
 
-export async function retrieveAgentRunById(runId: string): Promise<LettaRunStatus> {
-  const client = createLettaClient();
+export async function retrieveAgentRunById(runId: string, connectionId?: string): Promise<LettaRunStatus> {
+  const client = createLettaClient(connectionId);
   const run = await client.runs.retrieve(runId);
 
   return {
@@ -431,8 +445,8 @@ export async function retrieveAgentRunById(runId: string): Promise<LettaRunStatu
   } satisfies LettaRunStatus;
 }
 
-export async function cancelAgentRunById(runId: string): Promise<{ success: boolean; runId: string }> {
-  const client = createLettaClient();
+export async function cancelAgentRunById(runId: string, connectionId?: string): Promise<{ success: boolean; runId: string }> {
+  const client = createLettaClient(connectionId);
   await (client as any).runs.cancel(runId);
   return { success: true, runId };
 }
@@ -597,12 +611,13 @@ export async function rejectAllPendingRuns(
  * Approve a stuck run that is waiting for human approval.
  * Tries the known Letta approval endpoints; falls back to cancel if none work.
  */
-export async function approveRunById(runId: string): Promise<{ success: boolean; runId: string; method: string }> {
-  const baseURL = (process.env.LETTA_BASE_URL || "https://api.letta.com").trim().replace(/\/$/, "");
-  const apiKey = (process.env.LETTA_API_KEY || "").trim();
+export async function approveRunById(runId: string, connectionId?: string): Promise<{ success: boolean; runId: string; method: string }> {
+  const { baseURL: rawBaseURL, apiKey, defaultHeaders, fetch: runtimeFetch = fetch } = getLettaApiConfig(connectionId);
+  const baseURL = rawBaseURL.replace(/\/$/, "");
   const headers: Record<string, string> = {
+    ...defaultHeaders,
     "Content-Type": "application/json",
-    ...(apiKey ? { "Authorization": `Bearer ${apiKey}` } : {}),
+    "Authorization": `Bearer ${apiKey}`,
   };
 
   // Try known Letta REST patterns for run approval
@@ -614,7 +629,7 @@ export async function approveRunById(runId: string): Promise<{ success: boolean;
 
   for (const attempt of attempts) {
     try {
-      const res = await fetch(attempt.url, {
+      const res = await runtimeFetch(attempt.url, {
         method: "POST",
         headers,
         body: JSON.stringify(attempt.body),
@@ -631,6 +646,6 @@ export async function approveRunById(runId: string): Promise<{ success: boolean;
   // None of the approval endpoints worked — cancel as a safe fallback so the
   // session is no longer blocked.
   console.warn(`[approveRunById] Could not approve run ${runId} via API, cancelling as fallback`);
-  await cancelAgentRunById(runId).catch(() => {/* ignore */});
+  await cancelAgentRunById(runId, connectionId).catch(() => {/* ignore */});
   return { success: true, runId, method: "cancel-fallback" };
 }

@@ -100,11 +100,12 @@ export function useSessionController({ connected, sendEvent }: UseSessionControl
   // Check if Letta environment is configured
   const isLettaEnvConfigured = useCallback(async (agentIdOverride?: string) => {
     try {
+      const veraAuthenticated = await window.electron.isVeraAuthenticated();
       const env = await window.electron.getLettaEnv();
       const baseUrl = env.LETTA_BASE_URL.trim();
       const apiKey = env.LETTA_API_KEY.trim();
       const agentId = agentIdOverride?.trim() || env.LETTA_AGENT_ID.trim();
-      return baseUrl.length > 0 && apiKey.length > 0 && agentId.length > 0;
+      return veraAuthenticated || (baseUrl.length > 0 && apiKey.length > 0 && agentId.length > 0);
     } catch {
       return false;
     }
@@ -142,7 +143,12 @@ export function useSessionController({ connected, sendEvent }: UseSessionControl
   }, [isLettaEnvConfigured, setActiveSessionId, setShowStartModal]);
 
   // Handle starting a new session with a specific agent, or continuing an existing conversation.
-  const handleStartWithAgent = useCallback(async (agentId: string, model?: string, conversationId?: string) => {
+  const handleStartWithAgent = useCallback(async (
+    agentId: string,
+    model?: string,
+    conversationId?: string,
+    lettaConnectionId?: string,
+  ) => {
     const trimmedConversationId = conversationId?.trim();
     if (trimmedConversationId) {
       setActiveSessionId(trimmedConversationId);
@@ -152,6 +158,8 @@ export function useSessionController({ connected, sendEvent }: UseSessionControl
           sessionId: trimmedConversationId,
           prompt,
           cwd: cwd.trim() || undefined,
+          agentId: agentId || undefined,
+          lettaConnectionId: lettaConnectionId || undefined,
           model: model || undefined,
         }
       });
@@ -159,18 +167,8 @@ export function useSessionController({ connected, sendEvent }: UseSessionControl
       return;
     }
 
-    if (agentId) {
-      try {
-        const currentEnv = await window.electron.getLettaEnv();
-        await window.electron.updateLettaEnv({
-          ...currentEnv,
-          LETTA_AGENT_ID: agentId
-        });
-      } catch (err) {
-        console.error("Failed to update agent in env:", err);
-      }
-    }
-    // Start session with the selected agent
+    // Start session with the selected agent. The account selection is passed
+    // with the session instead of mutating process-wide Letta credentials.
     setPendingStart(true);
     sendEvent({
       type: "session.start",
@@ -180,7 +178,8 @@ export function useSessionController({ connected, sendEvent }: UseSessionControl
         cwd: cwd.trim() || undefined, 
         allowedTools: "Read,Edit,Bash",
         agentId: agentId || undefined,
-        model: model || undefined
+        model: model || undefined,
+        lettaConnectionId: lettaConnectionId || undefined,
       }
     });
   }, [cwd, prompt, sendEvent, setActiveSessionId, setPendingStart, setPrompt]);

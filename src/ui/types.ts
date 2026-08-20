@@ -116,9 +116,9 @@ export type ServerEvent =
 
 // Client -> Server events
 export type ClientEvent =
-  | { type: "session.start"; payload: { title: string; prompt: string; content?: MessageContentItem[]; attachments?: ChatAttachment[]; cwd?: string; allowedTools?: string; agentId?: string; model?: string; permissionMode?: "standard" | "acceptEdits" | "unrestricted" | "strict"; background?: boolean; isEmailSession?: boolean } }
-  | { type: "session.continue"; payload: { sessionId: string; prompt: string; content?: MessageContentItem[]; attachments?: ChatAttachment[]; cwd?: string; model?: string; permissionMode?: "standard" | "acceptEdits" | "unrestricted" | "strict" } }
-  | { type: "session.stopAndContinue"; payload: { sessionId: string; prompt: string; content?: MessageContentItem[]; attachments?: ChatAttachment[]; cwd?: string; model?: string; permissionMode?: "standard" | "acceptEdits" | "unrestricted" | "strict" } }
+  | { type: "session.start"; payload: { title: string; prompt: string; content?: MessageContentItem[]; attachments?: ChatAttachment[]; cwd?: string; allowedTools?: string; agentId?: string; lettaConnectionId?: string; model?: string; permissionMode?: "standard" | "acceptEdits" | "unrestricted" | "strict"; background?: boolean; isEmailSession?: boolean } }
+  | { type: "session.continue"; payload: { sessionId: string; prompt: string; content?: MessageContentItem[]; attachments?: ChatAttachment[]; cwd?: string; agentId?: string; lettaConnectionId?: string; model?: string; permissionMode?: "standard" | "acceptEdits" | "unrestricted" | "strict" } }
+  | { type: "session.stopAndContinue"; payload: { sessionId: string; prompt: string; content?: MessageContentItem[]; attachments?: ChatAttachment[]; cwd?: string; agentId?: string; lettaConnectionId?: string; model?: string; permissionMode?: "standard" | "acceptEdits" | "unrestricted" | "strict" } }
   | { type: "session.stop"; payload: { sessionId: string } }
   | { type: "session.delete"; payload: { sessionId: string } }
   | { type: "session.cancelPending"; payload: Record<string, never> }

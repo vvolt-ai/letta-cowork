@@ -7,6 +7,7 @@ import { emit } from "./session-creation.js";
 import { debug, createLettaClient, extractMessageText } from "./utils.js";
 import { normaliseHistoryBatch, type LettaMessage } from "../../../libs/conversation.js";
 import { getSession } from "../../../libs/runtime-state.js";
+import { getStoredSessions } from "../../../services/settings/index.js";
 
 import type { StreamMessage } from "../../../types.js";
 
@@ -96,7 +97,10 @@ export async function handleGetSessionHistory(
         return;
     }
 
-    const lettaClient = createLettaClient();
+    const connectionId = getStoredSessions().find(
+        (session) => session.id === conversationId
+    )?.lettaConnectionId;
+    const lettaClient = createLettaClient(connectionId);
 
     if (!lettaClient) {
         emit({

@@ -106,15 +106,23 @@ interface Window {
 
     // Letta
     getLettaEnv: () => Promise<any>;
-    listLettaAgents: (queryText?: string) => Promise<any>;
+    listLettaConnections: () => Promise<Array<{
+      id: string;
+      scope: "organization" | "personal";
+      name: string;
+      isDefault: boolean;
+      isActive: boolean;
+      lettaBaseUrl?: string | null;
+    }>>;
+    listLettaAgents: (queryText?: string, connectionId?: string) => Promise<any>;
     /** Clone an existing agent as letta_v1_agent for runtime client_tools support. */
     lettaMigrateAgent: (opts: { sourceAgentId: string; newName?: string; baseTools?: string[] }) => Promise<
       | { ok: true; data: { sourceAgentId: string; newAgentId: string; newAgentName: string; blocksCopied: number; skippedBlocks: Array<{ label: string; reason: string }> } }
       | { ok: false; error: string }
     >;
-    listLettaModels: () => Promise<any>;
-    getLettaAgent: (agentId: string) => Promise<any>;
-    listLettaConversations: (agentId: string) => Promise<Array<{
+    listLettaModels: (connectionId?: string) => Promise<any>;
+    getLettaAgent: (agentId: string, connectionId?: string) => Promise<any>;
+    listLettaConversations: (agentId: string, connectionId?: string) => Promise<Array<{
       id: string;
       agentId: string;
       summary?: string | null;
@@ -140,6 +148,7 @@ interface Window {
     rejectLivePatchProposal: (proposalId: string, reason?: string) => Promise<LivePatchProposalView>;
     updateLettaEnv: (values: any) => Promise<any>;
     isAdmin: () => Promise<boolean>;
+    isVeraAuthenticated: () => Promise<boolean>;
 
     // Channel Bridges (Legacy)
     getChannelBridgesConfig: () => Promise<any>;

@@ -8,6 +8,7 @@ import { randomUUID } from "crypto";
 import path from "path";
 import { ipcMain, dialog, shell } from "electron";
 import {
+    listLettaConnections,
     listLettaAgents,
     listLettaModels,
     listLettaConversations,
@@ -36,6 +37,7 @@ import { registerProjectFilesHandlers } from "./handlers/project-files-handlers.
 import { registerLettaCodeTools, attachLettaCodeToolsToAgent, listRegisteredLettaCodeTools } from "../services/tools/index.js";
 import { downloadSkillsFromGitHub } from "../services/skills/index.js";
 import { handleSessionEvent, recoverPendingApprovalsForSession, cancelRecoveredRun, cleanupAllSessions } from "./handlers/session/index.js";
+import { getVeraCoworkApiClient } from "../api/index.js";
 import { getStaticData, pollResources } from "../utils/test-helper.js";
 
 import type { ClientEvent } from "../types.js";
@@ -119,37 +121,50 @@ export function registerAllIpcHandlers(mainWindow: BrowserWindow): void {
         return process.env.IS_ADMIN === "true";
     });
 
+    ipcMain.handle("is-vera-authenticated", () => {
+        return getVeraCoworkApiClient().isAuthenticated();
+    });
+
     // Agent handlers
-    ipcMain.handle("list-letta-agents", async (_event, queryText?: string) => {
+    ipcMain.handle("list-letta-connections", async () => {
         try {
-            return await listLettaAgents(queryText);
+            return await listLettaConnections();
+        } catch (error) {
+            console.error("Failed to list Letta connections:", error);
+            throw error;
+        }
+    });
+
+    ipcMain.handle("list-letta-agents", async (_event, queryText?: string, connectionId?: string) => {
+        try {
+            return await listLettaAgents(queryText, connectionId);
         } catch (error) {
             console.error("Failed to list agents:", error);
             throw error;
         }
     });
 
-    ipcMain.handle("list-letta-models", async () => {
+    ipcMain.handle("list-letta-models", async (_event, connectionId?: string) => {
         try {
-            return await listLettaModels();
+            return await listLettaModels(connectionId);
         } catch (error) {
             console.error("Failed to list models:", error);
             throw error;
         }
     });
 
-    ipcMain.handle("get-letta-agent", async (_, agentId: string) => {
+    ipcMain.handle("get-letta-agent", async (_, agentId: string, connectionId?: string) => {
         try {
-            return await getLettaAgent(agentId);
+            return await getLettaAgent(agentId, connectionId);
         } catch (error) {
             console.error("Failed to get agent:", error);
             throw error;
         }
     });
 
-    ipcMain.handle("list-letta-conversations", async (_, agentId: string) => {
+    ipcMain.handle("list-letta-conversations", async (_, agentId: string, connectionId?: string) => {
         try {
-            return await listLettaConversations(agentId);
+            return await listLettaConversations(agentId, connectionId);
         } catch (error) {
             console.error("Failed to list conversations:", error);
             throw error;

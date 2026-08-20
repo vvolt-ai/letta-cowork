@@ -5,6 +5,8 @@
 import { Letta } from "@letta-ai/letta-client";
 import { BrowserWindow } from "electron";
 
+import { createLettaRuntimeClient } from "../../../services/letta-runtime/index.js";
+
 import type { ServerEvent } from "./types.js";
 
 const DEBUG = process.env.DEBUG_IPC === "true";
@@ -33,15 +35,9 @@ export const debug = (msg: string, data?: Record<string, unknown>): void => {
 /**
  * Create a Letta client instance
  */
-export function createLettaClient(): Letta | null {
+export function createLettaClient(connectionId?: string): Letta | null {
     try {
-        const baseURL = (process.env.LETTA_BASE_URL || "https://api.letta.com").trim();
-        const apiKey = (process.env.LETTA_API_KEY || "").trim();
-        if (!apiKey) return null;
-        return new Letta({
-            baseURL,
-            apiKey: apiKey || null,
-        });
+        return createLettaRuntimeClient(connectionId);
     } catch {
         return null;
     }

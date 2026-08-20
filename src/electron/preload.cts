@@ -84,14 +84,16 @@ electron.contextBridge.exposeInMainWorld("electron", {
         electron.ipcRenderer.invoke("search-emails", accountId, params),
     getLettaEnv: () =>
         electron.ipcRenderer.invoke("get-letta-env"),
-    listLettaAgents: (queryText?: string) =>
-        electron.ipcRenderer.invoke("list-letta-agents", queryText),
-    listLettaModels: () =>
-        electron.ipcRenderer.invoke("list-letta-models"),
-    getLettaAgent: (agentId: string) =>
-        electron.ipcRenderer.invoke("get-letta-agent", agentId),
-    listLettaConversations: (agentId: string) =>
-        electron.ipcRenderer.invoke("list-letta-conversations", agentId),
+    listLettaConnections: () =>
+        electron.ipcRenderer.invoke("list-letta-connections"),
+    listLettaAgents: (queryText?: string, connectionId?: string) =>
+        electron.ipcRenderer.invoke("list-letta-agents", queryText, connectionId),
+    listLettaModels: (connectionId?: string) =>
+        electron.ipcRenderer.invoke("list-letta-models", connectionId),
+    getLettaAgent: (agentId: string, connectionId?: string) =>
+        electron.ipcRenderer.invoke("get-letta-agent", agentId, connectionId),
+    listLettaConversations: (agentId: string, connectionId?: string) =>
+        electron.ipcRenderer.invoke("list-letta-conversations", agentId, connectionId),
     recoverPendingApprovals: (sessionId: string, agentId?: string) =>
         electron.ipcRenderer.invoke("recover-pending-approvals", sessionId, agentId),
     cancelStuckRun: (runId: string) =>
@@ -104,6 +106,8 @@ electron.contextBridge.exposeInMainWorld("electron", {
         electron.ipcRenderer.invoke("update-letta-env", values),
     isAdmin: () =>
         electron.ipcRenderer.invoke("is-admin"),
+    isVeraAuthenticated: () =>
+        electron.ipcRenderer.invoke("is-vera-authenticated"),
     getChannelBridgesConfig: () =>
         electron.ipcRenderer.invoke("get-channel-bridges-config"),
     updateChannelBridgesConfig: (values: any) =>
