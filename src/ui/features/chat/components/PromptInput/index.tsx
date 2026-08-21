@@ -52,17 +52,27 @@ export const PromptInput = memo(function PromptInput({
     sendEvent, onOpenMemory, overrideSessionId
   );
 
-  const selectedModel = useAppStore((state: AppState) => state.selectedModel);
-  const setSelectedModel = useAppStore((state: AppState) => state.setSelectedModel);
+  const draftSelectedModel = useAppStore((state: AppState) => state.selectedModel);
+  const setDraftSelectedModel = useAppStore((state: AppState) => state.setSelectedModel);
+  const setSessionModel = useAppStore((state: AppState) => state.setSessionModel);
   const showReasoningInChat = useAppStore((state: AppState) => state.showReasoningInChat);
   const setShowReasoningInChat = useAppStore((state: AppState) => state.setShowReasoningInChat);
   const setGlobalError = useAppStore((state: AppState) => state.setGlobalError);
   const permissionMode = useAppStore((state: AppState) => state.permissionMode);
   const setPermissionMode = useAppStore((state: AppState) => state.setPermissionMode);
-  const activeSessionId = useAppStore((state: AppState) => state.activeSessionId);
+  const globalActiveSessionId = useAppStore((state: AppState) => state.activeSessionId);
+  const activeSessionId = overrideSessionId ?? globalActiveSessionId;
   const activeAgentId = useAppStore((state: AppState) =>
     activeSessionId ? state.sessions[activeSessionId]?.agentId : undefined
   );
+  const activeConnectionId = useAppStore((state: AppState) =>
+    activeSessionId ? state.sessions[activeSessionId]?.lettaConnectionId : undefined
+  );
+  const activeSessionModel = useAppStore((state: AppState) =>
+    activeSessionId ? state.sessions[activeSessionId]?.model : undefined
+  );
+  const newConversationAgentId = useAppStore((state: AppState) => state.newConversationAgentId);
+  const newConversationConnectionId = useAppStore((state: AppState) => state.newConversationLettaConnectionId);
   const promptRef = useRef<HTMLTextAreaElement | null>(null);
   const [defaultAgentId, setDefaultAgentId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -93,11 +103,30 @@ export const PromptInput = memo(function PromptInput({
     return () => { cancelled = true; };
   }, []);
 
-  const agentIdForModels = activeAgentId ?? defaultAgentId ?? undefined;
+  // An active conversation with no connection ID means Vera's organization
+  // default. Never fall back to the last account selected in New Conversation.
+  const agentIdForModels = activeSessionId
+    ? activeAgentId
+    : newConversationAgentId.trim() || defaultAgentId || undefined;
+  const connectionIdForModels = activeSessionId
+    ? activeConnectionId
+    : newConversationConnectionId.trim() || undefined;
+  const selectedModel = activeSessionId ? activeSessionModel ?? "" : draftSelectedModel;
+  const setSelectedModel = useCallback((model: string) => {
+    if (activeSessionId) {
+      setSessionModel(activeSessionId, model);
+    } else {
+      setDraftSelectedModel(model);
+    }
+  }, [activeSessionId, setDraftSelectedModel, setSessionModel]);
 
   // Models hook
   const { models, modelsLoading, hasSelectedModelOption, setModelTouched } = useModels({
-    agentId: agentIdForModels, selectedModel, setSelectedModel,
+    agentId: agentIdForModels,
+    connectionId: connectionIdForModels,
+    contextKey: activeSessionId ?? "new-conversation",
+    selectedModel,
+    setSelectedModel,
   });
 
   // Attachments hook

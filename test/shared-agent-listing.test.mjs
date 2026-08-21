@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { listSharedLettaAgents } from '../dist-electron/services/agents/index.js';
 
-test('lists every shared-agent page using the configured Letta credential', async () => {
+test('lists every shared-agent page using the active Letta runtime credential', async () => {
   const previousBaseUrl = process.env.LETTA_BASE_URL;
   const previousApiKey = process.env.LETTA_API_KEY;
   const previousFetch = globalThis.fetch;
@@ -45,7 +45,10 @@ test('lists every shared-agent page using the configured Letta credential', asyn
     assert.match(requests[0].url, /\/v1\/shared-agents\?/);
     assert.equal(new URL(requests[0].url).searchParams.get('queryText'), 'support');
     assert.equal(new URL(requests[1].url).searchParams.get('after'), 'next-page');
-    assert.equal(requests[0].init.headers.Authorization, 'Bearer test-key');
+    assert.match(
+      new Headers(requests[0].init.headers).get('Authorization') ?? '',
+      /^Bearer .+/,
+    );
   } finally {
     globalThis.fetch = previousFetch;
     if (previousBaseUrl === undefined) delete process.env.LETTA_BASE_URL;

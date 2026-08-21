@@ -37,6 +37,7 @@ import {
 } from "../../client-tools/index.js";
 
 import type { Letta } from "@letta-ai/letta-client";
+import type { ToolRunContext } from "../../client-tools/types.js";
 
 const MAX_TURNS = 25; // safety cap mirroring our main session pump
 const DEFAULT_MAX_CONCURRENT_SUBAGENTS = 10;
@@ -85,6 +86,8 @@ export interface RunSubagentOptions {
     conversationId?: string;
     /** Abort signal propagated from the calling tool's run context. */
     signal: AbortSignal;
+    /** Trusted parent context used to preserve account and runtime secrets. */
+    toolContext?: ToolRunContext;
 }
 
 export interface RunSubagentResult {
@@ -238,6 +241,9 @@ async function runSubagentInner(
                         agentId: targetAgentId,
                         conversationId,
                         toolCallId: req.toolCallId,
+                        lettaClient: opts.toolContext?.lettaClient,
+                        lettaConnectionId: opts.toolContext?.lettaConnectionId,
+                        runtimeEnv: opts.toolContext?.runtimeEnv,
                     });
                     return {
                         tool_call_id: req.toolCallId,
@@ -276,6 +282,9 @@ async function runSubagentInner(
                         agentId: targetAgentId,
                         conversationId,
                         toolCallId: call.toolCallId,
+                        lettaClient: opts.toolContext?.lettaClient,
+                        lettaConnectionId: opts.toolContext?.lettaConnectionId,
+                        runtimeEnv: opts.toolContext?.runtimeEnv,
                     });
                     return {
                         tool_call_id: call.toolCallId,

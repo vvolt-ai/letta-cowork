@@ -28,6 +28,10 @@ export interface ToolRunContext {
     /** Conversation/agent scope, in case a runner wants to log/route on it. */
     agentId?: string;
     conversationId?: string;
+    /** Account-scoped Letta client owned by the current conversation turn. */
+    lettaClient?: unknown;
+    /** Non-secret Vera Letta connection UUID; absent means organization-default. */
+    lettaConnectionId?: string;
     /** Upstream call id used to correlate UI calls, returns, and local traces. */
     toolCallId?: string;
     /**

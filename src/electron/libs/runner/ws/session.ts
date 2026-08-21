@@ -78,6 +78,15 @@ export interface WsSessionOptions {
 const RESPONSE_STATE_HEADER = "X-Letta-Response-State";
 const RESPONSE_STATE_CACHE_SCOPE = "approval_boundary";
 
+class AcceptedRunResumeError extends Error {
+    constructor(runId: string, cause: unknown) {
+        super(
+            `Stream disconnected after ${runId} was accepted and could not be resumed: ${cause instanceof Error ? cause.message : String(cause)}`
+        );
+        this.name = "AcceptedRunResumeError";
+    }
+}
+
 function getResponseStateId(event: unknown): string | null {
     if (!event || typeof event !== "object") return null;
     const candidate = event as {
@@ -116,6 +125,8 @@ export class WsSession {
     private _agentId: string | null;
     private _conversationId: string | null;
     private initialized = false;
+    /** Server-confirmed conversation model for diagnostics and turn logging. */
+    private effectiveModel: string | null = null;
 
     /**
      * Per-session plan-mode manager. Tracks plan/unrestricted mode and the
@@ -257,6 +268,28 @@ export class WsSession {
                 model: selectedModel,
             });
         }
+
+        const confirmedConversation = (await (
+            client.conversations as unknown as {
+                retrieve: (conversationId: string) => Promise<unknown>;
+            }
+        ).retrieve(this._conversationId)) as { model?: string | null };
+        this.effectiveModel = confirmedConversation.model?.trim() || null;
+        if (
+            selectedModel &&
+            this.effectiveModel &&
+            this.effectiveModel !== selectedModel
+        ) {
+            throw new Error(
+                `WsSession.initialize: conversation model mismatch (requested ${selectedModel}, server confirmed ${this.effectiveModel})`
+            );
+        }
+        console.log("[WsSession] conversation scope confirmed", {
+            conversationId: this._conversationId,
+            accountScope: this.opts.lettaConnectionId?.trim() || "organization-default",
+            requestedModel: selectedModel ?? "agent-default",
+            effectiveModel: this.effectiveModel ?? "unknown",
+        });
 
         this.initialized = true;
         const init = this.buildInitMessage();
@@ -482,6 +515,10 @@ export class WsSession {
             // Refresh once per logical user turn so newly saved/rotated secrets
             // are available immediately without placing them in global state.
             const runtimeEnv = await this.loadRuntimeEnv();
+            // Keep one account-scoped client for every local tool/subagent in
+            // this logical turn. Task must never fall back to process.env after
+            // the user switches between Vera-managed Letta accounts.
+            const toolLettaClient = getClient(this.opts.lettaConnectionId);
 
 
             while (true) {
@@ -642,6 +679,8 @@ export class WsSession {
                                             toolCallId: req.toolCallId,
                                             planMode: this.planMode,
                                             runtimeEnv,
+                                            lettaClient: toolLettaClient,
+                                            lettaConnectionId: this.opts.lettaConnectionId,
                                         }
                                     );
                                     // Mirror to the renderer so the user
@@ -763,6 +802,8 @@ export class WsSession {
                                     toolCallId: call.toolCallId,
                                     planMode: this.planMode,
                                     runtimeEnv,
+                                    lettaClient: toolLettaClient,
+                                    lettaConnectionId: this.opts.lettaConnectionId,
                                 }
                             );
                             this.enqueue({
@@ -891,11 +932,12 @@ export class WsSession {
                     continue;
                 }
 
-                // Transient network drop mid-stream — reconnect with backoff.
-                // Letta's SSE can be cut by proxies/idle timeouts; the run is
-                // typically still progressing server-side, so a fresh pump
-                // either picks up trailing events or rerun cleanly.
+                // Transient network drop before the server yielded a run id.
+                // Once a run id exists, runOneStreamTurn resumes that accepted
+                // run by sequence cursor and raises AcceptedRunResumeError on
+                // exhaustion; never replay the original user message here.
                 if (
+                    !(err instanceof AcceptedRunResumeError) &&
                     isTransientNetworkError(err, errMessage) &&
                     networkRetries < MAX_NETWORK_RETRIES
                 ) {
@@ -1014,12 +1056,12 @@ export class WsSession {
             this.responseStateId = null;
         }
         console.log(
-            `[WsSession] messages.create → conv=${conversationId} client_tools=[${wireTools
+            `[WsSession] messages.create → conv=${conversationId} account=${this.opts.lettaConnectionId?.trim() || "organization-default"} model=${this.effectiveModel || this.opts.model?.trim() || "agent-default"} client_tools=[${wireTools
                 .map((t) => t.name)
                 .join(", ")}] background=true include_pings=true`
         );
 
-        const stream = (await (
+        let stream = (await (
             client.conversations as unknown as {
                 messages: {
                     create: (
@@ -1056,30 +1098,36 @@ export class WsSession {
         )) as Stream<LettaStreamingResponse>;
 
         let terminalStopReason: string | null = null;
-        const terminalEofGuard = createTerminalEofGuard({
-            getStopReason: () => terminalStopReason,
-            abortHttpRead: () =>
-                (stream as unknown as { controller?: AbortController }).controller?.abort(),
-            warn: (message) =>
-                debug("WsSession: stream_terminal_eof_guard_fired", {
-                    message,
-                    conversationId,
-                }),
-        });
+        let lastRunId: string | null = null;
+        let lastSeqId = 0;
+        let resumeAttempts = 0;
+        const MAX_STREAM_RESUME_ATTEMPTS = 3;
 
-        const guardedStream = (async function* () {
+        while (true) {
+            const terminalEofGuard = createTerminalEofGuard({
+                getStopReason: () => terminalStopReason,
+                abortHttpRead: () =>
+                    (stream as unknown as { controller?: AbortController }).controller?.abort(),
+                warn: (message) =>
+                    debug("WsSession: stream_terminal_eof_guard_fired", {
+                        message,
+                        conversationId,
+                    }),
+            });
+            const guardedStream = (async function* () {
+                try {
+                    yield* stream as AsyncIterable<LettaStreamingResponse>;
+                } catch (error) {
+                    // The guard aborts only the HTTP reader after semantic termination.
+                    // Suppress that expected abort; all other stream errors remain fatal.
+                    if (!terminalEofGuard.fired()) throw error;
+                } finally {
+                    terminalEofGuard.clear();
+                }
+            })();
+
             try {
-                yield* stream as AsyncIterable<LettaStreamingResponse>;
-            } catch (error) {
-                // The guard aborts only the HTTP reader after semantic termination.
-                // Suppress that expected abort; all other stream errors remain fatal.
-                if (!terminalEofGuard.fired()) throw error;
-            } finally {
-                terminalEofGuard.clear();
-            }
-        })();
-
-        for await (const event of guardedStream) {
+                for await (const event of guardedStream) {
             if (ctrl.signal.aborted) break;
             this.handleStreamingEvent(event);
 
@@ -1089,6 +1137,10 @@ export class WsSession {
             const messageType = String(e.message_type ?? "");
             if (typeof e.run_id === "string" && e.run_id) {
                 this.activeServerRunIds.add(e.run_id);
+                lastRunId = e.run_id;
+            }
+            if (typeof e.seq_id === "number" && Number.isFinite(e.seq_id)) {
+                lastSeqId = Math.max(lastSeqId, e.seq_id);
             }
             const responseStateId = getResponseStateId(event);
             if (responseStateId) {
@@ -1159,6 +1211,53 @@ export class WsSession {
                             argumentsRaw: tc.arguments ?? "",
                         });
                     }
+                }
+            }
+                }
+                break;
+            } catch (streamError) {
+                if (ctrl.signal.aborted) throw streamError;
+                if (!lastRunId) throw streamError;
+                if (resumeAttempts >= MAX_STREAM_RESUME_ATTEMPTS) {
+                    throw new AcceptedRunResumeError(lastRunId, streamError);
+                }
+
+                resumeAttempts++;
+                const backoffMs = Math.min(5_000, 500 * 2 ** (resumeAttempts - 1));
+                console.warn(
+                    `[WsSession] stream disconnected after accepted run ${lastRunId}; resuming after seq=${lastSeqId} (${resumeAttempts}/${MAX_STREAM_RESUME_ATTEMPTS})`
+                );
+                await this.sleepWithAbort(backoffMs, ctrl.signal);
+                if (ctrl.signal.aborted) throw streamError;
+                try {
+                    stream = await (
+                        client.runs as unknown as {
+                            messages: {
+                                stream: (
+                                    runId: string,
+                                    body: Record<string, unknown>,
+                                    options?: { signal?: AbortSignal }
+                                ) => Promise<Stream<LettaStreamingResponse>>;
+                            };
+                        }
+                    ).messages.stream(
+                        lastRunId,
+                        {
+                            starting_after: lastSeqId,
+                            batch_size: 1000,
+                            include_pings: true,
+                        },
+                        { signal: ctrl.signal }
+                    );
+                } catch (resumeError) {
+                    if (resumeAttempts >= MAX_STREAM_RESUME_ATTEMPTS) {
+                        throw new AcceptedRunResumeError(lastRunId, resumeError);
+                    }
+                    // Re-enter with a stream that fails immediately so the same
+                    // bounded resume policy handles transient reconnect errors.
+                    stream = (async function* () {
+                        throw resumeError;
+                    })() as unknown as Stream<LettaStreamingResponse>;
                 }
             }
         }

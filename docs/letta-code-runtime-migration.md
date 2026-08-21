@@ -1,5 +1,150 @@
 # Letta Code Runtime Migration Notes
 
+## 2026-08-21 — Letta Code v0.30.28+ migration plan
+
+- **Status:** Planning only. Upstream was pulled and reviewed; no Cowork runtime source was ported in this pass.
+- **Upstream source:** `letta-ai/letta-code` `main` commit `db60f05f` (`v0.30.28-5-gdb60f05f`)
+- **Latest release tag:** `v0.30.28` / `597f8b00`
+- **Previous Cowork migration baseline:** `a8a3f8a0` (`v0.28.15` was `635631ff`)
+- **Local pull performed:** `0c608d4f` → `db60f05f`
+- **Review range:** 300 upstream commits from `a8a3f8a0..db60f05f`
+
+### Scope and migration rule
+
+Cowork is an Electron runtime using the Letta conversations API, not a source fork of the Letta Code CLI/listener. Port behavior and tests, not upstream file structure. Keep account, model, approval, and run identity conversation-scoped; do not add process-global state while adapting upstream code.
+
+The working tree already contains the in-progress multi-account/model picker changes. Migration implementation must be split into separate reviewable commits and must not overwrite or silently absorb those changes.
+
+### Existing Cowork parity to retain and revalidate
+
+These behaviors already exist locally and should receive regression tests rather than a second implementation:
+
+- terminal SSE EOF protection in `WsSession` via `stream-terminal-eof-guard` (upstream `91352d42`);
+- total client-tool return clamping before model delivery;
+- runtime-secret redaction at model, persistence, and trace boundaries;
+- private bounded background output files and process/task retention limits;
+- deleted-working-directory fallback, managed `ripgrep` resolution, required `Bash.description`, and improved patch context diagnostics;
+- conversation-scoped model overrides and agent-model inheritance for Task subagents;
+- strict permission mode and per-session approval state.
+
+### Planned migration order
+
+#### P0.1 — Account/model truth and resume refresh
+
+Adapt upstream model carryover and resume work (`66d122af`, `97d1c170`, `65b7a3ae`, `e7514b7e`) to Cowork's API-driven session path.
+
+Deliverables:
+
+1. Treat organization-default as an explicit account scope internally; never let an empty connection selection inherit the New Conversation draft account or a previously selected client.
+2. Log the non-secret account scope, requested model, server-confirmed conversation model, run ID, and step model handle at each turn boundary.
+3. After creating, opening, or resuming a conversation, retrieve/verify the effective conversation model without replacing provider-specific output limits or model settings.
+4. Keep the selected account/model immutable for an in-flight turn. A UI switch affects only the next/new conversation.
+5. Add switch-away/switch-back tests covering organization-default plus two named connections, overlapping background runs, model catalogs, history, continuation, and compaction/recompile state.
+
+Primary Cowork surfaces:
+
+- `src/electron/services/letta-runtime/index.ts`
+- `src/electron/ipc/handlers/session/*`
+- `src/electron/libs/runner/ws/session.ts`
+- `src/ui/store/useAppStore.ts`
+- `src/ui/features/chat/components/PromptInput/*`
+
+#### P0.2 — Turn recovery and stream ownership
+
+Adapt behavior from upstream dropped-stream and safe-shutdown recovery (`c651c5b9`, `44cdd77b`) while preserving Cowork's existing busy-run wait and terminal EOF guard.
+
+Deliverables:
+
+1. Retry only when the active server run can be identified and resumed safely.
+2. Never submit a duplicate user message after an accepted run.
+3. Correlate `clientRunId`, Letta `run_id`, conversation owner, tool approvals, and terminal events.
+4. Bound busy-run waits and expose actionable status instead of appearing indefinitely stuck.
+5. Add tests for terminal SSE without transport EOF, transient provider shutdown, conversation-busy conflicts, cancellation, and approval continuations.
+
+#### P0.3 — Safe direct client-tool ports
+
+Review and port the small upstream hardening changes to both Cowork and Vera Server copies in the same implementation batch:
+
+- reject duplicate resolved paths in one `ApplyPatch` request (`1fbf0035`);
+- contain background-output write failures without crashing the owning run (`47e7d807`);
+- verify braced `${NAME}` runtime-secret expansion and redaction (`d6f12df8`);
+- preserve image content returned by external/client tools where Cowork's renderer and Letta SDK support it (`9b7f4609`);
+- retain total return clamping and secret-safe overflow files (`b5fd4ce3`, `e1677b09`) with parity tests.
+
+Do not copy upstream `Read` formatting blindly (`dad86b34`); Cowork history/tool rendering has its own line-number contract. Add a compatibility test first.
+
+#### P1.1 — Task/subagent contract parity
+
+Review upstream Task changes (`a6603c75`, `c0a387c9`, `bb329261`, `4f4864e3`, `acd1d3d7`).
+
+Plan:
+
+- keep the existing rule that Task cannot override its target agent model;
+- ensure forked/general-purpose subagents inherit the intended parent toolset without reintroducing stale Claude-derived tools;
+- align Task CRUD update validation with current upstream schemas where compatible;
+- decide background Task support separately. Do not change Cowork's current synchronous Task behavior merely because upstream defaults differ;
+- if background Task is enabled later, deliver completion notifications exactly once and keep TaskOutput/TaskStop ownership explicit.
+
+#### P1.2 — Runtime working directory
+
+Evaluate `SetWorkingDirectory` and runtime-CWD behavior (`4663d434`, `1263f94d`) as one feature rather than adding only a schema.
+
+Required design:
+
+- CWD is scoped to the active runtime session/turn, never process-global;
+- validate and normalize paths cross-platform;
+- update skill discovery and all local tools consistently;
+- preserve deleted-CWD fallback;
+- define how CWD changes are persisted across conversation resume and remote execution.
+
+#### P1.3 — Vera mod compatibility
+
+Validate `mods/letta-code-vera` against v0.30.28 before raising its engine floor.
+
+Compatibility checks:
+
+- approval-first turn input ordering (`9d8fb8d6`);
+- cleanup of registrations during in-flight `/reload` (`83f4f1f7`);
+- user-only notifications (`33aa7fef`);
+- conversation title handles/events (`4f57796c`);
+- mod-provided provider/environment composition (`64e177d8`);
+- no conflict with upstream per-agent MCP OAuth (`3c414cfd`); Vera credentials must remain behind Vera's server/mod boundary.
+
+Update the mod engine requirement only after install, reload, command, tool, auth-reuse, approval, and cleanup tests pass on the current Letta Code release.
+
+#### P2 — Listener/channel architecture candidates
+
+Do not copy the upstream listener or first-party Slack/Telegram/Discord implementations into Electron. Extract applicable contracts and tests for:
+
+- exact run-to-send correlation and queue-boundary status (`3850ebd3`, `dbe6cbb9`);
+- final lifecycle completion before outward delivery (`2c7de14a`);
+- duplicate outbound action suppression (`6248f2b4`);
+- channel-created conversation model pinning (`65b7a3ae`);
+- interactive control request coordination (`fe3c26d3`);
+- normalized message references, sender/thread metadata, and safe handoff semantics.
+
+Vera Server remains the channel authority; Cowork should consume explicit event metadata rather than importing provider adapters.
+
+### Explicitly not planned as direct ports
+
+- CLI/TUI components, provider selectors, teleport command UX, Docker/CI watcher code, and first-party channel adapters;
+- upstream app-server/listener transport wholesale;
+- upstream Cloud/local backend implementation internals;
+- process-global working-directory or model state;
+- automatic background Task behavior without Cowork-specific ownership and notification design;
+- upstream credential storage in place of Vera authentication.
+
+### Validation gates for implementation
+
+1. Add focused unit tests before each safe port.
+2. Run related Cowork tests after every batch.
+3. Run `bun run transpile:electron`.
+4. Run `bun run build` and restore generated `dist-react/index.html` unless release output is explicitly requested.
+5. Exercise organization-default plus at least two named Letta connections with concurrent conversations.
+6. Verify exact `/v1/runs/{run_id}/steps` model handles for normal turns, tool continuations, and compaction.
+7. Validate the Vera mod with `bun test ./src ./mods` and `bun --check mods/vera.js` against Letta Code v0.30.28+.
+8. Record each implemented batch here with commit references, files, tests, and intentionally deferred work.
+
 ## 2026-07-27 — Task subagents inherit the agent model
 
 Cowork no longer exposes or accepts a per-Task `model` override. Every subagent conversation uses the model configured on its target agent, and message requests never include `override_model`. This prevents model-generated Task arguments from silently changing the agent's configured model.

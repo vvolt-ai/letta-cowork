@@ -49,7 +49,12 @@ export function usePromptActions(
   const activeSession = useAppStore((state) =>
     activeSessionId ? state.sessions[activeSessionId] : undefined
   );
-  const selectedModel = useAppStore((state) => state.selectedModel);
+  const draftSelectedModel = useAppStore((state) => state.selectedModel);
+  const requestModel = activeSessionId
+    ? activeSession?.model?.trim() ?? ""
+    : draftSelectedModel.trim();
+  const newConversationAgentId = useAppStore((state) => state.newConversationAgentId);
+  const newConversationLettaConnectionId = useAppStore((state) => state.newConversationLettaConnectionId);
   const permissionMode = useAppStore((state) => state.permissionMode);
   const setPrompt = useAppStore((state) => state.setPrompt);
   const setPendingStart = useAppStore((state) => state.setPendingStart);
@@ -93,7 +98,9 @@ export function usePromptActions(
             attachments: options?.attachments,
             cwd: cwd.trim() || undefined,
             allowedTools: DEFAULT_ALLOWED_TOOLS,
-            model: selectedModel.trim() || undefined,
+            agentId: newConversationAgentId.trim() || undefined,
+            lettaConnectionId: newConversationLettaConnectionId.trim() || undefined,
+            model: requestModel,
             permissionMode,
           },
         });
@@ -113,7 +120,9 @@ export function usePromptActions(
             content: options?.content,
             attachments: options?.attachments,
             cwd: overrideSessionId ? undefined : activeSession?.cwd,
-            model: selectedModel.trim() || undefined,
+            agentId: activeSession?.agentId,
+            lettaConnectionId: activeSession?.lettaConnectionId ?? "",
+            model: requestModel,
             permissionMode,
           },
         });
@@ -125,10 +134,12 @@ export function usePromptActions(
       activeSessionId,
       cwd,
       isRunning,
+      newConversationAgentId,
+      newConversationLettaConnectionId,
       overrideSessionId,
       prompt,
       permissionMode,
-      selectedModel,
+      requestModel,
       sendEvent,
       setGlobalError,
       setPendingStart,
@@ -193,14 +204,16 @@ export function usePromptActions(
           content: options?.content,
           attachments: options?.attachments,
           cwd: overrideSessionId ? undefined : activeSession?.cwd,
-          model: selectedModel.trim() || undefined,
+          agentId: activeSession?.agentId,
+          lettaConnectionId: activeSession?.lettaConnectionId ?? "",
+          model: requestModel,
           permissionMode,
         },
       });
       setPrompt("");
       setGlobalError(null);
     },
-    [activeSession?.cwd, activeSessionId, overrideSessionId, permissionMode, prompt, selectedModel, sendEvent, setGlobalError, setPrompt]
+    [activeSession?.agentId, activeSession?.cwd, activeSession?.lettaConnectionId, activeSessionId, overrideSessionId, permissionMode, prompt, requestModel, sendEvent, setGlobalError, setPrompt]
   );
 
   const handleStopAndResend = useCallback(
@@ -253,13 +266,15 @@ export function usePromptActions(
           content: combinedContent,
           attachments: options?.attachments,
           cwd: overrideSessionId ? undefined : activeSession?.cwd,
-          model: selectedModel.trim() || undefined,
+          agentId: activeSession?.agentId,
+          lettaConnectionId: activeSession?.lettaConnectionId ?? "",
+          model: requestModel,
           permissionMode,
         },
       });
       setPrompt("");
     },
-    [activeSession?.cwd, activeSession?.lastPrompt, activeSessionId, overrideSessionId, permissionMode, prompt, selectedModel, sendEvent, setPrompt]
+    [activeSession?.agentId, activeSession?.cwd, activeSession?.lastPrompt, activeSession?.lettaConnectionId, activeSessionId, overrideSessionId, permissionMode, prompt, requestModel, sendEvent, setPrompt]
   );
 
   // Keep one slash-command dispatcher. PromptInput previously used a second,

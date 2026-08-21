@@ -1,3 +1,4 @@
+import type { Letta } from "@letta-ai/letta-client";
 import { getVeraCoworkApiClient } from "../../api/index.js";
 import { createLettaRuntimeClient, getLettaRuntimeConfig } from "../letta-runtime/index.js";
 

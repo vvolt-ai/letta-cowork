@@ -147,6 +147,8 @@ export function handleListSessions(): void {
         title: session.title,
         agentName: session.agentName,
         agentId: session.agentId,
+        lettaConnectionId: session.lettaConnectionId,
+        model: session.model,
         status: getSession(session.id)?.status || "idle",
         createdAt: session.createdAt,
         updatedAt: session.updatedAt,

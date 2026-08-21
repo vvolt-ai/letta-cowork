@@ -16,6 +16,14 @@ import type { ChatTimelineProps } from "../../types";
 
 export type { ChatTimelineProps, TimelineEntry } from "../../types";
 
+type LettaConnectionOption = {
+  id: string;
+  scope: "organization" | "personal";
+  name: string;
+  isDefault: boolean;
+  isActive: boolean;
+};
+
 type ConversationOption = {
   id: string;
   agentId: string;
@@ -46,7 +54,12 @@ function formatConversationDate(timestamp?: string | null): string {
 }
 
 function NewConversationAgentSelector() {
-  const [selectedAgentId, setSelectedAgentId] = useState("");
+  const selectedAgentId = useAppStore((state) => state.newConversationAgentId);
+  const setSelectedAgentId = useAppStore((state) => state.setNewConversationAgentId);
+  const selectedConnectionId = useAppStore((state) => state.newConversationLettaConnectionId);
+  const setSelectedConnectionId = useAppStore((state) => state.setNewConversationLettaConnectionId);
+  const [connections, setConnections] = useState<LettaConnectionOption[]>([]);
+  const [connectionsLoading, setConnectionsLoading] = useState(true);
   const [selectedConversationId, setSelectedConversationId] = useState(NEW_CONVERSATION_VALUE);
   const [conversations, setConversations] = useState<ConversationOption[]>([]);
   const [conversationsLoading, setConversationsLoading] = useState(false);
@@ -57,10 +70,29 @@ function NewConversationAgentSelector() {
 
   useEffect(() => {
     let cancelled = false;
+    window.electron.listLettaConnections()
+      .then((available) => {
+        if (!cancelled) setConnections(available ?? []);
+      })
+      .catch((error) => {
+        if (!cancelled) console.error("Failed to load Letta accounts:", error);
+      })
+      .finally(() => {
+        if (!cancelled) setConnectionsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
     window.electron.getLettaEnv()
       .then((env) => {
         if (cancelled) return;
-        setSelectedAgentId(env.LETTA_AGENT_ID?.trim() ?? "");
+        if (!useAppStore.getState().newConversationAgentId) {
+          setSelectedAgentId(env.LETTA_AGENT_ID?.trim() ?? "");
+        }
       })
       .catch((error) => {
         console.error("Failed to load Letta environment:", error);
@@ -69,7 +101,7 @@ function NewConversationAgentSelector() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [setSelectedAgentId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -87,7 +119,10 @@ function NewConversationAgentSelector() {
     }
 
     setConversationsLoading(true);
-    window.electron.listLettaConversations(agentId)
+    window.electron.listLettaConversations(
+      agentId,
+      selectedConnectionId || undefined,
+    )
       .then((items) => {
         if (!cancelled) setConversations(items ?? []);
       })
@@ -103,7 +138,7 @@ function NewConversationAgentSelector() {
     return () => {
       cancelled = true;
     };
-  }, [selectedAgentId]);
+  }, [selectedAgentId, selectedConnectionId]);
 
   const handleAgentChange = useCallback(async (agentId: string) => {
     const trimmedAgentId = agentId.trim();
@@ -137,18 +172,46 @@ function NewConversationAgentSelector() {
       id: conversation.id,
       title: conversation.summary?.trim() || conversation.id,
       agentId: conversation.agentId || selectedAgentId,
+      lettaConnectionId: selectedConnectionId || undefined,
+      model: conversation.model?.trim() || undefined,
       createdAt: parseConversationDate(conversation.createdAt),
       updatedAt: parseConversationDate(conversation.lastMessageAt ?? conversation.updatedAt),
     });
-  }, [conversations, openExistingConversation, selectedAgentId]);
+  }, [conversations, openExistingConversation, selectedAgentId, selectedConnectionId]);
 
   return (
     <div className="mt-6 grid gap-4 text-left">
+      <label className="grid min-w-0 gap-1.5">
+        <span className="text-xs text-ink-700">Letta account</span>
+        <select
+          className="w-full min-w-0 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink-800 outline-none transition focus:border-accent/40 disabled:cursor-not-allowed disabled:opacity-60"
+          value={selectedConnectionId}
+          onChange={(event) => {
+            setSelectedConnectionId(event.target.value);
+            setSelectedAgentId("");
+            setSelectedConversationId(NEW_CONVERSATION_VALUE);
+          }}
+          disabled={connectionsLoading}
+        >
+          <option value="">Organization default</option>
+          {connections.map((connection) => (
+            <option key={connection.id} value={connection.id}>
+              {connection.name} — {connection.scope === "organization" ? "Organization" : "Personal"}
+              {connection.isDefault ? " (default)" : ""}
+            </option>
+          ))}
+        </select>
+        <span className="text-xs leading-5 text-muted">
+          Credentials stay on Vera Server; Cowork receives only agent access.
+        </span>
+      </label>
+
       <div>
         <AgentDropdown
           value={selectedAgentId}
           onChange={handleAgentChange}
-          disabled={savingAgentId}
+          connectionId={selectedConnectionId || undefined}
+          disabled={savingAgentId || connectionsLoading}
         />
       </div>
 

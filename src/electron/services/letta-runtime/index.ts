@@ -10,6 +10,19 @@ export interface LettaRuntimeConfig {
   source: "vera" | "local";
 }
 
+/**
+ * Explicit wire value for Vera's organization-default Letta account.
+ *
+ * An omitted header used to be indistinguishable from a caller that forgot to
+ * propagate its conversation account. Keeping the default explicit prevents a
+ * later multi-account flow from accidentally inheriting unrelated state.
+ */
+export const ORGANIZATION_DEFAULT_LETTA_CONNECTION = "organization-default";
+
+export function getLettaConnectionScope(connectionId?: string): string {
+  return connectionId?.trim() || ORGANIZATION_DEFAULT_LETTA_CONNECTION;
+}
+
 function withBearerToken(
   input: RequestInfo | URL,
   init: RequestInit | undefined,
@@ -62,10 +75,7 @@ export function getLettaRuntimeConfig(connectionId?: string): LettaRuntimeConfig
     const defaultHeaders: Record<string, string> = {
       "X-Letta-Source": "vera-cowork-desktop",
     };
-    const selectedConnectionId = connectionId?.trim();
-    if (selectedConnectionId) {
-      defaultHeaders["x-letta-connection-id"] = selectedConnectionId;
-    }
+    defaultHeaders["x-letta-connection-id"] = getLettaConnectionScope(connectionId);
     return {
       apiKey: accessToken,
       baseURL: `${api.apiBaseUrl.replace(/\/$/, "")}/letta/runtime`,

@@ -204,6 +204,9 @@ function makeTool(
                     // tools ignore these fields.
                     _runtime_agent_id: ctx.agentId,
                     _runtime_conversation_id: ctx.conversationId,
+                    _runtime_letta_client: ctx.lettaClient,
+                    _runtime_letta_connection_id: ctx.lettaConnectionId,
+                    _runtime_tool_context: ctx,
                     _runtime_plan_mode: ctx.planMode,
                 });
                 const result = adaptResult(out);

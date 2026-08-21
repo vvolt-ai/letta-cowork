@@ -12,7 +12,7 @@ import {
 import { log, debug } from "./utils.js";
 import { runLetta } from "../../../libs/runner/index.js";
 import { createRuntimeSession, updateSession, deleteSession, getSession } from "../../../libs/runtime-state.js";
-import { addStoredSession, getStoredSessions } from "../../../services/settings/index.js";
+import { addStoredSession, getStoredSessions, updateStoredSession } from "../../../services/settings/index.js";
 
 import type { SessionContinueOptions } from "./types.js";
 import type { MessageContentItem } from "@letta-ai/letta-agent-sdk";
@@ -71,13 +71,29 @@ export async function handleContinueSession(
         );
         const resolvedTitle =
             runtimeSession.title ?? storedSession?.title ?? conversationId;
+        // A missing connection always falls back to the account originally stored
+        // with this conversation; if neither exists, the runtime uses Vera's
+        // organization-default Letta account.
+        const resolvedConnectionId = lettaConnectionId !== undefined
+            ? lettaConnectionId.trim() || undefined
+            : storedSession?.lettaConnectionId;
+        const resolvedModel = typeof model === "string"
+            ? model.trim() || undefined
+            : storedSession?.model;
         if (!storedSession && agentId) {
             addStoredSession({
                 id: conversationId,
                 agentId,
-                lettaConnectionId,
+                lettaConnectionId: resolvedConnectionId,
+                model: resolvedModel,
                 title: resolvedTitle,
                 createdAt: Date.now(),
+                updatedAt: Date.now(),
+            });
+        } else if (storedSession) {
+            updateStoredSession(conversationId, {
+                lettaConnectionId: resolvedConnectionId,
+                model: resolvedModel,
                 updatedAt: Date.now(),
             });
         }
@@ -94,6 +110,8 @@ export async function handleContinueSession(
                 sessionId: conversationId,
                 status: "running",
                 title: resolvedTitle,
+                lettaConnectionId: resolvedConnectionId ?? "",
+                model: resolvedModel ?? "",
             },
         });
         emit({
@@ -113,7 +131,7 @@ export async function handleContinueSession(
             const handle = await runLetta({
                 prompt: prompt ?? "",
                 content: content as MessageContentItem[] | undefined,
-                model,
+                model: resolvedModel,
                 permissionMode,
                 session: {
                     id: conversationId,
@@ -124,7 +142,7 @@ export async function handleContinueSession(
                     permissionGrants: runtimeSession.permissionGrants,
                 },
                 resumeConversationId: conversationId,
-                lettaConnectionId: lettaConnectionId ?? storedSession?.lettaConnectionId,
+                lettaConnectionId: resolvedConnectionId,
                 onEvent: (e) => {
                     if (
                         actualConversationId !== conversationId &&

@@ -72,7 +72,8 @@ function mapLettaMessagesToStreamMessages(rawMessages: LettaMessage[]): StreamMe
 export async function handleGetSessionHistory(
     sessionId: string,
     limit: number = 50,
-    before?: string
+    before?: string,
+    lettaConnectionId?: string
 ): Promise<void> {
     const conversationId = sessionId;
     const requestedBefore = isValidHistoryCursor(before) ? before : undefined;
@@ -97,9 +98,11 @@ export async function handleGetSessionHistory(
         return;
     }
 
-    const connectionId = getStoredSessions().find(
-        (session) => session.id === conversationId
-    )?.lettaConnectionId;
+    const connectionId = lettaConnectionId !== undefined
+        ? lettaConnectionId.trim() || undefined
+        : getStoredSessions().find(
+            (session) => session.id === conversationId
+        )?.lettaConnectionId;
     const lettaClient = createLettaClient(connectionId);
 
     if (!lettaClient) {

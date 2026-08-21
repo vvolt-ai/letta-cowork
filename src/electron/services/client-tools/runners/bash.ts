@@ -158,6 +158,12 @@ async function runBash(
     if (!command) {
         return { output: "Bash: missing 'command' argument", isError: true };
     }
+    if (args.run_in_background === true) {
+        return {
+            output: "run_in_background is not supported by the Cowork Bash runner; run the command synchronously.",
+            isError: true,
+        };
+    }
     const cwd = getCurrentWorkingDirectory();
     const recoveredFrom = consumeWorkingDirectoryRecovery();
     const recoveryNote = recoveredFrom

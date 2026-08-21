@@ -1,6 +1,6 @@
 # letta-cowork decisions
 
-**Last updated:** 2026-06-23
+**Last updated:** 2026-08-20
 **Sensitivity:** Level 2 internal. No secrets.
 
 ## Deployment/auth
@@ -14,6 +14,10 @@
 - Session state should not wait on slow agent-name lookups before marking a run as `running`.
 - `waiting_approval` state wins over completion-style events when permission requests still exist.
 - Completion notifications should fire only after a session truly finishes and has no pending approvals.
+- The inline `New Conversation` composer is the primary session-start flow. Vera-managed Letta account selection must be present there (not only in the legacy Start Session modal), and the selected connection must scope agent/model/conversation discovery, history, and session start/continuation.
+- Letta account and model context are conversation-scoped. For an active conversation, an absent `lettaConnectionId` explicitly means Vera's organization-default account and must never fall back to the New Conversation draft account. Model overrides must be stored per conversation; absent model means the agent default.
+- The composer model picker follows the Letta UI pattern: searchable catalog, All/Hosted/BYOK filters with counts, explicit Hosted/BYOK badges, model display name plus qualified handle, and a visible agent-default option.
+- Letta compaction has a separate agent-level model. A `null` `compaction_settings.model` uses Letta's lightweight provider-specific default and can produce billing entries for a model different from the conversation model. Do not diagnose that as a dropped conversation override; inspect both conversation `model` and agent `compaction_settings.model`.
 
 ## Message/history identity
 

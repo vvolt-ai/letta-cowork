@@ -563,6 +563,9 @@ export type SessionView = {
   cwd?: string;
   agentName?: string;
   agentId?: string;
+  lettaConnectionId?: string;
+  /** Explicit model override for this conversation; absent means agent default. */
+  model?: string;
   latestRunId?: string;
   latestClientRunId?: string;
   messages: StreamMessage[];
@@ -591,6 +594,8 @@ export type ExistingConversationSelection = {
   id: string;
   title?: string;
   agentId?: string;
+  lettaConnectionId?: string;
+  model?: string;
   createdAt?: number;
   updatedAt?: number;
 };
@@ -635,6 +640,8 @@ export interface AppState {
   historyRequested: Set<string>;
   coworkSettings: CoworkSettings;
   selectedModel: string;
+  newConversationAgentId: string;
+  newConversationLettaConnectionId: string;
   /**
    * Models that the Letta Code CLI runtime has rejected during session init
    * with an "Invalid model" error. The Letta workspace catalog can list
@@ -663,6 +670,9 @@ export interface AppState {
   resolvePermissionRequest: (sessionId: string, toolUseId: string) => void;
   setCoworkSettings: (settings: CoworkSettings) => void;
   setSelectedModel: (model: string) => void;
+  setSessionModel: (sessionId: string, model: string) => void;
+  setNewConversationAgentId: (agentId: string) => void;
+  setNewConversationLettaConnectionId: (connectionId: string) => void;
   markModelRejected: (model: string) => void;
   setShowReasoningInChat: (show: boolean) => void;
   setPermissionMode: (mode: PermissionMode) => void;
@@ -707,6 +717,8 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
     showLettaEnv: true,
   },
   selectedModel: "",
+  newConversationAgentId: "",
+  newConversationLettaConnectionId: "",
   rejectedModels: [],
   showReasoningInChat: true,
   permissionMode: "standard",
@@ -755,6 +767,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
         payload: {
           sessionId,
           limit,
+          lettaConnectionId: session.lettaConnectionId ?? "",
           ...(cursor ? { before: cursor } : {}),
         },
       });
@@ -812,7 +825,10 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
         if (session && !session.hydrated && !session.isLoadingHistory && state.ipcSendEvent) {
           state.ipcSendEvent({
             type: "session.history",
-            payload: { sessionId: id }
+            payload: {
+              sessionId: id,
+              lettaConnectionId: session.lettaConnectionId ?? "",
+            }
           });
         }
 
@@ -846,20 +862,21 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
   openExistingConversation: (conversation) => {
     const existing = get().sessions[conversation.id];
 
-    if (!existing) {
-      set((state) => ({
-        sessions: {
-          ...state.sessions,
-          [conversation.id]: {
-            ...createSession(conversation.id),
-            title: conversation.title ?? "",
-            agentId: conversation.agentId,
-            createdAt: conversation.createdAt,
-            updatedAt: conversation.updatedAt,
-          },
+    set((state) => ({
+      sessions: {
+        ...state.sessions,
+        [conversation.id]: {
+          ...(existing ?? createSession(conversation.id)),
+          title: conversation.title ?? existing?.title ?? "",
+          agentId: conversation.agentId ?? existing?.agentId,
+          // The picker account is authoritative, including undefined = org default.
+          lettaConnectionId: conversation.lettaConnectionId,
+          model: conversation.model?.trim() || undefined,
+          createdAt: conversation.createdAt ?? existing?.createdAt,
+          updatedAt: conversation.updatedAt ?? existing?.updatedAt,
         },
-      }));
-    }
+      },
+    }));
 
     get().setActiveSessionId(conversation.id, false);
 
@@ -916,6 +933,30 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
 
   setSelectedModel: (model) => {
     set({ selectedModel: model });
+  },
+
+  setSessionModel: (sessionId, model) => {
+    set((state) => {
+      const session = state.sessions[sessionId];
+      if (!session) return state;
+      return {
+        sessions: {
+          ...state.sessions,
+          [sessionId]: {
+            ...session,
+            model: model.trim() || undefined,
+          },
+        },
+      };
+    });
+  },
+
+  setNewConversationAgentId: (newConversationAgentId) => {
+    set({ newConversationAgentId, selectedModel: "" });
+  },
+
+  setNewConversationLettaConnectionId: (newConversationLettaConnectionId) => {
+    set({ newConversationLettaConnectionId, selectedModel: "" });
   },
 
   setShowReasoningInChat: (show) => {
@@ -1009,6 +1050,10 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
             title: session.title || existing.title,
             agentName: session.agentName || existing.agentName,
             agentId: session.agentId ?? existing.agentId,
+            // These fields are authoritative. Missing connection means Vera's
+            // organization default; it must not inherit a prior UI selection.
+            lettaConnectionId: session.lettaConnectionId,
+            model: session.model,
             cwd: session.cwd,
             createdAt: session.createdAt,
             updatedAt: session.updatedAt,
@@ -1133,7 +1178,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
       }
 
       case "session.status": {
-        const { sessionId, status, title, cwd, error, agentName, agentId, background, isEmailSession } = event.payload;
+        const { sessionId, status, title, cwd, error, agentName, agentId, lettaConnectionId, model, background, isEmailSession } = event.payload;
         const existing = rootState.sessions[sessionId] ?? createSession(sessionId);
         const previousStatus = existing.status;
         const hadPendingPermissions = (existing.permissionRequests?.length ?? 0) > 0;
@@ -1193,6 +1238,10 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
                 cwd: cwd ?? current.cwd,
                 agentName: agentName ?? current.agentName,
                 agentId: agentId ?? current.agentId,
+                lettaConnectionId: typeof lettaConnectionId === "string"
+                  ? lettaConnectionId.trim() || undefined
+                  : current.lettaConnectionId,
+                model: typeof model === "string" ? model.trim() || undefined : current.model,
                 isEmailSession: isEmailSession ?? current.isEmailSession,
                 updatedAt: Date.now(),
                 ephemeral: nextEphemeral,
@@ -1609,6 +1658,8 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
   storage: createJSONStorage(() => localStorage),
   partialize: (state) => ({
     selectedModel: state.selectedModel,
+    newConversationAgentId: state.newConversationAgentId,
+    newConversationLettaConnectionId: state.newConversationLettaConnectionId,
     showReasoningInChat: state.showReasoningInChat,
     permissionMode: state.permissionMode,
   }),

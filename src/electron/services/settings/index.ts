@@ -39,6 +39,8 @@ export interface StoredSession {
   agentId: string;
   agentName?: string;
   lettaConnectionId?: string;
+  /** Explicit model override for this conversation; absent means agent default. */
+  model?: string;
   title: string;
   createdAt: number; // Unix timestamp
   updatedAt: number; // Unix timestamp

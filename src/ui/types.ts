@@ -67,6 +67,8 @@ export type SessionInfo = {
   title: string;
   agentName?: string;
   agentId?: string;
+  lettaConnectionId?: string;
+  model?: string;
   status: SessionStatus;
   lettaConversationId?: string;
   cwd?: string;
@@ -79,7 +81,7 @@ export type SessionInfo = {
 export type ServerEvent =
   | { type: "stream.message"; payload: { sessionId: string; message: StreamMessage } }
   | { type: "stream.user_prompt"; payload: { sessionId: string; prompt: string; attachments?: ChatAttachment[]; content?: MessageContentItem[] } }
-  | { type: "session.status"; payload: { sessionId: string; status: SessionStatus; title?: string; cwd?: string; error?: string; agentName?: string; agentId?: string; background?: boolean; isEmailSession?: boolean } }
+  | { type: "session.status"; payload: { sessionId: string; status: SessionStatus; title?: string; cwd?: string; error?: string; agentName?: string; agentId?: string; lettaConnectionId?: string; model?: string; background?: boolean; isEmailSession?: boolean } }
   | { type: "session.list"; payload: { sessions: SessionInfo[] } }
   | {
       type: "session.history";
@@ -123,7 +125,7 @@ export type ClientEvent =
   | { type: "session.delete"; payload: { sessionId: string } }
   | { type: "session.cancelPending"; payload: Record<string, never> }
   | { type: "session.list" }
-  | { type: "session.history"; payload: { sessionId: string; limit?: number; before?: string } }
+  | { type: "session.history"; payload: { sessionId: string; limit?: number; before?: string; lettaConnectionId?: string } }
   | { type: "session.rename"; payload: { sessionId: string; title: string } }
   | { type: "permission.response"; payload: { sessionId: string; toolUseId: string; result: CanUseToolResponse; scope?: "once" | "tool" | "session" } };
 

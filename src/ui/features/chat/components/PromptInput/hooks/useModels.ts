@@ -100,6 +100,9 @@ function mergeModelOptions(primary: ModelOption[], secondary: ModelOption[]): Mo
 
 export interface UseModelsOptions {
   agentId?: string;
+  connectionId?: string;
+  /** Conversation identity, used to isolate touched/default state. */
+  contextKey?: string;
   selectedModel: string;
   setSelectedModel: (model: string) => void;
 }
@@ -113,7 +116,7 @@ export interface UseModelsResult {
 }
 
 export function useModels(options: UseModelsOptions): UseModelsResult {
-  const { agentId, selectedModel, setSelectedModel } = options;
+  const { agentId, connectionId, contextKey, selectedModel, setSelectedModel } = options;
 
   const [allModels, setAllModels] = useState<ModelOption[]>([]);
   const [models, setModels] = useState<ModelOption[]>([]);
@@ -128,14 +131,19 @@ export function useModels(options: UseModelsOptions): UseModelsResult {
   // Fetch catalog
   useEffect(() => {
     let cancelled = false;
+    // Never display the previous account's catalog while the selected account
+    // is loading. An absent connectionId intentionally means org default.
+    setAllModels([]);
+    setModels([]);
+    setModelsLoading(true);
 
     const fetchCatalog = async () => {
       try {
-        const fetched = await window.electron.listLettaModels();
+        const fetched = await window.electron.listLettaModels(connectionId);
         if (cancelled) return;
         if (Array.isArray(fetched)) {
           setAllModels(fetched);
-          setModels((current) => (current.length > 0 ? current : fetched));
+          setModels(fetched);
         }
       } catch (error) {
         if (!cancelled) {
@@ -155,7 +163,7 @@ export function useModels(options: UseModelsOptions): UseModelsResult {
       cancelled = true;
       window.removeEventListener("letta-model-catalog-changed", handleCatalogChanged);
     };
-  }, []);
+  }, [connectionId]);
 
   // Migrate selections persisted by older Cowork builds, which incorrectly
   // stored the provider-local model name instead of the qualified handle.
@@ -170,10 +178,11 @@ export function useModels(options: UseModelsOptions): UseModelsResult {
     }
   }, [allModels, selectedModel, setSelectedModel]);
 
-  // Reset touched on agent change
+  // Model choices are conversation-scoped. Switching conversations must not
+  // preserve the previous conversation's manually-touched state.
   useEffect(() => {
     setModelTouched(false);
-  }, [agentId]);
+  }, [agentId, connectionId, contextKey]);
 
   // Apply agent models
   useEffect(() => {
@@ -194,21 +203,15 @@ export function useModels(options: UseModelsOptions): UseModelsResult {
 
       setModelsLoading(true);
       try {
-        const agent = await window.electron.getLettaAgent(agentId);
+        const agent = await window.electron.getLettaAgent(agentId, connectionId);
         if (cancelled) return;
         const names = extractAgentModelNames(agent);
         const derived = mapModelNamesToOptions(names, allModels);
         const nextModels = mergeModelOptions(derived, allModels);
         setModels(nextModels);
 
-        const preferred =
-          typeof agent?.model === "string" && agent.model?.trim()
-            ? agent.model.trim()
-            : names[0];
-
-        // Fix A: If the currently-selected model is not valid for this agent,
-        // drop it so we fall back to the agent's default instead of shipping
-        // an unusable override to the Letta SDK (which would hang init).
+        // If the conversation's explicit model is unavailable in this account,
+        // clear the override and let the agent use its own default model.
         const selectedIsValidForAgent =
           !selectedModel ||
           nextModels.some((m) => m.name === selectedModel);
@@ -217,14 +220,8 @@ export function useModels(options: UseModelsOptions): UseModelsResult {
           console.warn(
             `[useModels] Selected model "${selectedModel}" is not available on agent ${agentId}. Resetting to agent default.`
           );
-          setSelectedModel(preferred ?? "");
+          setSelectedModel("");
           setModelTouched(false);
-        } else if (!modelTouched) {
-          if (preferred && preferred !== selectedModel) {
-            setSelectedModel(preferred);
-          } else if (!preferred && !selectedModel && nextModels[0]) {
-            setSelectedModel(nextModels[0].name);
-          }
         }
       } catch (error) {
         if (!cancelled) {
@@ -243,15 +240,7 @@ export function useModels(options: UseModelsOptions): UseModelsResult {
     return () => {
       cancelled = true;
     };
-  }, [agentId, allModels, modelTouched, selectedModel, setSelectedModel]);
-
-  // Default model selection
-  useEffect(() => {
-    if (modelTouched) return;
-    if (selectedModel) return;
-    if (models.length === 0) return;
-    setSelectedModel(models[0].name);
-  }, [modelTouched, models, selectedModel, setSelectedModel]);
+  }, [agentId, allModels, connectionId, modelTouched, selectedModel, setSelectedModel]);
 
   const visibleModels = useMemo(
     () => models.filter((m) => !rejectedSet.has(m.name)),

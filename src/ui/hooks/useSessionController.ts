@@ -27,6 +27,7 @@ export function useSessionController({ connected, sendEvent }: UseSessionControl
   const setCwd = useAppStore((s) => s.setCwd);
   const pendingStart = useAppStore((s) => s.pendingStart);
   const setPendingStart = useAppStore((s) => s.setPendingStart);
+  const setSelectedModel = useAppStore((s) => s.setSelectedModel);
 
   const messages = activeSession?.messages ?? [];
   const permissionRequests = activeSession?.permissionRequests ?? [];
@@ -45,7 +46,13 @@ export function useSessionController({ connected, sendEvent }: UseSessionControl
     if (!activeSessionId || !connected || !activeSession) return;
     if (!activeSession.hydrated && !historyRequested.has(activeSessionId)) {
       markHistoryRequested(activeSessionId);
-      sendEvent({ type: "session.history", payload: { sessionId: activeSessionId } });
+      sendEvent({
+        type: "session.history",
+        payload: {
+          sessionId: activeSessionId,
+          lettaConnectionId: activeSession.lettaConnectionId ?? "",
+        },
+      });
     }
   }, [activeSession, activeSessionId, connected, historyRequested, markHistoryRequested, sendEvent]);
 
@@ -60,9 +67,10 @@ export function useSessionController({ connected, sendEvent }: UseSessionControl
   }, [activeSession?.agentId, activeSession?.permissionRequests.length, activeSessionId, connected]);
 
   const handleNewSession = useCallback(() => {
+    setSelectedModel("");
     setActiveSessionId(null);
     setShowStartModal(true);
-  }, [setActiveSessionId, setShowStartModal]);
+  }, [setActiveSessionId, setSelectedModel, setShowStartModal]);
 
   const handleDeleteSession = useCallback((sessionId: string) => {
     sendEvent({ type: "session.delete", payload: { sessionId } });
@@ -138,9 +146,10 @@ export function useSessionController({ connected, sendEvent }: UseSessionControl
       }
     }
 
+    setSelectedModel("");
     setActiveSessionId(null, false);
     setShowStartModal(false);
-  }, [isLettaEnvConfigured, setActiveSessionId, setShowStartModal]);
+  }, [isLettaEnvConfigured, setActiveSessionId, setSelectedModel, setShowStartModal]);
 
   // Handle starting a new session with a specific agent, or continuing an existing conversation.
   const handleStartWithAgent = useCallback(async (
@@ -159,8 +168,8 @@ export function useSessionController({ connected, sendEvent }: UseSessionControl
           prompt,
           cwd: cwd.trim() || undefined,
           agentId: agentId || undefined,
-          lettaConnectionId: lettaConnectionId || undefined,
-          model: model || undefined,
+          lettaConnectionId: lettaConnectionId?.trim() ?? "",
+          model: model?.trim() ?? "",
         }
       });
       setPrompt("");

@@ -36,8 +36,13 @@ export async function handleSessionEvent(event: ClientEvent): Promise<void> {
     }
 
     if (event.type === "session.history") {
-        const { sessionId, limit, before } = event.payload as { sessionId: string; limit?: number; before?: string };
-        await handleGetSessionHistory(sessionId, limit, before);
+        const { sessionId, limit, before, lettaConnectionId } = event.payload as {
+            sessionId: string;
+            limit?: number;
+            before?: string;
+            lettaConnectionId?: string;
+        };
+        await handleGetSessionHistory(sessionId, limit, before, lettaConnectionId);
         return;
     }
 

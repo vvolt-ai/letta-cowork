@@ -132,6 +132,7 @@ export async function handleStartSession(
                     addStoredSession({
                         id: conversationId, agentId: resolvedAgentId, agentName: undefined,
                         lettaConnectionId,
+                        model: model?.trim() || undefined,
                         title: sessionTitle, createdAt: Date.now(), updatedAt: Date.now(),
                         isEmailSession: isEmailSession ?? false,
                     });
@@ -139,7 +140,17 @@ export async function handleStartSession(
                     console.log("[session.start] Emitting session.status", { conversationId, isEmailSession, status: "running" });
                     emit({
                         type: "session.status",
-                        payload: { sessionId: conversationId, status: "running", title: sessionTitle, cwd, agentId: resolvedAgentId, background, isEmailSession },
+                        payload: {
+                            sessionId: conversationId,
+                            status: "running",
+                            title: sessionTitle,
+                            cwd,
+                            agentId: resolvedAgentId,
+                            lettaConnectionId: lettaConnectionId?.trim() || "",
+                            model: model?.trim() || "",
+                            background,
+                            isEmailSession,
+                        },
                     });
                     emit({
                         type: "stream.user_prompt",
@@ -147,7 +158,7 @@ export async function handleStartSession(
                     });
 
                     if (resolvedAgentId) {
-                        void getLettaAgent(resolvedAgentId)
+                        void getLettaAgent(resolvedAgentId, lettaConnectionId)
                             .then((agent) => {
                                 if (!agent?.name) return;
                                 updateStoredSession(conversationId, { agentName: agent.name, updatedAt: Date.now() });

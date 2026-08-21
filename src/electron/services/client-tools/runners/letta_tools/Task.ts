@@ -23,6 +23,7 @@ import {
     runSubagent,
     type RunSubagentResult,
 } from "../../../agent/subagents/manager.js";
+import type { ToolRunContext } from "../../types.js";
 import { validateRequiredParams } from "../_shared/validation.js";
 
 interface TaskArgs {
@@ -37,6 +38,10 @@ interface TaskArgs {
     _runtime_agent_id?: string;
     /** Threaded by the framework's makeTool wrapper — the parent conversation id. */
     _runtime_conversation_id?: string;
+    /** Trusted account-scoped client from the parent Cowork turn. */
+    _runtime_letta_client?: unknown;
+    /** Trusted parent tool context inherited by the child conversation. */
+    _runtime_tool_context?: ToolRunContext;
 }
 
 interface TaskResult {
@@ -44,7 +49,8 @@ interface TaskResult {
     status: "success" | "error";
 }
 
-function getClient(): Letta {
+export function getTaskClient(runtimeClient?: unknown): Letta {
+    if (runtimeClient) return runtimeClient as Letta;
     const apiKey = (process.env.LETTA_API_KEY ?? "").trim();
     if (!apiKey) throw new Error("LETTA_API_KEY is not configured");
     const baseURL = (process.env.LETTA_BASE_URL ?? "").trim() || undefined;
@@ -88,7 +94,7 @@ export async function task(args: TaskArgs): Promise<TaskResult> {
     }
 
     const signal = args.signal ?? new AbortController().signal;
-    const client = getClient();
+    const client = getTaskClient(args._runtime_letta_client);
 
     let result: RunSubagentResult;
     try {
@@ -99,6 +105,7 @@ export async function task(args: TaskArgs): Promise<TaskResult> {
             agentId: args.agent_id,
             conversationId: args.conversation_id,
             signal,
+            toolContext: args._runtime_tool_context,
         });
     } catch (err) {
         return {
