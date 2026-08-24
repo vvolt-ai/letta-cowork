@@ -11,10 +11,13 @@ const ALLOWED_TOOLS = new Set([
   'vera_get_schedule',
   'vera_list_schedule_runs',
   'vera_search_knowledge',
+  'vera_list_organization_agents',
+  'vera_delegate_to_organization_agent',
 ]);
 const MAX_INPUT_BYTES = 256 * 1024;
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
-const REQUEST_TIMEOUT_MS = 30_000;
+const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+const DELEGATION_REQUEST_TIMEOUT_MS = 300_000;
 
 function fail(message) {
   throw new Error(message);
@@ -118,7 +121,11 @@ async function main() {
 
   const argumentsObject = await readArguments();
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const requestTimeoutMs =
+    toolName === 'vera_delegate_to_organization_agent'
+      ? DELEGATION_REQUEST_TIMEOUT_MS
+      : DEFAULT_REQUEST_TIMEOUT_MS;
+  const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
   let response;
 
   try {
@@ -141,7 +148,7 @@ async function main() {
     });
   } catch (error) {
     if (error?.name === 'AbortError') {
-      fail(`Vera MCP request timed out after ${REQUEST_TIMEOUT_MS / 1000} seconds.`);
+      fail(`Vera MCP request timed out after ${requestTimeoutMs / 1000} seconds.`);
     }
     fail(`Could not reach Vera MCP: ${error.message}`);
   } finally {

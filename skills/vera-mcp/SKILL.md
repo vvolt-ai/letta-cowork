@@ -1,6 +1,6 @@
 ---
 name: vera-mcp
-description: Use Vera's native read-only MCP tools for authenticated identity, visible communication channels, channel runtime status, owned schedules and run history, and ACL-filtered Vera knowledge search. Trigger for Vera identity, workspace channels, schedule status/history, or Vera knowledge retrieval.
+description: Uses Vera's native MCP tools for authenticated identity, visible communication channels, schedules and run history, ACL-filtered knowledge search, and secure delegation to organization Letta agents. Trigger for Vera identity, workspace channels, schedule status/history, Vera knowledge retrieval, organization-agent discovery, or delegation.
 ---
 
 # Vera Native MCP
@@ -44,10 +44,12 @@ If this skill was installed somewhere other than `~/.letta/skills/vera-mcp`, use
 | `vera_get_schedule` | Read one owned schedule by UUID. |
 | `vera_list_schedule_runs` | Read a bounded page of run history for one owned schedule. |
 | `vera_search_knowledge` | Search only knowledge documents allowed by Vera's ACL. |
+| `vera_list_organization_agents` | List owned/shared Letta agents available through the current Vera organization. |
+| `vera_delegate_to_organization_agent` | Run one isolated task on a listed organization agent. |
 
 The bundled client accepts only these exact tool names; do not add an MCP client prefix.
 
-All current Vera-native tools are read-only.
+All tools except delegation are read-only. Delegation is non-idempotent and may perform open-world model work, so use it only when the user requested the work. Vera keeps organization credentials server-side and does not grant the delegated run server-local Bash or filesystem client tools.
 
 ## Identity workflow
 
@@ -132,6 +134,16 @@ Example arguments:
 }
 ```
 
+## Organization-agent delegation workflow
+
+1. Call `vera_list_organization_agents`; never guess or reuse an ID from another user or organization.
+2. Select an agent from the returned current directory.
+3. Call `vera_delegate_to_organization_agent` with `agentId`, a short `description`, and a complete `prompt`.
+4. Treat each call as a fresh isolated conversation. Include all required context in the prompt.
+5. Report the returned final result and any clearly stated limitations.
+
+Delegation prompt length is capped at 20,000 characters. It does not expose the organization token or provide server-local client tools to the target agent.
+
 ## Tool selection
 
 - Identity or workspace mismatch → `vera_whoami`
@@ -141,6 +153,8 @@ Example arguments:
 - Show one schedule → list/verify, then `vera_get_schedule`
 - Did a scheduled task run? → list/verify, then `vera_list_schedule_runs`
 - Find indexed internal context → `vera_search_knowledge`
+- Which organization agents can I use? → `vera_list_organization_agents`
+- Ask an organization agent to complete a task → list first, then `vera_delegate_to_organization_agent`
 
 Do not use this skill for:
 
@@ -158,7 +172,7 @@ Do not use this skill for:
 - **Resource not found:** refresh the relevant list and verify the UUID; do not bypass ACLs with another API.
 - **Empty knowledge results:** refine the query or filters and clearly state the authorized search found no match.
 - **Truncated response:** narrow the search, lower the time range, or paginate schedule runs.
-- **Write requested:** explain that the native catalog is read-only and use an approved write workflow only if one exists and the user has authority.
+- **Write requested:** only organization-agent delegation is exposed as a non-read operation. For other writes, use an approved workflow only when the user has authority.
 
 ## Connection reference
 
