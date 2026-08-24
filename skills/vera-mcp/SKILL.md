@@ -7,7 +7,7 @@ description: Uses Vera's native MCP tools for authenticated identity, visible co
 
 This skill is self-contained. Call Vera's native MCP endpoint through the bundled `scripts/call-mcp.mjs` client; do not look for, add, mount, refresh, or attach MCP server tools. Vera applies the authenticated user's organization, ownership, sharing, and knowledge ACL boundaries.
 
-The client reads the current agent's `VERA_TOKEN` environment secret and never accepts a token as an argument. It uses `VERA_MCP_URL` when set, otherwise `/mcp` under `VERA_SERVER_URL` or `COWORK_SERVER_URL`, and finally the published Vera server default. Never print, echo, log, or ask the user to paste the token in chat.
+The client reads `VERA_TOKEN` first and falls back to the current agent's `COWORK_TOKEN`; it never accepts a token as an argument. Both are authenticated Vera user credentials accepted by the native MCP endpoint. It uses `VERA_MCP_URL` when set, otherwise `/mcp` under `VERA_SERVER_URL` or `COWORK_SERVER_URL`, and finally the published Vera server default. Never print, echo, log, or ask the user to paste either token in chat.
 
 ## Calling a tool
 
@@ -47,7 +47,7 @@ If this skill was installed somewhere other than `~/.letta/skills/vera-mcp`, use
 | `vera_list_organization_agents` | List owned/shared Letta agents available through the current Vera organization. |
 | `vera_delegate_to_organization_agent` | Run one isolated task on a listed organization agent. |
 
-The bundled client accepts only these exact tool names; do not add an MCP client prefix.
+The bundled client accepts only these exact tool names; do not add an MCP client prefix. Invoke them only through `scripts/call-mcp.mjs`. Do not route them through Vera's generic outbound `McpFetchTools`/`McpRunTool` connector catalog or a namespaced `vera_mcp__...` tool; that is a separate cached connector path.
 
 All tools except delegation are read-only. Delegation is non-idempotent and may perform open-world model work, so use it only when the user requested the work. Vera keeps organization credentials server-side and does not grant the delegated run server-local Bash or filesystem client tools.
 
@@ -165,7 +165,7 @@ Do not use this skill for:
 
 ## Error handling
 
-- **`VERA_TOKEN` unavailable:** tell the user to run `/secret set VERA_TOKEN ...` for the current Letta Code agent and start a new session. Never request the token in chat.
+- **Both `VERA_TOKEN` and `COWORK_TOKEN` unavailable:** tell the user to authenticate the current agent with the approved Vera login/token workflow and start a new session. Never request either token in chat.
 - **401/403:** report that the saved token is invalid, expired, revoked, or lacks access. Do not retry through another route.
 - **Client script missing:** the skill package is incomplete; reinstall the whole skill directory, including `scripts/call-mcp.mjs`. Do not attach an MCP server as a workaround.
 - **Endpoint unreachable:** report the connection failure. Use the configured Vera server URL when provided; do not expose the token while troubleshooting.
@@ -176,4 +176,4 @@ Do not use this skill for:
 
 ## Connection reference
 
-The bundled client calls the stateless Streamable HTTP endpoint at `POST /mcp` using the current agent's `VERA_TOKEN`. Personal MCP tokens are user-owned, expiring, revocable, and accepted only on approved MCP routes; they are not general Vera REST credentials. Never place token plaintext in skill files, source code, logs, screenshots, or chat.
+The bundled client calls the stateless Streamable HTTP endpoint at `POST /mcp` using `VERA_TOKEN` or, when absent, the current authenticated user's `COWORK_TOKEN`. Personal MCP tokens are user-owned, expiring, revocable, and accepted only on approved MCP routes; Cowork user tokens retain the acting user's Vera scope. Never place token plaintext in skill files, source code, logs, screenshots, or chat.

@@ -112,10 +112,11 @@ async function main() {
     );
   }
 
-  const token = process.env.VERA_TOKEN?.trim();
+  const token =
+    process.env.VERA_TOKEN?.trim() || process.env.COWORK_TOKEN?.trim();
   if (!token) {
     fail(
-      'VERA_TOKEN is unavailable. Save it to this Letta Code agent with /secret set VERA_TOKEN, then start a new session.',
+      'Neither VERA_TOKEN nor COWORK_TOKEN is available. Authenticate this agent with the approved Vera login/token workflow, then start a new session.',
     );
   }
 
