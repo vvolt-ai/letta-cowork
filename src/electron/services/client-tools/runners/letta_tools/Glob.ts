@@ -12,6 +12,7 @@ const execFileAsync = promisify(execFile);
 interface GlobArgs {
   pattern: string;
   path?: string;
+  signal?: AbortSignal;
 }
 
 interface GlobResult {
@@ -47,7 +48,7 @@ function applyFileLimit(files: string[], workingDirectory: string): GlobResult {
 
 export async function glob(args: GlobArgs): Promise<GlobResult> {
   validateRequiredParams(args, ["pattern"], "Glob");
-  const { pattern, path: searchPath } = args;
+  const { pattern, path: searchPath, signal } = args;
 
   // Explicit check for undefined/empty pattern (validateRequiredParams only checks key existence)
   if (!pattern) {
@@ -87,12 +88,14 @@ export async function glob(args: GlobArgs): Promise<GlobResult> {
     const { stdout } = await execFileAsync(rgPath, rgArgs, {
       maxBuffer: 50 * 1024 * 1024, // 50MB buffer for large file lists
       cwd: userCwd,
+      signal,
     });
 
     const files = stdout.trim().split("\n").filter(Boolean).sort();
 
     return applyFileLimit(files, userCwd);
   } catch (error) {
+    if (signal?.aborted) signal.throwIfAborted();
     const err = error as Error & {
       stdout?: string;
       code?: string | number;

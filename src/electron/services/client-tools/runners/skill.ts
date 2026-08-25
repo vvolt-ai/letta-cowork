@@ -11,11 +11,13 @@
  */
 
 import { existsSync, readFileSync, readdirSync, statSync } from "fs";
+import type { Dirent } from "fs";
 import { homedir } from "os";
-import { join } from "path";
+import { dirname, join } from "path";
 
 import type {
     ClientToolDefinition,
+    ToolRunContext,
     ToolRunResult,
 } from "../types.js";
 
@@ -38,7 +40,7 @@ export const skillTool: ClientToolDefinition = {
         },
         required: ["name"],
     },
-    run: async (args, _ctx) => loadSkill(args),
+    run: async (args, ctx) => loadSkill(args, ctx),
 };
 
 /** A companion tool that lists available skills with their descriptions. */
@@ -48,26 +50,40 @@ export const listSkillsTool: ClientToolDefinition = {
         "List the skills available on this device, with each skill's description. " +
         "Use this to discover what's available before calling Skill(name).",
     parameters: { type: "object", properties: {} },
-    run: async (_args, _ctx) => listSkills(),
+    run: async (_args, ctx) => listSkills(ctx),
 };
 
 // ─────────────────────────────────────────────────────────────────────
 // Implementation
 // ─────────────────────────────────────────────────────────────────────
 
-function getSkillRoots(): Array<{ root: string; source: string }> {
+function getSkillRoots(ctx?: ToolRunContext): Array<{ root: string; source: string }> {
     const out: Array<{ root: string; source: string }> = [];
-    const projectRoot = join(process.cwd(), "skills");
-    if (existsSync(projectRoot)) out.push({ root: projectRoot, source: "project" });
-    const globalRoot = join(homedir(), ".letta", "skills");
-    if (existsSync(globalRoot)) out.push({ root: globalRoot, source: "global" });
+    const seen = new Set<string>();
+    const add = (root: string, source: string) => {
+        if (!seen.has(root) && existsSync(root)) {
+            seen.add(root);
+            out.push({ root, source });
+        }
+    };
+    add(join(process.cwd(), "skills"), "project");
+    const memoryDir =
+        process.env.MEMORY_DIR ||
+        (ctx?.agentId
+            ? join(homedir(), ".letta", "agents", ctx.agentId, "memory")
+            : "");
+    if (memoryDir) add(join(memoryDir, "skills"), "agent-memory");
+    add(join(homedir(), ".letta", "skills"), "global");
     return out;
 }
 
-function findSkillPath(name: string): { path: string; source: string } | null {
+function findSkillPath(
+    name: string,
+    ctx?: ToolRunContext
+): { path: string; source: string } | null {
     const sanitized = name.replace(/[^a-zA-Z0-9_-]/g, "");
     if (!sanitized) return null;
-    for (const { root, source } of getSkillRoots()) {
+    for (const { root, source } of getSkillRoots(ctx)) {
         const candidate = join(root, sanitized, "SKILL.md");
         if (existsSync(candidate)) return { path: candidate, source };
     }
@@ -77,6 +93,54 @@ function findSkillPath(name: string): { path: string; source: string } | null {
 interface ParsedSkill {
     frontmatter: Record<string, string>;
     body: string;
+}
+
+const MAX_LISTED_SKILL_RESOURCES = 200;
+
+function escapeXmlText(value: string): string {
+    return value
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+}
+
+export function listSkillResources(skillMdPath: string): {
+    paths: string[];
+    truncated: boolean;
+} {
+    const skillDir = dirname(skillMdPath);
+    const paths: string[] = [];
+    let truncated = false;
+
+    const walk = (directory: string, relativeDirectory: string): void => {
+        let entries: Dirent[];
+        try {
+            entries = readdirSync(directory, { withFileTypes: true });
+        } catch {
+            return;
+        }
+        for (const entry of entries.sort((left, right) =>
+            left.name.localeCompare(right.name)
+        )) {
+            const relativePath = relativeDirectory
+                ? `${relativeDirectory}/${entry.name}`
+                : entry.name;
+            if (relativePath.toUpperCase() === "SKILL.MD") continue;
+            if (paths.length >= MAX_LISTED_SKILL_RESOURCES) {
+                truncated = true;
+                return;
+            }
+            if (entry.isDirectory()) {
+                walk(join(directory, entry.name), relativePath);
+                if (truncated) return;
+            } else if (entry.isFile()) {
+                paths.push(relativePath);
+            }
+        }
+    };
+
+    walk(skillDir, "");
+    return { paths, truncated };
 }
 
 function parseSkillContents(raw: string): ParsedSkill {
@@ -93,15 +157,18 @@ function parseSkillContents(raw: string): ParsedSkill {
     return { frontmatter, body: body.trim() };
 }
 
-function loadSkill(args: Record<string, unknown>): ToolRunResult {
+function loadSkill(
+    args: Record<string, unknown>,
+    ctx?: ToolRunContext
+): ToolRunResult {
     const name = String(args.name ?? "").trim();
     if (!name) {
         return { output: "Skill: missing 'name' argument", isError: true };
     }
-    const found = findSkillPath(name);
+    const found = findSkillPath(name, ctx);
     if (!found) {
         return {
-            output: `Skill '${name}' not found. Available roots: ${getSkillRoots()
+            output: `Skill '${name}' not found. Available roots: ${getSkillRoots(ctx)
                 .map((r) => r.root)
                 .join(", ") || "(none)"}`,
             isError: true,
@@ -125,15 +192,30 @@ function loadSkill(args: Record<string, unknown>): ToolRunResult {
             isError: true,
         };
     }
+    const skillDir = dirname(found.path);
+    const resources = listSkillResources(found.path);
+    const resourceLines = resources.paths.map(
+        (resourcePath) => `  <file>${escapeXmlText(resourcePath)}</file>`
+    );
+    if (resources.truncated) resourceLines.push("  <truncated>true</truncated>");
+    const resourcesSection =
+        resourceLines.length > 0
+            ? `\n\n<skill_resources>\n${resourceLines.join("\n")}\n</skill_resources>`
+            : "";
     const header =
         `# ${parsed.frontmatter.name ?? name}\n` +
-        `Source: ${found.source} (${found.path})\n\n`;
-    return { output: header + parsed.body, isError: false };
+        `Source: ${found.source} (${found.path})\n` +
+        `Skill directory: ${skillDir}\n` +
+        "Relative paths in this skill are relative to the skill directory.\n\n";
+    return {
+        output: header + parsed.body + resourcesSection,
+        isError: false,
+    };
 }
 
-function listSkills(): ToolRunResult {
+function listSkills(ctx?: ToolRunContext): ToolRunResult {
     const seen = new Map<string, { description: string; source: string }>();
-    for (const { root, source } of getSkillRoots()) {
+    for (const { root, source } of getSkillRoots(ctx)) {
         let entries: string[];
         try {
             entries = readdirSync(root);

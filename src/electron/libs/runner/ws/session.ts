@@ -40,6 +40,7 @@ import {
 } from "../../../services/client-tools/index.js";
 import { debug } from "../logger.js";
 import { createTerminalEofGuard } from "./stream-terminal-eof-guard.js";
+import { createStreamStallGuard } from "./stream-stall-guard.js";
 
 import type {
     SDKAssistantMessage,
@@ -1114,6 +1115,31 @@ export class WsSession {
                         conversationId,
                     }),
             });
+            const streamStallGuard = createStreamStallGuard({
+                getRunId: () => lastRunId,
+                getStopReason: () => terminalStopReason,
+                retrieveRunStatus: async (runId, signal) => {
+                    const run = await (
+                        client.runs as unknown as {
+                            retrieve: (
+                                id: string,
+                                options?: { signal?: AbortSignal }
+                            ) => Promise<{ status?: string }>;
+                        }
+                    ).retrieve(runId, { signal });
+                    return run.status;
+                },
+                abortHttpRead: () =>
+                    (stream as unknown as { controller?: AbortController }).controller?.abort(),
+                warn: (message) => {
+                    console.warn(`[WsSession] ${message}`);
+                    debug("WsSession: stream_stall_recovery", {
+                        message,
+                        conversationId,
+                        runId: lastRunId,
+                    });
+                },
+            });
             const guardedStream = (async function* () {
                 try {
                     yield* stream as AsyncIterable<LettaStreamingResponse>;
@@ -1123,12 +1149,14 @@ export class WsSession {
                     if (!terminalEofGuard.fired()) throw error;
                 } finally {
                     terminalEofGuard.clear();
+                    streamStallGuard.clear();
                 }
             })();
 
             try {
                 for await (const event of guardedStream) {
             if (ctrl.signal.aborted) break;
+            streamStallGuard.noteActivity();
             this.handleStreamingEvent(event);
 
             // Track tool_call_messages so we can dispatch after the

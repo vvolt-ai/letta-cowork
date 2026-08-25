@@ -7,6 +7,7 @@ import { emit } from "./session-creation.js";
 import { getSession, resolveSessionPermission } from "../../../libs/runtime-state.js";
 import { getAgentRunApprovalCandidates, cancelAgentRunById, approveRunById } from "../../../services/agents/index.js";
 import { getStoredSessions } from "../../../services/settings/index.js";
+import { snapshotPendingPermissionRequests } from "./pending-permission-replay.js";
 
 import type { CanUseToolResponse } from "@letta-ai/letta-agent-sdk";
 
@@ -44,6 +45,30 @@ export async function recoverPendingApprovalsForSession(
         || getSession(sessionId)?.agentId
         || storedSession?.agentId;
     const connectionId = storedSession?.lettaConnectionId;
+
+    // A renderer reconnect can lose its local approval cards while the Electron
+    // runner still owns the live Promise resolvers. Replay those requests before
+    // querying backend recovery state; never auto-resolve an approval that is
+    // still live in this process.
+    const livePending = snapshotPendingPermissionRequests(
+        getSession(sessionId)?.pendingPermissions.values() ?? [],
+    );
+    if (livePending.length > 0) {
+        for (const request of livePending) {
+            emit({
+                type: "permission.request",
+                payload: {
+                    sessionId,
+                    ...request,
+                    source: "live",
+                },
+            });
+        }
+        console.log(
+            `[recoverPendingApprovals] Replayed ${livePending.length} live approval request(s) for session ${sessionId}`,
+        );
+        return [];
+    }
 
     if (!resolvedAgentId) return [];
 

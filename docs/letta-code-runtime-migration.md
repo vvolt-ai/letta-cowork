@@ -1,5 +1,31 @@
 # Letta Code Runtime Migration Notes
 
+## 2026-08-25 — Letta Code v0.30.32 migration
+
+- **Upstream source:** `letta-ai/letta-code` `main` commit `1e17af70`, latest tag `v0.30.32` (`1e788701`).
+- **Pulled range:** `db60f05f..1e17af70`.
+- **Rule:** port observable runtime behavior into Cowork's API-driven Electron session; do not copy the upstream CLI/listener architecture wholesale.
+
+### Ported into Cowork
+
+- **Recovered approval replay** (`ffe30f6c`): when the renderer reconnects while Electron still owns live permission resolvers, `recoverPendingApprovalsForSession` re-emits every pending `permission.request` instead of auto-resolving it. This is Cowork's equivalent of upstream replaying recovered `control_request` frames to a newly initialized listener connection.
+- **Silent stream recovery** (`00d801a3`, `d490443f`): a bounded stall guard watches accepted SSE runs. If the stream goes silent and the run is terminal or its status cannot be checked, Cowork aborts only the dead HTTP reader and resumes from the last `seq_id`; active server runs receive another grace window. Recovery is logged explicitly.
+- **Interrupt propagation** (`356d54fb`, `ff0e2158`): `TaskOutput`/`BashOutput` polling and `Glob`/`Grep` ripgrep child processes now honor the turn `AbortSignal`. Interrupting a wait does not cancel the background task itself.
+- **Skill resources and agent-memory skills** (`8b65ca27`, `bca29419`): skill discovery now includes `<agent-memory>/skills`, and activation lists up to 200 bundled resource paths recursively while preserving the concrete skill directory for relative scripts/assets.
+- **Bash CWD wording** (`d876f1bd`): the description now states that every Bash call starts from the conversation CWD and `cd` affects only that command.
+
+### Reviewed, not directly ported
+
+- Upstream recovered approval state distinguishes replay-safe interactive questions from replay-unsafe tools after a full listener-process restart. Cowork does not use that listener state machine. This batch replays live in-process approvals; existing backend stale-run recovery remains the fallback after Electron itself restarts.
+- Provider-owned model catalogs/toolsets, OpenRouter/ChatGPT OAuth, CLI secret commands, app-server agent-free runtimes, first-party channel adapters, listener approval-classification frames, MemFS listener commands, and PI/local-backend changes do not map to Cowork's runtime boundary.
+- Attached shared-memory repository skills need an explicit Cowork attachment metadata contract; agent-memory skills are supported now, but arbitrary attached repositories were not inferred.
+- Native image-bearing client-tool returns remain a separate wire-contract migration because Cowork's current `ToolRunResult` is text-only. Attachment images already use native model vision through the responder pipeline.
+
+### Validation
+
+- Focused Node tests cover live approval snapshots, accepted-run resume, silent-stream recovery, interruptible output/search tools, and recursive skill resources.
+- Required gates: `bun run transpile:electron`, focused Node tests, then `bun run build`.
+
 ## 2026-08-21 — Letta Code v0.30.28+ migration plan
 
 - **Status:** Planning only. Upstream was pulled and reviewed; no Cowork runtime source was ported in this pass.

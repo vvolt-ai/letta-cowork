@@ -5,6 +5,7 @@ interface TaskOutputArgs {
   task_id: string;
   block?: boolean;
   timeout?: number;
+  signal?: AbortSignal;
   onOutput?: (chunk: string, stream: "stdout" | "stderr") => void;
 }
 
@@ -21,12 +22,13 @@ export async function task_output(
   args: TaskOutputArgs,
 ): Promise<TaskOutputResult> {
   validateRequiredParams(args, ["task_id"], "TaskOutput");
-  const { task_id, block = true, timeout = 30000, onOutput } = args;
+  const { task_id, block = true, timeout = 30000, signal, onOutput } = args;
 
   return getTaskOutput({
     task_id,
     block,
     timeout,
+    signal,
     onOutput,
     runningMessageWhenNonBlocking: true,
   });
