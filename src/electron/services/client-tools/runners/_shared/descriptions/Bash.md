@@ -22,6 +22,7 @@ Before executing the command, please follow these steps:
 
 Usage notes:
   - The command and description arguments are required.
+  - On Windows, the runner prefers Git Bash when installed and falls back to PowerShell. Prefer portable one-line commands, use Write for multiline scripts/files, and avoid Unix heredocs in cross-platform workflows. If PowerShell blocks an npm shim, use `npm.cmd` or `npx.cmd`.
   - You can specify an optional timeout in milliseconds (up to 600000ms / 10 minutes). If not specified, commands will timeout after 120000ms (2 minutes).
   - Write a clear, concise user-facing description of what this command does. Describe the command's purpose, not its shell syntax. For simple commands, keep it brief (5-10 words). For complex commands, add enough context to clarify what it does.
   - If the output exceeds 30000 characters, output will be truncated before being returned to you.

@@ -1,4 +1,7 @@
 const SEP = "\u0000";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+
 type ShellLaunchOptions = {
   login?: boolean;
   powershellEnvAliases?: string[];
@@ -57,19 +60,39 @@ export function buildPowerShellCommand(
   return `${aliasPrelude}; ${powerShellCommand}`;
 }
 
-function windowsLaunchers(
+export function buildWindowsShellLaunchers(
   command: string,
   envAliases: string[] = [],
+  options: {
+    env?: NodeJS.ProcessEnv;
+    pathExists?: (path: string) => boolean;
+  } = {},
 ): string[][] {
   const trimmed = command.trim();
   if (!trimmed) return [];
   const launchers: string[][] = [];
   const seen = new Set<string>();
   const powerShellCommand = buildPowerShellCommand(trimmed, envAliases);
+  const env = options.env ?? process.env;
+  const pathExists = options.pathExists ?? existsSync;
 
-  // Default to PowerShell on Windows (same as Gemini CLI and Codex CLI)
-  // This ensures better PATH compatibility since many tools are configured
-  // in PowerShell profiles rather than system-wide cmd.exe PATH
+  // The model-facing contract is Bash. Prefer Git Bash when installed so
+  // heredocs, &&, $VAR, and common CLI examples behave consistently on Windows.
+  const gitRoots = [
+    env.ProgramFiles && join(env.ProgramFiles, "Git", "bin", "bash.exe"),
+    env["ProgramFiles(x86)"] &&
+      join(env["ProgramFiles(x86)"]!, "Git", "bin", "bash.exe"),
+    env.LOCALAPPDATA &&
+      join(env.LOCALAPPDATA, "Programs", "Git", "bin", "bash.exe"),
+  ].filter((candidate): candidate is string => Boolean(candidate));
+  for (const bashPath of gitRoots) {
+    if (pathExists(bashPath)) {
+      pushUnique(launchers, seen, [bashPath, "-lc", trimmed]);
+    }
+  }
+
+  // Fall back to PowerShell without changing the machine's execution policy.
+  // The model-facing description tells agents to use npm.cmd/npx.cmd there.
   pushUnique(launchers, seen, [
     "powershell.exe",
     "-NoProfile",
@@ -84,7 +107,7 @@ function windowsLaunchers(
   ]);
 
   // Fall back to cmd.exe if PowerShell fails
-  const envComSpecRaw = process.env.ComSpec || process.env.COMSPEC;
+  const envComSpecRaw = env.ComSpec || env.COMSPEC;
   const envComSpec = envComSpecRaw?.trim();
   if (envComSpec) {
     pushUnique(launchers, seen, [envComSpec, "/d", "/s", "/c", trimmed]);
@@ -169,6 +192,6 @@ export function buildShellLaunchers(
 ): string[][] {
   const login = options?.login ?? false;
   return process.platform === "win32"
-    ? windowsLaunchers(command, options?.powershellEnvAliases)
+    ? buildWindowsShellLaunchers(command, options?.powershellEnvAliases)
     : unixLaunchers(command, login);
 }

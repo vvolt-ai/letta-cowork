@@ -119,12 +119,24 @@ async function spawnCommand(
 }
 
 // ─────────────────────── Tool definition ────────────────────────────
+export function buildBashToolDescription(
+    platform: NodeJS.Platform = process.platform
+): string {
+    const platformGuidance =
+        platform === "win32"
+            ? "On Windows, the runner prefers Git Bash when installed and otherwise uses PowerShell. Prefer portable one-line commands; do not use Unix heredocs for cross-shell work. Use Write for multiline scripts/files. If a PowerShell environment blocks an npm shim, invoke npm.cmd or npx.cmd. "
+            : "Each call starts from the conversation working directory; cd affects only that call. ";
+    return (
+        "Executes a shell command with optional timeout. " +
+        platformGuidance +
+        "IMPORTANT: This tool is for terminal operations like git, npm, docker, etc. Do not use for file edits or reads — use Edit/Read instead. " +
+        "Avoid commands that require interactive input (no TTY). Combined stdout+stderr is returned."
+    );
+}
+
 export const bashTool: ClientToolDefinition = {
     name: "Bash",
-    description:
-        "Executes a given bash command in a persistent shell session with optional timeout, ensuring proper handling and security measures. " +
-        "IMPORTANT: This tool is for terminal operations like git, npm, docker, etc. Do not use for file edits or reads — use Edit/Read instead. " +
-        "Avoid commands that require interactive input (no TTY). Combined stdout+stderr is returned.",
+    description: buildBashToolDescription(),
     parameters: {
         type: "object",
         properties: {

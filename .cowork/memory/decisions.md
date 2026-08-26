@@ -48,3 +48,8 @@
 ## Generated files
 
 - Build may touch `dist-react/index.html`; do not commit generated output unless explicitly requested.
+
+## Cross-platform workflow latency
+
+- The model-facing `Bash` contract must match the Windows launcher: prefer installed Git Bash, retain PowerShell/cmd fallbacks, state the active semantics in the tool description, and never weaken host execution policy. Windows fallback guidance uses `npm.cmd`/`npx.cmd` and avoids Unix heredocs.
+- Email/PO workflows must reuse supplied IDs/content, inspect attachments before Odoo verification, use one retrieval route, call direct mounted Odoo tools with exact bounded domains, and broaden only after a targeted miss. Mandatory approval/business checks do not justify repeated technical discovery.

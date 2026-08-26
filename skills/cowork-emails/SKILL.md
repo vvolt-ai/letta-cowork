@@ -5,6 +5,22 @@ description: Use this skill for Vera Cowork local email APIs: accounts, folders,
 
 # Vera Cowork Email APIs
 
+## Fast path before discovery
+
+Use the shortest route supported by the identifiers already present:
+
+1. If email and attachment content are already in model context, use them directly; make no retrieval call.
+2. If `messageId`, `accountId`, and `folderId` are supplied and the local Cowork app is available, call the local endpoint directly. Do **not** list remote channels/accounts/folders first. On Windows use:
+
+```text
+curl.exe --fail --silent --show-error --get "http://localhost:4321/downloadAttachment" --data-urlencode "messageId=<messageId>" --data-urlencode "accountId=<accountId>" --data-urlencode "folderId=<folderId>" --data-urlencode "agentId=<agentId>"
+```
+
+3. Use the remote channel API only when local retrieval is unavailable and a `channelId` is already known.
+4. Discover a channel/account/folder only when its required identifier is genuinely missing. Make one bounded discovery attempt; do not retry an equivalent route after timeout.
+
+On Windows use `curl.exe` so PowerShell does not substitute a different `curl` command; on macOS/Linux use `curl`. Avoid Unix heredocs on Windows. If package execution is unavoidable there, use `npm.cmd`/`npx.cmd`.
+
 ## Base URL
 
 ```

@@ -1,216 +1,111 @@
 ---
 name: email-processing
-description: Use this skill when an agent needs to process an incoming email end-to-end. Covers the full 4-step flow: (1) classify the email type and intent, (2) gather structured information from the email content, (3) verify and download attachments if present, (4) present a structured summary to the user and wait for explicit approval before taking any next action.
+description: Processes an incoming email end-to-end with classification, attachment inspection, targeted PO/Odoo verification, a concise approval summary, and an explicit no-write approval gate. Use for email triage, purchase-order emails, attachment review, or preparing a proposed downstream action.
 ---
 
-# Email Processing Skill
+# Email Processing
 
-Use this skill to process any incoming email through a **4-step approval-gated workflow**.
+Process the email through one consolidated critical path. Preserve the approval gate, but do not rediscover identifiers or reload overlapping procedures.
 
-The agent MUST complete all 4 steps in order. The agent MUST NOT take any downstream action (routing, replying, creating records) until the user explicitly approves at Step 4.
+## Non-negotiable boundary
 
----
+Before explicit user approval, do not send or forward email, route work, create/update Odoo records, or perform any other write. Read-only verification is allowed.
 
-## Prerequisites
+## Fast-path rules
 
-- Vera Cowork app running (local Express server at `http://localhost:4321`)
-- Zoho Mail connected in the app
+1. **Reuse supplied context.** If the prompt already contains the email body, `messageId`, `accountId`, `folderId`, attachment metadata, or agent ID, treat those values as authoritative input. Do not list channels/accounts/folders or search for the email again.
+2. **Reuse supplied attachment content.** If PDF pages, images, extracted text, CSV/JSON/Markdown, or a transcript are already present in model context, inspect them directly. Do not download or extract the same attachment again.
+3. **Use one retrieval route.** If content is missing and the local Cowork email service is available, call the exact local endpoint directly. Do not probe the remote channel list first.
+4. **Load references only when needed.** Read `references/classification-guide.md` only for ambiguous classification. For a PO, read `references/po-processing.md`. Read `references/approval-template.md` only when formatting the final summary. When content and identifiers are already supplied, do not also load `cowork-emails`, `pdf-reader`, or another overlapping discovery skill.
+5. **Plan tool calls before executing.** After attachment extraction, issue independent read-only Odoo checks together where supported. Start exact and bounded; broaden only after a targeted search returns no useful result.
 
----
+## Step 1 — Reuse, retrieve, and classify
 
-## Step 1: Classify the Email
+If the full email is already present, classify it immediately. Otherwise retrieve only the missing data.
 
-**Goal:** Identify what type of email this is and what action it likely requires.
+When all local identifiers are supplied, use a single direct request. On Windows use:
 
-### 1a. Get the email if you don't have it yet
-
-If you already have the email content (e.g. passed in from a channel), skip to 1b.
-
-Otherwise search by subject or sender:
-
-```bash
-# Search by subject keyword
-curl "http://localhost:4321/searchEmails?searchKey=subject:<keyword>"
-
-# Search by sender
-curl "http://localhost:4321/searchEmails?searchKey=sender:<email>"
-
-# Search with attachment filter
-curl "http://localhost:4321/searchEmails?searchKey=subject:<keyword>::has:attachment"
+```text
+curl.exe --fail --silent --show-error --get "http://localhost:4321/downloadAttachment" --data-urlencode "messageId=<messageId>" --data-urlencode "accountId=<accountId>" --data-urlencode "folderId=<folderId>" --data-urlencode "agentId=<agentId>"
 ```
 
-Extract `messageId` from the JSON response.
+On macOS/Linux, use the same command with `curl` instead of `curl.exe`. Do not use a Unix heredoc on Windows, and never run `npm` merely to make this request.
 
-### 1b. Classify
+Only discover an account, folder, channel, or message when its required identifier is genuinely absent. Perform at most one bounded discovery attempt before reporting the missing prerequisite.
 
-Using the email subject and body (or preview), assign exactly ONE classification label.
+Assign one classification label:
 
-See `references/classification-guide.md` for the full label taxonomy and examples.
+- Placing a Purchase Order
+- Requesting a Quote
+- New Business Inquiry / Inbound Lead
+- Technical Support (pre/post sales)
+- RMA Request
+- Order Status Inquiry
+- Documentation & Compliance Request
+- Invoice & Payment Inquiry
+- Complaint / Escalation
+- Other
 
-**Output of Step 1:**
-```
-Classification: <CATEGORY NAME>
-  (one of: Placing a Purchase Order | Requesting a Quote |
-   New Business Inquiry / Inbound Lead | Technical Support (pre and post sales) |
-   RMA Request | Order Status Inquiry | Documentation & Compliance Request |
-   Invoice & Payment Inquiry | Complaint / Escalation | Other)
-Confidence: High / Medium / Low
-Reasoning: <one sentence>
-Sender: <email address>
-Subject: <subject line>
-Urgency: High / Normal / Low
-```
+Record classification, confidence, sender, subject, urgency, and requested action. Extract only facts present in the email.
 
----
+## Step 2 — Inspect attachments before business verification
 
-## Step 2: Gather Information
+For each expected attachment:
 
-**Goal:** Extract all structured data from the full email body.
+1. Validate that its type is expected (PDF, CSV, XLSX, DOCX, image, or text).
+2. Reuse model-visible content when available.
+3. Otherwise use the direct local download result and inspect the returned file path with an existing supported reader. Use Windows-compatible commands (`npm.cmd`/`npx.cmd`) only when a package command is unavoidable.
+4. Extract document type, identifiers, parties, dates, payment/shipping terms, line-item configurations, quantities, unit prices, and totals.
+5. If unreadable, state `Attachment content unavailable`; never infer it.
 
-### 2a. Fetch full email content
+Process every attachment, not only the first.
 
-```bash
-curl "http://localhost:4321/fetchEmailById?messageId=<messageId>"
-```
+## Step 3 — Run only the required category checks
 
-### 2b. Extract structured fields
+### Purchase orders
 
-From the full email body, extract ALL of the following that are present:
+Read `references/po-processing.md` and execute its read-only fast path.
 
-| Field | Description |
-|-------|-------------|
-| Sender name | Full name of sender |
-| Sender email | Email address |
-| Recipient | Who it was sent to |
-| Date received | Timestamp |
-| Subject | Email subject |
-| Action requested | What the sender is asking for |
-| Key entities | Customer names, order numbers, PO numbers, invoice IDs, amounts, product names, dates |
-| Tone | Formal / Urgent / Friendly / Complaint |
-| Has attachment | Yes / No |
-| Attachment names | List if present |
+- Use direct mounted `odoo_search`, `odoo_count`, or `odoo_group` tools. Do not use Bash, curl, Python, Task/subagents, or legacy Odoo wrappers for normal Odoo reads.
+- Search configured products by exact `default_code` fragments from the PO, not by enumerating the whole product family.
+- Keep initial limits at 5–10 records.
+- Run requester/company, duplicate PO, exact products, payment terms, overdue invoices, and address checks together where supported.
+- Expand one failed query at a time. Never replace a failed exact query with an unbounded family search.
 
-**Rules:**
-- Extract ONLY what is present in the email. Do NOT infer or invent.
-- If a field is missing, write "Not present".
-- If the email is HTML, parse the plain-text content only.
+### Other categories
 
----
+Perform only checks needed for the requested action. Do not load PO/Odoo procedures for unrelated mail.
 
-## Step 2b: Category-Specific Processing
+## Step 4 — Present one approval summary
 
-After completing Step 2, run the category-specific processing for the classified email type **before** moving to Step 3.
+Include:
 
-### If category = "Placing a Purchase Order"
+1. classification and confidence;
+2. sender, subject, request, and urgency;
+3. attachment findings;
+4. read-only business-system verification;
+5. discrepancies or blockers;
+6. proposed writes/actions.
 
-Run the full PO processing checklist from `references/po-processing.md`. This covers:
-
-1. **CRM sender lookup** — is the sender's email already in Odoo?
-2. **Email validity check** — is this a corporate email? (Reject gmail, hotmail, yahoo, etc.)
-3. **Domain/org match** — if sender not in CRM, does their domain match an existing company?
-4. **Contact creation decision** — create new contact and/or company if needed (propose, don't execute yet)
-5. **Payment terms check** — do the PO terms match the CRM terms?
-   - If discrepancy → draft a payment terms clarification email
-   - If CRM = "Immediate Payment" → draft a payment instructions email with payment link, bank details, and proforma invoice
-6. Add all findings and any drafted emails to the Step 4 approval summary
-
-**CRITICAL:** Do NOT create Odoo records or send any emails until Step 4 is approved.
-
-### All other categories
-
-No additional processing required — proceed directly to Step 3.
-
----
-
-## Step 3: Verify and Download Attachment
-
-**Goal:** If an attachment is present, download it and extract key data from it.
-
-### 3a. Check for attachment
-
-Use the `hasAttachment` flag from the email metadata in Step 2. If `false`, skip to Step 4.
-
-### 3b. Download attachment
-
-**Notes:**
-- Make sure not download harmful files. Only proceed if the file type is expected (PDF, CSV, XLSX, DOCX, or image).
-- Do NOT guess or fabricate attachment content. Only use what the API returns.
-
-### 3c. Extract from attachment
-
-If the attachment content is returned (PDF text, CSV, markdown), extract:
-- Document type (Purchase Order, Invoice, Quote, etc.)
-- Key identifiers (PO number, invoice number, order date)
-- Line items (product names, quantities, prices)
-- Totals
-- Parties (buyer name, vendor name)
-
-If attachment content is unavailable or unreadable, write: `"Attachment content unavailable"`.
-
----
-
-## Step 4: Summarize and Ask for User Approval
-
-**Goal:** Present a full structured summary to the user and wait for explicit approval before proceeding.
-
-Use the template in `references/approval-template.md` to format your output.
-
-### 4a. Present summary
-
-Show the user:
-1. **Email Classification** — label, confidence, reasoning
-2. **Key Information** — all structured fields from Step 2
-3. **Attachment Summary** — extracted content or "No attachment"
-4. **Proposed Next Action** — what you recommend doing next
-
-### 4b. HARD STOP — Wait for approval
-
-After presenting the summary, ask exactly:
+Then ask:
 
 > **Do you approve proceeding with the proposed action?**
-> - **Yes** — proceed with the proposed action
-> - **No / Modify** — describe what you'd like changed
-> - **Reject** — stop, no action taken
+> - **Yes** — proceed
+> - **No / Modify** — describe changes
+> - **Reject** — stop
 
-**CRITICAL:** Do NOT take any action until the user explicitly responds with approval.
+Stop until the user answers.
 
-Do NOT:
-- Route to another agent
-- Send a reply
-- Create an Odoo record
-- Forward the email
-- Update any system
+## Retry and latency discipline
 
-...until the user says Yes.
-
----
-
-## API Quick Reference
-
-| Endpoint | Purpose |
-|----------|---------|
-| `GET localhost:4321/searchEmails?searchKey=...` | Search for email by subject/sender |
-| `GET localhost:4321/fetchEmailById?messageId=...` | Get full email content |
-| `GET localhost:4321/downloadAttachment?messageId=...` | Download attachment |
-| `GET localhost:4321/downloadAttachment?messageId=...&agentId=...` | Download + upload to Letta |
-| `GET localhost:4321/fetchAccount` | Get account ID (only if needed) |
-| `GET localhost:4321/fetchFolders` | Get folder IDs (only if needed) |
-
----
-
-## Anti-Hallucination Rules
-
-- NEVER fabricate a `messageId`, `accountId`, or `folderId`
-- NEVER invent email content or attachment data
-- NEVER assume attachment content if the API did not return it
-- ONLY use data returned from actual API calls
-- If any API call fails, report the failure clearly and do not continue with fake data
-- If the email is not found, say so clearly
-
----
+- Do not repeat successful lookups for verification; consolidate the evidence in memory for the current turn.
+- Do not retry the same failing route with equivalent parameters.
+- A timeout is evidence to change route, not permission to add more discovery.
+- Prefer a small exact result over exhaustive enumeration.
+- Keep mandatory business safeguards; remove redundant technical discovery.
 
 ## References
 
-- `references/classification-guide.md` — full email category taxonomy and examples for Step 1
-- `references/po-processing.md` — Purchase Order processing checklist (CRM lookup, contact creation, payment terms, draft emails) for Step 2b
-- `references/approval-template.md` — structured output format for Step 4
+- `references/classification-guide.md` — use only when classification is ambiguous.
+- `references/po-processing.md` — read-only PO/Odoo fast path and payment-term handling.
+- `references/approval-template.md` — final approval-summary format.
