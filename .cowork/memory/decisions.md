@@ -1,6 +1,6 @@
 # letta-cowork decisions
 
-**Last updated:** 2026-08-20
+**Last updated:** 2026-08-31
 **Sensitivity:** Level 2 internal. No secrets.
 
 ## Deployment/auth
@@ -53,3 +53,11 @@
 
 - The model-facing `Bash` contract must match the Windows launcher: prefer installed Git Bash, retain PowerShell/cmd fallbacks, state the active semantics in the tool description, and never weaken host execution policy. Windows fallback guidance uses `npm.cmd`/`npx.cmd` and avoids Unix heredocs.
 - Email/PO workflows must reuse supplied IDs/content, inspect attachments before Odoo verification, use one retrieval route, call direct mounted Odoo tools with exact bounded domains, and broaden only after a targeted miss. Mandatory approval/business checks do not justify repeated technical discovery.
+
+## Email context isolation — 2026-08-31
+
+- Cowork email UI state and new-conversation links use a scoped identity of `(accountId, folderId, messageId)`, not bare Zoho `messageId`.
+- Email sessions embed an exact mailbox-scoped marker in their title. Recovery may match that marker only; subject substring matching and “only pending email” guessing are forbidden because they can attach an earlier email conversation.
+- Async email detail/prompt requests are latest-wins. A response captured for a previously selected email must not overwrite the current email details or prompt.
+
+Source: user-reported Cowork email context swapping and implementation review, 2026-08-31.

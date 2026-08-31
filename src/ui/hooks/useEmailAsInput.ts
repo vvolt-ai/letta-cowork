@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { useAppStore } from "../store/useAppStore";
 
@@ -94,12 +94,13 @@ function extractEmailContent(content: unknown): string {
 }
 
 export function useEmailAsInput() {
-  const prompt = useAppStore((state) => state.prompt);
   const setPrompt = useAppStore((state) => state.setPrompt);
   const [isLoading, setIsLoading] = useState(false);
+  const requestSequenceRef = useRef(0);
 
   const setEmailAsInput = useCallback(
     async (email: ZohoEmail) => {
+      const requestId = ++requestSequenceRef.current;
       setIsLoading(true);
       // First, get full email content and download attachments
       let emailContent = "";
@@ -116,6 +117,7 @@ export function useEmailAsInput() {
 
       if (!accountId || !folderId) {
         console.error("Missing accountId or folderId for email");
+        if (requestId === requestSequenceRef.current) setIsLoading(false);
         return;
       }
 
@@ -146,6 +148,10 @@ export function useEmailAsInput() {
         // Fallback to summary if fetch fails
         emailContent = email.summary || "";
       }
+
+      // A slower request for a previously selected email must never overwrite
+      // a newer email selection or the user's current prompt.
+      if (requestId !== requestSequenceRef.current) return;
 
       // Build the formatted prompt for the agent
       const emailPrompt = [
@@ -191,10 +197,15 @@ export function useEmailAsInput() {
         }
       }
 
-      setPrompt(prompt.trim() ? `${prompt}\n\n${emailPrompt.join("\n")}` : emailPrompt.join("\n"));
-      setIsLoading(false);
+      const latestPrompt = useAppStore.getState().prompt;
+      setPrompt(
+        latestPrompt.trim()
+          ? `${latestPrompt}\n\n${emailPrompt.join("\n")}`
+          : emailPrompt.join("\n")
+      );
+      if (requestId === requestSequenceRef.current) setIsLoading(false);
     },
-    [prompt, setPrompt]
+    [setPrompt]
   );
 
   return { setEmailAsInput, isLoading };

@@ -11,6 +11,11 @@ import {
 } from "../../../types";
 
 import type { ZohoEmail } from "../../../../../types";
+import {
+  emailIdentityKey,
+  emailIdentityKeyFromParts,
+  emailSessionMarker,
+} from "../../../emailIdentity";
 
 interface UseEmailInboxProps {
   open: boolean;
@@ -96,6 +101,8 @@ export function useEmailInbox({
   const [listWidth, setListWidth] = useState(DEFAULT_LIST_WIDTH);
   const [isResizingList, setIsResizingList] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const emailDetailsRequestRef = useRef(0);
+  const processedEmailsRequestRef = useRef(0);
 
   // Get session data from store
   const sessions = useAppStore(useShallow((state) => state.sessions)) as Record<string, SessionView>;
@@ -104,20 +111,22 @@ export function useEmailInbox({
   // (server-side search results) so selection works even when the clicked
   // email isn't part of the paginated feed.
   const selectedEmail =
-    emails.find(e => e.messageId === localSelectedId) ??
-    (extraLookupEmails ? extraLookupEmails.find(e => e.messageId === localSelectedId) : undefined);
+    emails.find(e => emailIdentityKey(e) === localSelectedId) ??
+    (extraLookupEmails ? extraLookupEmails.find(e => emailIdentityKey(e) === localSelectedId) : undefined);
 
   // Load processed emails from server when modal opens
   useEffect(() => {
     if (open && accountId && folderId) {
+      const requestId = ++processedEmailsRequestRef.current;
       window.electron.getProcessedEmailDetailsFromServer(accountId, folderId)
         .then((records) => {
+          if (requestId !== processedEmailsRequestRef.current) return;
           console.log(`[EmailInboxModal] Loaded ${records.length} processed emails from server:`, records);
           const map = new Map<string, ProcessedEmailData>();
           let noConversationCount = 0;
           for (const record of records) {
             if (record.conversationId) {
-              map.set(record.messageId, {
+              map.set(emailIdentityKeyFromParts(accountId, folderId, record.messageId), {
                 conversationId: record.conversationId,
                 agentId: record.agentId ?? undefined,
               });
@@ -130,6 +139,7 @@ export function useEmailInbox({
           console.log(`[EmailInboxModal] ${map.size} emails have conversationId, ${noConversationCount} can be reprocessed`);
         })
         .catch((err) => {
+          if (requestId !== processedEmailsRequestRef.current) return;
           console.warn(`[EmailInboxModal] Failed to load from server:`, err);
         });
     }
@@ -138,6 +148,8 @@ export function useEmailInbox({
   // Clear processed emails when modal closes
   useEffect(() => {
     if (!open) {
+      emailDetailsRequestRef.current += 1;
+      processedEmailsRequestRef.current += 1;
       setProcessedEmailsFromServer(new Map());
     }
   }, [open]);
@@ -195,7 +207,7 @@ export function useEmailInbox({
   // Check if an email is already processed
   const isEmailProcessed = useCallback((email: ZohoEmail) => {
     const messageId = String(email.messageId);
-    const serverData = processedEmailsFromServer.get(messageId);
+    const serverData = processedEmailsFromServer.get(emailIdentityKey(email));
     const isProcessed = !!(serverData?.conversationId);
     console.log(`[EmailInboxModal] isEmailProcessed(${messageId}): ${isProcessed}, serverData:`, serverData);
     return isProcessed;
@@ -203,19 +215,17 @@ export function useEmailInbox({
 
   // Find conversation ID for a processed email
   const findConversationIdForEmail = useCallback((email: ZohoEmail): string | null => {
-    const messageId = String(email.messageId);
-
-    // Check server data
-    const serverData = processedEmailsFromServer.get(messageId);
+    // Check server data using the full mailbox identity.
+    const serverData = processedEmailsFromServer.get(emailIdentityKey(email));
     if (serverData?.conversationId) {
       return serverData.conversationId;
     }
 
     // Fallback: check local sessions by title matching
-    const emailSubject = email.subject || messageId;
+    const messageMarker = emailSessionMarker(email);
     for (const session of Object.values(sessions)) {
       const isEmailRelatedSession = session.isEmailSession || session.title?.startsWith("Email:");
-      if (isEmailRelatedSession && session.title?.includes(emailSubject)) {
+      if (isEmailRelatedSession && session.title?.includes(messageMarker)) {
         return session.id;
       }
     }
@@ -255,18 +265,18 @@ export function useEmailInbox({
   }), []);
 
   const getEmailStatusInfo = useCallback((email: ZohoEmail): EmailStatusInfo | null => {
-    const messageId = String(email.messageId);
-    if (processingEmailId && String(processingEmailId) === messageId) {
+    const emailKey = emailIdentityKey(email);
+    if (processingEmailId && processingEmailId === emailKey) {
       return buildCustomStatus("uploading", "Uploading to agent…", "bg-slate-400", "text-slate-600");
     }
-    if (awaitingConversationEmailId && String(awaitingConversationEmailId) === messageId) {
+    if (awaitingConversationEmailId && awaitingConversationEmailId === emailKey) {
       return buildCustomStatus("starting", "Starting session…", "bg-blue-300", "text-blue-600");
     }
-    if (errorEmailId && String(errorEmailId) === messageId) {
+    if (errorEmailId && errorEmailId === emailKey) {
       return buildCustomStatus("failure", "Failed to send", "bg-red-500", "text-red-600");
     }
 
-    const serverData = processedEmailsFromServer.get(messageId);
+    const serverData = processedEmailsFromServer.get(emailKey);
     const conversationId = serverData?.conversationId || findConversationIdForEmail(email);
     if (conversationId) {
       const session = sessions[conversationId];
@@ -351,7 +361,8 @@ export function useEmailInbox({
   // Handle email selection
   const handleSelectEmail = useCallback(async (email: ZohoEmail) => {
     setViewingConversationId(null);
-    setLocalSelectedId(email.messageId);
+    const requestId = ++emailDetailsRequestRef.current;
+    setLocalSelectedId(emailIdentityKey(email));
     setLocalEmailDetails(null);
     setLocalEmailDetailsError(null);
     setIsFetchingLocalContent(true);
@@ -362,12 +373,17 @@ export function useEmailInbox({
         email.folderId || '',
         email.messageId
       );
+      if (requestId !== emailDetailsRequestRef.current) return;
       setLocalEmailDetails(details);
     } catch (err) {
       console.error("Failed to fetch email details:", err);
-      setLocalEmailDetailsError("Failed to load email content");
+      if (requestId === emailDetailsRequestRef.current) {
+        setLocalEmailDetailsError("Failed to load email content");
+      }
     } finally {
-      setIsFetchingLocalContent(false);
+      if (requestId === emailDetailsRequestRef.current) {
+        setIsFetchingLocalContent(false);
+      }
     }
   }, []);
 

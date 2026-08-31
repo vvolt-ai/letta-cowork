@@ -7,6 +7,7 @@ import { ZohoMailEmbed, type ZohoMailNavigation } from "./ZohoMailEmbed";
 import { ConversationViewer } from "../../../chat/components/ConversationViewer";
 
 import type { ZohoEmail } from "../../../../types";
+import { emailIdentityKey } from "../../emailIdentity";
 import type { EmailInboxModalProps } from "../../types";
 
 /**
@@ -229,18 +230,18 @@ export function EmailInboxModal({
     }
   };
 
-  const activeMessageId = activeEmail ? String(activeEmail.messageId) : null;
+  const activeEmailKey = activeEmail ? emailIdentityKey(activeEmail) : null;
   const isFetchingThread = Boolean(
     activeZohoNavigation.threadId && String(fetchingThreadId) === String(activeZohoNavigation.threadId)
   );
   const isFetchingActiveEmail = Boolean(
     activeZohoMailId && String(fetchingActiveEmailId) === String(activeZohoMailId)
   );
-  const isProcessing = Boolean(activeMessageId && String(processingEmailId) === activeMessageId);
+  const isProcessing = Boolean(activeEmailKey && processingEmailId === activeEmailKey);
   const isAwaitingConversation = Boolean(
-    activeMessageId && String(awaitingConversationEmailId) === activeMessageId
+    activeEmailKey && awaitingConversationEmailId === activeEmailKey
   );
-  const hasSendError = Boolean(activeMessageId && String(errorEmailId) === activeMessageId);
+  const hasSendError = Boolean(activeEmailKey && errorEmailId === activeEmailKey);
   const isSendBusy = isFetchingThread || isFetchingActiveEmail || isProcessing || isAwaitingConversation;
 
   const canSendToAgent = Boolean(isServerConnected && isEmailConnected && activeEmail) && !isSendBusy;

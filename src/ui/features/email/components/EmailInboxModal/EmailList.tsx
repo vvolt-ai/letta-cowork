@@ -2,6 +2,7 @@ import { EmailFilters } from "./EmailFilters";
 import { EmailListItem } from "./EmailListItem";
 
 import type { ZohoEmail } from "../../../../types";
+import { emailIdentityKey } from "../../emailIdentity";
 import type { ProcessedEmailData, EmailStatusInfo } from "../../types";
 
 interface EmailListProps {
@@ -64,9 +65,9 @@ export function EmailList({
           <div className="flex flex-col gap-0.5 p-2">
             {emails.map((email) => (
               <EmailListItem
-                key={email.messageId}
+                key={emailIdentityKey(email)}
                 email={email}
-                isSelected={localSelectedId === email.messageId}
+                isSelected={localSelectedId === emailIdentityKey(email)}
                 isProcessed={isEmailProcessed(email)}
                 statusInfo={emailStatusById.get(String(email.messageId))}
                 onSelect={onSelectEmail}

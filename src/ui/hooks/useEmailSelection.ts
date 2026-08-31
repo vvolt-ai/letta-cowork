@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import type { ZohoEmail } from "../types";
 
@@ -19,6 +19,7 @@ export function useEmailSelection({
   const [emailDetailsError, setEmailDetailsError] = useState<string | null>(null);
   const [viewingEmail, setViewingEmail] = useState<ZohoEmail | null>(null);
   const [emailDetails, setEmailDetails] = useState<unknown>(null);
+  const viewRequestRef = useRef(0);
 
   const handleSelectEmail = useCallback(async (email: ZohoEmail) => {
     setSelectedEmailId(email.messageId);
@@ -48,6 +49,7 @@ export function useEmailSelection({
   }, [fetchEmailById, markMessagesAsRead, refreshEmailsForFolder]);
 
   const handleViewEmail = useCallback(async (email: ZohoEmail) => {
+    const requestId = ++viewRequestRef.current;
     setViewingEmail(email);
     setIsEmailDetailsOpen(true);
     setIsEmailDetailsLoading(true);
@@ -59,12 +61,17 @@ export function useEmailSelection({
         emailContent: any,
         attachments: any
       };
+      if (requestId !== viewRequestRef.current) return;
       setEmailDetails(details.emailContent);
     } catch (err) {
       console.error("failed to fetch email details", err);
-      setEmailDetailsError("Failed to load email details.");
+      if (requestId === viewRequestRef.current) {
+        setEmailDetailsError("Failed to load email details.");
+      }
     } finally {
-      setIsEmailDetailsLoading(false);
+      if (requestId === viewRequestRef.current) {
+        setIsEmailDetailsLoading(false);
+      }
     }
   }, [fetchEmailById]);
 

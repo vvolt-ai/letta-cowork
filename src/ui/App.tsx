@@ -219,11 +219,11 @@ function App() {
   }, [newlyCreatedConversations]);
 
   const { processEmailToAgent, processingEmailId, awaitingConversationEmailId, errorEmailId } = useProcessEmailToAgent(
-    useCallback((messageId: string, conversationId: string, agentId?: string) => {
-      console.log(`[App] Conversation created callback for email ${messageId}: ${conversationId}`);
+    useCallback((emailKey: string, conversationId: string, agentId?: string) => {
+      console.log(`[App] Conversation created callback for email ${emailKey}: ${conversationId}`);
       setNewlyCreatedConversations(prev => {
         const newMap = new Map(prev);
-        newMap.set(messageId, { conversationId, agentId });
+        newMap.set(emailKey, { conversationId, agentId });
         console.log(`[App] Updated newlyCreatedConversations, new size: ${newMap.size}`);
         return newMap;
       });
