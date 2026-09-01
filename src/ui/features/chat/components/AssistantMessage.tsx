@@ -1,6 +1,6 @@
-import { memo, useCallback, useState } from "react";
+import { memo, useCallback, useEffect, useState } from "react";
 
-import MDContent from "../../../render/markdown";
+import MDContent, { preloadMarkdownRenderer } from "../../../render/markdown";
 
 import type { SDKAssistantMessage, MessageContentItem } from "@letta-ai/letta-agent-sdk";
 
@@ -27,6 +27,12 @@ interface AssistantMessageProps {
 export const AssistantMessage = memo(function AssistantMessage({ message, fallbackText = "", isStreaming = false }: AssistantMessageProps) {
   const textContent = (message && extractText(message.content)) || fallbackText;
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!isStreaming) return;
+    const timer = window.setTimeout(preloadMarkdownRenderer, 250);
+    return () => window.clearTimeout(timer);
+  }, [isStreaming]);
 
   const onCopy = useCallback(async () => {
     if (!textContent) return;
@@ -80,7 +86,7 @@ export const AssistantMessage = memo(function AssistantMessage({ message, fallba
       </div>
       {textContent ? (
         <div className="chat-prose min-w-0 max-w-full break-words text-ink-900 [&>*:first-child]:mt-0 [&>p:first-child]:mt-0">
-          <MDContent text={textContent} />
+          {isStreaming ? <div className="whitespace-pre-wrap">{textContent}</div> : <MDContent text={textContent} />}
           {isStreaming ? (
             <span
               aria-hidden

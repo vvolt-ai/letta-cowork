@@ -427,6 +427,12 @@ function upsertToolExecution(ephemeral: EphemeralState, message: StreamMessage):
   return ephemeral;
 }
 
+// Assistant token deltas can arrive much faster than the renderer can paint.
+// Keep their growing payload outside Zustand so every token does not replace
+// the full sessions tree and rerender the application. The completed message is
+// committed to the canonical transcript when the result event arrives.
+const bufferedAssistantDrafts = new Map<string, SDKAssistantMessage>();
+
 function updateAssistantDraft(ephemeral: EphemeralState, message: StreamMessage): EphemeralState {
   if (message.type !== "assistant") {
     return ephemeral;
@@ -1190,6 +1196,9 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
 
       case "session.status": {
         const { sessionId, status, title, cwd, error, agentName, agentId, lettaConnectionId, model, background, isEmailSession } = event.payload;
+        if (status === "idle" || status === "error") {
+          bufferedAssistantDrafts.delete(sessionId);
+        }
         const existing = rootState.sessions[sessionId] ?? createSession(sessionId);
         const previousStatus = existing.status;
         const hadPendingPermissions = (existing.permissionRequests?.length ?? 0) > 0;
@@ -1344,6 +1353,25 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
           // Skipping the global store update prevents full sessions tree churn per token.
           break;
         }
+        if (message.type === "assistant") {
+          const existing = rootState.sessions[sessionId] ?? createSession(sessionId);
+          const currentEphemeral = existing.ephemeral ?? initialEphemeralState();
+          const bufferedDraft = bufferedAssistantDrafts.get(sessionId);
+          const updatedDraft = updateAssistantDraft(
+            bufferedDraft ? { ...currentEphemeral, assistantDraft: bufferedDraft } : currentEphemeral,
+            message,
+          );
+          if (updatedDraft.assistantDraft) {
+            bufferedAssistantDrafts.set(sessionId, updatedDraft.assistantDraft);
+          }
+
+          // Once the generating transition has been published, avoid calling
+          // Zustand set() entirely. This prevents both subscriber notifications
+          // and persistence middleware work for every following token.
+          if (currentEphemeral.status === "generating" && currentEphemeral.tools.length === 0) {
+            break;
+          }
+        }
         set((state) => {
           const existing = state.sessions[sessionId] ?? createSession(sessionId);
           const currentEphemeral = existing.ephemeral ?? initialEphemeralState();
@@ -1460,9 +1488,11 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
               break;
             }
             case "assistant": {
-              const updatedDraft = updateAssistantDraft(currentEphemeral, message);
+              // The complete draft is buffered outside Zustand above. The local
+              // message window owns the throttled streaming presentation.
               ephemeral = {
-                ...updatedDraft,
+                ...currentEphemeral,
+                assistantDraft: undefined,
                 tools: [],
               };
               status = "generating";
@@ -1470,7 +1500,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
             }
             case "result": {
               if (message.success) {
-                const draft = currentEphemeral.assistantDraft;
+                const draft = bufferedAssistantDrafts.get(sessionId) ?? currentEphemeral.assistantDraft;
                 if (draft) {
                   const existingIndex = messages.findIndex(
                     (m) => m.type === "assistant" && "uuid" in m && "uuid" in draft && m.uuid === draft.uuid
@@ -1485,6 +1515,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
                 }
               }
 
+              bufferedAssistantDrafts.delete(sessionId);
               const hasPendingPermissions = (existing.permissionRequests?.length ?? 0) > 0;
 
               if (hasPendingPermissions) {
@@ -1573,6 +1604,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
 
       case "stream.user_prompt": {
         const { sessionId, prompt, attachments, content } = event.payload;
+        bufferedAssistantDrafts.delete(sessionId);
         set((state) => {
           const existing = state.sessions[sessionId] ?? createSession(sessionId);
           const newMessages = [

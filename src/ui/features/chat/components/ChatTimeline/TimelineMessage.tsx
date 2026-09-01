@@ -2,6 +2,8 @@
  * Renders individual timeline message entries
  */
 
+import { memo } from "react";
+
 import { ActivityStreamBlock } from "../ActivityStreamBlock";
 import { AssistantMessage } from "../AssistantMessage";
 import { ReasoningBlock } from "../ReasoningBlock";
@@ -16,10 +18,28 @@ export type TimelineMessageProps = {
   agentName: string;
 };
 
+function timelineMessagePropsEqual(previous: TimelineMessageProps, next: TimelineMessageProps): boolean {
+  if (previous.agentName !== next.agentName) return false;
+  if (previous.entry === next.entry) return true;
+  if (previous.entry.id !== next.entry.id || previous.entry.kind !== next.entry.kind) return false;
+
+  // Timeline reconstruction may create fresh wrapper objects when a tool event
+  // changes. Stable committed chat messages should not rerender with them.
+  if (previous.entry.kind === "user" && next.entry.kind === "user") {
+    return previous.entry.message === next.entry.message;
+  }
+  if (previous.entry.kind === "assistant" && next.entry.kind === "assistant") {
+    return previous.entry.message === next.entry.message
+      && previous.entry.text === next.entry.text
+      && previous.entry.streaming === next.entry.streaming;
+  }
+  return false;
+}
+
 /**
  * Renders a single timeline entry based on its kind
  */
-export function TimelineMessage({ entry, agentName }: TimelineMessageProps) {
+export const TimelineMessage = memo(function TimelineMessage({ entry, agentName }: TimelineMessageProps) {
   switch (entry.kind) {
     case "user":
       return <UserMessage key={entry.id} message={entry.message as any} />;
@@ -63,7 +83,7 @@ export function TimelineMessage({ entry, agentName }: TimelineMessageProps) {
     default:
       return null;
   }
-}
+}, timelineMessagePropsEqual);
 
 /**
  * Renders CLI result as a styled block

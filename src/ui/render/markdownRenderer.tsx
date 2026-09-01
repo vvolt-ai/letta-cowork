@@ -3,6 +3,13 @@ import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
 
+// Syntax highlighting is the most expensive Markdown phase on Windows. Large
+// responses still render as Markdown, but code blocks keep their plain styling.
+const LARGE_MARKDOWN_HIGHLIGHT_LIMIT = 30_000;
+const REMARK_PLUGINS = [remarkGfm];
+const HIGHLIGHT_PLUGINS = [rehypeHighlight];
+const NO_REHYPE_PLUGINS: [] = [];
+
 function CopyButton({ getText, label = "Copy" }: { getText: () => string; label?: string }) {
   const [copied, setCopied] = useState(false);
   const onCopy = useCallback(async () => {
@@ -69,8 +76,8 @@ function CodeBlock({ language, children }: { language: string | null; children: 
 export default function MarkdownRenderer({ text }: { text: string }) {
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      rehypePlugins={[rehypeHighlight]}
+      remarkPlugins={REMARK_PLUGINS}
+      rehypePlugins={text.length <= LARGE_MARKDOWN_HIGHLIGHT_LIMIT ? HIGHLIGHT_PLUGINS : NO_REHYPE_PLUGINS}
       components={{
         h1: (props) => <h1 className="mt-4 mb-1.5 text-[17px] font-semibold text-ink-900 leading-snug" {...props} />,
         h2: (props) => <h2 className="mt-3.5 mb-1 text-[15px] font-semibold text-ink-900 leading-snug" {...props} />,

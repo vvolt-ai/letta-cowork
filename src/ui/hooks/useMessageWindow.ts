@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ServerEvent, StreamMessage } from "../types";
 
 const PARTIAL_MESSAGE_RESET_DELAY_MS = 500;
+const PARTIAL_RENDER_INTERVAL_MS = 50;
 const INITIAL_VISIBLE_HISTORY_COUNT = 50;
 const HISTORY_PAGE_SIZE = 50;
 
@@ -54,15 +55,15 @@ export function useMessageWindow(
   const partialMessageRef = useRef("");
   const partialReasoningRef = useRef("");
   const partialResetTimeoutRef = useRef<number | null>(null);
-  const partialFlushRafRef = useRef<number | null>(null);
+  const partialFlushTimerRef = useRef<number | null>(null);
   const shouldFlushPartialMessageRef = useRef(false);
   const shouldFlushPartialReasoningRef = useRef(false);
   const shouldNotifyPartialUpdateRef = useRef(false);
 
   const cancelPendingPartialFlush = useCallback(() => {
-    if (partialFlushRafRef.current) {
-      window.cancelAnimationFrame(partialFlushRafRef.current);
-      partialFlushRafRef.current = null;
+    if (partialFlushTimerRef.current) {
+      window.clearTimeout(partialFlushTimerRef.current);
+      partialFlushTimerRef.current = null;
     }
     shouldFlushPartialMessageRef.current = false;
     shouldFlushPartialReasoningRef.current = false;
@@ -70,9 +71,9 @@ export function useMessageWindow(
   }, []);
 
   const flushPendingPartialNow = useCallback(() => {
-    if (partialFlushRafRef.current) {
-      window.cancelAnimationFrame(partialFlushRafRef.current);
-      partialFlushRafRef.current = null;
+    if (partialFlushTimerRef.current) {
+      window.clearTimeout(partialFlushTimerRef.current);
+      partialFlushTimerRef.current = null;
     }
 
     const shouldFlushMessage = shouldFlushPartialMessageRef.current;
@@ -140,12 +141,12 @@ export function useMessageWindow(
       shouldFlushPartialReasoningRef.current ||= reasoning;
       shouldNotifyPartialUpdateRef.current ||= notify;
 
-      if (partialFlushRafRef.current) {
+      if (partialFlushTimerRef.current) {
         return;
       }
 
-      partialFlushRafRef.current = window.requestAnimationFrame(() => {
-        partialFlushRafRef.current = null;
+      partialFlushTimerRef.current = window.setTimeout(() => {
+        partialFlushTimerRef.current = null;
 
         const shouldFlushMessage = shouldFlushPartialMessageRef.current;
         const shouldFlushReasoning = shouldFlushPartialReasoningRef.current;
@@ -170,7 +171,7 @@ export function useMessageWindow(
             onNewMessage();
           }
         }
-      });
+      }, PARTIAL_RENDER_INTERVAL_MS);
     },
     [onNewMessage, performAutoScroll, shouldAutoScroll]
   );

@@ -335,19 +335,19 @@ function App() {
 
       if (container) {
         try {
-          if (typeof container.scrollTo === "function") {
-            container.scrollTo({
-              top: container.scrollHeight,
-              behavior: currentBehavior,
-            });
+          if (currentBehavior === "smooth" && typeof container.scrollTo === "function") {
+            container.scrollTo({ top: container.scrollHeight, behavior: currentBehavior });
           } else {
             container.scrollTop = container.scrollHeight;
           }
         } catch {
           container.scrollTop = container.scrollHeight;
         }
+        return;
       }
 
+      // Fall back to the sentinel only when the scroll container is unavailable.
+      // Doing both forced two layout/scroll passes for every streaming update.
       const endNode = messagesEndRef.current;
       if (endNode) {
         try {
