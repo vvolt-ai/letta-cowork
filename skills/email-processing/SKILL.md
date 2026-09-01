@@ -14,10 +14,12 @@ Before explicit user approval, do not send or forward email, route work, create/
 ## Fast-path rules
 
 1. **Reuse supplied context.** If the prompt already contains the email body, `messageId`, `accountId`, `folderId`, attachment metadata, or agent ID, treat those values as authoritative input. Do not list channels/accounts/folders or search for the email again.
-2. **Reuse supplied attachment content.** If PDF pages, images, extracted text, CSV/JSON/Markdown, or a transcript are already present in model context, inspect them directly. Do not download or extract the same attachment again.
+2. **Reuse supplied attachment content.** If PDF pages, images, extracted text, CSV/JSON/Markdown, or a transcript are already present in model context, inspect them directly. Do not download or extract the same attachment again. If the request says there are no attachments and supplies the full body, do not call Vera MCP discovery/knowledge tools to look for another copy.
 3. **Use one retrieval route.** If content is missing and the local Cowork email service is available, call the exact local endpoint directly. Do not probe the remote channel list first.
 4. **Load references only when needed.** Read `references/classification-guide.md` only for ambiguous classification. For a PO, read `references/po-processing.md`. Read `references/approval-template.md` only when formatting the final summary. When content and identifiers are already supplied, do not also load `cowork-emails`, `pdf-reader`, or another overlapping discovery skill.
 5. **Plan tool calls before executing.** After attachment extraction, issue independent read-only Odoo checks together where supported. Start exact and bounded; broaden only after a targeted search returns no useful result.
+6. **Keep an evidence ledger for the turn.** Track each successful model/domain, returned IDs, and fields. Reuse that evidence; do not search the same record again unless a write may have changed it.
+7. **Use a query budget.** For a PO tied to an existing quotation, target no more than 10 Odoo reads before the first approved write. Exceed this only for a named unresolved business fact, never for general exploration.
 
 ## Step 1 — Reuse, retrieve, and classify
 
@@ -68,8 +70,11 @@ Read `references/po-processing.md` and execute its read-only fast path.
 
 - Use direct mounted `odoo_search`, `odoo_count`, or `odoo_group` tools. Do not use Bash, curl, Python, Task/subagents, or legacy Odoo wrappers for normal Odoo reads.
 - Search configured products by exact `default_code` fragments from the PO, not by enumerating the whole product family.
-- Keep initial limits at 5–10 records.
-- Run requester/company, duplicate PO, exact products, payment terms, overdue invoices, and address checks together where supported.
+- If an existing draft quotation can be identified by exact PO reference or exact total, read its lines once and compare them to the PO before searching the product catalog. Reuse matching SO-line product IDs, quantities, prices, and discounts.
+- Keep initial limits at 5–10 records and request only decision-relevant fields.
+- Run requester/company, duplicate PO, candidate quotation, exact products, payment terms, overdue invoices, and address checks together where dependencies allow.
+- The current mounted connector accepts only AND condition triples with scalar string/number values. Do not send prefix `|`, `&`, or `!`, list-valued `in` domains, or boolean domain values. Use one bounded exact search, then at most one targeted fallback.
+- Do not call `odoo_get_models` or `odoo_get_fields` for standard known models such as `sale.order`, `sale.order.line`, `res.partner`, or `product.product`.
 - Expand one failed query at a time. Never replace a failed exact query with an unbounded family search.
 
 ### Other categories
@@ -98,7 +103,10 @@ Stop until the user answers.
 
 ## Retry and latency discipline
 
-- Do not repeat successful lookups for verification; consolidate the evidence in memory for the current turn.
+- Do not repeat successful lookups for verification; consolidate the evidence for the current turn.
+- Re-read a record only after a write that can change the fields being verified. One post-write verification is enough.
+- Treat a tool payload containing `"ok": false`, `ODOO_MCP_INPUT_VALIDATION`, or `ODOO_MCP_NON_JSON_RESPONSE` as a failure even if the outer trace status says success.
+- For Odoo `message_post`, send a concise plain-text body. This XML-RPC route escapes supplied HTML and can store visible tags; do not retry with alternate markup.
 - Do not retry the same failing route with equivalent parameters.
 - A timeout is evidence to change route, not permission to add more discovery.
 - Prefer a small exact result over exhaustive enumeration.

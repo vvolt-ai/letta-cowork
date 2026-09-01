@@ -67,6 +67,8 @@ function getSkillRoots(ctx?: ToolRunContext): Array<{ root: string; source: stri
         }
     };
     add(join(process.cwd(), "skills"), "project");
+    const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
+    if (resourcesPath) add(join(resourcesPath, "skills"), "packaged");
     const memoryDir =
         process.env.MEMORY_DIR ||
         (ctx?.agentId

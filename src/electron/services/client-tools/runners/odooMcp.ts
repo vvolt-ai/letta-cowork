@@ -12,7 +12,16 @@ const searchParameters = {
   type: "object",
   properties: {
     model: { type: "string", description: "Odoo model name, e.g. res.partner, sale.order, mail.activity." },
-    domain: { type: "array", description: "Odoo domain array, e.g. [[\"name\",\"ilike\",\"Acme\"]]. Use [] for all records only when appropriate." },
+    domain: {
+      type: "array",
+      items: {
+        type: "array",
+        minItems: 3,
+        maxItems: 3,
+        items: { anyOf: [{ type: "string" }, { type: "number" }] },
+      },
+      description: "AND-only Odoo condition triples, e.g. [[\"name\",\"ilike\",\"Acme\"]]. This deployment rejects prefix |/&/!, list-valued in/not-in, and boolean values. Use separate bounded searches when OR is required.",
+    },
     fields: { type: "array", items: { type: "string" }, description: "Fields to return." },
     limit: { type: "integer", minimum: 1, maximum: 200, description: "Maximum records to return. Default/safe values should be small." },
     offset: { type: "integer", minimum: 0 },
@@ -77,8 +86,8 @@ const callMethodParameters = {
   properties: {
     model: { type: "string", description: "Odoo model name." },
     method: { type: "string", description: "Odoo model method to call." },
-    args: { description: "Method positional args. MCP accepts this as JSON/string depending on deployment." },
-    kwargs: { description: "Method keyword args. MCP accepts this as JSON/string depending on deployment." },
+    args: { type: "string", description: "JSON-encoded positional args string for this deployment, e.g. \"[[3367]]\"." },
+    kwargs: { type: "string", description: "JSON-encoded keyword args string for this deployment, usually \"{}\"." },
   },
   required: ["model", "method"],
   additionalProperties: true,
@@ -87,7 +96,7 @@ const callMethodParameters = {
 const mountedTools: MountedOdooTool[] = [
   {
     name: "odoo_search",
-    description: "Direct mounted Odoo MCP tool: search/read Odoo records. Always use this instead of Bash, Python skill scripts, Skill, or Task for normal Odoo lookups.",
+    description: "Direct mounted Odoo MCP search/read. Plan once and reuse successful results. Start with exact IDs/references/default-code fragments, only decision-relevant fields, and limit <=10. Never enumerate a configured product family at high limits. Use AND-only scalar condition triples; this deployment rejects prefix OR, list, and boolean domain values.",
     parameters: searchParameters,
   },
   {
@@ -120,7 +129,7 @@ const mountedTools: MountedOdooTool[] = [
   },
   {
     name: "odoo_get_fields",
-    description: "Direct mounted Odoo MCP tool: inspect fields for one Odoo model before complex reads/writes. Prefer this direct tool over legacy Odoo skills/scripts.",
+    description: "Direct mounted Odoo MCP tool: inspect fields only when the model/field choice is genuinely unknown. Do not call it for standard known sale.order, sale.order.line, res.partner, or product.product workflows.",
     parameters: fieldsParameters,
   },
   {
@@ -140,7 +149,7 @@ const mountedTools: MountedOdooTool[] = [
   },
   {
     name: "odoo_call_method",
-    description: "Direct mounted Odoo MCP tool: call an Odoo model method, e.g. workflow actions. Only use with explicit user instruction and verified target records.",
+    description: "Direct mounted Odoo MCP workflow call. Only use with explicit user instruction and verified records. Pass args and kwargs as JSON-encoded strings (for example args=\"[[3367]]\", kwargs=\"{}\"); do not retry object/array variants.",
     parameters: callMethodParameters,
   },
   {
@@ -152,6 +161,10 @@ const mountedTools: MountedOdooTool[] = [
 
 function jsonBody(value: unknown): string {
   return JSON.stringify(value, null, 2);
+}
+
+export function isOdooFailureResult(value: unknown): boolean {
+  return Boolean(value && typeof value === "object" && "ok" in value && (value as { ok?: unknown }).ok === false);
 }
 
 async function runMountedOdooTool(toolName: string, args: Record<string, unknown>, ctx: ToolRunContext): Promise<ToolRunResult> {
@@ -171,9 +184,10 @@ async function runMountedOdooTool(toolName: string, args: Record<string, unknown
       requireAuth: true,
     });
 
+    const isError = isOdooFailureResult(result);
     return {
-      isError: false,
-      output: `${toolName} completed in ${Date.now() - startedAt}ms via mounted Odoo MCP.\n${jsonBody(result)}`,
+      isError,
+      output: `${toolName} ${isError ? "returned a failure" : "completed"} in ${Date.now() - startedAt}ms via mounted Odoo MCP.\n${jsonBody(result)}`,
     };
   } catch (error) {
     if (ctx.signal.aborted) {

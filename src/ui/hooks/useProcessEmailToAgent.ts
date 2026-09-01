@@ -106,6 +106,8 @@ const buildEmailMarkdownPrompt = (email: ZohoEmail, agentId: string, emailConten
   return [
     "# Email Processing Request",
     "Please analyze and process this email:",
+    "## Required Execution Workflow",
+    "Before any business-system tool call, load the `email-processing` skill and follow its bounded fast path. Build one query plan, reuse successful results, and do not enumerate product families or rediscover supplied email data. Use direct mounted Odoo tools for Odoo reads.",
     `## Target Agent\n\`${escapeMd(agentId)}\``,
     "## Email Metadata",
     metadataTable,

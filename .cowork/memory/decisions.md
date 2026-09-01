@@ -81,3 +81,13 @@ Source: desktop runtime log showing `WsSession.runOneStreamTurn` failing with Ex
 - New Cowork conversations and sessions always use the active organization's default Vera-managed Letta connection.
 - The visible Letta account selector and its persisted draft connection selection were removed from both new-conversation surfaces. Cowork no longer lists personal or organization connection choices in the UI.
 - Existing session connection metadata remains supported only for safely resuming historical sessions; it is not selectable for new work.
+
+## Bounded Odoo processing for email-driven PO work (2026-09-01)
+
+Source: Andrew Windows trace `2026-09-01.ndjson` (conversation `conv-16a6601a-b0cb-4163-964e-a6d96a072a4c`). A single PO-to-SO turn made 60 Odoo calls, including 48 searches and broad configured-product queries returning ~31–32k characters each.
+
+- Generated email-processing prompts must require loading the repo `email-processing` skill before business-system calls.
+- Packaged desktop builds ship that skill under `resources/skills/email-processing`; the Skill runner checks `process.resourcesPath/skills`.
+- PO processing uses a <=10-read pre-write target, turn-local evidence reuse, exact-total candidate quotation matching, and one SO-line read before any product-catalog expansion.
+- The deployed Odoo connector accepts AND-only scalar domain triples; prefix boolean operators, list-valued domains, and boolean values are rejected. `odoo_call_method` args/kwargs are JSON-encoded strings.
+- Mounted Odoo results containing `{ ok: false }` are surfaced as tool errors rather than successful calls.

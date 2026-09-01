@@ -8,7 +8,14 @@
         "node_modules/ws/**/*"
     ],
     "extraResources": [
-        "dist-electron/preload.cjs"
+        "dist-electron/preload.cjs",
+        {
+            "from": "skills/email-processing",
+            "to": "skills/email-processing",
+            "filter": [
+                "**/*"
+            ]
+        }
     ],
     "asarUnpack": [
         "node_modules/@letta-ai/letta-code-sdk/**/*",

@@ -21,7 +21,15 @@ Do not query Odoo for a value that has not yet been extracted from the PO.
 
 ## First read batch
 
-Issue independent calls together where the runtime supports parallel tool calls. Use direct mounted Odoo tools only.
+Issue independent calls together where the runtime supports parallel tool calls. Use direct mounted Odoo tools only. Target no more than 10 reads before an approved write.
+
+Current connector constraints:
+
+- Use only condition triples such as `[["field", "=", "value"], ["other", "=", 123]]`; multiple triples are ANDed.
+- Do not use prefix `|`, `&`, or `!` operators.
+- Do not use list-valued `in`/`not in` or boolean domain values; this deployment rejects them.
+- Do not inspect models/fields for the standard models named in this reference.
+- Keep a turn-local evidence ledger of successful queries and returned IDs.
 
 ### 1. Requester/contact
 
@@ -43,9 +51,24 @@ fields: ["id", "name", "state", "client_order_ref", "partner_id", "amount_total"
 limit: 5
 ```
 
-### 3. Exact product variants
+### 3. Candidate existing quotation
 
-Run one bounded query per distinct PO configuration:
+If the duplicate-reference query is empty and the PO supplies an exact total, search for a recent candidate quotation before querying product families:
+
+```text
+odoo_search
+model: sale.order
+domain: [["amount_total", "=", <exact_po_total>]]
+fields: ["id", "name", "state", "date_order", "client_order_ref", "partner_id", "partner_invoice_id", "partner_shipping_id", "payment_term_id", "pricelist_id", "carrier_id", "amount_total", "order_line"]
+limit: 5
+order: date_order desc
+```
+
+When one plausible draft is found, read all of its `sale.order.line` records once using `order_id = <id>`. Compare its non-delivery lines to the PO. If product descriptions/configurations, quantities, unit prices, discounts, and total match, reuse that evidence and those product IDs. Do not then run broad product-family searches, per-product catalog reads, historical-order searches, or unit-price searches for facts already established by the matched quotation.
+
+### 4. Exact product variants
+
+Only when no candidate quotation provides a verified line match, run one bounded query per distinct PO configuration:
 
 ```text
 odoo_search
@@ -64,7 +87,7 @@ ISOBLOCK V-1C (1500V 10V
 
 Never start with `name ilike "IsoBlock V-1c"` at a high limit. The base name represents a large variant family and is not enough to identify a sellable configuration.
 
-### 4. Overdue exposure
+### 5. Overdue exposure
 
 Once the customer/company partner ID is known, use a bounded invoice query:
 
@@ -113,7 +136,7 @@ Use the first read batch to produce one comparison table:
 | Credit exposure | Due date and residual amount of unpaid posted invoices |
 | Address | PO billing/shipping address against customer/address records |
 
-Do not rerun successful searches merely to verify the same fact.
+Do not rerun successful searches merely to verify the same fact. Re-read only fields affected by a subsequent write, once per write phase.
 
 ## Search expansion policy
 
