@@ -54,7 +54,6 @@ export function usePromptActions(
     ? activeSession?.model?.trim() ?? ""
     : draftSelectedModel.trim();
   const newConversationAgentId = useAppStore((state) => state.newConversationAgentId);
-  const newConversationLettaConnectionId = useAppStore((state) => state.newConversationLettaConnectionId);
   const permissionMode = useAppStore((state) => state.permissionMode);
   const setPrompt = useAppStore((state) => state.setPrompt);
   const setPendingStart = useAppStore((state) => state.setPendingStart);
@@ -99,7 +98,6 @@ export function usePromptActions(
             cwd: cwd.trim() || undefined,
             allowedTools: DEFAULT_ALLOWED_TOOLS,
             agentId: newConversationAgentId.trim() || undefined,
-            lettaConnectionId: newConversationLettaConnectionId.trim() || undefined,
             model: requestModel,
             permissionMode,
           },
@@ -135,7 +133,6 @@ export function usePromptActions(
       cwd,
       isRunning,
       newConversationAgentId,
-      newConversationLettaConnectionId,
       overrideSessionId,
       prompt,
       permissionMode,

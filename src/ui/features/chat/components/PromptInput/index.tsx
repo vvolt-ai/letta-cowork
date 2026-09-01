@@ -72,7 +72,6 @@ export const PromptInput = memo(function PromptInput({
     activeSessionId ? state.sessions[activeSessionId]?.model : undefined
   );
   const newConversationAgentId = useAppStore((state: AppState) => state.newConversationAgentId);
-  const newConversationConnectionId = useAppStore((state: AppState) => state.newConversationLettaConnectionId);
   const promptRef = useRef<HTMLTextAreaElement | null>(null);
   const [defaultAgentId, setDefaultAgentId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -108,9 +107,7 @@ export const PromptInput = memo(function PromptInput({
   const agentIdForModels = activeSessionId
     ? activeAgentId
     : newConversationAgentId.trim() || defaultAgentId || undefined;
-  const connectionIdForModels = activeSessionId
-    ? activeConnectionId
-    : newConversationConnectionId.trim() || undefined;
+  const connectionIdForModels = activeSessionId ? activeConnectionId : undefined;
   const selectedModel = activeSessionId ? activeSessionModel ?? "" : draftSelectedModel;
   const setSelectedModel = useCallback((model: string) => {
     if (activeSessionId) {

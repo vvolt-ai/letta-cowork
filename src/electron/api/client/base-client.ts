@@ -10,7 +10,12 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
 import { homedir } from "os";
 import { dirname, join } from "path";
 
-import type { AuthTokens, RequestOptions } from "../types.js";
+import type {
+  AuthenticatedUser,
+  AuthResponsePayload,
+  AuthTokens,
+  RequestOptions,
+} from "../types.js";
 
 // Storage path for tokens
 const TOKENS_PATH = join(homedir(), ".letta-cowork", "api-tokens.json");
@@ -97,10 +102,10 @@ export class BaseHttpClient {
 
   private writeUserShellEnv(token: string | null): void {
     const MARKER_START = "# BEGIN COWORK_TOKEN (managed by Vera Cowork)";
-    const MARKER_END   = "# END COWORK_TOKEN";
+    const MARKER_END = "# END COWORK_TOKEN";
 
     // Determine shell env file: prefer ~/.zshenv (zsh default on macOS), fallback to ~/.profile
-    const zshenv  = join(homedir(), ".zshenv");
+    const zshenv = join(homedir(), ".zshenv");
     const profile = join(homedir(), ".profile");
     const envFile = process.platform === "darwin" ? zshenv : profile;
 
@@ -165,6 +170,50 @@ export class BaseHttpClient {
       this.tokens = null;
       this.syncAuthEnv();
     }
+  }
+
+  protected normalizeProfileResponse(data: AuthenticatedUser): AuthenticatedUser {
+    const currentOrganization = data?.currentOrganization ?? null;
+    return {
+      ...data,
+      organizationId:
+        currentOrganization?.organizationId ??
+        data?.organizationId ??
+        this.tokens?.user.organizationId,
+      role: currentOrganization?.role ?? data?.role ?? this.tokens?.user.role,
+      currentOrganization,
+      memberships: data?.memberships ?? [],
+    };
+  }
+
+  protected applyAuthResponse(data: AuthResponsePayload): AuthTokens {
+    const rawUser = data?.user ?? this.tokens?.user;
+    const currentOrganization =
+      data?.currentOrganization ?? rawUser?.currentOrganization ?? null;
+    const memberships = data?.memberships ?? rawUser?.memberships ?? [];
+
+    if (!rawUser?.id || !rawUser?.email) {
+      throw new Error("Authentication response did not include a valid user");
+    }
+
+    this.tokens = {
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken ?? this.tokens?.refreshToken ?? "",
+      expiresIn: data.expiresIn,
+      user: {
+        ...rawUser,
+        organizationId:
+          currentOrganization?.organizationId ??
+          rawUser.organizationId ??
+          this.tokens?.user.organizationId,
+        role:
+          currentOrganization?.role ?? rawUser.role ?? this.tokens?.user.role,
+        currentOrganization,
+        memberships,
+      },
+    };
+    this.saveTokens();
+    return this.tokens;
   }
 
   protected saveTokens(): void {
@@ -310,15 +359,7 @@ export class BaseHttpClient {
       }
 
       const data = await response.json();
-      this.tokens = {
-        accessToken: data.accessToken,
-        refreshToken: data.refreshToken || this.tokens.refreshToken,
-        expiresIn: data.expiresIn,
-        user: data.user,
-      };
-      this.syncAuthEnv();
-      this.saveTokens();
-      return this.tokens;
+      return this.applyAuthResponse(data);
     } catch (error) {
       console.error("Failed to refresh token:", error);
       return null;

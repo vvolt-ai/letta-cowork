@@ -78,6 +78,10 @@ export interface WsSessionOptions {
 
 const RESPONSE_STATE_HEADER = "X-Letta-Response-State";
 const RESPONSE_STATE_CACHE_SCOPE = "approval_boundary";
+// Retried continuations keep the full client-tool catalog, so leave ample room
+// under legacy 100 KB Express proxies by reducing only already-executed tool
+// returns. The full outputs remain available in Cowork overflow files.
+const PAYLOAD_RETRY_TOOL_RETURN_BUDGET_BYTES = 16_000;
 
 class AcceptedRunResumeError extends Error {
     constructor(runId: string, cause: unknown) {
@@ -115,6 +119,74 @@ function encodeResponseStateHeader(previousResponseId: string): string {
         }),
         "utf8"
     ).toString("base64url");
+}
+
+export function isRequestEntityTooLargeError(error: unknown): boolean {
+    const candidate = error as {
+        status?: unknown;
+        message?: unknown;
+        error?: { message?: unknown };
+    };
+    const detail = [candidate?.message, candidate?.error?.message]
+        .filter((value): value is string => typeof value === "string")
+        .join(" ");
+    return candidate?.status === 413 || /request entity too large|payload too large/i.test(detail);
+}
+
+function truncateUtf8ForPayload(value: string, maxBytes: number): string {
+    const bytes = Buffer.from(value, "utf8");
+    if (bytes.byteLength <= maxBytes) return value;
+    let prefix = bytes.subarray(0, Math.max(0, maxBytes)).toString("utf8");
+    if (prefix.endsWith("�")) prefix = prefix.slice(0, -1);
+    return `${prefix}\n\n[Tool output compacted after the server rejected the continuation as too large.]`;
+}
+
+/**
+ * Compact only tool-continuation output. User prompts and image blocks are not
+ * silently modified. Returns null when the failed request is not a continuation
+ * Cowork can safely retry.
+ */
+export function compactToolContinuationMessagesFor413(
+    messages: unknown[],
+    budgetBytes = PAYLOAD_RETRY_TOOL_RETURN_BUDGET_BYTES
+): unknown[] | null {
+    const cloned = JSON.parse(JSON.stringify(messages)) as unknown[];
+    const toolEntries: Array<Record<string, unknown>> = [];
+
+    for (const message of cloned) {
+        if (!message || typeof message !== "object") continue;
+        const record = message as Record<string, unknown>;
+        for (const key of ["approvals", "tool_returns"] as const) {
+            const entries = record[key];
+            if (!Array.isArray(entries)) continue;
+            for (const entry of entries) {
+                if (
+                    entry &&
+                    typeof entry === "object" &&
+                    typeof (entry as Record<string, unknown>).tool_return === "string"
+                ) {
+                    toolEntries.push(entry as Record<string, unknown>);
+                }
+            }
+        }
+    }
+
+    if (toolEntries.length === 0) return null;
+    const totalBytes = toolEntries.reduce(
+        (total, entry) =>
+            total + Buffer.byteLength(String(entry.tool_return), "utf8"),
+        0
+    );
+    if (totalBytes <= budgetBytes) return null;
+
+    const perEntryBudget = Math.max(512, Math.floor(budgetBytes / toolEntries.length) - 100);
+    for (const entry of toolEntries) {
+        entry.tool_return = truncateUtf8ForPayload(
+            String(entry.tool_return),
+            perEntryBudget
+        );
+    }
+    return cloned;
 }
 
 function getClient(connectionId?: string): Letta {
@@ -843,6 +915,18 @@ export class WsSession {
                 const errMessage =
                     err instanceof Error ? err.message : String(err);
 
+                if (isRequestEntityTooLargeError(err)) {
+                    const friendlyMessage =
+                        "This request produced more data than the connected server can accept. I compacted tool results once, but the request is still too large. Please narrow the request or split it into smaller steps.";
+                    console.error("[WsSession] request remained too large after recovery:", err);
+                    this.enqueue({
+                        type: "error",
+                        message: friendlyMessage,
+                    } as SDKErrorMessage);
+                    settleTurn(false, friendlyMessage);
+                    break;
+                }
+
                 // Approval conflicts are their own error class. Do not let the
                 // generic `internal_error` wrapper route them through the LLM
                 // retry budget: the conflict cannot clear without submitting a
@@ -1062,41 +1146,58 @@ export class WsSession {
                 .join(", ")}] background=true include_pings=true`
         );
 
-        let stream = (await (
-            client.conversations as unknown as {
-                messages: {
-                    create: (
-                        convId: string,
-                        body: Record<string, unknown>,
-                        options?: {
-                            headers?: Record<string, string>;
-                            signal?: AbortSignal;
-                        }
-                    ) => Promise<Stream<LettaStreamingResponse>>;
-                };
-            }
-        ).messages.create(
-            conversationId,
-            {
-                // Mirror letta-code's exact request body shape from
-                // src/agent/message.ts → buildConversationMessagesCreateRequestBody.
-                // Missing any of these fields (especially `background: true`)
-                // causes the server to NOT route client-tool calls back to us
-                // and instead return "Tool not found" via tool_return_message.
-                messages,
-                streaming: true,
-                stream_tokens: true,
-                include_pings: true,
-                background: true,
-                client_skills: [],
-                client_tools: wireTools,
-                include_compaction_messages: true,
-            },
-            {
-                ...(Object.keys(headers).length > 0 ? { headers } : {}),
-                signal: ctrl.signal,
-            }
-        )) as Stream<LettaStreamingResponse>;
+        const createStream = async (
+            requestMessages: unknown[]
+        ): Promise<Stream<LettaStreamingResponse>> =>
+            (await (
+                client.conversations as unknown as {
+                    messages: {
+                        create: (
+                            convId: string,
+                            body: Record<string, unknown>,
+                            options?: {
+                                headers?: Record<string, string>;
+                                signal?: AbortSignal;
+                            }
+                        ) => Promise<Stream<LettaStreamingResponse>>;
+                    };
+                }
+            ).messages.create(
+                conversationId,
+                {
+                    // Mirror letta-code's exact request body shape from
+                    // src/agent/message.ts → buildConversationMessagesCreateRequestBody.
+                    // Missing any of these fields (especially `background: true`)
+                    // causes the server to NOT route client-tool calls back to us
+                    // and instead return "Tool not found" via tool_return_message.
+                    messages: requestMessages,
+                    streaming: true,
+                    stream_tokens: true,
+                    include_pings: true,
+                    background: true,
+                    client_skills: [],
+                    client_tools: wireTools,
+                    include_compaction_messages: true,
+                },
+                {
+                    ...(Object.keys(headers).length > 0 ? { headers } : {}),
+                    signal: ctrl.signal,
+                }
+            )) as Stream<LettaStreamingResponse>;
+
+        let stream: Stream<LettaStreamingResponse>;
+        try {
+            stream = await createStream(messages);
+        } catch (error) {
+            const compacted = isRequestEntityTooLargeError(error)
+                ? compactToolContinuationMessagesFor413(messages)
+                : null;
+            if (!compacted) throw error;
+            console.warn(
+                "[WsSession] continuation exceeded server request limit; retrying once with compacted tool returns"
+            );
+            stream = await createStream(compacted);
+        }
 
         let terminalStopReason: string | null = null;
         let lastRunId: string | null = null;
@@ -1284,6 +1385,7 @@ export class WsSession {
                     // Re-enter with a stream that fails immediately so the same
                     // bounded resume policy handles transient reconnect errors.
                     stream = (async function* () {
+                        yield* [] as LettaStreamingResponse[];
                         throw resumeError;
                     })() as unknown as Stream<LettaStreamingResponse>;
                 }

@@ -1,18 +1,30 @@
 import { useState, useEffect, useCallback } from "react";
 
+interface OrganizationMembership {
+  id: string;
+  organizationId: string;
+  name: string | null;
+  role: string;
+  isActive: boolean;
+  organization?: { id: string; name: string; isActive: boolean; } | null;
+}
+
 interface User {
   id: string;
   email: string;
   organizationId: string;
   role: string;
+  currentOrganization?: OrganizationMembership | null;
+  memberships?: OrganizationMembership[];
 }
 
 interface UseAuthResult {
   isAuthenticated: boolean;
   isLoading: boolean;
   user: User | null;
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  register: (data: { email: string; password: string; name?: string; organizationName?: string }) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string; }>;
+  register: (data: { email: string; password: string; name?: string; organizationName?: string; }) => Promise<{ success: boolean; error?: string; }>;
+  switchOrganization: (organizationId: string) => Promise<{ success: boolean; error?: string; }>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
   handleAuthError: (error: Error) => void;
@@ -54,9 +66,9 @@ export function useAuth(): UseAuthResult {
 
   // Handle authentication errors from API calls
   const handleAuthError = useCallback((error: Error) => {
-    if (error.message.includes("Authentication expired") || 
-        error.message.includes("Unauthorized") ||
-        error.message.includes("401")) {
+    if (error.message.includes("Authentication expired") ||
+      error.message.includes("Unauthorized") ||
+      error.message.includes("401")) {
       setIsAuthenticated(false);
       setUser(null);
     }
@@ -85,7 +97,7 @@ export function useAuth(): UseAuthResult {
     }
   }, []);
 
-  const register = useCallback(async (data: { email: string; password: string; name?: string; organizationName?: string }) => {
+  const register = useCallback(async (data: { email: string; password: string; name?: string; organizationName?: string; }) => {
     try {
       const api = getApi();
       if (!api?.apiRegister) {
@@ -101,6 +113,26 @@ export function useAuth(): UseAuthResult {
       }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : "Registration failed" };
+    }
+  }, []);
+
+  const switchOrganization = useCallback(async (organizationId: string) => {
+    try {
+      const api = getApi();
+      if (!api?.apiSwitchOrganization) {
+        return { success: false, error: "Electron organization API is unavailable" };
+      }
+      const result = await api.apiSwitchOrganization(organizationId);
+      if (!result.success || !result.user) {
+        return { success: false, error: result.error || "Could not switch organization" };
+      }
+      setUser(result.user);
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Could not switch organization",
+      };
     }
   }, []);
 
@@ -122,6 +154,7 @@ export function useAuth(): UseAuthResult {
     user,
     login,
     register,
+    switchOrganization,
     logout,
     checkAuth,
     handleAuthError,

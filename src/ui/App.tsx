@@ -133,13 +133,13 @@ const clearLegacyAutoSyncConfig = () => {
 
 function App() {
   // Authentication
-  const { isAuthenticated, isLoading: isAuthLoading, checkAuth, user, logout, handleAuthError } = useAuth();
+  const { isAuthenticated, isLoading: isAuthLoading, checkAuth, user, switchOrganization, logout, handleAuthError } = useAuth();
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const prevMessagesLengthRef = useRef(0);
-  const pendingHistoryLoadRef = useRef<{ prevScrollHeight: number; prevScrollTop: number } | null>(null);
+  const pendingHistoryLoadRef = useRef<{ prevScrollHeight: number; prevScrollTop: number; } | null>(null);
   const scrollRafRef = useRef<number | null>(null);
   const scrollBehaviorRef = useRef<ScrollBehavior>("auto");
 
@@ -157,8 +157,10 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("profile");
   const [runsPresetConversationId, setRunsPresetConversationId] = useState<string | undefined>(undefined);
-  const [scheduleAgents, setScheduleAgents] = useState<Array<{ id: string; name: string; description?: string | null }>>([]);
+  const [scheduleAgents, setScheduleAgents] = useState<Array<{ id: string; name: string; description?: string | null; }>>([]);
   const [skillDownloadOpen, setSkillDownloadOpen] = useState(false);
+  const [isSwitchingOrganization, setIsSwitchingOrganization] = useState(false);
+  const [organizationSwitchError, setOrganizationSwitchError] = useState<string | null>(null);
 
   const {
     skillUrl,
@@ -208,7 +210,7 @@ function App() {
   } = useZohoEmail();
 
   // State to track newly created conversations for email modal
-  const [newlyCreatedConversations, setNewlyCreatedConversations] = useState<Map<string, { conversationId: string; agentId?: string }>>(new Map());
+  const [newlyCreatedConversations, setNewlyCreatedConversations] = useState<Map<string, { conversationId: string; agentId?: string; }>>(new Map());
 
   // Debug: log when state changes
   useEffect(() => {
@@ -295,7 +297,7 @@ function App() {
   }, [handleServerEvent]);
 
   const { connected, sendEvent } = useIPC(onEvent);
-  
+
   // Session controller - provides activeSessionId and session management
   const {
     activeSessionId,
@@ -317,7 +319,7 @@ function App() {
     handleStartSessionClick,
     handleStartWithAgent,
   } = useSessionController({ connected, sendEvent });
-  
+
   // Message window hook - must be called after useSessionController to get activeSessionId
   const scheduleScrollToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
     scrollBehaviorRef.current = behavior;
@@ -404,7 +406,7 @@ function App() {
   useEffect(() => {
     if (!showSchedules) return;
     window.electron.listLettaAgents()
-      .then((agents: Array<{ id: string; name: string }>) => setScheduleAgents(agents ?? []))
+      .then((agents: Array<{ id: string; name: string; }>) => setScheduleAgents(agents ?? []))
       .catch(console.warn);
   }, [showSchedules]);
 
@@ -490,7 +492,7 @@ function App() {
     const unsubscribe = window.electron?.onAuthExpired?.(() => {
       console.log('[App] Auth expired event received, logging out');
       logout();
-    }) ?? (() => {});
+    }) ?? (() => { });
     return unsubscribe;
   }, [logout]);
 
@@ -703,6 +705,35 @@ function App() {
     }
   }, [agentStatus]);
 
+  const handleOrganizationChange = async (organizationId: string) => {
+    if (!organizationId || organizationId === user?.organizationId || isSwitchingOrganization) {
+      return;
+    }
+
+    const hasActiveRun = Object.values(useAppStore.getState().sessions).some((session) =>
+      ["thinking", "running_tool", "waiting_approval", "generating"].includes(
+        session.ephemeral.status,
+      ),
+    );
+    if (hasActiveRun) {
+      setOrganizationSwitchError("Finish or cancel active agent runs before switching workspace.");
+      return;
+    }
+
+    setIsSwitchingOrganization(true);
+    setOrganizationSwitchError(null);
+    const result = await switchOrganization(organizationId);
+    if (!result.success) {
+      setOrganizationSwitchError(result.error || "Could not switch organization");
+      setIsSwitchingOrganization(false);
+      return;
+    }
+
+    useAppStore.getState().resetOrganizationState();
+    clearLegacyAutoSyncConfig();
+    window.location.reload();
+  };
+
   // Show loading while checking auth
   if (isAuthLoading) {
     return (
@@ -779,6 +810,15 @@ function App() {
             isLoadingMoreEmails={isLoadingMoreEmails}
             onLoadMoreEmails={handleLoadMoreEmails}
             userEmail={user?.email}
+            organizations={(user?.memberships ?? []).map((membership) => ({
+              id: membership.organizationId,
+              name: membership.name ?? membership.organization?.name ?? "Organization",
+              role: membership.role,
+            }))}
+            currentOrganizationId={user?.organizationId}
+            isSwitchingOrganization={isSwitchingOrganization}
+            organizationSwitchError={organizationSwitchError}
+            onOrganizationChange={handleOrganizationChange}
             onLogout={logout}
           />
         }
@@ -806,29 +846,29 @@ function App() {
               contentWidthClassName="max-w-5xl"
             >
               <ConfigurationTab
-                  coworkSettings={coworkSettings}
-                  lettaEnvOpen={lettaEnvOpen}
-                  onLettaEnvOpenChange={setLettaEnvOpen}
-                  onOpenChannels={() => setShowCoworkSettings(true)}
-                  onOpenSkillDownload={() => setSkillDownloadOpen(true)}
-                  onOpenLettaCli={() => {}}
-                  onOpenMcpServers={() => {}}
-                  onOpenSuperAdmin={() => {
-                    setShowSuperAdmin(true);
-                    setShowConfiguration(false);
-                    setShowSchedules(false);
-                    setShowSkills(false);
-                    setShowRuns(false);
-                  }}
-                  isEmailConnected={isMailConnected}
-                  unreadLabel={""}
-                  autoSyncEnabled={autoSyncEnabled}
-                  onToggleAutoSync={setAutoSyncEnabled}
-                  onConnectEmail={connectEmail}
-                  onDisconnectEmail={disconnectEmail}
-                  onOpenEmailView={() => setShowConfiguration(false)}
-                  onRefreshEmails={refetchEmails}
-                  onOpenAddAgentsModal={() => setShowConfiguration(false)}
+                coworkSettings={coworkSettings}
+                lettaEnvOpen={lettaEnvOpen}
+                onLettaEnvOpenChange={setLettaEnvOpen}
+                onOpenChannels={() => setShowCoworkSettings(true)}
+                onOpenSkillDownload={() => setSkillDownloadOpen(true)}
+                onOpenLettaCli={() => { }}
+                onOpenMcpServers={() => { }}
+                onOpenSuperAdmin={() => {
+                  setShowSuperAdmin(true);
+                  setShowConfiguration(false);
+                  setShowSchedules(false);
+                  setShowSkills(false);
+                  setShowRuns(false);
+                }}
+                isEmailConnected={isMailConnected}
+                unreadLabel={""}
+                autoSyncEnabled={autoSyncEnabled}
+                onToggleAutoSync={setAutoSyncEnabled}
+                onConnectEmail={connectEmail}
+                onDisconnectEmail={disconnectEmail}
+                onOpenEmailView={() => setShowConfiguration(false)}
+                onRefreshEmails={refetchEmails}
+                onOpenAddAgentsModal={() => setShowConfiguration(false)}
               />
             </InnerPageLayout>
           ) : (
@@ -936,8 +976,8 @@ function App() {
                 onLettaEnvOpenChange={setLettaEnvOpen}
                 onOpenChannels={() => setShowCoworkSettings(true)}
                 onOpenSkillDownload={() => setSkillDownloadOpen(true)}
-                onOpenLettaCli={() => {}}
-                onOpenMcpServers={() => {}}
+                onOpenLettaCli={() => { }}
+                onOpenMcpServers={() => { }}
                 onOpenSuperAdmin={() => setSettingsSection("administration")}
                 isEmailConnected={isMailConnected}
                 unreadLabel=""

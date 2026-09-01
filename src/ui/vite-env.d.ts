@@ -5,6 +5,15 @@ declare const SHOW_CHANNELS: boolean | undefined;
 declare const SHOW_EMAIL_OPTION: boolean | undefined;
 
 // Window electron API types
+interface OrganizationMembershipSummary {
+  id: string;
+  organizationId: string;
+  name: string | null;
+  role: string;
+  isActive: boolean;
+  organization?: { id: string; name: string; isActive: boolean; } | null;
+}
+
 interface ProjectFileEntry {
   name: string;
   path: string;
@@ -51,7 +60,7 @@ interface LivePatchProposalView {
       status: "clean" | "partial" | "conflict";
       message?: string;
       currentDiff?: string;
-      hunks: Array<{ id: string; header?: string; status: "clean" | "conflict"; message?: string }>;
+      hunks: Array<{ id: string; header?: string; status: "clean" | "conflict"; message?: string; }>;
     }>;
   };
   patchFiles: Array<{
@@ -59,7 +68,7 @@ interface LivePatchProposalView {
     path: string;
     patch: string;
     hunkSelectable: boolean;
-    hunks: Array<{ id: string; header: string; patch: string }>;
+    hunks: Array<{ id: string; header: string; patch: string; }>;
   }>;
 }
 
@@ -87,13 +96,13 @@ interface Window {
     fetchEmails: (accountId: string, params?: any) => Promise<any>;
     fetchFolders: () => Promise<any>;
     fetchAccounts: () => Promise<any>;
-    
+
     // Email Channel Configuration (Server-Side)
-    setEmailChannelId: (channelId: string | null) => Promise<{ success: boolean }>;
+    setEmailChannelId: (channelId: string | null) => Promise<{ success: boolean; }>;
     getEmailChannelId: () => Promise<string | null>;
-    triggerEmailSync: () => Promise<{ success: boolean }>;
-    
-    onEmailConnected: (callback: (data: { success: boolean }) => void) => () => void;
+    triggerEmailSync: () => Promise<{ success: boolean; }>;
+
+    onEmailConnected: (callback: (data: { success: boolean; }) => void) => () => void;
     connectEmail: () => Promise<any>;
     disconnectEmail: () => Promise<any>;
     checkAlreadyConnected: () => Promise<any>;
@@ -116,9 +125,9 @@ interface Window {
     }>>;
     listLettaAgents: (queryText?: string, connectionId?: string) => Promise<any>;
     /** Clone an existing agent as letta_v1_agent for runtime client_tools support. */
-    lettaMigrateAgent: (opts: { sourceAgentId: string; newName?: string; baseTools?: string[] }) => Promise<
-      | { ok: true; data: { sourceAgentId: string; newAgentId: string; newAgentName: string; blocksCopied: number; skippedBlocks: Array<{ label: string; reason: string }> } }
-      | { ok: false; error: string }
+    lettaMigrateAgent: (opts: { sourceAgentId: string; newName?: string; baseTools?: string[]; }) => Promise<
+      | { ok: true; data: { sourceAgentId: string; newAgentId: string; newAgentName: string; blocksCopied: number; skippedBlocks: Array<{ label: string; reason: string; }>; }; }
+      | { ok: false; error: string; }
     >;
     listLettaModels: (connectionId?: string) => Promise<any>;
     getLettaAgent: (agentId: string, connectionId?: string) => Promise<any>;
@@ -135,16 +144,16 @@ interface Window {
     recoverPendingApprovals: (sessionId: string, agentId?: string) => Promise<any[]>;
     cancelStuckRun: (runId: string) => Promise<any>;
     getRunStatus: (runId: string) => Promise<any>;
-    runLettaCli: (args: string[]) => Promise<{ stdout: string; stderr: string; exitCode: number }>;
-    startLettaCliStream: (args: string[]) => Promise<{ processId: string }>;
-    onLettaCliOutput: (callback: (payload: { type: string; data: string; processId: string }) => void) => () => void;
+    runLettaCli: (args: string[]) => Promise<{ stdout: string; stderr: string; exitCode: number; }>;
+    startLettaCliStream: (args: string[]) => Promise<{ processId: string; }>;
+    onLettaCliOutput: (callback: (payload: { type: string; data: string; processId: string; }) => void) => () => void;
     killLettaCli: (processId: string) => Promise<void>;
-    registerLettaCodeTools: (enabled: boolean) => Promise<{ registered: string[]; skipped: string[] }>;
-    attachLettaCodeToolsToAgent: (agentId: string) => Promise<{ attached: string[]; failed: string[] }>;
+    registerLettaCodeTools: (enabled: boolean) => Promise<{ registered: string[]; skipped: string[]; }>;
+    attachLettaCodeToolsToAgent: (agentId: string) => Promise<{ attached: string[]; failed: string[]; }>;
     listAgentMemoryFiles: () => Promise<any>;
     getLivePatchProposal: (proposalId: string) => Promise<LivePatchProposalView>;
-    applyLivePatchProposal: (proposalId: string, selection?: { fileIds?: string[]; hunkIds?: string[] }) => Promise<{ proposal: LivePatchProposalView; output: string }>;
-    undoLivePatchProposal: (proposalId: string) => Promise<{ proposal: LivePatchProposalView; output: string }>;
+    applyLivePatchProposal: (proposalId: string, selection?: { fileIds?: string[]; hunkIds?: string[]; }) => Promise<{ proposal: LivePatchProposalView; output: string; }>;
+    undoLivePatchProposal: (proposalId: string) => Promise<{ proposal: LivePatchProposalView; output: string; }>;
     rejectLivePatchProposal: (proposalId: string, reason?: string) => Promise<LivePatchProposalView>;
     updateLettaEnv: (values: any) => Promise<any>;
     isAdmin: () => Promise<boolean>;
@@ -198,7 +207,7 @@ interface Window {
     // ============================================
 
     // API Configuration
-    apiSetUrl: (url: string) => Promise<{ success: boolean; url: string }>;
+    apiSetUrl: (url: string) => Promise<{ success: boolean; url: string; }>;
     apiGetUrl: () => Promise<string>;
 
     // Authentication
@@ -211,6 +220,8 @@ interface Window {
       phoneNumber?: string | null;
       organizationId: string;
       role: string;
+      currentOrganization?: OrganizationMembershipSummary | null;
+      memberships?: OrganizationMembershipSummary[];
     } | null>;
     apiUpdateCurrentUserProfile: (data: {
       firstName?: string;
@@ -262,7 +273,19 @@ interface Window {
     }>;
     apiListWorkspaces: () => Promise<{
       success: boolean;
-      workspaces?: Array<{ id: string; name: string }>;
+      workspaces?: Array<{ id: string; name: string; }>;
+      error?: string;
+    }>;
+    apiSwitchOrganization: (organizationId: string) => Promise<{
+      success: boolean;
+      user?: {
+        id: string;
+        email: string;
+        organizationId: string;
+        role: string;
+        currentOrganization?: OrganizationMembershipSummary | null;
+        memberships?: OrganizationMembershipSummary[];
+      };
       error?: string;
     }>;
     apiLogout: () => Promise<void>;
@@ -312,12 +335,12 @@ interface Window {
     }>;
     apiListAgentSecrets: () => Promise<{
       success: boolean;
-      secrets?: Array<{ id: string; name: string; keyVersion?: string; createdAt?: string; updatedAt?: string }>;
+      secrets?: Array<{ id: string; name: string; keyVersion?: string; createdAt?: string; updatedAt?: string; }>;
       error?: string;
     }>;
-    apiUpsertAgentSecret: (data: { name: string; value: string }) => Promise<{
+    apiUpsertAgentSecret: (data: { name: string; value: string; }) => Promise<{
       success: boolean;
-      secret?: { id: string; name: string; keyVersion?: string; createdAt?: string; updatedAt?: string };
+      secret?: { id: string; name: string; keyVersion?: string; createdAt?: string; updatedAt?: string; };
       error?: string;
     }>;
     apiDeleteAgentSecret: (id: string) => Promise<{
@@ -388,7 +411,7 @@ interface Window {
       count?: number;
       error?: string;
     }>;
-    apiGetWeChatIlinkQrCode: (options?: { baseUrl?: string }) => Promise<{
+    apiGetWeChatIlinkQrCode: (options?: { baseUrl?: string; }) => Promise<{
       success: boolean;
       qrcode?: string;
       qrcodeImageUrl?: string | null;
@@ -396,7 +419,7 @@ interface Window {
       baseUrl?: string;
       error?: string;
     }>;
-    apiGetWeChatIlinkQrCodeStatus: (qrcode: string, options?: { baseUrl?: string }) => Promise<{
+    apiGetWeChatIlinkQrCodeStatus: (qrcode: string, options?: { baseUrl?: string; }) => Promise<{
       success: boolean;
       status?: string;
       accountId?: string | null;
@@ -447,31 +470,31 @@ interface Window {
     // Super-admin
     apiAdminOverview: () => Promise<{
       success: boolean;
-      overview?: { users: number; organizations: number; activeMemberships: number; channels: number };
+      overview?: { users: number; organizations: number; activeMemberships: number; channels: number; };
       error?: string;
     }>;
-    apiAdminListUsers: () => Promise<{ success: boolean; users?: any[]; error?: string }>;
-    apiAdminUpdateUser: (userId: string, data: any) => Promise<{ success: boolean; user?: any; error?: string }>;
-    apiAdminListOrganizations: () => Promise<{ success: boolean; organizations?: any[]; error?: string }>;
-    apiAdminCreateOrganization: (data: { name: string; isActive?: boolean }) => Promise<{ success: boolean; organization?: any; error?: string }>;
-    apiAdminUpdateOrganization: (organizationId: string, data: any) => Promise<{ success: boolean; organization?: any; error?: string }>;
-    apiAdminListMemberships: () => Promise<{ success: boolean; memberships?: any[]; error?: string }>;
-    apiAdminUpsertMembership: (data: { userId: string; organizationId: string; role?: string; isActive?: boolean }) => Promise<{ success: boolean; membership?: any; error?: string }>;
-    apiAdminUpdateMembership: (membershipId: string, data: any) => Promise<{ success: boolean; membership?: any; error?: string }>;
-    apiAdminListChannels: () => Promise<{ success: boolean; channels?: any[]; error?: string }>;
-    apiAdminCreateChannel: (data: any) => Promise<{ success: boolean; channel?: any; error?: string }>;
-    apiAdminUpdateChannel: (channelId: string, data: any) => Promise<{ success: boolean; channel?: any; error?: string }>;
-    apiAdminDeleteChannel: (channelId: string) => Promise<{ success: boolean; error?: string }>;
-    apiAdminListChannelShares: () => Promise<{ success: boolean; channelShares?: any[]; error?: string }>;
+    apiAdminListUsers: () => Promise<{ success: boolean; users?: any[]; error?: string; }>;
+    apiAdminUpdateUser: (userId: string, data: any) => Promise<{ success: boolean; user?: any; error?: string; }>;
+    apiAdminListOrganizations: () => Promise<{ success: boolean; organizations?: any[]; error?: string; }>;
+    apiAdminCreateOrganization: (data: { name: string; isActive?: boolean; }) => Promise<{ success: boolean; organization?: any; error?: string; }>;
+    apiAdminUpdateOrganization: (organizationId: string, data: any) => Promise<{ success: boolean; organization?: any; error?: string; }>;
+    apiAdminListMemberships: () => Promise<{ success: boolean; memberships?: any[]; error?: string; }>;
+    apiAdminUpsertMembership: (data: { userId: string; organizationId: string; role?: string; isActive?: boolean; }) => Promise<{ success: boolean; membership?: any; error?: string; }>;
+    apiAdminUpdateMembership: (membershipId: string, data: any) => Promise<{ success: boolean; membership?: any; error?: string; }>;
+    apiAdminListChannels: () => Promise<{ success: boolean; channels?: any[]; error?: string; }>;
+    apiAdminCreateChannel: (data: any) => Promise<{ success: boolean; channel?: any; error?: string; }>;
+    apiAdminUpdateChannel: (channelId: string, data: any) => Promise<{ success: boolean; channel?: any; error?: string; }>;
+    apiAdminDeleteChannel: (channelId: string) => Promise<{ success: boolean; error?: string; }>;
+    apiAdminListChannelShares: () => Promise<{ success: boolean; channelShares?: any[]; error?: string; }>;
 
     // Scheduler
     schedulerList: () => Promise<any[]>;
     schedulerCreate: (dto: Record<string, unknown>) => Promise<any>;
     schedulerUpdate: (id: string, dto: Record<string, unknown>) => Promise<any>;
     schedulerToggle: (id: string) => Promise<any>;
-    schedulerDelete: (id: string) => Promise<{ success: boolean }>;
-    schedulerRunNow: (id: string) => Promise<{ status: string; startedAt: string; completedAt?: string; error?: string | null; output?: string | null }>;
-    schedulerRuns: (id: string, limit?: number, offset?: number) => Promise<{ runs: any[]; total: number }>;
+    schedulerDelete: (id: string) => Promise<{ success: boolean; }>;
+    schedulerRunNow: (id: string) => Promise<{ status: string; startedAt: string; completedAt?: string; error?: string | null; output?: string | null; }>;
+    schedulerRuns: (id: string, limit?: number, offset?: number) => Promise<{ runs: any[]; total: number; }>;
 
     // Runs Debugger
     listAgentRuns: (params: {
@@ -490,20 +513,20 @@ interface Window {
         createdAt?: string;
         completedAt?: string | null;
         durationMs?: number;
-        pendingApprovals?: Array<{ toolUseId: string; toolName: string; input: unknown }>;
+        pendingApprovals?: Array<{ toolUseId: string; toolName: string; input: unknown; }>;
         raw?: unknown;
       }>;
       total: number;
     }>;
-    approveAgentRun: (runId: string) => Promise<{ success: boolean; runId: string; method?: string }>;
-    rejectAgentRun: (runId: string) => Promise<{ success: boolean; runId: string }>;
+    approveAgentRun: (runId: string) => Promise<{ success: boolean; runId: string; method?: string; }>;
+    rejectAgentRun: (runId: string) => Promise<{ success: boolean; runId: string; }>;
     approveAllAgentRuns: (agentId: string, conversationId?: string) => Promise<{
       approved: string[];
-      failed: Array<{ runId: string; error: string }>;
+      failed: Array<{ runId: string; error: string; }>;
     }>;
     rejectAllAgentRuns: (agentId: string, conversationId?: string) => Promise<{
       cancelled: string[];
-      failed: Array<{ runId: string; error: string }>;
+      failed: Array<{ runId: string; error: string; }>;
     }>;
   };
 }

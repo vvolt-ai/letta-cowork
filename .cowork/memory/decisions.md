@@ -61,3 +61,23 @@
 - Async email detail/prompt requests are latest-wins. A response captured for a previously selected email must not overwrite the current email details or prompt.
 
 Source: user-reported Cowork email context swapping and implementation review, 2026-08-31.
+
+## Cowork HTTP 413 continuation recovery — 2026-08-31
+
+- Standalone Cowork must handle `messages.create` HTTP 413 itself rather than relying only on a larger Vera proxy limit. If a rejected request is a tool continuation, Cowork retries once after compacting only already-executed tool returns to a 16 KB aggregate budget; it never silently truncates an ordinary user prompt or image request.
+- If the compacted retry is still rejected, surface a friendly request-splitting message instead of the raw SDK `413 request entity too large` error.
+
+Source: desktop runtime log showing `WsSession.runOneStreamTurn` failing with Express HTTP 413 after 135 seconds, 2026-08-31.
+
+## Desktop multi-organization switching (2026-09-01)
+
+- Cowork desktop consumes membership summaries from `/auth/me` and auth responses, and shows the active workspace selector in the sidebar account footer.
+- Switching uses `POST /auth/switch-organization`; the rotated access/refresh tokens become the sole desktop/server credential context and continue syncing to the Cowork-managed environment token.
+- The desktop refuses to switch while any agent run is thinking, generating, executing a tool, or waiting for approval so an in-flight run cannot cross tenant credential boundaries.
+- After a successful switch, organization-scoped session, agent/connection, notification, and legacy email auto-sync state is cleared, scheduler and remote-access services are restarted under the new token, and the renderer reloads so server-backed hooks refetch for the selected organization.
+
+## Remove Letta account selection from desktop (2026-09-01)
+
+- New Cowork conversations and sessions always use the active organization's default Vera-managed Letta connection.
+- The visible Letta account selector and its persisted draft connection selection were removed from both new-conversation surfaces. Cowork no longer lists personal or organization connection choices in the UI.
+- Existing session connection metadata remains supported only for safely resuming historical sessions; it is not selectable for new work.

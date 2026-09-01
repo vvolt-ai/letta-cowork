@@ -126,7 +126,7 @@ export function initializeApiIpcHandlers(): void {
     }
   });
 
-  ipcMain.handle("api:verify-mobile-otp", async (_, data: { phoneNumber: string; otp: string }) => {
+  ipcMain.handle("api:verify-mobile-otp", async (_, data: { phoneNumber: string; otp: string; }) => {
     console.log('[API IPC] verify mobile OTP');
     try {
       const user = await api.verifyMobileOtp(data.phoneNumber, data.otp);
@@ -161,7 +161,7 @@ export function initializeApiIpcHandlers(): void {
     }
   });
 
-  ipcMain.handle("api:verify-email-otp", async (_, data: { email: string; otp: string }) => {
+  ipcMain.handle("api:verify-email-otp", async (_, data: { email: string; otp: string; }) => {
     console.log('[API IPC] verify email OTP for:', data.email);
     try {
       const tokens = await api.verifyEmailOtp(data.email, data.otp);
@@ -195,6 +195,21 @@ export function initializeApiIpcHandlers(): void {
       return { success: true, workspaces };
     } catch (error) {
       console.error('[API IPC] list-workspaces failed:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle("api:switch-organization", async (_, organizationId: string) => {
+    console.log('[API IPC] switch-organization');
+    try {
+      const tokens = await api.switchOrganization(organizationId);
+      teardownScheduler();
+      stopRemoteAccessService();
+      await ensureSchedulerInitialized();
+      restartRemoteAccessService();
+      return { success: true, user: tokens.user };
+    } catch (error) {
+      console.error('[API IPC] switch-organization failed:', error);
       return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   });
@@ -253,7 +268,7 @@ export function initializeApiIpcHandlers(): void {
     }
   });
 
-  ipcMain.handle("api:admin:create-organization", async (_, data: { name: string; isActive?: boolean }) => {
+  ipcMain.handle("api:admin:create-organization", async (_, data: { name: string; isActive?: boolean; }) => {
     try {
       return { success: true, organization: await api.adminCreateOrganization(data) };
     } catch (error) {
@@ -280,7 +295,7 @@ export function initializeApiIpcHandlers(): void {
     }
   });
 
-  ipcMain.handle("api:admin:upsert-membership", async (_, data: { userId: string; organizationId: string; role?: string; isActive?: boolean }) => {
+  ipcMain.handle("api:admin:upsert-membership", async (_, data: { userId: string; organizationId: string; role?: string; isActive?: boolean; }) => {
     try {
       return { success: true, membership: await api.adminUpsertMembership(data) };
     } catch (error) {
@@ -381,7 +396,7 @@ export function initializeApiIpcHandlers(): void {
     }
   });
 
-  ipcMain.handle("api:install-connector-plugin", async (_, data: { pluginId: string; version?: string; source?: Record<string, unknown> }) => {
+  ipcMain.handle("api:install-connector-plugin", async (_, data: { pluginId: string; version?: string; source?: Record<string, unknown>; }) => {
     console.log('[API IPC] install-connector-plugin:', data.pluginId);
     try {
       const result = await api.installConnectorPlugin(data as any);
@@ -601,7 +616,7 @@ export function initializeApiIpcHandlers(): void {
     }
   });
 
-  ipcMain.handle("api:get-wechat-ilink-qrcode", async (_, options?: { baseUrl?: string }) => {
+  ipcMain.handle("api:get-wechat-ilink-qrcode", async (_, options?: { baseUrl?: string; }) => {
     console.log('[API IPC] get-wechat-ilink-qrcode');
     try {
       const result = await api.getWeChatIlinkQrCode(options);
@@ -612,7 +627,7 @@ export function initializeApiIpcHandlers(): void {
     }
   });
 
-  ipcMain.handle("api:get-wechat-ilink-qrcode-status", async (_, qrcode: string, options?: { baseUrl?: string }) => {
+  ipcMain.handle("api:get-wechat-ilink-qrcode-status", async (_, qrcode: string, options?: { baseUrl?: string; }) => {
     try {
       const result = await api.getWeChatIlinkQrCodeStatus(qrcode, options);
       return { success: true, ...result };
@@ -826,7 +841,7 @@ export function setupApiStatusBridge(mainWindow: Electron.BrowserWindow): void {
     try {
       // Use request() directly with suppressAuthExpired so a transient 401
       // from polling never clears the session token and logs the user out.
-      const result = await api.request<{ channels: unknown[]; count: number }>(
+      const result = await api.request<{ channels: unknown[]; count: number; }>(
         "/channels/runtime/status",
         { suppressAuthExpired: true }
       );

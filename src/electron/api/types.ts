@@ -8,19 +8,45 @@
 // Authentication Types
 // ============================================
 
+export interface OrganizationMembershipSummary {
+  id: string;
+  organizationId: string;
+  name: string | null;
+  role: string;
+  isActive: boolean;
+  organization?: {
+    id: string;
+    name: string;
+    isActive: boolean;
+  } | null;
+}
+
+export interface AuthenticatedUser {
+  id: string;
+  email: string;
+  firstName?: string;
+  lastName?: string | null;
+  phoneNumber?: string | null;
+  organizationId: string;
+  role: string;
+  currentOrganization?: OrganizationMembershipSummary | null;
+  memberships?: OrganizationMembershipSummary[];
+}
+
+export interface AuthResponsePayload {
+  accessToken: string;
+  refreshToken?: string;
+  expiresIn: number;
+  user?: AuthenticatedUser;
+  currentOrganization?: OrganizationMembershipSummary | null;
+  memberships?: OrganizationMembershipSummary[];
+}
+
 export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
   expiresIn: number;
-  user: {
-    id: string;
-    email: string;
-    firstName?: string;
-    lastName?: string | null;
-    phoneNumber?: string | null;
-    organizationId: string;
-    role: string;
-  };
+  user: AuthenticatedUser;
 }
 
 export interface OrganizationUser {
@@ -76,7 +102,7 @@ export interface AdminOrganization {
   isActive: boolean;
   createdAt?: string | Date;
   updatedAt?: string | Date;
-  members?: Array<AdminMembership & { user?: AdminUser | null }>;
+  members?: Array<AdminMembership & { user?: AdminUser | null; }>;
 }
 
 export interface AdminMembership {
@@ -280,7 +306,7 @@ export interface AutoSyncEmailConfig {
   channelId?: string | null;
   enabled: boolean;
   agentIds: string[];
-  routingRules: Array<{ fromPattern: string; agentId: string }>;
+  routingRules: Array<{ fromPattern: string; agentId: string; }>;
   sinceDate: string;
   processingMode: 'unread_only' | 'today_all';
   markAsReadAfterProcess: boolean;

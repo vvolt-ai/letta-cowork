@@ -312,12 +312,12 @@ function updateReasoning(ephemeral: EphemeralState, message: StreamMessage): Eph
   const rawMessage = message as any;
   const id = String(
     rawMessage.uuid
-      ?? rawMessage.id
-      ?? rawMessage.messageId
-      ?? rawMessage.message_id
-      ?? rawMessage.runId
-      ?? rawMessage.run_id
-      ?? "active-reasoning"
+    ?? rawMessage.id
+    ?? rawMessage.messageId
+    ?? rawMessage.message_id
+    ?? rawMessage.runId
+    ?? rawMessage.run_id
+    ?? "active-reasoning"
   );
   const existingIndex = ephemeral.reasoning.findIndex((step) => step.id === id);
   const delta =
@@ -545,7 +545,7 @@ async function waitForRunToSettle(runId: string, maxAttempts: number = 8, delayM
 }
 
 function withMessageTimestamp<T extends StreamMessage>(message: T, fallback: number = Date.now()): T {
-  const existingCreatedAt = (message as { createdAt?: number }).createdAt;
+  const existingCreatedAt = (message as { createdAt?: number; }).createdAt;
   if (typeof existingCreatedAt === "number" && Number.isFinite(existingCreatedAt)) {
     return message;
   }
@@ -641,7 +641,6 @@ export interface AppState {
   coworkSettings: CoworkSettings;
   selectedModel: string;
   newConversationAgentId: string;
-  newConversationLettaConnectionId: string;
   /**
    * Models that the Letta Code CLI runtime has rejected during session init
    * with an "Invalid model" error. The Letta workspace catalog can list
@@ -656,6 +655,7 @@ export interface AppState {
   ipcSendEvent: ((event: ClientEvent) => void) | null;
 
   setIPCSendEvent: (sendEvent: (event: ClientEvent) => void) => void;
+  resetOrganizationState: () => void;
   setPrompt: (prompt: string) => void;
   setCwd: (cwd: string) => void;
   setPendingStart: (pending: boolean) => void;
@@ -672,7 +672,6 @@ export interface AppState {
   setSelectedModel: (model: string) => void;
   setSessionModel: (sessionId: string, model: string) => void;
   setNewConversationAgentId: (agentId: string) => void;
-  setNewConversationLettaConnectionId: (connectionId: string) => void;
   markModelRejected: (model: string) => void;
   setShowReasoningInChat: (show: boolean) => void;
   setPermissionMode: (mode: PermissionMode) => void;
@@ -718,7 +717,6 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
   },
   selectedModel: "",
   newConversationAgentId: "",
-  newConversationLettaConnectionId: "",
   rejectedModels: [],
   showReasoningInChat: true,
   permissionMode: "standard",
@@ -726,6 +724,22 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
   ipcSendEvent: null,
 
   setIPCSendEvent: (sendEvent) => set({ ipcSendEvent: sendEvent }),
+
+  resetOrganizationState: () =>
+    set({
+      sessions: {},
+      activeSessionId: null,
+      emailSessionId: null,
+      prompt: "",
+      pendingStart: false,
+      globalError: null,
+      sessionsLoaded: false,
+      showStartModal: false,
+      historyRequested: new Set(),
+      newConversationAgentId: "",
+          rejectedModels: [],
+      notifications: [],
+    }),
 
   addNotification: (notification) =>
     set((state) => ({
@@ -787,7 +801,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
       // Clear messages from inactive sessions to free memory,
       // but NEVER clear a session that is currently running (it may be processing in background).
       const updatedSessions: Record<string, SessionView> = {};
-      
+
       for (const [sessionId, sess] of Object.entries(state.sessions)) {
         if (sessionId === id) {
           updatedSessions[sessionId] = sess;
@@ -806,14 +820,14 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
           };
         }
       }
-      
+
       return { activeSessionId: id, sessions: updatedSessions };
     });
-    
+
     if (id) {
       get().dismissNotificationsForSession(id);
     }
-    
+
     // Always try to fetch history - the useEffect will also try, but this ensures it happens
     // We don't clear historyRequested here anymore to avoid race conditions
     if (fetchHistory && id) {
@@ -955,9 +969,6 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
     set({ newConversationAgentId, selectedModel: "" });
   },
 
-  setNewConversationLettaConnectionId: (newConversationLettaConnectionId) => {
-    set({ newConversationLettaConnectionId, selectedModel: "" });
-  },
 
   setShowReasoningInChat: (show) => {
     set({ showReasoningInChat: show });
@@ -1367,10 +1378,10 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
               const toolCallId = (toolCall as any).toolCallId ?? (toolCall as any).id ?? (toolCall as any).uuid;
               const existingIndex = typeof toolCallId !== "undefined"
                 ? messages.findIndex(
-                    (msg) =>
-                      msg.type === "tool_call" &&
-                      ((msg as any).toolCallId ?? (msg as any).id ?? (msg as any).uuid) === toolCallId,
-                  )
+                  (msg) =>
+                    msg.type === "tool_call" &&
+                    ((msg as any).toolCallId ?? (msg as any).id ?? (msg as any).uuid) === toolCallId,
+                )
                 : -1;
               if (existingIndex >= 0) {
                 messages = messages.map((msg, idx) => (
@@ -1389,10 +1400,10 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
               const toolCallId = (toolResult as any).toolCallId ?? (toolResult as any).id ?? (toolResult as any).uuid;
               const existingIndex = typeof toolCallId !== "undefined"
                 ? messages.findIndex(
-                    (msg) =>
-                      msg.type === "tool_result" &&
-                      ((msg as any).toolCallId ?? (msg as any).id ?? (msg as any).uuid) === toolCallId,
-                  )
+                  (msg) =>
+                    msg.type === "tool_result" &&
+                    ((msg as any).toolCallId ?? (msg as any).id ?? (msg as any).uuid) === toolCallId,
+                )
                 : -1;
               if (existingIndex >= 0) {
                 messages = messages.map((msg, idx) => (idx === existingIndex ? toolResult : msg));
@@ -1659,7 +1670,6 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
   partialize: (state) => ({
     selectedModel: state.selectedModel,
     newConversationAgentId: state.newConversationAgentId,
-    newConversationLettaConnectionId: state.newConversationLettaConnectionId,
     showReasoningInChat: state.showReasoningInChat,
     permissionMode: state.permissionMode,
   }),

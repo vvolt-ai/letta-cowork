@@ -31,7 +31,7 @@ export interface SidebarProps {
   autoSyncAgentIds: string[];
   onAddAutoSyncAgent: (agentId: string) => void;
   onRemoveAutoSyncAgent: (agentId: string) => void;
-  autoSyncRoutingRules: { fromPattern: string; agentId: string }[];
+  autoSyncRoutingRules: { fromPattern: string; agentId: string; }[];
   onAddAutoSyncRoutingRule: (fromPattern: string, agentId: string) => void;
   onRemoveAutoSyncRoutingRule: (index: number) => void;
   autoSyncSinceDate: string;
@@ -49,13 +49,18 @@ export interface SidebarProps {
   processingEmailId?: string | null;
   awaitingConversationEmailId?: string | null;
   errorEmailId?: string | null;
-  newlyCreatedConversations?: Map<string, { conversationId: string; agentId?: string }>;
+  newlyCreatedConversations?: Map<string, { conversationId: string; agentId?: string; }>;
   // Pagination props
   hasMoreEmails?: boolean;
   isLoadingMoreEmails?: boolean;
   onLoadMoreEmails?: () => void;
   // Auth props
   userEmail?: string;
+  organizations?: Array<{ id: string; name: string; role: string; }>;
+  currentOrganizationId?: string;
+  isSwitchingOrganization?: boolean;
+  organizationSwitchError?: string | null;
+  onOrganizationChange?: (organizationId: string) => void | Promise<void>;
   onLogout?: () => void;
 }
 
@@ -102,6 +107,11 @@ export const Sidebar = memo(function Sidebar({
   isLoadingMoreEmails,
   onLoadMoreEmails,
   userEmail,
+  organizations = [],
+  currentOrganizationId,
+  isSwitchingOrganization = false,
+  organizationSwitchError,
+  onOrganizationChange,
   onLogout,
 }: SidebarProps) {
   const coworkSettings = useAppStore((state) => state.coworkSettings);
@@ -140,39 +150,39 @@ export const Sidebar = memo(function Sidebar({
       <div className="px-3 pb-3 pt-8">
         <div className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">Cowork</div>
         <div className="space-y-2">
-        <button
-          onClick={onOpenSettings}
-          className="group flex w-full items-center gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]/80 p-3 text-left shadow-sm transition hover:border-[var(--color-border-hover)] hover:bg-[var(--color-surface-hover)] hover:shadow-md"
-        >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
-          <svg className="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.75">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-[13.5px] font-semibold text-ink-800">Settings</span>
-            <span className="mt-0.5 block text-[10px] text-muted">Skills, schedules and integrations</span>
-          </span>
-          <svg className="h-4 w-4 text-muted transition group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="m9 18 6-6-6-6"/></svg>
-        </button>
-        <button
-          type="button"
-          onClick={handleOpenEmailView}
-          className="group flex w-full items-center gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]/80 p-3 text-left shadow-sm transition hover:border-[var(--color-border-hover)] hover:bg-[var(--color-surface-hover)] hover:shadow-md"
-        >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
-            <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-              <rect x="3" y="5" width="18" height="14" rx="2" />
-              <path d="m4 7 8 6 8-6" />
-            </svg>
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-[13.5px] font-semibold text-ink-800">Emails</span>
-            <span className="mt-0.5 block text-[10px] text-muted">Open your connected inbox</span>
-          </span>
-          <svg className="h-4 w-4 text-muted transition group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="m9 18 6-6-6-6"/></svg>
-        </button>
+          <button
+            onClick={onOpenSettings}
+            className="group flex w-full items-center gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]/80 p-3 text-left shadow-sm transition hover:border-[var(--color-border-hover)] hover:bg-[var(--color-surface-hover)] hover:shadow-md"
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
+              <svg className="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.75">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[13.5px] font-semibold text-ink-800">Settings</span>
+              <span className="mt-0.5 block text-[10px] text-muted">Skills, schedules and integrations</span>
+            </span>
+            <svg className="h-4 w-4 text-muted transition group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="m9 18 6-6-6-6" /></svg>
+          </button>
+          <button
+            type="button"
+            onClick={handleOpenEmailView}
+            className="group flex w-full items-center gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]/80 p-3 text-left shadow-sm transition hover:border-[var(--color-border-hover)] hover:bg-[var(--color-surface-hover)] hover:shadow-md"
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
+              <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+                <rect x="3" y="5" width="18" height="14" rx="2" />
+                <path d="m4 7 8 6 8-6" />
+              </svg>
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[13.5px] font-semibold text-ink-800">Emails</span>
+              <span className="mt-0.5 block text-[10px] text-muted">Open your connected inbox</span>
+            </span>
+            <svg className="h-4 w-4 text-muted transition group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="m9 18 6-6-6-6" /></svg>
+          </button>
         </div>
       </div>
 
@@ -222,6 +232,32 @@ export const Sidebar = memo(function Sidebar({
       {/* User Section */}
       {userEmail && (
         <div className="mt-auto flex-shrink-0 border-t border-[var(--color-border)] p-3">
+          {organizations.length > 0 && (
+            <div className="mb-2">
+              <label className="mb-1 block px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
+                Workspace
+              </label>
+              <select
+                aria-label="Active workspace"
+                value={currentOrganizationId ?? ""}
+                disabled={isSwitchingOrganization || organizations.length < 2}
+                onChange={(event) => void onOrganizationChange?.(event.target.value)}
+                className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs font-medium text-ink-900 outline-none transition focus:border-[var(--color-accent)] disabled:cursor-default disabled:opacity-70"
+              >
+                {organizations.map((organization) => (
+                  <option key={organization.id} value={organization.id}>
+                    {organization.name} · {organization.role}
+                  </option>
+                ))}
+              </select>
+              {isSwitchingOrganization && (
+                <p className="mt-1 px-1 text-[10px] text-muted">Switching workspace…</p>
+              )}
+              {organizationSwitchError && (
+                <p className="mt-1 px-1 text-[10px] text-red-600">{organizationSwitchError}</p>
+              )}
+            </div>
+          )}
           <div className="flex items-center justify-between rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]/80 px-3 py-2 shadow-sm">
             <div className="flex items-center gap-2">
               <div className="h-8 w-8 rounded-full bg-[var(--color-accent)] flex items-center justify-center text-white text-sm font-medium">

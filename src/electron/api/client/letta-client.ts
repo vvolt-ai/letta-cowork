@@ -22,10 +22,11 @@ import type {
   UpdateMcpServerInput,
   McpToolRunResult,
 } from "../endpoints/mcp.js";
-import type { 
-  AuthTokens, 
-  Channel, 
-  ChannelRuntimeStatus, 
+import type {
+  AuthResponsePayload,
+  AuthTokens,
+  Channel,
+  ChannelRuntimeStatus,
   ChannelCredentials,
   MessageLog,
   ConversationContext,
@@ -66,17 +67,10 @@ export class VeraCoworkApiClient extends BaseHttpClient {
     }
 
     const data = await response.json();
-    this.tokens = {
-      accessToken: data.accessToken,
-      refreshToken: data.refreshToken,
-      expiresIn: data.expiresIn,
-      user: data.user,
-    };
-    this.saveTokens();
-    return this.tokens;
+    return this.applyAuthResponse(data);
   }
 
-  async requestEmailOtp(email: string): Promise<{ success: boolean; message: string; expiresInMinutes: number }> {
+  async requestEmailOtp(email: string): Promise<{ success: boolean; message: string; expiresInMinutes: number; }> {
     const response = await fetch(`${this.baseUrl}/auth/otp/request`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -104,17 +98,10 @@ export class VeraCoworkApiClient extends BaseHttpClient {
     }
 
     const data = await response.json();
-    this.tokens = {
-      accessToken: data.accessToken,
-      refreshToken: data.refreshToken,
-      expiresIn: data.expiresIn,
-      user: data.user,
-    };
-    this.saveTokens();
-    return this.tokens;
+    return this.applyAuthResponse(data);
   }
 
-  async listWorkspaces(): Promise<Array<{ id: string; name: string }>> {
+  async listWorkspaces(): Promise<Array<{ id: string; name: string; }>> {
     const response = await fetch(`${this.baseUrl}/auth/workspaces`);
 
     if (!response.ok) {
@@ -123,6 +110,15 @@ export class VeraCoworkApiClient extends BaseHttpClient {
     }
 
     return response.json();
+  }
+
+  async switchOrganization(organizationId: string): Promise<AuthTokens> {
+    const data = await this.request<AuthResponsePayload>("/auth/switch-organization", {
+      method: "POST",
+      body: { organizationId },
+      suppressAuthExpired: false,
+    });
+    return this.applyAuthResponse(data);
   }
 
   async register(data: {
@@ -145,14 +141,7 @@ export class VeraCoworkApiClient extends BaseHttpClient {
     }
 
     const result = await response.json();
-    this.tokens = {
-      accessToken: result.accessToken,
-      refreshToken: result.refreshToken,
-      expiresIn: result.expiresIn,
-      user: result.user,
-    };
-    this.saveTokens();
-    return this.tokens;
+    return this.applyAuthResponse(result);
   }
 
   async logout(): Promise<void> {
@@ -168,9 +157,10 @@ export class VeraCoworkApiClient extends BaseHttpClient {
    * is invalid. On success, persists the user info into the token cache.
    */
   async fetchCurrentUser(): Promise<AuthTokens["user"]> {
-    const user = await this.request<AuthTokens["user"]>("/auth/me", {
+    const profile = await this.request<AuthTokens["user"]>("/auth/me", {
       suppressAuthExpired: false,
     });
+    const user = this.normalizeProfileResponse(profile);
 
     if (this.tokens) {
       this.tokens = { ...this.tokens, user };
@@ -180,8 +170,8 @@ export class VeraCoworkApiClient extends BaseHttpClient {
     return user;
   }
 
-  async requestMobileOtp(phoneNumber: string): Promise<{ success: boolean; message: string; expiresInMinutes: number; phoneNumber: string }> {
-    return this.request<{ success: boolean; message: string; expiresInMinutes: number; phoneNumber: string }>("/auth/mobile-otp/request", {
+  async requestMobileOtp(phoneNumber: string): Promise<{ success: boolean; message: string; expiresInMinutes: number; phoneNumber: string; }> {
+    return this.request<{ success: boolean; message: string; expiresInMinutes: number; phoneNumber: string; }>("/auth/mobile-otp/request", {
       method: "POST",
       body: { phoneNumber },
       suppressAuthExpired: false,
@@ -189,11 +179,12 @@ export class VeraCoworkApiClient extends BaseHttpClient {
   }
 
   async verifyMobileOtp(phoneNumber: string, otp: string): Promise<AuthTokens["user"]> {
-    const user = await this.request<AuthTokens["user"]>("/auth/mobile-otp/verify", {
+    const profile = await this.request<AuthTokens["user"]>("/auth/mobile-otp/verify", {
       method: "POST",
       body: { phoneNumber, otp },
       suppressAuthExpired: false,
     });
+    const user = this.normalizeProfileResponse(profile);
 
     if (this.tokens) {
       this.tokens = { ...this.tokens, user };
@@ -207,11 +198,12 @@ export class VeraCoworkApiClient extends BaseHttpClient {
     firstName?: string;
     lastName?: string | null;
   }): Promise<AuthTokens["user"]> {
-    const user = await this.request<AuthTokens["user"]>("/auth/me", {
+    const profile = await this.request<AuthTokens["user"]>("/auth/me", {
       method: "PATCH",
       body: data,
       suppressAuthExpired: false,
     });
+    const user = this.normalizeProfileResponse(profile);
 
     if (this.tokens) {
       this.tokens = { ...this.tokens, user };
@@ -295,7 +287,7 @@ export class VeraCoworkApiClient extends BaseHttpClient {
   }
 
   async getAgentSecretRuntimeEnv(agentId: string): Promise<Record<string, string>> {
-    const result = await this.request<{ env: Record<string, string> }>(
+    const result = await this.request<{ env: Record<string, string>; }>(
       "/agent-secrets/runtime-env",
       {
         method: "POST",
@@ -305,8 +297,8 @@ export class VeraCoworkApiClient extends BaseHttpClient {
     return result.env ?? {};
   }
 
-  async deleteAgentSecret(id: string): Promise<{ success: boolean }> {
-    return this.request<{ success: boolean }>(`/agent-secrets/${encodeURIComponent(id)}`, {
+  async deleteAgentSecret(id: string): Promise<{ success: boolean; }> {
+    return this.request<{ success: boolean; }>(`/agent-secrets/${encodeURIComponent(id)}`, {
       method: "DELETE",
     });
   }
@@ -335,7 +327,7 @@ export class VeraCoworkApiClient extends BaseHttpClient {
     return this.request<AdminOrganization[]>("/admin/organizations", { suppressAuthExpired: false });
   }
 
-  async adminCreateOrganization(input: { name: string; isActive?: boolean }): Promise<AdminOrganization> {
+  async adminCreateOrganization(input: { name: string; isActive?: boolean; }): Promise<AdminOrganization> {
     return this.request<AdminOrganization>("/admin/organizations", {
       method: "POST",
       body: input,
@@ -355,7 +347,7 @@ export class VeraCoworkApiClient extends BaseHttpClient {
     return this.request<AdminMembership[]>("/admin/memberships", { suppressAuthExpired: false });
   }
 
-  async adminUpsertMembership(input: { userId: string; organizationId: string; role?: string; isActive?: boolean }): Promise<AdminMembership> {
+  async adminUpsertMembership(input: { userId: string; organizationId: string; role?: string; isActive?: boolean; }): Promise<AdminMembership> {
     return this.request<AdminMembership>("/admin/memberships", {
       method: "POST",
       body: input,
@@ -391,8 +383,8 @@ export class VeraCoworkApiClient extends BaseHttpClient {
     });
   }
 
-  async adminDeleteChannel(channelId: string): Promise<{ success: boolean }> {
-    return this.request<{ success: boolean }>(`/admin/channels/${encodeURIComponent(channelId)}`, {
+  async adminDeleteChannel(channelId: string): Promise<{ success: boolean; }> {
+    return this.request<{ success: boolean; }>(`/admin/channels/${encodeURIComponent(channelId)}`, {
       method: "DELETE",
       suppressAuthExpired: false,
     });
@@ -478,13 +470,13 @@ export class VeraCoworkApiClient extends BaseHttpClient {
     return ChannelEndpoints.getAllRuntimeStatus(this);
   }
 
-  async getWeChatIlinkQrCode(options?: { baseUrl?: string }): Promise<WeChatIlinkQrCodeResponse> {
+  async getWeChatIlinkQrCode(options?: { baseUrl?: string; }): Promise<WeChatIlinkQrCodeResponse> {
     return ChannelEndpoints.getWeChatIlinkQrCode(this, options);
   }
 
   async getWeChatIlinkQrCodeStatus(
     qrcode: string,
-    options?: { baseUrl?: string }
+    options?: { baseUrl?: string; }
   ): Promise<WeChatIlinkQrStatusResponse> {
     return ChannelEndpoints.getWeChatIlinkQrCodeStatus(this, qrcode, options);
   }
@@ -758,7 +750,7 @@ export class VeraCoworkApiClient extends BaseHttpClient {
 
   async mcpTestServer(
     id: string,
-  ): Promise<{ ok: boolean; error?: string }> {
+  ): Promise<{ ok: boolean; error?: string; }> {
     return McpEndpoints.testServer(this, id);
   }
 
@@ -804,12 +796,12 @@ export class VeraCoworkApiClient extends BaseHttpClient {
   async mcpListToolsForAgent(
     agentId: string,
   ): Promise<
-    Array<{ name: string; description: string; parameters: Record<string, unknown> }>
+    Array<{ name: string; description: string; parameters: Record<string, unknown>; }>
   > {
     return McpEndpoints.listToolsForAgent(this, agentId);
   }
 
-  async mcpListEnvKeysForAgent(agentId: string): Promise<{ agentId: string; keys: string[] }> {
+  async mcpListEnvKeysForAgent(agentId: string): Promise<{ agentId: string; keys: string[]; }> {
     return McpEndpoints.listEnvKeysForAgent(this, agentId);
   }
 
