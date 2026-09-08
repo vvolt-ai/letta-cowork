@@ -47,6 +47,8 @@ describe("Vera mod", () => {
       "vera_channel_history",
       "vera_channel_send",
       "vera_channel_send_file",
+      "vera_list_organization_agents",
+      "vera_delegate_to_organization_agent",
       "vera_master_list_accessible_organizations",
       "vera_master_list_organization_agents",
       "vera_master_get_organization_agent",

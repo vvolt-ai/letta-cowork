@@ -570,14 +570,6 @@ export class VeraClient {
     );
   }
 
-  async listMasterOrganizationAgents(agentId, organizationId, signal) {
-    return this.requestAsMaster(
-      `/master-agent-access/organizations/${encodeURIComponent(organizationId)}/agents`,
-      agentId,
-      { signal },
-    );
-  }
-
   async getProfile(signal) {
     return this.request("/auth/me", { signal });
   }
@@ -591,6 +583,24 @@ export class VeraClient {
     return this.request("/mcp/tools/invoke", {
       method: "POST",
       body: { toolName, args: args ?? {} },
+      signal,
+    });
+  }
+
+  async listOrganizationAgents(signal) {
+    const agents = await this.request("/organization-agents", { signal });
+    return Array.isArray(agents) ? agents : [];
+  }
+
+  async delegateToOrganizationAgent(input, signal) {
+    return this.request("/organization-agents/delegate", {
+      method: "POST",
+      body: {
+        agentId: input.agentId,
+        description: input.description,
+        prompt: input.prompt,
+        confirm: true,
+      },
       signal,
     });
   }

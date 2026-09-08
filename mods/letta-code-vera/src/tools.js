@@ -86,7 +86,13 @@ function masterGitBody(args) {
 
 async function masterRequest(client, ctx, method, path, body) {
   const agentId = runtimeAgentId(ctx);
-  return formatJson(await client.requestAsMaster(agentId, method, path, body, ctx.signal));
+  return formatJson(
+    await client.requestAsMaster(path, agentId, {
+      method,
+      body,
+      signal: ctx.signal,
+    }),
+  );
 }
 
 function normalizeMcpResult(result) {
@@ -376,6 +382,78 @@ export function registerTools(letta, client) {
                 mimeType: String(ctx.args.mimeType ?? "").trim(),
                 caption: String(ctx.args.caption ?? "").trim(),
                 conversationId: String(ctx.args.conversationId ?? "").trim(),
+              },
+              ctx.signal,
+            ),
+          );
+        } catch (error) {
+          return toolError(error);
+        }
+      },
+    }),
+  );
+
+  disposers.push(
+    letta.tools.register({
+      name: "vera_list_organization_agents",
+      description:
+        "List same-organization agents published to the connected Vera member. This uses normal Vera user authorization and does not require Master Clio enrollment.",
+      parameters: {
+        type: "object",
+        properties: {},
+        additionalProperties: false,
+      },
+      requiresApproval: false,
+      parallelSafe: true,
+      async run(ctx) {
+        try {
+          const agents = await client.listOrganizationAgents(ctx.signal);
+          return formatJson({ agents, total: agents.length });
+        } catch (error) {
+          return toolError(error);
+        }
+      },
+    }),
+  );
+
+  disposers.push(
+    letta.tools.register({
+      name: "vera_delegate_to_organization_agent",
+      description:
+        "Delegate work to an agent published to the connected Vera member's organization. Use vera_list_organization_agents first. This does not require Master Clio enrollment and always requires human approval.",
+      parameters: {
+        type: "object",
+        properties: {
+          agentId: {
+            type: "string",
+            description: "Agent ID returned by vera_list_organization_agents.",
+          },
+          description: {
+            type: "string",
+            minLength: 1,
+            maxLength: 120,
+            description: "Short task description.",
+          },
+          prompt: {
+            type: "string",
+            minLength: 1,
+            maxLength: 500000,
+            description: "Complete task instructions to send to the agent.",
+          },
+        },
+        required: ["agentId", "description", "prompt"],
+        additionalProperties: false,
+      },
+      approvalPolicy: "ask",
+      parallelSafe: false,
+      async run(ctx) {
+        try {
+          return formatJson(
+            await client.delegateToOrganizationAgent(
+              {
+                agentId: requiredString(ctx.args.agentId, "agentId"),
+                description: requiredString(ctx.args.description, "description"),
+                prompt: requiredString(ctx.args.prompt, "prompt"),
               },
               ctx.signal,
             ),

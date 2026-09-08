@@ -295,6 +295,48 @@ describe("VeraClient", () => {
     expect(tools.at(-1).name).toBe("connector__tool_162");
   });
 
+  test("uses normal Vera user endpoints for organization-agent delegation", async () => {
+    const env = await testEnv();
+    const accessToken = jwt(Math.floor(Date.now() / 1000) + 3600);
+    await writeState(
+      {
+        version: 1,
+        serverUrl: "https://vera.example.com",
+        pendingEmail: null,
+        auth: { accessToken, refreshToken: "refresh" },
+      },
+      env,
+    );
+    const requests = [];
+    const client = new VeraClient({
+      env,
+      fetch: async (url, init) => {
+        requests.push({ url, init });
+        return requests.length === 1
+          ? json([{ agentId: "agent-specialist" }])
+          : json({ conversationId: "conversation-1" });
+      },
+    });
+
+    await expect(client.listOrganizationAgents()).resolves.toHaveLength(1);
+    await client.delegateToOrganizationAgent({
+      agentId: "agent-specialist",
+      description: "Review task",
+      prompt: "Please review this task",
+    });
+
+    expect(new URL(requests[0].url).pathname).toBe("/organization-agents");
+    expect(new URL(requests[1].url).pathname).toBe(
+      "/organization-agents/delegate",
+    );
+    expect(JSON.parse(requests[1].init.body)).toEqual({
+      agentId: "agent-specialist",
+      description: "Review task",
+      prompt: "Please review this task",
+      confirm: true,
+    });
+  });
+
   test("uses exact Vera MCP invocation and channel send contracts", async () => {
     const env = await testEnv();
     const accessToken = jwt(Math.floor(Date.now() / 1000) + 3600);

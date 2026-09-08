@@ -22,6 +22,8 @@ the owner of that session. Browser OAuth authorization-code flow with PKCE is th
 
 - `vera_mcp_list_tools`
 - `vera_mcp_call_tool`
+- `vera_list_organization_agents`
+- `vera_delegate_to_organization_agent`
 - `vera_master_list_accessible_organizations`
 - `vera_master_list_organization_agents`
 - `vera_master_get_organization_agent`
@@ -52,6 +54,7 @@ the owner of that session. Browser OAuth authorization-code flow with PKCE is th
 - Dedicated channel-send helpers still reject email channels so they cannot bypass the generic MCP approval boundary.
 - Tokens must never appear in command output or tool results.
 - Cowork-managed tokens must not be copied into mod state or revoked by `/vera-disconnect`.
+- Normal same-organization listing and delegation use the connected Vera member's published-agent access and do not require Master Clio.
 - Master calls derive identity only from runtime `ctx.agent.id`; model-provided identity arguments are ignored.
 - Master enrollment uses a one-time browser grant restricted to `vera:master-enroll`; operational requests use one-time challenges, Ed25519 signatures, and short-lived scoped tokens.
 - Copying the mod or identity file to another agent does not authorize it because Vera verifies the enrolled runtime agent ID.

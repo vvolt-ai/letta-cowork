@@ -56,6 +56,42 @@ describe("Vera tools", () => {
     ]);
   });
 
+  test("uses normal Vera user authorization for organization-agent delegation", async () => {
+    const calls = [];
+    const client = {
+      async listOrganizationAgents() {
+        return [{ agentId: "agent-specialist", name: "Specialist" }];
+      },
+      async delegateToOrganizationAgent(input) {
+        calls.push(input);
+        return { conversationId: "conversation-1", output: "done" };
+      },
+    };
+    const tools = registeredTools(client);
+    const list = tools.get("vera_list_organization_agents");
+    const delegate = tools.get("vera_delegate_to_organization_agent");
+
+    expect(delegate.approvalPolicy).toBe("ask");
+    expect(JSON.parse(await list.run({ args: {}, signal: undefined })).total).toBe(1);
+    const result = await delegate.run({
+      args: {
+        agentId: "agent-specialist",
+        description: "Review task",
+        prompt: "Please review this work",
+      },
+      signal: undefined,
+    });
+
+    expect(JSON.parse(result).output).toBe("done");
+    expect(calls).toEqual([
+      {
+        agentId: "agent-specialist",
+        description: "Review task",
+        prompt: "Please review this work",
+      },
+    ]);
+  });
+
   test("routes Master agent creation through the trusted runtime identity", async () => {
     const calls = [];
     const tools = registeredTools({
@@ -81,15 +117,17 @@ describe("Vera tools", () => {
     expect(JSON.parse(result).id).toBe("agent-created");
     expect(calls).toEqual([
       [
-        "agent-master",
-        "POST",
         "/master-agent-access/organizations/11111111-1111-4111-8111-111111111111/agents",
+        "agent-master",
         {
-          name: "New agent",
-          description: "Created through Master Clio",
-          confirm: true,
+          method: "POST",
+          body: {
+            name: "New agent",
+            description: "Created through Master Clio",
+            confirm: true,
+          },
+          signal: undefined,
         },
-        undefined,
       ],
     ]);
   });
