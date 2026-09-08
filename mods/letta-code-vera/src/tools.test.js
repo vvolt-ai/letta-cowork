@@ -132,8 +132,12 @@ describe("Vera tools", () => {
     ]);
   });
 
-  test("marks every Master mutation as approval-gated", () => {
+  test("marks every Master mutation as approval-gated and dynamically scoped", () => {
     const tools = registeredTools({});
+    expect(tools.get("vera_list_organization_agents").isEnabled).toBeUndefined();
+    expect(
+      typeof tools.get("vera_master_list_accessible_organizations").isEnabled,
+    ).toBe("function");
     for (const name of [
       "vera_master_create_organization_agent",
       "vera_master_update_organization_agent",

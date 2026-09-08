@@ -4,6 +4,7 @@ import {
   randomUUID,
   sign,
 } from "node:crypto";
+import { readFileSync } from "node:fs";
 import {
   chmod,
   mkdir,
@@ -198,6 +199,46 @@ export function signMasterAssertion(identity, assertion) {
     Buffer.from(masterAssertionPayload(assertion), "utf8"),
     identity.privateKeyPem,
   ).toString("base64url");
+}
+
+let visibilityCache = {
+  checkedAt: 0,
+  agentId: "",
+  identityPath: "",
+  enabled: false,
+};
+
+export function isEnrolledMasterRuntime(context, env = process.env) {
+  const agentId = context?.agent?.id;
+  if (typeof agentId !== "string" || !agentId.trim()) return false;
+  const normalizedAgentId = agentId.trim();
+  const identityPath = masterIdentityPath(env);
+  const now = Date.now();
+  if (
+    visibilityCache.agentId === normalizedAgentId &&
+    visibilityCache.identityPath === identityPath &&
+    now - visibilityCache.checkedAt < 1_000
+  ) {
+    return visibilityCache.enabled;
+  }
+
+  let enabled = false;
+  try {
+    const identity = JSON.parse(readFileSync(identityPath, "utf8"));
+    enabled =
+      typeof identity.installationId === "string" &&
+      identity.installationId.length > 0 &&
+      identity.enrolledAgentId === normalizedAgentId;
+  } catch {
+    enabled = false;
+  }
+  visibilityCache = {
+    checkedAt: now,
+    agentId: normalizedAgentId,
+    identityPath,
+    enabled,
+  };
+  return enabled;
 }
 
 export function runtimeAgentId(context) {

@@ -8,9 +8,11 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import {
   ensureMasterIdentity,
+  isEnrolledMasterRuntime,
   masterAssertionPayload,
   readMasterIdentity,
   runtimeAgentId,
+  saveMasterEnrollment,
   signMasterAssertion,
 } from "./master-identity.js";
 
@@ -70,6 +72,29 @@ describe("Master Clio local identity", () => {
         signature,
       ),
     ).toBe(true);
+  });
+
+  test("enables Master tools only for the exact enrolled runtime agent", async () => {
+    const env = await testEnv();
+    await ensureMasterIdentity(env);
+    await saveMasterEnrollment(
+      {
+        installationId: "installation-1",
+        agentId: "agent-master",
+        assignmentId: "assignment-1",
+        assignmentRevision: 1,
+        serverUrl: "https://vera.example.com",
+      },
+      env,
+    );
+
+    expect(
+      isEnrolledMasterRuntime({ agent: { id: "agent-master" } }, env),
+    ).toBe(true);
+    expect(
+      isEnrolledMasterRuntime({ agent: { id: "agent-other" } }, env),
+    ).toBe(false);
+    expect(isEnrolledMasterRuntime({}, env)).toBe(false);
   });
 
   test("uses runtime context and ignores spoofed tool arguments", () => {

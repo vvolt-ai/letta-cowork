@@ -102,7 +102,7 @@ Vera's OTP request endpoint is enumeration-safe: an accepted response does not p
 | `vera_mcp_call_tool` | Invoke any exact namespaced MCP tool advertised to the authenticated Vera user | Always asks |
 | `vera_list_organization_agents` | List same-organization agents published to the connected Vera member | Automatic |
 | `vera_delegate_to_organization_agent` | Delegate to a published same-organization agent without Master Clio | Always asks |
-| `vera_master_list_accessible_organizations` | List organization grants for the exact enrolled runtime agent | Automatic |
+| `vera_master_list_accessible_organizations` | List organization grants for the exact enrolled runtime agent; hidden from non-Master agents | Automatic |
 | `vera_master_list_organization_agents` | List grant-filtered agents in one accessible organization | Automatic |
 | `vera_master_get_organization_agent` | Read one grant-scoped organization agent | Automatic |
 | `vera_master_create_organization_agent` | Create an agent under an organization-wide `agents.manage` grant | Always asks |
@@ -124,6 +124,8 @@ Vera's OTP request endpoint is enumeration-safe: an accepted response does not p
 The generic MCP bridge avoids placing every connector schema in every model request. The agent first discovers the exact tool and then invokes it. Frequently used tools can be materialized as direct Letta tools in a later release.
 
 The generic MCP bridge does not silently remove server-advertised capabilities, including email tools. Every generic invocation uses Letta Code's `ask` approval policy. The separate `vera_channel_send` and file-send helpers continue to reject email channels so they cannot bypass the generic MCP approval boundary.
+
+Master tools are dynamically hidden unless `ctx.agent.id` exactly matches the locally enrolled Master Clio identity. Non-Master agents see only the normal user-authorized organization listing and delegation tools, preventing ambiguous organization-access requests from invoking the Master control plane.
 
 ## Authentication and local state
 

@@ -1,5 +1,8 @@
 import { VeraApiError } from "./client.js";
-import { runtimeAgentId } from "./master-identity.js";
+import {
+  isEnrolledMasterRuntime,
+  runtimeAgentId,
+} from "./master-identity.js";
 
 const MAX_TOOL_OUTPUT_CHARS = 30_000;
 
@@ -469,7 +472,8 @@ export function registerTools(letta, client) {
     letta.tools.register({
       name: "vera_master_list_accessible_organizations",
       description:
-        "List organizations and capability grants available to this exact Master Clio runtime agent. Use before any organization-scoped Master Clio operation.",
+        "List organizations and capability grants available to this exact Master Clio runtime agent. Hidden from non-enrolled agents. Use before any organization-scoped Master Clio operation.",
+      isEnabled: isEnrolledMasterRuntime,
       parameters: {
         type: "object",
         properties: {},
@@ -492,7 +496,8 @@ export function registerTools(letta, client) {
     letta.tools.register({
       name: "vera_master_list_organization_agents",
       description:
-        "List agents in one organization accessible to this exact Master Clio runtime. The result is filtered by that organization's agent grant.",
+        "List agents in one organization accessible to this exact Master Clio runtime. Hidden from non-enrolled agents. The result is filtered by that organization's agent grant.",
+      isEnabled: isEnrolledMasterRuntime,
       parameters: {
         type: "object",
         properties: {
@@ -970,6 +975,7 @@ export function registerTools(letta, client) {
     disposers.push(
       letta.tools.register({
         ...definition,
+        isEnabled: isEnrolledMasterRuntime,
         async run(ctx) {
           try {
             return await definition.run(ctx);
