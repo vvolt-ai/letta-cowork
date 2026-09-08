@@ -1,6 +1,6 @@
 {
   "name": "@verivolt/letta-code-vera",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "description": "Native Letta Code integration with browser OAuth, the complete Vera MCP tool catalog, Master Clio, and channels.",
   "type": "module",
   "private": true,

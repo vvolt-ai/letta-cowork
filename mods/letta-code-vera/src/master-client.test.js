@@ -115,7 +115,7 @@ describe("VeraClient Master Clio requests", () => {
     expect(requests.filter(({ url }) => url.endsWith("/revoke"))).toHaveLength(2);
   });
 
-  test("uses unauthenticated challenges and only the short-lived master token for access", async () => {
+  test("requires the current super-admin Vera token for every Master token exchange", async () => {
     const env = await testEnv();
     const requests = [];
     const client = new VeraClient({
@@ -140,11 +140,15 @@ describe("VeraClient Master Clio requests", () => {
 
     expect(organizations).toHaveLength(1);
     expect(requests).toHaveLength(3);
-    expect(requests[0].init.headers.get("authorization")).toBeNull();
+    expect(requests[0].init.headers.get("authorization")).toBe(
+      "Bearer user-access-token",
+    );
     const challengeRequest = JSON.parse(requests[0].init.body);
     expect(challengeRequest.requestNonce).toBeTruthy();
     expect(challengeRequest.signature).toBeTruthy();
-    expect(requests[1].init.headers.get("authorization")).toBeNull();
+    expect(requests[1].init.headers.get("authorization")).toBe(
+      "Bearer user-access-token",
+    );
     const exchange = JSON.parse(requests[1].init.body);
     expect(exchange.agentId).toBe("agent-master");
     expect(exchange.installationId).toBe("installation-1");

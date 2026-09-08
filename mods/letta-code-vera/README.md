@@ -125,7 +125,7 @@ The generic MCP bridge avoids placing every connector schema in every model requ
 
 The generic MCP bridge does not silently remove server-advertised capabilities, including email tools. Every generic invocation uses Letta Code's `ask` approval policy. The separate `vera_channel_send` and file-send helpers continue to reject email channels so they cannot bypass the generic MCP approval boundary.
 
-Master tools are dynamically hidden unless `ctx.agent.id` exactly matches the locally enrolled Master Clio identity. Non-Master agents see only the normal user-authorized organization listing and delegation tools, preventing ambiguous organization-access requests from invoking the Master control plane.
+Master tools are dynamically hidden unless `ctx.agent.id` exactly matches the locally enrolled Master Clio identity. Non-Master agents see only the normal user-authorized organization listing and delegation tools, preventing ambiguous organization-access requests from invoking the Master control plane. Every Master operation also requires a current Vera token with `userRole=super_admin`; an MCP token must carry `vera:mcp`. Vera binds challenge creation and exchange to the same super-admin user before issuing the operation-bound Master token.
 
 ## Authentication and local state
 
@@ -189,7 +189,7 @@ POST /channels/:channelId/send
 POST /channels/:channelId/send-file-upload
 ```
 
-Normal MCP and channel endpoints use the browser/Cowork user's bearer token. Master Clio endpoints use browser approval only for enrollment, then signed installation identity and operation-bound short-lived tokens. Vera remains the authorization boundary in both cases.
+Normal MCP and channel endpoints use the browser/Cowork user's bearer token. Master Clio enrollment uses narrow browser approval; every later operation requires both the signed installation identity and the current super-admin Vera bearer token to mint an operation-bound short-lived token. Vera remains the authorization boundary in both cases.
 
 ## Inbound channel follow-up
 
