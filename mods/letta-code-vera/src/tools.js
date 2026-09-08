@@ -1,4 +1,5 @@
 import { VeraApiError } from "./client.js";
+import { runtimeAgentId } from "./master-identity.js";
 
 const MAX_TOOL_OUTPUT_CHARS = 30_000;
 
@@ -13,39 +14,6 @@ function requiredString(value, name) {
 }
 
 const EMAIL_CHANNEL_PROVIDERS = new Set(["email", "gmail"]);
-const OUTBOUND_EMAIL_ACTION =
-  /(?:send|reply|forward|transmit|schedule|queue|deliver|dispatch)(?:email|mail)|(?:email|mail)(?:send|reply|forward|transmit|schedule|queue|deliver|dispatch)/;
-
-export function isProhibitedEmailAction(toolName, args = {}, description = "") {
-  const sourceText = `${String(toolName || "")} ${String(description || "")}`.toLowerCase();
-  const compactName = String(toolName || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "");
-  if (OUTBOUND_EMAIL_ACTION.test(compactName)) return true;
-
-  const mentionsEmail = /(?:^|[^a-z])(?:e-?mail|gmail|outlook|smtp|mail)(?:[^a-z]|$)/.test(
-    sourceText,
-  );
-  const hasOutboundAction =
-    /(?:^|[^a-z])(?:send|sends|sending|reply|replies|forward|forwards|transmit|schedule|queue|deliver|dispatch)(?:[^a-z]|$)/.test(
-      sourceText,
-    );
-  if (mentionsEmail && hasOutboundAction) return true;
-
-  const model = String(args?.model ?? "").trim().toLowerCase();
-  const method = String(args?.method ?? "").trim().toLowerCase();
-  const writeLikeTool = /(?:create|update|write|callmethod|executemethod)/.test(
-    compactName,
-  );
-  if (model === "mail.mail" && writeLikeTool) return true;
-  if (
-    (model === "mail.mail" || model === "mail.message") &&
-    /^(?:send|action_send|schedule|queue)$/.test(method)
-  ) {
-    return true;
-  }
-  return false;
-}
 
 async function assertNonEmailChannel(client, channelId, signal) {
   const channel = (await client.listChannels(signal)).find(
@@ -187,11 +155,6 @@ export function registerTools(letta, client) {
           if (!definition) {
             throw new Error(
               "The requested MCP tool is not available to the connected Vera user",
-            );
-          }
-          if (isProhibitedEmailAction(toolName, args, definition.description)) {
-            throw new Error(
-              "Agents may draft email content but cannot send, schedule, queue, or transmit email",
             );
           }
           return normalizeMcpResult(
@@ -375,6 +338,71 @@ export function registerTools(letta, client) {
                 caption: String(ctx.args.caption ?? "").trim(),
                 conversationId: String(ctx.args.conversationId ?? "").trim(),
               },
+              ctx.signal,
+            ),
+          );
+        } catch (error) {
+          return toolError(error);
+        }
+      },
+    }),
+  );
+
+  disposers.push(
+    letta.tools.register({
+      name: "vera_master_list_accessible_organizations",
+      description:
+        "List organizations and capability grants available to this exact Master Clio runtime agent. Use before any organization-scoped Master Clio operation.",
+      parameters: {
+        type: "object",
+        properties: {},
+        additionalProperties: false,
+      },
+      requiresApproval: false,
+      parallelSafe: true,
+      async run(ctx) {
+        try {
+          const agentId = runtimeAgentId(ctx);
+          return formatJson(
+            await client.listMasterOrganizations(agentId, ctx.signal),
+          );
+        } catch (error) {
+          return toolError(error);
+        }
+      },
+    }),
+  );
+
+  disposers.push(
+    letta.tools.register({
+      name: "vera_master_list_organization_agents",
+      description:
+        "List agents in one organization accessible to this exact Master Clio runtime. The result is filtered by that organization's agent grant.",
+      parameters: {
+        type: "object",
+        properties: {
+          organizationId: {
+            type: "string",
+            description:
+              "Organization UUID returned by vera_master_list_accessible_organizations.",
+          },
+        },
+        required: ["organizationId"],
+        additionalProperties: false,
+      },
+      requiresApproval: false,
+      parallelSafe: true,
+      async run(ctx) {
+        try {
+          const agentId = runtimeAgentId(ctx);
+          const organizationId = requiredString(
+            ctx.args.organizationId,
+            "organizationId",
+          );
+          return formatJson(
+            await client.listMasterOrganizationAgents(
+              agentId,
+              organizationId,
               ctx.signal,
             ),
           );

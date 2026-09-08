@@ -37,6 +37,8 @@ describe("Vera mod", () => {
       "vera-sync",
       "vera-tools",
       "vera-disconnect",
+      "vera-master-enroll",
+      "vera-master-status",
     ]);
     expect([...letta.tools.keys()]).toEqual([
       "vera_mcp_list_tools",
@@ -45,6 +47,8 @@ describe("Vera mod", () => {
       "vera_channel_history",
       "vera_channel_send",
       "vera_channel_send_file",
+      "vera_master_list_accessible_organizations",
+      "vera_master_list_organization_agents",
     ]);
     expect(letta.commands.get("vera-connect").showInTranscript).toBe(false);
     expect(letta.tools.get("vera_channel_send").approvalPolicy).toBe(

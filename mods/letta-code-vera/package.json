@@ -1,7 +1,7 @@
 {
   "name": "@verivolt/letta-code-vera",
-  "version": "0.1.1",
-  "description": "Native Letta Code integration for Vera authentication, MCP tools, and channels.",
+  "version": "0.3.0",
+  "description": "Native Letta Code integration with browser OAuth, the complete Vera MCP tool catalog, Master Clio, and channels.",
   "type": "module",
   "private": true,
   "license": "UNLICENSED",
@@ -14,7 +14,9 @@
   "files": [
     "mods/vera.js",
     "src/client.js",
+    "src/browser-oauth.js",
     "src/cowork-auth.js",
+    "src/master-identity.js",
     "src/commands.js",
     "src/state.js",
     "src/tools.js",

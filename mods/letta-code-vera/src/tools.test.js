@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { isProhibitedEmailAction, registerTools } from "./tools.js";
+import { registerTools } from "./tools.js";
 
 function registeredTools(client) {
   const tools = new Map();
@@ -20,30 +20,8 @@ function registeredTools(client) {
 }
 
 describe("Vera tools", () => {
-  test("identifies outbound email MCP actions but permits drafting", () => {
-    expect(isProhibitedEmailAction("zoho_mail__send_email", {})).toBe(true);
-    expect(isProhibitedEmailAction("gmail__users_messages_send", {})).toBe(true);
-    expect(
-      isProhibitedEmailAction("odoo__call_method", {
-        model: "mail.mail",
-        method: "send",
-      }),
-    ).toBe(true);
-    expect(
-      isProhibitedEmailAction(
-        "connector__message_create",
-        {},
-        "Send an outbound message through Gmail",
-      ),
-    ).toBe(true);
-    expect(isProhibitedEmailAction("zoho_mail__create_draft", {})).toBe(false);
-    expect(
-      isProhibitedEmailAction("odoo__search", { model: "mail.activity" }),
-    ).toBe(false);
-  });
-
-  test("blocks generic MCP outbound email before invocation", async () => {
-    let invoked = false;
+  test("invokes every MCP tool advertised by Vera behind approval", async () => {
+    const calls = [];
     const tools = registeredTools({
       async listMcpTools() {
         return [
@@ -53,20 +31,29 @@ describe("Vera tools", () => {
           },
         ];
       },
-      async invokeMcpTool() {
-        invoked = true;
+      async invokeMcpTool(toolName, args) {
+        calls.push({ toolName, args });
         return { ok: true };
       },
     });
+    const invoke = tools.get("vera_mcp_call_tool");
 
-    const result = await tools.get("vera_mcp_call_tool").run({
-      args: { toolName: "zoho_mail__send_email", args: { to: "user@example.com" } },
+    expect(invoke.approvalPolicy).toBe("ask");
+    const result = await invoke.run({
+      args: {
+        toolName: "zoho_mail__send_email",
+        args: { to: "user@example.com" },
+      },
       signal: undefined,
     });
 
-    expect(result.status).toBe("error");
-    expect(result.content).toContain("cannot send");
-    expect(invoked).toBe(false);
+    expect(JSON.parse(result)).toEqual({ ok: true });
+    expect(calls).toEqual([
+      {
+        toolName: "zoho_mail__send_email",
+        args: { to: "user@example.com" },
+      },
+    ]);
   });
 
   test("blocks email channels while allowing approved non-email sends", async () => {

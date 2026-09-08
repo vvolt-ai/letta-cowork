@@ -1,5 +1,42 @@
 # Letta Code Runtime Migration Notes
 
+## 2026-09-08 — Letta Code v0.31.13 / Agent SDK v0.8.3 migration
+
+- **Upstream checkout:** fast-forwarded `letta-ai/letta-code` `main` from `1e17af70` to `2f0fb7c1`.
+- **Release dependency:** upgraded `@letta-ai/letta-code` from `0.30.18` to `0.31.13`.
+- **SDK dependency:** upgraded `@letta-ai/letta-agent-sdk` from `0.6.3` to `0.8.3`. SDK v0.8.3 still pins an internal Letta Code v0.31.7 copy; do not force an override until upstream publishes a matching SDK.
+- **Migration rule:** keep porting behavior into Cowork's API-driven Electron runtime; do not copy the upstream CLI/listener architecture wholesale.
+
+### Integrated in this batch
+
+- Browser OAuth authorization-code flow with PKCE for the Vera mod.
+- Dynamic discovery and approval-gated invocation of the complete MCP tool catalog advertised by Vera.
+- Narrow `vera:master-enroll` OAuth scope, runtime `ctx.agent.id` binding, Ed25519 challenges, and short-lived operation-bound Master Clio tokens.
+- Updated package/lock versions; Electron transpilation and the full production build pass.
+
+### Reviewed migration candidates
+
+- **Automatic Bash yield** (`feb32e33`): upstream turns ordinary Bash commands into background tasks after ten seconds and emits a completion notification. Cowork and Vera currently preserve explicit `run_in_background`; port only with scoped exactly-once completion notifications and approval-safe turn ownership.
+- **Background-only subagents** (`f61414ac`): not copied. Cowork intentionally uses synchronous in-process API-driven subagents and explicitly rejects `run_in_background`; changing this requires durable task ownership and completion delivery.
+- **Default-conversation resume identity** (`7a4337e2`): upstream fix applies to its literal `default` conversation alias. Cowork uses concrete API conversation IDs and already carries the target agent for new conversations; add a regression test if default aliases are introduced.
+- **Unified MCP CLI/discovery** (`2ed46648`, `3a2ebda9`, `ba6cfe48`): upstream CLI internals do not map directly. Vera's mod now provides the equivalent bounded dynamic list/call bridge while Vera remains the credential and authorization boundary.
+- **Configurable MemFS layout and limits** (`b2c7560e`, `9047f71c`): supplied by the updated Letta runtime for native Letta Code agents. Cowork/Vera must not duplicate these hooks in their API-driven client-tool layer.
+- **Cron pause/resume** (`dd3c99d5`), attached-repository sync, teleport/computer routing, first-party channels, ChatGPT OAuth, and listener Git-status work remain upstream-runtime features; they are not direct Cowork/Vera source ports.
+- **Retired `x-letta-node` header** (`cab57ad5`): neither Cowork nor Vera emits it, so no migration is needed.
+
+### Vera/database check
+
+The Letta package upgrade requires no Vera schema change. The uncommitted Master Clio feature requires both `20260908-create-master-agent-access.sql` and `20260908-create-master-agent-auth.sql`, in that order, when `DATABASE_SYNCHRONIZE=false`. The deployment manual now lists every checked-in SQL migration through this batch.
+
+### Validation
+
+- `bun run transpile:electron`
+- `bun run build`
+- Cowork migration regressions: 7 tests, 0 failures
+- Vera mod: 29 tests, 0 failures
+- Vera focused OAuth/Master authorization: 39 tests, 0 failures
+- `@verivolt/letta-code-vera` v0.3.0 package dry-run includes the browser OAuth module
+
 ## 2026-08-25 — Letta Code v0.30.32 migration
 
 - **Upstream source:** `letta-ai/letta-code` `main` commit `1e17af70`, latest tag `v0.30.32` (`1e788701`).

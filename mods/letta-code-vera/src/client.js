@@ -2,6 +2,19 @@ import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 
 import { readCoworkAuth } from "./cowork-auth.js";
+import {
+  authorizeInBrowser,
+  refreshBrowserOAuth,
+  revokeBrowserOAuth,
+} from "./browser-oauth.js";
+import {
+  bodySha256,
+  createChallengeRequest,
+  ensureMasterIdentity,
+  readMasterIdentity,
+  saveMasterEnrollment,
+  signMasterAssertion,
+} from "./master-identity.js";
 import { clearAuth, normalizeServerUrl, readState, writeState } from "./state.js";
 
 const ACCESS_TOKEN_SKEW_SECONDS = 60;
@@ -71,6 +84,7 @@ export class VeraClient {
     if (typeof this.fetch !== "function") {
       throw new Error("Vera integration requires a runtime with fetch support");
     }
+    this.openBrowser = options.openBrowser;
     this.refreshPromise = null;
   }
 
@@ -85,7 +99,13 @@ export class VeraClient {
     ]);
     return {
       connected: Boolean(coworkAuth || state.auth),
-      source: coworkAuth ? "cowork" : state.auth ? "letta-code" : null,
+      source: coworkAuth
+        ? "cowork"
+        : state.auth?.authType === "oauth"
+          ? "browser-oauth"
+          : state.auth
+            ? "letta-code"
+            : null,
       serverUrl: normalizeServerUrl(coworkAuth?.serverUrl || state.serverUrl),
       pendingEmail: state.pendingEmail,
     };
@@ -104,6 +124,30 @@ export class VeraClient {
     state.pendingEmail = null;
     state.auth = null;
     return writeState(state, this.env);
+  }
+
+  async connectInBrowser(signal) {
+    const state = await this.getState();
+    const auth = await authorizeInBrowser({
+      serverUrl: state.serverUrl,
+      scopes: ["vera:mcp"],
+      fetch: this.fetch,
+      openBrowser: this.openBrowser,
+      signal,
+    });
+    state.pendingEmail = null;
+    state.auth = {
+      accessToken: auth.accessToken,
+      refreshToken: auth.refreshToken,
+      refreshTokenExpiresAt: null,
+      user: null,
+      currentOrganization: null,
+      authType: "oauth",
+      oauthClientId: auth.oauthClientId,
+      scope: auth.scope,
+    };
+    await writeState(state, this.env);
+    return state.auth;
   }
 
   async requestOtp(email) {
@@ -158,6 +202,9 @@ export class VeraClient {
       refreshTokenExpiresAt: auth.refreshTokenExpiresAt ?? null,
       user: auth.user ?? null,
       currentOrganization: auth.currentOrganization ?? null,
+      authType: "otp",
+      oauthClientId: null,
+      scope: null,
     };
     await writeState(state, this.env);
     return state.auth;
@@ -169,16 +216,25 @@ export class VeraClient {
     const hadLocalAuth = Boolean(state.auth);
     try {
       if (state.auth?.refreshToken) {
-        const accessToken = await this.getStoredAccessToken();
-        // getStoredAccessToken may rotate the refresh token, so reload before logout.
-        state = await this.getState();
-        await this.request("/auth/logout", {
-          method: "POST",
-          body: { refreshToken: state.auth?.refreshToken },
-          accessToken,
-          authenticated: true,
-          retryAuth: false,
-        });
+        if (state.auth.authType === "oauth") {
+          await revokeBrowserOAuth({
+            serverUrl: state.serverUrl,
+            clientId: state.auth.oauthClientId,
+            token: state.auth.refreshToken,
+            fetch: this.fetch,
+          });
+        } else {
+          const accessToken = await this.getStoredAccessToken();
+          // getStoredAccessToken may rotate the refresh token, so reload before logout.
+          state = await this.getState();
+          await this.request("/auth/logout", {
+            method: "POST",
+            body: { refreshToken: state.auth?.refreshToken },
+            accessToken,
+            authenticated: true,
+            retryAuth: false,
+          });
+        }
       }
     } finally {
       await clearAuth(this.env);
@@ -203,12 +259,26 @@ export class VeraClient {
       });
     }
 
-    const auth = await this.request("/auth/refresh", {
-      method: "POST",
-      body: { refreshToken },
-      authenticated: false,
-      retryAuth: false,
-    });
+    if (state.auth?.authType === "oauth" && !state.auth.oauthClientId) {
+      throw new VeraApiError(
+        "Vera OAuth client state is incomplete. Run /vera-connect again.",
+      );
+    }
+    const auth =
+      state.auth?.authType === "oauth"
+        ? await refreshBrowserOAuth({
+            serverUrl: state.serverUrl,
+            clientId: state.auth.oauthClientId,
+            refreshToken,
+            scope: state.auth.scope,
+            fetch: this.fetch,
+          })
+        : await this.request("/auth/refresh", {
+            method: "POST",
+            body: { refreshToken },
+            authenticated: false,
+            retryAuth: false,
+          });
     if (!auth?.accessToken || !auth?.refreshToken) {
       throw new VeraApiError("Vera returned an invalid refresh response");
     }
@@ -220,6 +290,9 @@ export class VeraClient {
       user: auth.user ?? state.auth?.user ?? null,
       currentOrganization:
         auth.currentOrganization ?? state.auth?.currentOrganization ?? null,
+      authType: state.auth?.authType ?? "otp",
+      oauthClientId: state.auth?.oauthClientId ?? null,
+      scope: auth.scope ?? state.auth?.scope ?? null,
     };
     await writeState(state, this.env);
     return state.auth.accessToken;
@@ -321,6 +394,188 @@ export class VeraClient {
       });
     }
     return payload;
+  }
+
+  async getMasterEnrollment() {
+    const identity = await readMasterIdentity(this.env);
+    if (!identity) return null;
+    return {
+      installationId: identity.installationId,
+      enrolledAgentId: identity.enrolledAgentId,
+      assignmentId: identity.assignmentId,
+      assignmentRevision: identity.assignmentRevision,
+      serverUrl: identity.serverUrl,
+      publicKeyFingerprint: identity.publicKeyFingerprint,
+      enrolledAt: identity.enrolledAt,
+    };
+  }
+
+  async enrollMasterAgent(agentId, deviceName, signal) {
+    const identity = await ensureMasterIdentity(this.env);
+    const state = await this.getState();
+    const serverUrl = state.serverUrl;
+    const authentication = await authorizeInBrowser({
+      serverUrl,
+      scopes: ["vera:master-enroll"],
+      clientName: "Master Clio enrollment for Letta Code",
+      fetch: this.fetch,
+      openBrowser: this.openBrowser,
+      signal,
+    });
+    try {
+      const enrollment = await this.request(
+        "/master-agent-auth/installations/enroll",
+        {
+          method: "POST",
+          body: {
+            agentId,
+            deviceName: String(deviceName || "Letta Code").trim().slice(0, 120),
+            publicKeyPem: identity.publicKeyPem,
+            publicKeyFingerprint: identity.publicKeyFingerprint,
+          },
+          accessToken: authentication.accessToken,
+          authSource: "master-enrollment-oauth",
+          serverUrl,
+          signal,
+        },
+      );
+      if (
+        !enrollment?.installationId ||
+        !enrollment?.assignmentId ||
+        !Number.isInteger(enrollment?.assignmentRevision)
+      ) {
+        throw new VeraApiError("Vera returned an invalid Master Clio enrollment");
+      }
+      await saveMasterEnrollment(
+        {
+          installationId: enrollment.installationId,
+          agentId,
+          assignmentId: enrollment.assignmentId,
+          assignmentRevision: enrollment.assignmentRevision,
+          serverUrl,
+          enrolledAt: enrollment.enrolledAt,
+        },
+        this.env,
+      );
+      return this.getMasterEnrollment();
+    } finally {
+      const revoke = (token, tokenTypeHint) =>
+        token
+          ? revokeBrowserOAuth({
+              serverUrl,
+              clientId: authentication.oauthClientId,
+              token,
+              tokenTypeHint,
+              fetch: this.fetch,
+            }).catch(() => undefined)
+          : Promise.resolve();
+      await Promise.all([
+        revoke(authentication.refreshToken, "refresh_token"),
+        revoke(authentication.accessToken, "access_token"),
+      ]);
+    }
+  }
+
+  async requestAsMaster(pathname, agentId, options = {}) {
+    const identity = await readMasterIdentity(this.env);
+    if (!identity?.installationId || !identity.enrolledAgentId) {
+      throw new VeraApiError(
+        "This Letta Code installation is not enrolled for Master Clio. Run /vera-master-enroll first.",
+        { code: "master_not_enrolled" },
+      );
+    }
+    if (identity.enrolledAgentId !== agentId) {
+      throw new VeraApiError(
+        "The active agent does not match the enrolled Master Clio identity.",
+        { code: "master_agent_mismatch" },
+      );
+    }
+
+    const method = String(options.method || "GET").toUpperCase();
+    const requestBodySha256 = bodySha256(options.body);
+    const challenge = await this.request("/master-agent-auth/challenges", {
+      method: "POST",
+      body: createChallengeRequest(identity, {
+        agentId,
+        method,
+        path: pathname,
+        bodySha256: requestBodySha256,
+      }),
+      authenticated: false,
+      serverUrl: identity.serverUrl,
+      retryAuth: false,
+      signal: options.signal,
+    });
+    if (!challenge?.challengeId || !challenge?.nonce) {
+      throw new VeraApiError("Vera returned an invalid Master Clio challenge");
+    }
+
+    const assertion = {
+      challengeId: challenge.challengeId,
+      nonce: challenge.nonce,
+      installationId: identity.installationId,
+      agentId,
+      timestamp: new Date().toISOString(),
+      method,
+      path: pathname,
+      bodySha256: requestBodySha256,
+    };
+    const tokenResult = await this.request("/master-agent-auth/tokens/exchange", {
+      method: "POST",
+      body: {
+        ...assertion,
+        signature: signMasterAssertion(identity, assertion),
+      },
+      authenticated: false,
+      serverUrl: identity.serverUrl,
+      retryAuth: false,
+      signal: options.signal,
+    });
+    if (!tokenResult?.accessToken) {
+      throw new VeraApiError("Vera did not return a Master Clio access token");
+    }
+
+    return this.request(pathname, {
+      ...options,
+      accessToken: tokenResult.accessToken,
+      authSource: "master-agent",
+      serverUrl: identity.serverUrl,
+      retryAuth: false,
+    });
+  }
+
+  async getMasterStatus(agentId, signal) {
+    const enrollment = await this.getMasterEnrollment();
+    const remote = await this.requestAsMaster(
+      "/master-agent-access/status",
+      agentId,
+      { signal },
+    );
+    return { enrollment, remote };
+  }
+
+  async listMasterOrganizations(agentId, signal) {
+    return this.requestAsMaster(
+      "/master-agent-access/organizations",
+      agentId,
+      { signal },
+    );
+  }
+
+  async listMasterOrganizationAgents(agentId, organizationId, signal) {
+    return this.requestAsMaster(
+      `/master-agent-access/organizations/${encodeURIComponent(organizationId)}/agents`,
+      agentId,
+      { signal },
+    );
+  }
+
+  async listMasterOrganizationAgents(agentId, organizationId, signal) {
+    return this.requestAsMaster(
+      `/master-agent-access/organizations/${encodeURIComponent(organizationId)}/agents`,
+      agentId,
+      { signal },
+    );
   }
 
   async getProfile(signal) {

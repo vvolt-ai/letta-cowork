@@ -1,4 +1,5 @@
 import { VeraApiError } from "./client.js";
+import { runtimeAgentId } from "./master-identity.js";
 
 function output(text, success = true) {
   return { type: "output", output: text, success };
@@ -52,7 +53,13 @@ async function connectionSummary(client) {
 
   return [
     "Vera is connected.",
-    `Authentication: ${connection.source === "cowork" ? "Cowork session" : "Letta Code session"}`,
+    `Authentication: ${
+      connection.source === "cowork"
+        ? "Cowork session"
+        : connection.source === "browser-oauth"
+          ? "Browser OAuth"
+          : "Letta Code OTP session"
+    }`,
     `Server: ${connection.serverUrl}`,
     `User: ${user || "authenticated user"}`,
     `Organization: ${organization || "current organization"}`,
@@ -83,8 +90,8 @@ export function registerCommands(letta, client) {
   disposers.push(
     letta.commands.register({
       id: "vera-connect",
-      description: "Connect Letta Code to Vera using Cowork or email OTP authentication.",
-      args: "[--server <url>] [email|otp]",
+      description: "Connect Letta Code to all available Vera MCP tools using browser OAuth.",
+      args: "[--server <url>] [browser|email|otp]",
       showInTranscript: false,
       async run(context) {
         try {
@@ -99,23 +106,28 @@ export function registerCommands(letta, client) {
           const state = await client.getState();
           const connection = await client.getConnectionInfo();
 
-          if (!credential) {
-            if (connection.connected) return output(await connectionSummary(client));
-            if (state.pendingEmail) {
-              return output(
-                `An OTP was sent to ${state.pendingEmail}.\n` +
-                  "Enter it with: /vera-connect <six-digit-otp>\n" +
-                  "This command is excluded from the conversation transcript.",
-              );
-            }
+          if (!credential && connection.connected) {
+            return output(await connectionSummary(client));
+          }
+          if (!credential && state.pendingEmail) {
+            return output(
+              `An OTP was sent to ${state.pendingEmail}.\n` +
+                "Enter it with: /vera-connect <six-digit-otp>\n" +
+                "This command is excluded from the conversation transcript.",
+            );
+          }
+          if (!credential || credential.toLowerCase() === "browser") {
+            const auth = await client.connectInBrowser(context.signal);
+            const [tools, channels] = await Promise.all([
+              client.listMcpTools(),
+              client.listChannels(),
+            ]);
             return output(
               [
-                "Connect to Vera with email OTP:",
-                "  /vera-connect user@verivolt.com",
-                "",
-                `Current server: ${state.serverUrl}`,
-                "Use another server:",
-                "  /vera-connect --server https://vera.example.com user@verivolt.com",
+                "Connected to Vera through browser OAuth.",
+                `OAuth scope: ${auth.scope || "vera:mcp"}`,
+                `MCP tools available: ${tools.length}`,
+                `Channels available: ${channels.length}`,
               ].join("\n"),
             );
           }
@@ -151,7 +163,7 @@ export function registerCommands(letta, client) {
           }
 
           return output(
-            "Expected an email address or six-digit OTP. Run /vera-connect for usage.",
+            "Expected browser, an email address, or a six-digit OTP. Run /vera-connect for browser authentication.",
             false,
           );
         } catch (error) {
@@ -247,6 +259,66 @@ export function registerCommands(letta, client) {
           return output(
             `Local Vera credentials were removed. Server logout reported: ${errorText(error)}`,
           );
+        }
+      },
+    }),
+  );
+
+  disposers.push(
+    letta.commands.register({
+      id: "vera-master-enroll",
+      description:
+        "Enroll this Letta Code installation for the active Master Clio agent.",
+      args: "[device name]",
+      showInTranscript: false,
+      async run(context) {
+        try {
+          const agentId = runtimeAgentId(context);
+          const deviceName = context.args.trim() || "Letta Code";
+          const enrollment = await client.enrollMasterAgent(
+            agentId,
+            deviceName,
+            context.signal,
+          );
+          return output(
+            [
+              "Master Clio installation enrolled.",
+              `Agent: ${agentId}`,
+              `Installation: ${enrollment.installationId}`,
+              `Key fingerprint: ${enrollment.publicKeyFingerprint.slice(0, 16)}…`,
+              "The private signing key remains in the protected local mod state.",
+            ].join("\n"),
+          );
+        } catch (error) {
+          return output(`Master Clio enrollment failed: ${errorText(error)}`, false);
+        }
+      },
+    }),
+  );
+
+  disposers.push(
+    letta.commands.register({
+      id: "vera-master-status",
+      description:
+        "Show whether the active agent and this installation are authorized as Master Clio.",
+      showInTranscript: false,
+      async run(context) {
+        try {
+          const agentId = runtimeAgentId(context);
+          const status = await client.getMasterStatus(agentId, context.signal);
+          const enrollment = status.enrollment;
+          return output(
+            [
+              `Runtime agent: ${agentId}`,
+              `Local enrollment: ${enrollment?.installationId ? "present" : "not enrolled"}`,
+              `Enrollment agent match: ${enrollment?.enrolledAgentId === agentId ? "yes" : "no"}`,
+              `Vera assignment: ${status.remote?.assignmentEnabled ? "enabled" : "disabled"}`,
+              `Registered installation: ${status.remote?.installationEnabled ? "enabled" : "disabled"}`,
+              `Accessible organizations: ${status.remote?.organizationCount ?? 0}`,
+            ].join("\n"),
+          );
+        } catch (error) {
+          return output(`Unable to read Master Clio status: ${errorText(error)}`, false);
         }
       },
     }),

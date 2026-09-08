@@ -67,6 +67,12 @@ export function normalizeState(value, env = process.env) {
         currentOrganization: isRecord(value.auth.currentOrganization)
           ? value.auth.currentOrganization
           : null,
+        authType: value.auth.authType === "oauth" ? "oauth" : "otp",
+        oauthClientId:
+          typeof value.auth.oauthClientId === "string"
+            ? value.auth.oauthClientId
+            : null,
+        scope: typeof value.auth.scope === "string" ? value.auth.scope : null,
       }
     : null;
 

@@ -43,6 +43,40 @@ describe("Vera commands with Cowork authentication", () => {
     expect(result.output).toContain("MCP tools: 0");
   });
 
+  test("uses browser OAuth by default for a disconnected standalone session", async () => {
+    const registry = commandRegistry();
+    let browserCalls = 0;
+    registerCommands(registry.api, {
+      getState: async () => ({
+        auth: null,
+        pendingEmail: null,
+        serverUrl: "https://vera.example.com",
+      }),
+      getConnectionInfo: async () => ({
+        connected: false,
+        source: null,
+        serverUrl: "https://vera.example.com",
+        pendingEmail: null,
+      }),
+      connectInBrowser: async () => {
+        browserCalls += 1;
+        return { scope: "vera:mcp" };
+      },
+      listMcpTools: async () => [{ name: "connector__read" }],
+      listChannels: async () => [],
+    });
+
+    const result = await registry.commands.get("vera-connect").run({
+      argv: [],
+      signal: undefined,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.output).toContain("browser OAuth");
+    expect(result.output).toContain("MCP tools available: 1");
+    expect(browserCalls).toBe(1);
+  });
+
   test("does not claim to disconnect a Cowork-owned session", async () => {
     const registry = commandRegistry();
     registerCommands(registry.api, {

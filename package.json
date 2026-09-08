@@ -28,8 +28,8 @@
     "prepare": "husky install || true"
   },
   "dependencies": {
-    "@letta-ai/letta-agent-sdk": "^0.6.3",
-    "@letta-ai/letta-code": "0.30.18",
+    "@letta-ai/letta-agent-sdk": "0.8.3",
+    "@letta-ai/letta-code": "0.31.13",
     "@radix-ui/react-dialog": "^1.1.23",
     "@radix-ui/react-dropdown-menu": "^2.1.24",
     "@slack/bolt": "^5.0.0",
