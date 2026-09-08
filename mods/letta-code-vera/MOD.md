@@ -24,6 +24,18 @@ the owner of that session. Browser OAuth authorization-code flow with PKCE is th
 - `vera_mcp_call_tool`
 - `vera_master_list_accessible_organizations`
 - `vera_master_list_organization_agents`
+- `vera_master_get_organization_agent`
+- `vera_master_create_organization_agent`
+- `vera_master_update_organization_agent`
+- `vera_master_delete_organization_agent`
+- `vera_master_get_agent_instructions`
+- `vera_master_update_agent_instructions`
+- `vera_master_list_agent_memory`
+- `vera_master_get_agent_memory_block`
+- `vera_master_update_agent_memory_block`
+- `vera_master_git_read`
+- `vera_master_git_write`
+- `vera_master_delegate_to_organization_agent`
 - `vera_channels_list`
 - `vera_channel_history`
 - `vera_channel_send`
@@ -43,4 +55,5 @@ the owner of that session. Browser OAuth authorization-code flow with PKCE is th
 - Master calls derive identity only from runtime `ctx.agent.id`; model-provided identity arguments are ignored.
 - Master enrollment uses a one-time browser grant restricted to `vera:master-enroll`; operational requests use one-time challenges, Ed25519 signatures, and short-lived scoped tokens.
 - Copying the mod or identity file to another agent does not authorize it because Vera verifies the enrolled runtime agent ID.
+- Master agent, instruction, memory, Git, and delegation operations are independently capability-checked against the organization grant. Mutations require human approval; stale agent or content versions are rejected rather than overwritten.
 - Native inbound delivery must not be enabled until Vera has exclusive route ownership and an acknowledged event stream.

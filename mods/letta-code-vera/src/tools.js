@@ -48,6 +48,47 @@ function toolError(error) {
   };
 }
 
+function masterAgentPath(organizationId, agentId) {
+  const base = `/master-agent-access/organizations/${encodeURIComponent(organizationId)}/agents`;
+  return agentId ? `${base}/${encodeURIComponent(agentId)}` : base;
+}
+
+const MASTER_GIT_ARGUMENTS = [
+  "operation",
+  "paths",
+  "message",
+  "branch",
+  "ref",
+  "tag",
+  "mode",
+  "source",
+  "destination",
+  "abortOperation",
+  "stashAction",
+  "stashRef",
+  "staged",
+  "rebase",
+  "force",
+  "forceWithLease",
+  "includeIgnored",
+  "includeUntracked",
+  "recursive",
+  "confirm",
+  "maxCount",
+  "timeoutMs",
+];
+
+function masterGitBody(args) {
+  return Object.fromEntries(
+    MASTER_GIT_ARGUMENTS.filter((key) => args[key] !== undefined).map((key) => [key, args[key]]),
+  );
+}
+
+async function masterRequest(client, ctx, method, path, body) {
+  const agentId = runtimeAgentId(ctx);
+  return formatJson(await client.requestAsMaster(agentId, method, path, body, ctx.signal));
+}
+
 function normalizeMcpResult(result) {
   if (isRecord(result) && result.isError === true) {
     return {
@@ -95,7 +136,9 @@ export function registerTools(letta, client) {
       parallelSafe: true,
       async run(ctx) {
         try {
-          const query = String(ctx.args.query ?? "").trim().toLowerCase();
+          const query = String(ctx.args.query ?? "")
+            .trim()
+            .toLowerCase();
           const includeSchemas = ctx.args.includeSchemas === true;
           const limit = Math.min(
             200,
@@ -104,9 +147,7 @@ export function registerTools(letta, client) {
           const allTools = await client.listMcpTools(ctx.signal);
           const matching = allTools.filter((tool) => {
             if (!query) return true;
-            return `${tool.name || ""} ${tool.description || ""}`
-              .toLowerCase()
-              .includes(query);
+            return `${tool.name || ""} ${tool.description || ""}`.toLowerCase().includes(query);
           });
           const tools = matching.slice(0, limit).map((tool) => ({
             name: tool.name,
@@ -153,13 +194,9 @@ export function registerTools(letta, client) {
             (tool) => tool.name === toolName,
           );
           if (!definition) {
-            throw new Error(
-              "The requested MCP tool is not available to the connected Vera user",
-            );
+            throw new Error("The requested MCP tool is not available to the connected Vera user");
           }
-          return normalizeMcpResult(
-            await client.invokeMcpTool(toolName, args, ctx.signal),
-          );
+          return normalizeMcpResult(await client.invokeMcpTool(toolName, args, ctx.signal));
         } catch (error) {
           return toolError(error);
         }
@@ -190,7 +227,9 @@ export function registerTools(letta, client) {
       parallelSafe: true,
       async run(ctx) {
         try {
-          const provider = String(ctx.args.provider ?? "").trim().toLowerCase();
+          const provider = String(ctx.args.provider ?? "")
+            .trim()
+            .toLowerCase();
           const channels = (await client.listChannels(ctx.signal)).filter(
             (channel) =>
               (!provider || String(channel.provider).toLowerCase() === provider) &&
@@ -363,9 +402,7 @@ export function registerTools(letta, client) {
       async run(ctx) {
         try {
           const agentId = runtimeAgentId(ctx);
-          return formatJson(
-            await client.listMasterOrganizations(agentId, ctx.signal),
-          );
+          return formatJson(await client.listMasterOrganizations(agentId, ctx.signal));
         } catch (error) {
           return toolError(error);
         }
@@ -383,8 +420,7 @@ export function registerTools(letta, client) {
         properties: {
           organizationId: {
             type: "string",
-            description:
-              "Organization UUID returned by vera_master_list_accessible_organizations.",
+            description: "Organization UUID returned by vera_master_list_accessible_organizations.",
           },
         },
         required: ["organizationId"],
@@ -395,16 +431,9 @@ export function registerTools(letta, client) {
       async run(ctx) {
         try {
           const agentId = runtimeAgentId(ctx);
-          const organizationId = requiredString(
-            ctx.args.organizationId,
-            "organizationId",
-          );
+          const organizationId = requiredString(ctx.args.organizationId, "organizationId");
           return formatJson(
-            await client.listMasterOrganizationAgents(
-              agentId,
-              organizationId,
-              ctx.signal,
-            ),
+            await client.listMasterOrganizationAgents(agentId, organizationId, ctx.signal),
           );
         } catch (error) {
           return toolError(error);
@@ -412,6 +441,467 @@ export function registerTools(letta, client) {
       },
     }),
   );
+
+  const organizationAgentFields = {
+    organizationId: {
+      type: "string",
+      description: "Organization UUID returned by vera_master_list_accessible_organizations.",
+    },
+    agentId: {
+      type: "string",
+      description: "Target agent ID returned by vera_master_list_organization_agents.",
+    },
+  };
+  const confirmedMutation = {
+    type: "boolean",
+    enum: [true],
+    description: "Must be true after reviewing the requested mutation.",
+  };
+
+  const masterAgentTools = [
+    {
+      name: "vera_master_get_organization_agent",
+      description:
+        "Read one agent through a granted organization's Letta connection. Requires agents.read for the target agent.",
+      parameters: {
+        type: "object",
+        properties: organizationAgentFields,
+        required: ["organizationId", "agentId"],
+        additionalProperties: false,
+      },
+      requiresApproval: false,
+      parallelSafe: true,
+      async run(ctx) {
+        const organizationId = requiredString(ctx.args.organizationId, "organizationId");
+        const agentId = requiredString(ctx.args.agentId, "agentId");
+        return masterRequest(client, ctx, "GET", masterAgentPath(organizationId, agentId));
+      },
+    },
+    {
+      name: "vera_master_create_organization_agent",
+      description:
+        "Create an agent through a granted organization's Letta connection. Requires an organization-wide agents.manage grant and human approval.",
+      parameters: {
+        type: "object",
+        properties: {
+          organizationId: organizationAgentFields.organizationId,
+          name: { type: "string", minLength: 1, maxLength: 255 },
+          model: { type: "string", minLength: 1, maxLength: 512 },
+          description: { type: "string", maxLength: 4096 },
+          confirm: confirmedMutation,
+        },
+        required: ["organizationId", "name", "confirm"],
+        additionalProperties: false,
+      },
+      approvalPolicy: "ask",
+      parallelSafe: false,
+      async run(ctx) {
+        const organizationId = requiredString(ctx.args.organizationId, "organizationId");
+        return masterRequest(client, ctx, "POST", masterAgentPath(organizationId), {
+          name: requiredString(ctx.args.name, "name"),
+          ...(ctx.args.model !== undefined ? { model: ctx.args.model } : {}),
+          ...(ctx.args.description !== undefined ? { description: ctx.args.description } : {}),
+          confirm: ctx.args.confirm === true,
+        });
+      },
+    },
+    {
+      name: "vera_master_update_organization_agent",
+      description:
+        "Update an approved agent's name, model, or description. Read the agent first and supply its current updated_at value. Requires agents.manage and human approval.",
+      parameters: {
+        type: "object",
+        properties: {
+          ...organizationAgentFields,
+          name: { type: "string", minLength: 1, maxLength: 255 },
+          model: { type: "string", minLength: 1, maxLength: 512 },
+          description: { type: "string", maxLength: 4096 },
+          expectedUpdatedAt: { type: "string", minLength: 1, maxLength: 128 },
+          confirm: confirmedMutation,
+        },
+        required: ["organizationId", "agentId", "expectedUpdatedAt", "confirm"],
+        additionalProperties: false,
+      },
+      approvalPolicy: "ask",
+      parallelSafe: false,
+      async run(ctx) {
+        const organizationId = requiredString(ctx.args.organizationId, "organizationId");
+        const agentId = requiredString(ctx.args.agentId, "agentId");
+        return masterRequest(client, ctx, "PATCH", masterAgentPath(organizationId, agentId), {
+          ...(ctx.args.name !== undefined ? { name: ctx.args.name } : {}),
+          ...(ctx.args.model !== undefined ? { model: ctx.args.model } : {}),
+          ...(ctx.args.description !== undefined ? { description: ctx.args.description } : {}),
+          expectedUpdatedAt: requiredString(ctx.args.expectedUpdatedAt, "expectedUpdatedAt"),
+          confirm: ctx.args.confirm === true,
+        });
+      },
+    },
+    {
+      name: "vera_master_delete_organization_agent",
+      description:
+        "Permanently delete an approved organization agent. Read the agent first and supply its current updated_at value. Requires agents.manage, confirm=true, and human approval.",
+      parameters: {
+        type: "object",
+        properties: {
+          ...organizationAgentFields,
+          expectedUpdatedAt: { type: "string", minLength: 1, maxLength: 128 },
+          confirm: confirmedMutation,
+        },
+        required: ["organizationId", "agentId", "expectedUpdatedAt", "confirm"],
+        additionalProperties: false,
+      },
+      approvalPolicy: "ask",
+      parallelSafe: false,
+      async run(ctx) {
+        const organizationId = requiredString(ctx.args.organizationId, "organizationId");
+        const agentId = requiredString(ctx.args.agentId, "agentId");
+        return masterRequest(client, ctx, "DELETE", masterAgentPath(organizationId, agentId), {
+          expectedUpdatedAt: requiredString(ctx.args.expectedUpdatedAt, "expectedUpdatedAt"),
+          confirm: ctx.args.confirm === true,
+        });
+      },
+    },
+    {
+      name: "vera_master_get_agent_instructions",
+      description:
+        "Read an approved organization agent's system instructions and concurrency hash. Requires instructions.read.",
+      parameters: {
+        type: "object",
+        properties: organizationAgentFields,
+        required: ["organizationId", "agentId"],
+        additionalProperties: false,
+      },
+      requiresApproval: false,
+      parallelSafe: true,
+      async run(ctx) {
+        const organizationId = requiredString(ctx.args.organizationId, "organizationId");
+        const agentId = requiredString(ctx.args.agentId, "agentId");
+        return masterRequest(
+          client,
+          ctx,
+          "GET",
+          `${masterAgentPath(organizationId, agentId)}/instructions`,
+        );
+      },
+    },
+    {
+      name: "vera_master_update_agent_instructions",
+      description:
+        "Replace an approved organization agent's system instructions using the current SHA-256 hash. Protected Vera-marked layers cannot be changed. Requires instructions.write and human approval.",
+      parameters: {
+        type: "object",
+        properties: {
+          ...organizationAgentFields,
+          system: { type: "string", minLength: 1, maxLength: 500000 },
+          expectedSha256: {
+            type: "string",
+            pattern: "^[a-fA-F0-9]{64}$",
+          },
+          confirm: confirmedMutation,
+        },
+        required: ["organizationId", "agentId", "system", "expectedSha256", "confirm"],
+        additionalProperties: false,
+      },
+      approvalPolicy: "ask",
+      parallelSafe: false,
+      async run(ctx) {
+        const organizationId = requiredString(ctx.args.organizationId, "organizationId");
+        const agentId = requiredString(ctx.args.agentId, "agentId");
+        return masterRequest(
+          client,
+          ctx,
+          "PUT",
+          `${masterAgentPath(organizationId, agentId)}/instructions`,
+          {
+            system: requiredString(ctx.args.system, "system"),
+            expectedSha256: requiredString(ctx.args.expectedSha256, "expectedSha256"),
+            confirm: ctx.args.confirm === true,
+          },
+        );
+      },
+    },
+    {
+      name: "vera_master_list_agent_memory",
+      description:
+        "List core-memory blocks for an approved organization agent. Requires memory.read.",
+      parameters: {
+        type: "object",
+        properties: organizationAgentFields,
+        required: ["organizationId", "agentId"],
+        additionalProperties: false,
+      },
+      requiresApproval: false,
+      parallelSafe: true,
+      async run(ctx) {
+        const organizationId = requiredString(ctx.args.organizationId, "organizationId");
+        const agentId = requiredString(ctx.args.agentId, "agentId");
+        return masterRequest(
+          client,
+          ctx,
+          "GET",
+          `${masterAgentPath(organizationId, agentId)}/memory`,
+        );
+      },
+    },
+    {
+      name: "vera_master_get_agent_memory_block",
+      description:
+        "Read one core-memory block and its concurrency hash for an approved organization agent. Requires memory.read.",
+      parameters: {
+        type: "object",
+        properties: {
+          ...organizationAgentFields,
+          label: {
+            type: "string",
+            minLength: 1,
+            maxLength: 120,
+            pattern: "^[A-Za-z0-9_.-]+$",
+          },
+        },
+        required: ["organizationId", "agentId", "label"],
+        additionalProperties: false,
+      },
+      requiresApproval: false,
+      parallelSafe: true,
+      async run(ctx) {
+        const organizationId = requiredString(ctx.args.organizationId, "organizationId");
+        const agentId = requiredString(ctx.args.agentId, "agentId");
+        const label = requiredString(ctx.args.label, "label");
+        return masterRequest(
+          client,
+          ctx,
+          "GET",
+          `${masterAgentPath(organizationId, agentId)}/memory/${encodeURIComponent(label)}`,
+        );
+      },
+    },
+    {
+      name: "vera_master_update_agent_memory_block",
+      description:
+        "Replace one core-memory block using its current SHA-256 hash. Requires memory.write and human approval.",
+      parameters: {
+        type: "object",
+        properties: {
+          ...organizationAgentFields,
+          label: {
+            type: "string",
+            minLength: 1,
+            maxLength: 120,
+            pattern: "^[A-Za-z0-9_.-]+$",
+          },
+          value: { type: "string", maxLength: 500000 },
+          expectedSha256: {
+            type: "string",
+            pattern: "^[a-fA-F0-9]{64}$",
+          },
+          confirm: confirmedMutation,
+        },
+        required: ["organizationId", "agentId", "label", "value", "expectedSha256", "confirm"],
+        additionalProperties: false,
+      },
+      approvalPolicy: "ask",
+      parallelSafe: false,
+      async run(ctx) {
+        const organizationId = requiredString(ctx.args.organizationId, "organizationId");
+        const agentId = requiredString(ctx.args.agentId, "agentId");
+        const label = requiredString(ctx.args.label, "label");
+        return masterRequest(
+          client,
+          ctx,
+          "PUT",
+          `${masterAgentPath(organizationId, agentId)}/memory/${encodeURIComponent(label)}`,
+          {
+            value: String(ctx.args.value ?? ""),
+            expectedSha256: requiredString(ctx.args.expectedSha256, "expectedSha256"),
+            confirm: ctx.args.confirm === true,
+          },
+        );
+      },
+    },
+    {
+      name: "vera_master_git_read",
+      description:
+        "Run a read-only Git operation against a repository key allowed by the organization's git.read grant.",
+      parameters: {
+        type: "object",
+        properties: {
+          organizationId: organizationAgentFields.organizationId,
+          repositoryKey: {
+            type: "string",
+            description:
+              "Repository key returned in the organization's allowedRepositoryKeys grant.",
+          },
+          operation: {
+            type: "string",
+            enum: [
+              "ensure_checkout",
+              "status",
+              "diff",
+              "log",
+              "show",
+              "branches",
+              "tags",
+              "remote_info",
+            ],
+          },
+          paths: { type: "array", items: { type: "string" } },
+          ref: { type: "string" },
+          staged: { type: "boolean" },
+          maxCount: { type: "integer", minimum: 1, maximum: 200 },
+          timeoutMs: { type: "integer", minimum: 1, maximum: 600000 },
+        },
+        required: ["organizationId", "repositoryKey", "operation"],
+        additionalProperties: false,
+      },
+      requiresApproval: false,
+      parallelSafe: false,
+      async run(ctx) {
+        const organizationId = requiredString(ctx.args.organizationId, "organizationId");
+        const repositoryKey = requiredString(ctx.args.repositoryKey, "repositoryKey");
+        return masterRequest(
+          client,
+          ctx,
+          "POST",
+          `/master-agent-access/organizations/${encodeURIComponent(organizationId)}/repositories/${encodeURIComponent(repositoryKey)}/git`,
+          masterGitBody(ctx.args),
+        );
+      },
+    },
+    {
+      name: "vera_master_git_write",
+      description:
+        "Run a mutating Git operation against a repository key allowed by the organization's git.write grant. Requires confirm=true and human approval.",
+      parameters: {
+        type: "object",
+        properties: {
+          organizationId: organizationAgentFields.organizationId,
+          repositoryKey: {
+            type: "string",
+            description:
+              "Repository key returned in the organization's allowedRepositoryKeys grant.",
+          },
+          operation: {
+            type: "string",
+            enum: [
+              "fetch",
+              "pull",
+              "add",
+              "commit",
+              "push",
+              "push_tag",
+              "checkout",
+              "create_branch",
+              "delete_branch",
+              "merge",
+              "rebase",
+              "reset",
+              "revert",
+              "cherry_pick",
+              "abort",
+              "restore",
+              "remove",
+              "move",
+              "stash",
+              "tag",
+              "delete_tag",
+              "delete_remote_tag",
+              "clean",
+            ],
+          },
+          paths: { type: "array", items: { type: "string" } },
+          message: { type: "string", maxLength: 10000 },
+          branch: { type: "string" },
+          ref: { type: "string" },
+          tag: { type: "string" },
+          mode: { type: "string", enum: ["soft", "mixed", "hard"] },
+          source: { type: "string" },
+          destination: { type: "string" },
+          abortOperation: {
+            type: "string",
+            enum: ["merge", "rebase", "cherry_pick"],
+          },
+          stashAction: {
+            type: "string",
+            enum: ["list", "push", "apply", "pop", "drop"],
+          },
+          stashRef: { type: "string" },
+          staged: { type: "boolean" },
+          rebase: { type: "boolean" },
+          force: { type: "boolean" },
+          forceWithLease: { type: "boolean" },
+          includeIgnored: { type: "boolean" },
+          includeUntracked: { type: "boolean" },
+          recursive: { type: "boolean" },
+          confirm: confirmedMutation,
+          maxCount: { type: "integer", minimum: 1, maximum: 200 },
+          timeoutMs: { type: "integer", minimum: 1, maximum: 600000 },
+        },
+        required: ["organizationId", "repositoryKey", "operation", "confirm"],
+        additionalProperties: false,
+      },
+      approvalPolicy: "ask",
+      parallelSafe: false,
+      async run(ctx) {
+        const organizationId = requiredString(ctx.args.organizationId, "organizationId");
+        const repositoryKey = requiredString(ctx.args.repositoryKey, "repositoryKey");
+        return masterRequest(
+          client,
+          ctx,
+          "POST",
+          `/master-agent-access/organizations/${encodeURIComponent(organizationId)}/repositories/${encodeURIComponent(repositoryKey)}/git`,
+          masterGitBody(ctx.args),
+        );
+      },
+    },
+    {
+      name: "vera_master_delegate_to_organization_agent",
+      description:
+        "Delegate a prompt to an approved organization agent through a new isolated Letta conversation. Requires delegation.use and human approval.",
+      parameters: {
+        type: "object",
+        properties: {
+          ...organizationAgentFields,
+          description: { type: "string", minLength: 1, maxLength: 120 },
+          prompt: { type: "string", minLength: 1, maxLength: 500000 },
+          confirm: confirmedMutation,
+        },
+        required: ["organizationId", "agentId", "description", "prompt", "confirm"],
+        additionalProperties: false,
+      },
+      approvalPolicy: "ask",
+      parallelSafe: false,
+      async run(ctx) {
+        const organizationId = requiredString(ctx.args.organizationId, "organizationId");
+        return masterRequest(
+          client,
+          ctx,
+          "POST",
+          `/master-agent-access/organizations/${encodeURIComponent(organizationId)}/delegations`,
+          {
+            agentId: requiredString(ctx.args.agentId, "agentId"),
+            description: requiredString(ctx.args.description, "description"),
+            prompt: requiredString(ctx.args.prompt, "prompt"),
+            confirm: ctx.args.confirm === true,
+          },
+        );
+      },
+    },
+  ];
+
+  for (const definition of masterAgentTools) {
+    disposers.push(
+      letta.tools.register({
+        ...definition,
+        async run(ctx) {
+          try {
+            return await definition.run(ctx);
+          } catch (error) {
+            return toolError(error);
+          }
+        },
+      }),
+    );
+  }
 
   return disposers;
 }

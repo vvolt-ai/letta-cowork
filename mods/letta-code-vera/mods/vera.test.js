@@ -49,14 +49,22 @@ describe("Vera mod", () => {
       "vera_channel_send_file",
       "vera_master_list_accessible_organizations",
       "vera_master_list_organization_agents",
+      "vera_master_get_organization_agent",
+      "vera_master_create_organization_agent",
+      "vera_master_update_organization_agent",
+      "vera_master_delete_organization_agent",
+      "vera_master_get_agent_instructions",
+      "vera_master_update_agent_instructions",
+      "vera_master_list_agent_memory",
+      "vera_master_get_agent_memory_block",
+      "vera_master_update_agent_memory_block",
+      "vera_master_git_read",
+      "vera_master_git_write",
+      "vera_master_delegate_to_organization_agent",
     ]);
     expect(letta.commands.get("vera-connect").showInTranscript).toBe(false);
-    expect(letta.tools.get("vera_channel_send").approvalPolicy).toBe(
-      "alwaysAsk",
-    );
-    expect(letta.tools.get("vera_channel_send_file").approvalPolicy).toBe(
-      "alwaysAsk",
-    );
+    expect(letta.tools.get("vera_channel_send").approvalPolicy).toBe("alwaysAsk");
+    expect(letta.tools.get("vera_channel_send_file").approvalPolicy).toBe("alwaysAsk");
 
     dispose();
     expect(letta.commands.size).toBe(0);

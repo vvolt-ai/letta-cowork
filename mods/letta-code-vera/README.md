@@ -102,6 +102,18 @@ Vera's OTP request endpoint is enumeration-safe: an accepted response does not p
 | `vera_mcp_call_tool` | Invoke any exact namespaced MCP tool advertised to the authenticated Vera user | Always asks |
 | `vera_master_list_accessible_organizations` | List organization grants for the exact enrolled runtime agent | Automatic |
 | `vera_master_list_organization_agents` | List grant-filtered agents in one accessible organization | Automatic |
+| `vera_master_get_organization_agent` | Read one grant-scoped organization agent | Automatic |
+| `vera_master_create_organization_agent` | Create an agent under an organization-wide `agents.manage` grant | Always asks |
+| `vera_master_update_organization_agent` | Update an approved agent with optimistic concurrency | Always asks |
+| `vera_master_delete_organization_agent` | Permanently delete an approved agent with optimistic concurrency | Always asks |
+| `vera_master_get_agent_instructions` | Read system instructions and their concurrency hash | Automatic |
+| `vera_master_update_agent_instructions` | Update system instructions while preserving protected marked layers | Always asks |
+| `vera_master_list_agent_memory` | List approved-agent core-memory blocks | Automatic |
+| `vera_master_get_agent_memory_block` | Read one core-memory block and its concurrency hash | Automatic |
+| `vera_master_update_agent_memory_block` | Update one core-memory block with optimistic concurrency | Always asks |
+| `vera_master_git_read` | Run grant-scoped read-only Git operations | Automatic |
+| `vera_master_git_write` | Run grant-scoped mutating Git operations | Always asks |
+| `vera_master_delegate_to_organization_agent` | Delegate through a new isolated Letta conversation | Always asks |
 | `vera_channels_list` | List owned/shared channels visible to the user | Automatic |
 | `vera_channel_history` | Read channel message logs | Automatic |
 | `vera_channel_send` | Send a non-email text message | Always asks |
@@ -152,8 +164,19 @@ POST /master-agent-auth/installations/enroll
 GET  /master-agent-access/status
 POST /master-agent-auth/challenges
 POST /master-agent-auth/tokens/exchange
-GET  /master-agent-access/organizations
-GET  /master-agent-access/organizations/:organizationId/agents
+GET    /master-agent-access/organizations
+GET    /master-agent-access/organizations/:organizationId/agents
+POST   /master-agent-access/organizations/:organizationId/agents
+GET    /master-agent-access/organizations/:organizationId/agents/:agentId
+PATCH  /master-agent-access/organizations/:organizationId/agents/:agentId
+DELETE /master-agent-access/organizations/:organizationId/agents/:agentId
+GET    /master-agent-access/organizations/:organizationId/agents/:agentId/instructions
+PUT    /master-agent-access/organizations/:organizationId/agents/:agentId/instructions
+GET    /master-agent-access/organizations/:organizationId/agents/:agentId/memory
+GET    /master-agent-access/organizations/:organizationId/agents/:agentId/memory/:label
+PUT    /master-agent-access/organizations/:organizationId/agents/:agentId/memory/:label
+POST   /master-agent-access/organizations/:organizationId/repositories/:repositoryKey/git
+POST   /master-agent-access/organizations/:organizationId/delegations
 
 GET  /channels/:channelId/messages
 POST /channels/:channelId/send
