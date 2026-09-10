@@ -31,14 +31,17 @@ async function requestJson(fetchImpl, url, options = {}) {
   return parseJsonResponse(await response.text(), response.status);
 }
 
-export function openSystemBrowser(url, platform = process.platform) {
+export function systemBrowserCommand(url, platform = process.platform) {
   const target = String(url);
-  const command =
-    platform === "darwin"
-      ? ["open", [target]]
-      : platform === "win32"
-        ? ["cmd", ["/c", "start", "", target]]
-        : ["xdg-open", [target]];
+  return platform === "darwin"
+    ? ["open", [target]]
+    : platform === "win32"
+      ? ["rundll32.exe", ["url.dll,FileProtocolHandler", target]]
+      : ["xdg-open", [target]];
+}
+
+export function openSystemBrowser(url, platform = process.platform) {
+  const command = systemBrowserCommand(url, platform);
   return new Promise((resolve, reject) => {
     const child = spawn(command[0], command[1], {
       detached: true,

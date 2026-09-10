@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { authorizeInBrowser, pkceChallenge } from "./browser-oauth.js";
+import {
+  authorizeInBrowser,
+  pkceChallenge,
+  systemBrowserCommand,
+} from "./browser-oauth.js";
 
 function json(value, status = 200) {
   return new Response(JSON.stringify(value), {
@@ -14,6 +18,15 @@ describe("Vera browser OAuth", () => {
     expect(pkceChallenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk")).toBe(
       "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
     );
+  });
+
+  test("preserves the complete OAuth URL when launching on Windows", () => {
+    const url =
+      "https://vera.example/authorize?response_type=code&client_id=client-1&state=state-1";
+    expect(systemBrowserCommand(url, "win32")).toEqual([
+      "rundll32.exe",
+      ["url.dll,FileProtocolHandler", url],
+    ]);
   });
 
   test("registers a loopback client and exchanges the callback code", async () => {

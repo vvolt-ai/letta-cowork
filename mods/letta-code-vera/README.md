@@ -70,6 +70,8 @@ Run `/vera-connect` while disconnected. The mod dynamically registers a public P
 /vera-connect --server https://vera-cowork-server.ngrok.app browser
 ```
 
+On Windows, the mod launches the complete authorization URL directly through the system URL handler. Version `0.5.1` fixes the older `cmd /c start` path that could truncate the query at the first `&`, causing Vera to report a missing `client_id`.
+
 Email OTP remains available as a non-browser fallback:
 
 ```text
