@@ -1,5 +1,9 @@
 #!/usr/bin/env node
 
+import { readFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+
 const DEFAULT_SERVER_URL = 'https://vera-cowork-server.ngrok.app';
 const ENDPOINT_PATH = '/mcp';
 const ENDPOINT_ENV = 'VERA_MCP_URL';
@@ -11,8 +15,8 @@ const ALLOWED_TOOLS = new Set([
   'vera_get_schedule',
   'vera_list_schedule_runs',
   'vera_search_knowledge',
-  'vera_list_organization_agents',
-  'vera_delegate_to_organization_agent',
+  'vera_list_accessible_organization_agents',
+  'vera_send_message_to_organization_agent',
 ]);
 const MAX_INPUT_BYTES = 256 * 1024;
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
@@ -23,15 +27,69 @@ function fail(message) {
   throw new Error(message);
 }
 
-function resolveEndpoint() {
+function resolveEndpoint(coworkServerUrl) {
   const explicitEndpoint = process.env[ENDPOINT_ENV]?.trim();
   if (explicitEndpoint) return new URL(explicitEndpoint);
 
   const baseUrl =
+    coworkServerUrl ||
+    process.env.VERA_COWORK_API_URL?.trim() ||
     process.env.VERA_SERVER_URL?.trim() ||
     process.env.COWORK_SERVER_URL?.trim() ||
     DEFAULT_SERVER_URL;
   return new URL(ENDPOINT_PATH, baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`);
+}
+
+function unwrapEnvValue(value) {
+  const trimmed = String(value ?? '').trim();
+  if (trimmed.length >= 2) {
+    const quote = trimmed[0];
+    if ((quote === "'" || quote === '"') && trimmed.at(-1) === quote) {
+      return trimmed.slice(1, -1);
+    }
+  }
+  return trimmed;
+}
+
+function parseCoworkEnv(contents) {
+  const values = {};
+  for (const line of String(contents ?? '').split(/\r?\n/)) {
+    const match = line.match(/^\s*(?:export\s+)?([A-Z_][A-Z0-9_]*)\s*=\s*(.*?)\s*$/);
+    if (!match) continue;
+    const [, key, rawValue] = match;
+    if (!['COWORK_TOKEN', 'VERA_COWORK_API_URL', 'VERA_SERVER_URL'].includes(key)) continue;
+    const value = unwrapEnvValue(rawValue);
+    if (value && !value.includes('\0')) values[key] = value;
+  }
+  return values;
+}
+
+async function resolveAuthentication() {
+  const coworkEnvPath =
+    process.env.VERA_COWORK_ENV_PATH?.trim() ||
+    join(process.env.HOME || homedir(), '.letta-cowork', 'cowork.env');
+  try {
+    const values = parseCoworkEnv(await readFile(coworkEnvPath, 'utf8'));
+    if (values.COWORK_TOKEN) {
+      return {
+        token: values.COWORK_TOKEN,
+        serverUrl: values.VERA_COWORK_API_URL || values.VERA_SERVER_URL || '',
+      };
+    }
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+  }
+
+  const coworkToken = process.env.COWORK_TOKEN?.trim();
+  if (coworkToken) {
+    return {
+      token: coworkToken,
+      serverUrl: process.env.VERA_COWORK_API_URL?.trim() || '',
+    };
+  }
+
+  const veraToken = process.env.VERA_TOKEN?.trim();
+  return veraToken ? { token: veraToken, serverUrl: '' } : null;
 }
 
 async function readArguments() {
@@ -112,29 +170,28 @@ async function main() {
     );
   }
 
-  const token =
-    process.env.VERA_TOKEN?.trim() || process.env.COWORK_TOKEN?.trim();
-  if (!token) {
+  const authentication = await resolveAuthentication();
+  if (!authentication) {
     fail(
-      'Neither VERA_TOKEN nor COWORK_TOKEN is available. Authenticate this agent with the approved Vera login/token workflow, then start a new session.',
+      'No Cowork-managed or standalone Vera token is available. Authenticate with Cowork or the approved Vera login workflow, then retry.',
     );
   }
 
   const argumentsObject = await readArguments();
   const controller = new AbortController();
   const requestTimeoutMs =
-    toolName === 'vera_delegate_to_organization_agent'
+    toolName === 'vera_send_message_to_organization_agent'
       ? DELEGATION_REQUEST_TIMEOUT_MS
       : DEFAULT_REQUEST_TIMEOUT_MS;
   const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
   let response;
 
   try {
-    response = await fetch(resolveEndpoint(), {
+    response = await fetch(resolveEndpoint(authentication.serverUrl), {
       method: 'POST',
       headers: {
         Accept: 'application/json, text/event-stream',
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${authentication.token}`,
         'Content-Type': 'application/json',
         'User-Agent': 'letta-code-vera-mcp-skill/1.0',
         'ngrok-skip-browser-warning': 'true',

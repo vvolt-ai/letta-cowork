@@ -312,8 +312,20 @@ describe("VeraClient", () => {
       env,
       fetch: async (url, init) => {
         requests.push({ url, init });
-        return requests.length === 1
-          ? json([{ agentId: "agent-specialist" }])
+        return new URL(url).pathname === "/agent-communication/available-agents"
+          ? json({
+              summary: { total: 1 },
+              agents: [
+                {
+                  publicationId: "publisher-org:agent-specialist",
+                  organizationId: "publisher-org",
+                  organizationName: "Publisher",
+                  agentId: "agent-specialist",
+                  sameOrganization: false,
+                  grantedThrough: "trusted_member",
+                },
+              ],
+            })
           : json({ conversationId: "conversation-1" });
       },
     });
@@ -325,15 +337,18 @@ describe("VeraClient", () => {
       prompt: "Please review this task",
     });
 
-    expect(new URL(requests[0].url).pathname).toBe("/organization-agents");
-    expect(new URL(requests[1].url).pathname).toBe(
-      "/organization-agents/delegate",
+    expect(new URL(requests[0].url).pathname).toBe(
+      "/agent-communication/available-agents",
     );
-    expect(JSON.parse(requests[1].init.body)).toEqual({
-      agentId: "agent-specialist",
-      description: "Review task",
-      prompt: "Please review this task",
-      confirm: true,
+    expect(new URL(requests[1].url).pathname).toBe(
+      "/agent-communication/available-agents",
+    );
+    expect(new URL(requests[2].url).pathname).toBe(
+      "/agent-communication/send",
+    );
+    expect(JSON.parse(requests[2].init.body)).toEqual({
+      publicationId: "publisher-org:agent-specialist",
+      message: "Please review this task",
     });
   });
 

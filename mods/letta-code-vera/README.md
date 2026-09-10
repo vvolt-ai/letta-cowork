@@ -102,8 +102,10 @@ Vera's OTP request endpoint is enumeration-safe: an accepted response does not p
 |---|---|---|
 | `vera_mcp_list_tools` | Discover available Vera MCP tools and schemas | Automatic |
 | `vera_mcp_call_tool` | Invoke any exact namespaced MCP tool advertised to the authenticated Vera user | Always asks |
-| `vera_list_organization_agents` | List same-organization agents published to the connected Vera member | Automatic |
-| `vera_delegate_to_organization_agent` | Delegate to a published same-organization agent without Master Clio | Always asks |
+| `vera_list_accessible_organization_agents` | List same- and cross-organization agents through the canonical publication directory, including publisher and exact publication ID | Automatic |
+| `vera_send_message_to_organization_agent` | Send to a published agent using its exact publication ID | Always asks |
+| `vera_list_organization_agents` | Compatibility alias that lists the same publication directory | Automatic |
+| `vera_delegate_to_organization_agent` | Compatibility alias that resolves an agent ID against the current directory before sending | Always asks |
 | `vera_master_list_accessible_organizations` | List organization grants for the exact enrolled runtime agent; hidden from non-Master agents | Automatic |
 | `vera_master_list_organization_agents` | List grant-filtered agents in one accessible organization | Automatic |
 | `vera_master_get_organization_agent` | Read one grant-scoped organization agent | Automatic |

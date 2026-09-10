@@ -585,22 +585,47 @@ export class VeraClient {
     });
   }
 
-  async listOrganizationAgents(signal) {
-    const agents = await this.request("/organization-agents", { signal });
-    return Array.isArray(agents) ? agents : [];
+  async listAccessibleOrganizationAgents(signal) {
+    const directory = await this.request("/agent-communication/available-agents", {
+      signal,
+    });
+    return {
+      summary: directory?.summary ?? {},
+      agents: Array.isArray(directory?.agents) ? directory.agents : [],
+    };
   }
 
-  async delegateToOrganizationAgent(input, signal) {
-    return this.request("/organization-agents/delegate", {
+  async listOrganizationAgents(signal) {
+    const directory = await this.listAccessibleOrganizationAgents(signal);
+    return directory.agents;
+  }
+
+  async sendMessageToOrganizationAgent(input, signal) {
+    return this.request("/agent-communication/send", {
       method: "POST",
       body: {
-        agentId: input.agentId,
-        description: input.description,
-        prompt: input.prompt,
-        confirm: true,
+        publicationId: input.publicationId,
+        message: input.message,
       },
       signal,
     });
+  }
+
+  async delegateToOrganizationAgent(input, signal) {
+    const agents = await this.listOrganizationAgents(signal);
+    const target = agents.find((agent) => agent.agentId === input.agentId);
+    if (!target?.publicationId) {
+      throw new Error(
+        "The requested agent is not in the connected Vera member's current published-agent directory",
+      );
+    }
+    return this.sendMessageToOrganizationAgent(
+      {
+        publicationId: target.publicationId,
+        message: input.prompt,
+      },
+      signal,
+    );
   }
 
   async listChannels(signal) {

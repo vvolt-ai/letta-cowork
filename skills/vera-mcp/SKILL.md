@@ -7,7 +7,7 @@ description: Uses Vera's native MCP tools for authenticated identity, visible co
 
 This skill is self-contained. Call Vera's native MCP endpoint through the bundled `scripts/call-mcp.mjs` client; do not look for, add, mount, refresh, or attach MCP server tools. Vera applies the authenticated user's organization, ownership, sharing, and knowledge ACL boundaries.
 
-The client reads `VERA_TOKEN` first and falls back to the current agent's `COWORK_TOKEN`; it never accepts a token as an argument. Both are authenticated Vera user credentials accepted by the native MCP endpoint. It uses `VERA_MCP_URL` when set, otherwise `/mcp` under `VERA_SERVER_URL` or `COWORK_SERVER_URL`, and finally the published Vera server default. Never print, echo, log, or ask the user to paste either token in chat.
+The client re-reads the current Cowork session from `~/.letta-cowork/cowork.env` first, then uses `COWORK_TOKEN`, and uses standalone `VERA_TOKEN` only as a final fallback. This keeps skill calls aligned with the identity shown by `/vera-connect` instead of allowing a stale process-level token to override Cowork. It never accepts a token as an argument. It uses `VERA_MCP_URL` when set, otherwise the Cowork session server, `/mcp` under the configured Vera/Cowork server URL, and finally the published Vera server default. Never print, echo, log, or ask the user to paste a token in chat.
 
 ## Calling a tool
 
@@ -44,8 +44,8 @@ If this skill was installed somewhere other than `~/.letta/skills/vera-mcp`, use
 | `vera_get_schedule` | Read one owned schedule by UUID. |
 | `vera_list_schedule_runs` | Read a bounded page of run history for one owned schedule. |
 | `vera_search_knowledge` | Search only knowledge documents allowed by Vera's ACL. |
-| `vera_list_organization_agents` | List owned/shared Letta agents available through the current Vera organization. |
-| `vera_delegate_to_organization_agent` | Run one isolated task on a listed organization agent. |
+| `vera_list_accessible_organization_agents` | List same- and cross-organization Letta agents published to the current Vera member, optionally filtered by grant scope. |
+| `vera_send_message_to_organization_agent` | Send one bounded message to a listed agent using its exact publication ID. |
 
 The bundled client accepts only these exact tool names; do not add an MCP client prefix. Invoke them only through `scripts/call-mcp.mjs`. Do not route them through Vera's generic outbound `McpFetchTools`/`McpRunTool` connector catalog or a namespaced `vera_mcp__...` tool; that is a separate cached connector path.
 
@@ -136,10 +136,10 @@ Example arguments:
 
 ## Organization-agent delegation workflow
 
-1. Call `vera_list_organization_agents`; never guess or reuse an ID from another user or organization.
-2. Select an agent from the returned current directory.
-3. Call `vera_delegate_to_organization_agent` with `agentId`, a short `description`, and a complete `prompt`.
-4. Treat each call as a fresh isolated conversation. Include all required context in the prompt.
+1. Call `vera_list_accessible_organization_agents` with `scope: "all"`; never guess or reuse an ID from another user or organization.
+2. Select an agent from the returned directory and preserve its exact `publicationId` and publisher organization.
+3. Call `vera_send_message_to_organization_agent` with that `publicationId` and a complete `message`.
+4. Treat each call as a fresh isolated conversation. Include all required context in the message.
 5. Report the returned final result and any clearly stated limitations.
 
 Delegation prompt length is capped at 20,000 characters. It does not expose the organization token or provide server-local client tools to the target agent.
@@ -153,8 +153,8 @@ Delegation prompt length is capped at 20,000 characters. It does not expose the 
 - Show one schedule → list/verify, then `vera_get_schedule`
 - Did a scheduled task run? → list/verify, then `vera_list_schedule_runs`
 - Find indexed internal context → `vera_search_knowledge`
-- Which organization agents can I use? → `vera_list_organization_agents`
-- Ask an organization agent to complete a task → list first, then `vera_delegate_to_organization_agent`
+- Which organization agents can I use? → `vera_list_accessible_organization_agents`
+- Ask an organization agent to complete a task → list first, then `vera_send_message_to_organization_agent`
 
 Do not use this skill for:
 

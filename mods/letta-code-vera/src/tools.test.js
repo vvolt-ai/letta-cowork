@@ -59,6 +59,25 @@ describe("Vera tools", () => {
   test("uses normal Vera user authorization for organization-agent delegation", async () => {
     const calls = [];
     const client = {
+      async listAccessibleOrganizationAgents() {
+        return {
+          summary: { total: 1, trustedMember: 1 },
+          agents: [
+            {
+              publicationId: "publisher-org:agent-specialist",
+              organizationId: "publisher-org",
+              organizationName: "Publisher",
+              agentId: "agent-specialist",
+              name: "Specialist",
+              grantedThrough: "trusted_member",
+            },
+          ],
+        };
+      },
+      async sendMessageToOrganizationAgent(input) {
+        calls.push(input);
+        return { requestId: "request-1", finalText: "canonical done" };
+      },
       async listOrganizationAgents() {
         return [{ agentId: "agent-specialist", name: "Specialist" }];
       },
@@ -68,10 +87,31 @@ describe("Vera tools", () => {
       },
     };
     const tools = registeredTools(client);
+    const canonicalList = tools.get(
+      "vera_list_accessible_organization_agents",
+    );
+    const canonicalSend = tools.get("vera_send_message_to_organization_agent");
     const list = tools.get("vera_list_organization_agents");
     const delegate = tools.get("vera_delegate_to_organization_agent");
 
+    expect(canonicalSend.approvalPolicy).toBe("ask");
     expect(delegate.approvalPolicy).toBe("ask");
+    const canonicalDirectory = JSON.parse(
+      await canonicalList.run({
+        args: { scope: "trusted_member" },
+        signal: undefined,
+      }),
+    );
+    expect(canonicalDirectory.count).toBe(1);
+    expect(canonicalDirectory.agents[0].organizationName).toBe("Publisher");
+    const canonicalResult = await canonicalSend.run({
+      args: {
+        publicationId: "publisher-org:agent-specialist",
+        message: "Please review this work",
+      },
+      signal: undefined,
+    });
+    expect(JSON.parse(canonicalResult).finalText).toBe("canonical done");
     expect(JSON.parse(await list.run({ args: {}, signal: undefined })).total).toBe(1);
     const result = await delegate.run({
       args: {
@@ -84,6 +124,10 @@ describe("Vera tools", () => {
 
     expect(JSON.parse(result).output).toBe("done");
     expect(calls).toEqual([
+      {
+        publicationId: "publisher-org:agent-specialist",
+        message: "Please review this work",
+      },
       {
         agentId: "agent-specialist",
         description: "Review task",

@@ -398,9 +398,104 @@ export function registerTools(letta, client) {
 
   disposers.push(
     letta.tools.register({
+      name: "vera_list_accessible_organization_agents",
+      description:
+        "List all same- and cross-organization agents the connected Vera member may contact. Returns publisher organization, exact publicationId, and grant scope. Use the exact publicationId with vera_send_message_to_organization_agent.",
+      parameters: {
+        type: "object",
+        properties: {
+          scope: {
+            type: "string",
+            enum: [
+              "all",
+              "organization",
+              "member",
+              "trusted_organization",
+              "trusted_member",
+            ],
+            description: "Optional grant-scope filter. Defaults to all.",
+          },
+        },
+        additionalProperties: false,
+      },
+      requiresApproval: false,
+      parallelSafe: true,
+      async run(ctx) {
+        try {
+          const scope = String(ctx.args.scope ?? "all");
+          const directory = await client.listAccessibleOrganizationAgents(ctx.signal);
+          const agents =
+            scope === "all"
+              ? directory.agents
+              : directory.agents.filter(
+                  (agent) => agent.grantedThrough === scope,
+                );
+          return formatJson({
+            scope,
+            summary: directory.summary,
+            count: agents.length,
+            agents,
+          });
+        } catch (error) {
+          return toolError(error);
+        }
+      },
+    }),
+  );
+
+  disposers.push(
+    letta.tools.register({
+      name: "vera_send_message_to_organization_agent",
+      description:
+        "Send one bounded message to a same- or cross-organization agent authorized for the connected Vera member. Use an exact publicationId from vera_list_accessible_organization_agents. Always requires human approval.",
+      parameters: {
+        type: "object",
+        properties: {
+          publicationId: {
+            type: "string",
+            minLength: 1,
+            maxLength: 512,
+            description:
+              "Exact opaque publicationId returned by vera_list_accessible_organization_agents.",
+          },
+          message: {
+            type: "string",
+            minLength: 1,
+            maxLength: 20000,
+            description: "Complete message or task for the target agent.",
+          },
+        },
+        required: ["publicationId", "message"],
+        additionalProperties: false,
+      },
+      approvalPolicy: "ask",
+      parallelSafe: false,
+      async run(ctx) {
+        try {
+          return formatJson(
+            await client.sendMessageToOrganizationAgent(
+              {
+                publicationId: requiredString(
+                  ctx.args.publicationId,
+                  "publicationId",
+                ),
+                message: requiredString(ctx.args.message, "message"),
+              },
+              ctx.signal,
+            ),
+          );
+        } catch (error) {
+          return toolError(error);
+        }
+      },
+    }),
+  );
+
+  disposers.push(
+    letta.tools.register({
       name: "vera_list_organization_agents",
       description:
-        "List same-organization agents published to the connected Vera member. This uses normal Vera user authorization and does not require Master Clio enrollment.",
+        "List same- and cross-organization agents published to the connected Vera member, including each publisher organization and grant scope. This uses normal Vera user authorization and does not require Master Clio enrollment.",
       parameters: {
         type: "object",
         properties: {},
@@ -423,7 +518,7 @@ export function registerTools(letta, client) {
     letta.tools.register({
       name: "vera_delegate_to_organization_agent",
       description:
-        "Delegate work to an agent published to the connected Vera member's organization. Use vera_list_organization_agents first. This does not require Master Clio enrollment and always requires human approval.",
+        "Delegate work to a same- or cross-organization agent published to the connected Vera member. Use vera_list_organization_agents first. This does not require Master Clio enrollment and always requires human approval.",
       parameters: {
         type: "object",
         properties: {

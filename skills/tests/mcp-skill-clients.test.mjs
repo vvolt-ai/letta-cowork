@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
@@ -17,6 +20,7 @@ function runClient(client, tool, input, env = {}) {
       env: {
         PATH: process.env.PATH,
         HOME: process.env.HOME,
+        VERA_COWORK_ENV_PATH: join(tmpdir(), `missing-cowork-env-${process.pid}`),
         ...env,
       },
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -142,6 +146,29 @@ test('bundled clients call their stateless MCP endpoints with VERA_TOKEN', async
   );
 });
 
+test('Vera client prefers the current Cowork session over a stale VERA_TOKEN', async (t) => {
+  const mock = await startMcpServer();
+  t.after(mock.close);
+  const home = await mkdtemp(join(tmpdir(), 'vera-mcp-cowork-'));
+  t.after(() => rm(home, { recursive: true, force: true }));
+  const coworkDirectory = join(home, '.letta-cowork');
+  await mkdir(coworkDirectory);
+  await writeFile(
+    join(coworkDirectory, 'cowork.env'),
+    `COWORK_TOKEN=cowork-token\nVERA_COWORK_API_URL=${mock.url}\n`,
+  );
+
+  const result = await runClient(veraClient, 'vera_whoami', '{}', {
+    HOME: home,
+    VERA_COWORK_ENV_PATH: join(coworkDirectory, 'cowork.env'),
+    VERA_TOKEN: 'stale-vera-token',
+  });
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(mock.requests[0].authorization, 'Bearer cowork-token');
+  assert.equal(mock.requests[0].url, '/mcp');
+});
+
 test('explicit endpoint override is supported and MCP tool errors fail', async (t) => {
   const mock = await startMcpServer();
   t.after(mock.close);
@@ -160,7 +187,7 @@ test('explicit endpoint override is supported and MCP tool errors fail', async (
 test('clients reject missing secrets, unknown tools, and invalid argument JSON', async () => {
   const missingToken = await runClient(veraClient, 'vera_whoami', '{}');
   assert.equal(missingToken.code, 1);
-  assert.match(missingToken.stderr, /VERA_TOKEN is unavailable/);
+  assert.match(missingToken.stderr, /No Cowork-managed or standalone Vera token is available/);
 
   const unknownTool = await runClient(neo4jClient, 'vera_whoami', '{}', {
     VERA_TOKEN: 'do-not-print',
