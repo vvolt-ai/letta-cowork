@@ -71,6 +71,29 @@ async function parseResponse(response) {
   }
 }
 
+function nativeMcpErrorMessage(error) {
+  if (typeof error?.message === "string" && error.message.trim()) return error.message;
+  return "Vera native MCP request failed";
+}
+
+function nativeMcpToolOutput(result) {
+  const text = Array.isArray(result?.content)
+    ? result.content
+        .filter((item) => item?.type === "text" && typeof item.text === "string")
+        .map((item) => item.text)
+        .join("\n")
+    : "";
+  if (text) return text;
+  if (result?.structuredContent !== undefined) {
+    return JSON.stringify(result.structuredContent, null, 2);
+  }
+  return JSON.stringify(result ?? null, null, 2);
+}
+
+function isNativeVeraMcpTool(toolName) {
+  return /^vera_[a-z0-9_]+$/i.test(String(toolName));
+}
+
 function safeInteger(value, fallback, minimum, maximum) {
   const parsed = Number.parseInt(String(value ?? ""), 10);
   if (!Number.isFinite(parsed)) return fallback;
@@ -572,12 +595,64 @@ export class VeraClient {
     return this.request("/auth/me", { signal });
   }
 
+  async requestNativeMcp(method, params, signal) {
+    const payload = await this.request("/mcp", {
+      method: "POST",
+      headers: { accept: "application/json, text/event-stream" },
+      body: {
+        jsonrpc: "2.0",
+        id: "letta-code-vera",
+        method,
+        params,
+      },
+      signal,
+    });
+    if (payload?.error) {
+      throw new VeraApiError(nativeMcpErrorMessage(payload.error), {
+        code: payload.error.code ?? null,
+      });
+    }
+    if (!payload || payload.result === undefined) {
+      throw new VeraApiError("Vera native MCP returned no result");
+    }
+    return payload.result;
+  }
+
   async listMcpTools(signal) {
-    const tools = await this.request("/mcp/tools", { signal });
-    return Array.isArray(tools) ? tools : [];
+    const connectorTools = await this.request("/mcp/tools", { signal });
+    const nativeCatalog = await this.requestNativeMcp("tools/list", {}, signal);
+    const nativeTools = Array.isArray(nativeCatalog?.tools)
+      ? nativeCatalog.tools.map((tool) => ({
+          name: tool.name,
+          description: tool.description ?? "",
+          parameters: tool.inputSchema ?? {},
+        }))
+      : [];
+    const tools = [
+      ...nativeTools,
+      ...(Array.isArray(connectorTools) ? connectorTools : []),
+    ];
+    return [
+      ...new Map(
+        tools
+          .filter((tool) => typeof tool?.name === "string" && tool.name.trim())
+          .map((tool) => [tool.name, tool]),
+      ).values(),
+    ];
   }
 
   async invokeMcpTool(toolName, args, signal) {
+    if (isNativeVeraMcpTool(toolName)) {
+      const result = await this.requestNativeMcp(
+        "tools/call",
+        { name: toolName, arguments: args ?? {} },
+        signal,
+      );
+      return {
+        output: nativeMcpToolOutput(result),
+        isError: result?.isError === true,
+      };
+    }
     return this.request("/mcp/tools/invoke", {
       method: "POST",
       body: { toolName, args: args ?? {} },

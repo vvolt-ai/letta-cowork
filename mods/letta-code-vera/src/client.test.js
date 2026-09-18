@@ -29,6 +29,14 @@ function json(payload, status = 200) {
   });
 }
 
+function nativeMcpResult(result) {
+  return json({ jsonrpc: "2.0", id: "letta-code-vera", result });
+}
+
+function nativeMcpTools(tools = []) {
+  return nativeMcpResult({ tools });
+}
+
 function jwt(expiresAtSeconds) {
   const encode = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
   return `${encode({ alg: "none" })}.${encode({ exp: expiresAtSeconds })}.signature`;
@@ -54,6 +62,7 @@ describe("VeraClient", () => {
       if (path === "/mcp/tools") {
         return json([{ name: "odoo__search", description: "Search Odoo", parameters: {} }]);
       }
+      if (path === "/mcp") return nativeMcpTools();
       return json({ message: "not found" }, 404);
     };
     const client = new VeraClient({ env, fetch });
@@ -97,16 +106,19 @@ describe("VeraClient", () => {
       env,
       fetch: async (url, init) => {
         requests.push({ url, init });
-        return json([]);
+        return new URL(url).pathname === "/mcp" ? nativeMcpTools() : json([]);
       },
     });
 
     await client.listMcpTools();
 
-    expect(requests).toHaveLength(1);
-    expect(requests[0].init.headers.get("authorization")).toBe(
-      "Bearer cowork-access-token",
-    );
+    expect(requests).toHaveLength(2);
+    expect(
+      requests.every(
+        (request) =>
+          request.init.headers.get("authorization") === "Bearer cowork-access-token",
+      ),
+    ).toBe(true);
     expect((await client.getConnectionInfo()).source).toBe("cowork");
   });
 
@@ -131,19 +143,21 @@ describe("VeraClient", () => {
           );
           return json({ message: "expired" }, 401);
         }
-        return json([]);
+        return new URL(url).pathname === "/mcp" ? nativeMcpTools() : json([]);
       },
     });
 
     await client.listMcpTools();
 
-    expect(requests).toHaveLength(2);
+    expect(requests).toHaveLength(3);
     expect(requests[0].init.headers.get("authorization")).toBe(
       "Bearer cowork-token-1",
     );
-    expect(requests[1].init.headers.get("authorization")).toBe(
-      "Bearer cowork-token-2",
-    );
+    expect(
+      requests.slice(1).every(
+        (request) => request.init.headers.get("authorization") === "Bearer cowork-token-2",
+      ),
+    ).toBe(true);
   });
 
   test("does not revoke a Cowork-managed session during Vera disconnect", async () => {
@@ -199,6 +213,7 @@ describe("VeraClient", () => {
           return json({ accessToken: freshToken, refreshToken: "refresh-new" });
         }
         if (path === "/mcp/tools") return json([]);
+        if (path === "/mcp") return nativeMcpTools();
         return json({}, 404);
       },
     });
@@ -208,6 +223,7 @@ describe("VeraClient", () => {
     expect(requests.map(({ url }) => new URL(url).pathname)).toEqual([
       "/auth/refresh",
       "/mcp/tools",
+      "/mcp",
     ]);
     expect(JSON.parse(requests[0].init.body)).toEqual({
       refreshToken: "refresh-old",
@@ -286,13 +302,131 @@ describe("VeraClient", () => {
 
     const client = new VeraClient({
       env,
-      fetch: async () => json(catalog),
+      fetch: async (url) =>
+        new URL(url).pathname === "/mcp" ? nativeMcpTools() : json(catalog),
     });
 
     const tools = await client.listMcpTools();
 
     expect(tools).toHaveLength(163);
     expect(tools.at(-1).name).toBe("connector__tool_162");
+  });
+
+  test("merges native Vera tools with connector tools", async () => {
+    const env = await testEnv();
+    await writeFile(
+      env.VERA_COWORK_ENV_PATH,
+      "export COWORK_TOKEN=cowork-access-token\n",
+      "utf8",
+    );
+    const requests = [];
+    const client = new VeraClient({
+      env,
+      fetch: async (url, init) => {
+        requests.push({ url, init });
+        if (new URL(url).pathname === "/mcp") {
+          return nativeMcpTools([
+            {
+              name: "vera_list_remote_machines",
+              description: "List connected Cowork computers",
+              inputSchema: { type: "object", properties: {} },
+            },
+            {
+              name: "vera_run_remote_tool",
+              description: "Run a connected-computer tool",
+              inputSchema: {
+                type: "object",
+                properties: { environmentId: { type: "string" } },
+              },
+            },
+          ]);
+        }
+        return json([
+          {
+            name: "odoo__search",
+            description: "Search Odoo",
+            parameters: { type: "object", properties: {} },
+          },
+        ]);
+      },
+    });
+
+    const tools = await client.listMcpTools();
+
+    expect(tools.map((tool) => tool.name)).toEqual([
+      "vera_list_remote_machines",
+      "vera_run_remote_tool",
+      "odoo__search",
+    ]);
+    expect(tools[1].parameters.properties.environmentId.type).toBe("string");
+    expect(requests.map(({ url }) => new URL(url).pathname)).toEqual([
+      "/mcp/tools",
+      "/mcp",
+    ]);
+    expect(JSON.parse(requests[1].init.body)).toMatchObject({
+      jsonrpc: "2.0",
+      method: "tools/list",
+      params: {},
+    });
+  });
+
+  test("routes native Vera tool calls through the stateless MCP endpoint", async () => {
+    const env = await testEnv();
+    await writeFile(
+      env.VERA_COWORK_ENV_PATH,
+      "export COWORK_TOKEN=cowork-access-token\n",
+      "utf8",
+    );
+    const requests = [];
+    const client = new VeraClient({
+      env,
+      fetch: async (url, init) => {
+        requests.push({ url, init });
+        return nativeMcpResult({
+          content: [{ type: "text", text: '{"count":1}' }],
+          isError: false,
+        });
+      },
+    });
+
+    const result = await client.invokeMcpTool(
+      "vera_list_remote_machines",
+      {},
+    );
+
+    expect(result).toEqual({ output: '{"count":1}', isError: false });
+    expect(new URL(requests[0].url).pathname).toBe("/mcp");
+    expect(JSON.parse(requests[0].init.body)).toMatchObject({
+      jsonrpc: "2.0",
+      method: "tools/call",
+      params: { name: "vera_list_remote_machines", arguments: {} },
+    });
+  });
+
+  test("keeps namespaced connector calls on the connector runtime endpoint", async () => {
+    const env = await testEnv();
+    await writeFile(
+      env.VERA_COWORK_ENV_PATH,
+      "export COWORK_TOKEN=cowork-access-token\n",
+      "utf8",
+    );
+    const requests = [];
+    const client = new VeraClient({
+      env,
+      fetch: async (url, init) => {
+        requests.push({ url, init });
+        return json({ output: "connector result", isError: false });
+      },
+    });
+
+    const result = await client.invokeMcpTool("odoo__search", { limit: 1 });
+
+    expect(result).toEqual({ output: "connector result", isError: false });
+    expect(new URL(requests[0].url).pathname).toBe("/mcp/tools/invoke");
+    expect(JSON.parse(requests[0].init.body)).toEqual({
+      toolName: "odoo__search",
+      args: { limit: 1 },
+    });
   });
 
   test("uses normal Vera user endpoints for organization-agent delegation", async () => {

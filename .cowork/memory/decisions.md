@@ -1,6 +1,6 @@
 # letta-cowork decisions
 
-**Last updated:** 2026-08-31
+**Last updated:** 2026-09-18
 **Sensitivity:** Level 2 internal. No secrets.
 
 ## Deployment/auth
@@ -91,3 +91,11 @@ Source: Andrew Windows trace `2026-09-01.ndjson` (conversation `conv-16a6601a-b0
 - PO processing uses a <=10-read pre-write target, turn-local evidence reuse, exact-total candidate quotation matching, and one SO-line read before any product-catalog expansion.
 - The deployed Odoo connector accepts AND-only scalar domain triples; prefix boolean operators, list-valued domains, and boolean values are rejected. `odoo_call_method` args/kwargs are JSON-encoded strings.
 - Mounted Odoo results containing `{ ok: false }` are surfaced as tool errors rather than successful calls.
+
+## Letta Code Vera MCP catalog ownership — 2026-09-18
+
+- Vera exposes two distinct authenticated catalogs: native operational tools through stateless Streamable HTTP `POST /mcp`, and namespaced configured-connector tools through `GET /mcp/tools` plus `POST /mcp/tools/invoke`.
+- The Letta Code Vera mod must merge both catalogs for `vera_mcp_list_tools` and `/vera-sync`. Native unnamespaced `vera_*` calls route through MCP `tools/call`; namespaced `<connector>__<tool>` calls remain on the connector runtime endpoint.
+- A successful `/vera-sync` against only `/mcp/tools` proves connector discovery, not native Vera tool availability.
+
+Source: live post-deployment diagnosis of missing remote-machine tools, 2026-09-18.

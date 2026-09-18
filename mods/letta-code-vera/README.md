@@ -125,7 +125,7 @@ Vera's OTP request endpoint is enumeration-safe: an accepted response does not p
 | `vera_channel_send` | Send a non-email text message | Always asks |
 | `vera_channel_send_file` | Upload and send a local file through a non-email channel | Always asks |
 
-The generic MCP bridge avoids placing every connector schema in every model request. The agent first discovers the exact tool and then invokes it. Frequently used tools can be materialized as direct Letta tools in a later release.
+The generic MCP bridge avoids placing every connector or Vera-native schema in every model request. Discovery merges Vera's native Streamable HTTP catalog with the connector-centric catalog, then routes each invocation back to its owning endpoint. The agent first discovers the exact tool and then invokes it. Frequently used tools can be materialized as direct Letta tools in a later release.
 
 The generic MCP bridge does not silently remove server-advertised capabilities, including email tools. Every generic invocation uses Letta Code's `ask` approval policy. The separate `vera_channel_send` and file-send helpers continue to reject email channels so they cannot bypass the generic MCP approval boundary.
 
@@ -164,8 +164,9 @@ GET  /authorize
 POST /token
 POST /revoke
 
-GET  /mcp/tools
-POST /mcp/tools/invoke
+POST /mcp                  # Native Vera MCP tools/list and tools/call
+GET  /mcp/tools            # Namespaced configured-connector catalog
+POST /mcp/tools/invoke     # Configured-connector invocation
 
 GET  /channels/accessible
 GET  /organization-agents

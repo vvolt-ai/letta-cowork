@@ -46,7 +46,7 @@ the owner of that session. Browser OAuth authorization-code flow with PKCE is th
 ## Safety boundaries
 
 - Vera remains the source of truth for user, organization, connector, and channel authorization.
-- The dynamic `vera_mcp_list_tools` + `vera_mcp_call_tool` bridge exposes every tool currently authorized by Vera without injecting every remote schema into each model request.
+- The dynamic `vera_mcp_list_tools` + `vera_mcp_call_tool` bridge merges Vera-native tools from the authenticated `/mcp` endpoint with namespaced configured-connector tools from `/mcp/tools`, without injecting every remote schema into each model request.
 - Standalone login uses dynamic public-client registration, PKCE, state validation, and a loopback-only callback.
 - Provider credentials remain on Vera Server.
 - Non-email channel sends and file sends always require human approval.
