@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-
 import { ChannelList } from '../ChannelList';
 import { ChannelSharingModal } from '../ChannelSharingModal';
 import { ConfigModal } from '../ConfigModal';

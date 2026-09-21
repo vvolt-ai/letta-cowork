@@ -17,6 +17,10 @@ import {
   stopRemoteAccessService,
 } from "../../services/remote-access/remoteAccessService.js";
 import { ensureSchedulerInitialized, teardownScheduler } from "../../services/scheduler/bootstrap.js";
+import {
+  restartRemoteAccessService,
+  stopRemoteAccessService,
+} from "../../services/remote-access/remoteAccessService.js";
 
 // Types for IPC events
 export interface ApiConfig {
