@@ -1,5 +1,40 @@
 # Letta Code Runtime Migration Notes
 
+## 2026-09-21 — Letta Code v0.32.15 / Agent SDK v0.8.11 migration
+
+- **Upstream checkout:** fast-forwarded `letta-ai/letta-code` `main` from `2f0fb7c1` to `b69da0ee` (`v0.32.15-1-gb69da0ee`).
+- **Review range:** 183 upstream commits in `2f0fb7c1..b69da0ee`.
+- **Release dependencies:** upgraded exact pins from `@letta-ai/letta-code@0.31.13` and `@letta-ai/letta-agent-sdk@0.8.3` to `0.32.15` and `0.8.11`.
+- **Migration rule:** port observable behavior into Cowork's API-driven Electron runtime and Vera Server's copied client-tool/runtime surfaces; do not copy upstream CLI/listener architecture wholesale.
+
+### Integrated in this batch
+
+- **Runtime-scoped LS paths** (`312ccfdd`): both Cowork and Vera Server now resolve relative `LS.path` values from the scoped conversation/runtime CWD rather than the Node process CWD. Absolute paths remain unchanged.
+- **Claude-aligned overflow previews** (`e95604c0`): Bash success output uses a 30K threshold, failure output uses 10K, full redacted output is preserved in the existing private overflow file, and the model receives a 2K prefix plus the file pointer. The total client-tool backstop uses the same preview behavior and falls back to the full configured excerpt when no overflow file was written.
+- **Direct agent-ID messaging compatibility** (`ec48fd6d`, adapted): Vera still prefers and revalidates the exact discovered `publicationId`, but also accepts a raw `agent-...` ID only when it resolves to exactly one currently authorized publication. Missing and ambiguous IDs fail closed. This preserves Vera's publication/grant boundary while matching current Letta Code agent-addressing behavior.
+- **Regression coverage:** Cowork tests cover scoped LS resolution and overflow preservation/preview behavior; Vera tests cover unique raw-agent resolution and ambiguous-ID rejection.
+
+### Reviewed, not directly ported
+
+- **Subagent process-tree termination** (`41f2e7ab`) applies to upstream local child-process launchers. Cowork/Vera Task delegation is in-process/API-driven and already aborts through `AbortController`; copying the process launcher would introduce the wrong ownership model.
+- **Interrupt monitor preservation and queue parking/resume** (`59fa9c27`, `de54f4a4`) depend on upstream listener queue state. Cowork's accepted-run resume and explicit interrupt path remain the authority; queued-message parking needs a Cowork-owned durable queue before migration.
+- **Structured output schemas** (`fb34d202`) are currently an upstream listener/protocol feature. Cowork's conversation API path does not yet expose an equivalent end-to-end response-schema contract.
+- **Acting-user propagation for subagents/schedules/channels** (`d1c2f661`, `c7afb3fe`, `0ecc23ef`) was reviewed as a trust-boundary requirement, not copied as listener code. Vera continues deriving user/organization authority from verified server context; each schedule/channel path requires its own persisted-principal audit.
+- **Workflow tool** (`b25271ad`) wraps the SDK's local `query()` launcher and inherits headless process/task semantics that Cowork intentionally does not expose yet.
+- **Skill-change notifications** (`1e444154`) require upstream's long-lived listener runtime. Cowork currently rediscovers skills at its own session/tool boundaries.
+- **Cloud deployment interruption recovery** (`a78664a7`) is upstream listener infrastructure and does not map to Cowork's Electron/API run recovery.
+
+### Validation
+
+- Cowork exact dependency read-back: `@letta-ai/letta-code@0.32.15` and `@letta-ai/letta-agent-sdk@0.8.11`.
+- `bun run transpile:electron`: passed.
+- Cowork production `bun run build`: passed.
+- Cowork Node regressions: 32 tests passed, including the 2 new migration tests.
+- Vera focused agent-directory regressions: 13 tests passed.
+- Vera focused LS/overflow regressions: 6 tests passed.
+- Vera full Jest suite: passed.
+- Vera `npm run build`: passed.
+
 ## 2026-09-08 — Letta Code v0.31.13 / Agent SDK v0.8.3 migration
 
 - **Upstream checkout:** fast-forwarded `letta-ai/letta-code` `main` from `1e17af70` to `2f0fb7c1`.

@@ -15,6 +15,7 @@ import {
     getCurrentWorkingDirectory,
 } from "./_shared/runtime-context.js";
 import { redactRuntimeSecrets } from "./_shared/runtime-secrets.js";
+import { LIMITS, truncateByChars } from "./_shared/truncation.js";
 import { getShellEnv } from "./shell/shellEnv.js";
 import { buildShellLaunchers } from "./shell/shellLaunchers.js";
 import { type ShellExecutionError, spawnWithLauncher } from "./shell/shellRunner.js";
@@ -27,7 +28,18 @@ import type {
 
 const DEFAULT_TIMEOUT_MS = 2 * 60 * 1000;
 const MAX_TIMEOUT_MS = 10 * 60 * 1000;
-const MAX_OUTPUT_CHARS = 64 * 1024;
+
+function truncateBashOutput(output: string, cwd: string, failed: boolean): string {
+    return truncateByChars(
+        output,
+        failed ? LIMITS.BASH_FAILURE_OUTPUT_CHARS : LIMITS.BASH_OUTPUT_CHARS,
+        "Bash",
+        {
+            workingDirectory: cwd,
+            previewChars: LIMITS.OVERFLOW_PREVIEW_CHARS,
+        }
+    ).content;
+}
 
 // Cache the first launcher that successfully spawned. Reset on ENOENT.
 let cachedWorkingLauncher: string[] | null = null;
@@ -200,14 +212,11 @@ async function runBash(
         let output = stdout || "";
         if (stderr) output = output ? `${output}\n${stderr}` : stderr;
         output = redactRuntimeSecrets(output, ctx.runtimeEnv);
-        if (output.length > MAX_OUTPUT_CHARS) {
-            output =
-                `${output.slice(0, MAX_OUTPUT_CHARS)
-                }\n[output truncated to ${MAX_OUTPUT_CHARS} chars]`;
-        }
+        const failed = exitCode !== 0 && exitCode !== null;
+        if (output) output = truncateBashOutput(output, cwd, failed);
         if (!output) output = "(Command completed with no output)";
 
-        if (exitCode !== 0 && exitCode !== null) {
+        if (failed) {
             return {
                 output: `${recoveryNote}Exit code: ${exitCode}\n${output}`,
                 isError: true,
@@ -236,11 +245,7 @@ async function runBash(
         else if (e.message) msg += e.message;
         if (e.stdout) msg = `${e.stdout}\n${msg}`;
         msg = redactRuntimeSecrets(msg, ctx.runtimeEnv);
-        if (msg.length > MAX_OUTPUT_CHARS) {
-            msg =
-                `${msg.slice(0, MAX_OUTPUT_CHARS)
-                }\n[output truncated to ${MAX_OUTPUT_CHARS} chars]`;
-        }
+        if (msg) msg = truncateBashOutput(msg, cwd, true);
         return {
             output: `${recoveryNote}${msg.trim() || "Command failed with unknown error"}`,
             isError: true,

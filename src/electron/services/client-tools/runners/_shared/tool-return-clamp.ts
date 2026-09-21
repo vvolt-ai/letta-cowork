@@ -18,6 +18,7 @@ export function clampToolReturnContent(
     truncateByChars(content, LIMITS.TOOL_RETURN_MAX_CHARS, toolName, {
       workingDirectory: getCurrentWorkingDirectory(),
       toolName,
+      previewChars: LIMITS.OVERFLOW_PREVIEW_CHARS,
     }).content
   );
 }
