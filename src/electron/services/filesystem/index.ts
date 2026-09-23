@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 
-import { Letta } from "@letta-ai/letta-client";
+import { createLettaRuntimeClient } from "../letta-runtime/index.js";
 
 const SUPPORTED_FILE_EXTENSIONS = new Set([
   ".png",
@@ -55,14 +55,8 @@ function isSupportedPath(filePath: string): boolean {
   return SUPPORTED_FILE_EXTENSIONS.has(ext);
 }
 
-function createLettaClient(): Letta {
-  const baseURL = (process.env.LETTA_BASE_URL || "https://api.letta.com").trim();
-  const apiKey = (process.env.LETTA_API_KEY || "").trim();
-
-  return new Letta({
-    baseURL,
-    apiKey: apiKey || null,
-  });
+function createLettaClient() {
+  return createLettaRuntimeClient();
 }
 
 export async function attachFilesToAgentFolder({

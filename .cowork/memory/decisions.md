@@ -99,3 +99,11 @@ Source: Andrew Windows trace `2026-09-01.ndjson` (conversation `conv-16a6601a-b0
 - A successful `/vera-sync` against only `/mcp/tools` proves connector discovery, not native Vera tool availability.
 
 Source: live post-deployment diagnosis of missing remote-machine tools, 2026-09-18.
+
+## Local-first Letta runtime selection (2026-09-23)
+
+- Cowork runtime selection is credential-presence based: a nonblank local `LETTA_API_KEY` connects directly to `LETTA_BASE_URL` (default `https://api.letta.com`); when no local key exists, Cowork uses the signed-in Vera JWT and Vera's `/letta/runtime` proxy.
+- Do not retry through Vera when a configured local key receives an upstream authentication/error response. That would silently cross account boundaries and hide a broken local credential; Vera is only the absence fallback.
+- In local mode, Vera-specific connection IDs and headers are not sent. In Vera mode, the active organization's default connection scope remains explicit.
+
+Source: Bhavesh request, 2026-09-23.

@@ -20,17 +20,13 @@
  *   • copy tool attachments — the new agent uses runtime client_tools
  */
 
-import { Letta } from "@letta-ai/letta-client";
+import type { Letta } from "@letta-ai/letta-client";
 
+import { createLettaRuntimeClient } from "../letta-runtime/index.js";
 import { buildLettaSystemPrompt } from "./buildSystemPrompt.js";
 
 function getClient(): Letta {
-    const apiKey = (process.env.LETTA_API_KEY ?? "").trim();
-    const baseURL = (
-        process.env.LETTA_BASE_URL || "https://api.letta.com"
-    ).trim();
-    if (!apiKey) throw new Error("LETTA_API_KEY is not configured");
-    return new Letta({ apiKey, baseURL });
+    return createLettaRuntimeClient();
 }
 
 export interface MigrationOptions {

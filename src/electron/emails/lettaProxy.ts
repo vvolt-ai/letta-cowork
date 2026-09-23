@@ -1,18 +1,7 @@
-import { Letta } from "@letta-ai/letta-client";
-
 import type { Request, Response } from "express";
 
 import { listLettaAgents } from "../services/agents/index.js";
-
-function createLettaClient(): Letta {
-  const baseURL = (process.env.LETTA_BASE_URL || "https://api.letta.com").trim();
-  const apiKey = (process.env.LETTA_API_KEY || "").trim();
-
-  return new Letta({
-    baseURL,
-    apiKey: apiKey || null,
-  });
-}
+import { createLettaRuntimeClient } from "../services/letta-runtime/index.js";
 
 function sanitizeError(error: unknown): { error: string } {
   if (error instanceof Error) {
@@ -44,7 +33,7 @@ export async function getAgentHandler(req: Request, res: Response): Promise<void
   if (!agentId) return;
 
   try {
-    const client = createLettaClient();
+    const client = createLettaRuntimeClient();
     const agent = await client.agents.retrieve(agentId);
     res.json(agent);
   } catch (error) {
@@ -55,7 +44,7 @@ export async function getAgentHandler(req: Request, res: Response): Promise<void
 
 export async function listToolsHandler(_req: Request, res: Response): Promise<void> {
   try {
-    const client = createLettaClient();
+    const client = createLettaRuntimeClient();
     const response = await (client.tools as any).list({ limit: 100 });
     res.json(response?.items ?? response ?? []);
   } catch (error) {
@@ -66,7 +55,7 @@ export async function listToolsHandler(_req: Request, res: Response): Promise<vo
 
 export async function listModelsHandler(_req: Request, res: Response): Promise<void> {
   try {
-    const client = createLettaClient();
+    const client = createLettaRuntimeClient();
     const response = await client.models.list();
     res.json(response ?? []);
   } catch (error) {
@@ -80,7 +69,7 @@ export async function listBlocksHandler(req: Request, res: Response): Promise<vo
   if (!agentId) return;
 
   try {
-    const client = createLettaClient();
+    const client = createLettaRuntimeClient();
     const response = await (client.agents as any).coreMemory.blocks.list(agentId);
     res.json(response?.items ?? response ?? []);
   } catch (error) {
@@ -102,7 +91,7 @@ export async function archivalSearchHandler(req: Request, res: Response): Promis
   }
 
   try {
-    const client = createLettaClient();
+    const client = createLettaRuntimeClient();
     const response = await (client.agents as any).archivalMemory.list(agentId, {
       query,
       limit: Number.isFinite(limit) ? limit : 10,

@@ -68,10 +68,30 @@ function createVeraRuntimeFetch(): typeof fetch {
   };
 }
 
+export function selectLettaRuntimeSource(
+  localApiKey?: string | null,
+  veraAccessToken?: string | null,
+): LettaRuntimeConfig["source"] | null {
+  if (localApiKey?.trim()) return "local";
+  if (veraAccessToken?.trim()) return "vera";
+  return null;
+}
+
 export function getLettaRuntimeConfig(connectionId?: string): LettaRuntimeConfig {
+  const localApiKey = (process.env.LETTA_API_KEY || "").trim();
   const api = getVeraCoworkApiClient();
   const accessToken = api.accessToken?.trim();
-  if (accessToken) {
+  const source = selectLettaRuntimeSource(localApiKey, accessToken);
+
+  if (source === "local") {
+    return {
+      apiKey: localApiKey,
+      baseURL: (process.env.LETTA_BASE_URL || "https://api.letta.com").trim(),
+      source,
+    };
+  }
+
+  if (source === "vera" && accessToken) {
     const defaultHeaders: Record<string, string> = {
       "X-Letta-Source": "vera-cowork-desktop",
     };
@@ -81,21 +101,39 @@ export function getLettaRuntimeConfig(connectionId?: string): LettaRuntimeConfig
       baseURL: `${api.apiBaseUrl.replace(/\/$/, "")}/letta/runtime`,
       defaultHeaders,
       fetch: createVeraRuntimeFetch(),
-      source: "vera",
+      source,
     };
   }
 
-  const apiKey = (process.env.LETTA_API_KEY || "").trim();
-  if (!apiKey) {
-    throw new Error(
-      "No Letta account is available. Sign in to Vera or configure a local LETTA_API_KEY.",
-    );
-  }
-  return {
-    apiKey,
-    baseURL: (process.env.LETTA_BASE_URL || "https://api.letta.com").trim(),
-    source: "local",
-  };
+  throw new Error(
+    "No Letta account is available. Configure a local LETTA_API_KEY or sign in to Vera.",
+  );
+}
+
+export function getLettaRuntimeRequestBase(
+  config: Pick<LettaRuntimeConfig, "baseURL" | "source">,
+): string {
+  const trimmedBase = config.baseURL.replace(/\/$/, "");
+  return config.source === "local" && !trimmedBase.endsWith("/v1")
+    ? `${trimmedBase}/v1`
+    : trimmedBase;
+}
+
+export async function fetchLettaRuntime(
+  path: string,
+  init: RequestInit = {},
+  connectionId?: string,
+): Promise<Response> {
+  const config = getLettaRuntimeConfig(connectionId);
+  const requestBase = getLettaRuntimeRequestBase(config);
+  const headers = new Headers(config.defaultHeaders);
+  new Headers(init.headers).forEach((value, name) => headers.set(name, value));
+  headers.set("Authorization", `Bearer ${config.apiKey}`);
+  const runtimeFetch = config.fetch ?? fetch;
+  return runtimeFetch(`${requestBase}/${path.replace(/^\//, "")}`, {
+    ...init,
+    headers,
+  });
 }
 
 export function createLettaRuntimeClient(connectionId?: string): Letta {

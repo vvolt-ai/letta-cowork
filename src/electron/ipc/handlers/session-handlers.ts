@@ -3,7 +3,7 @@
  * Handles session lifecycle events: start, stop, continue, delete, list, history
  */
 
-import { Letta } from "@letta-ai/letta-client";
+import type { Letta } from "@letta-ai/letta-client";
 import { BrowserWindow } from "electron";
 
 import { normaliseHistoryBatch, type LettaMessage } from "../../libs/conversation.js";
@@ -15,6 +15,7 @@ import {
     deleteSession,
 } from "../../libs/runtime-state.js";
 import { getLettaAgent, getAgentRunApprovalCandidates, cancelAgentRunById, approveRunById } from "../../services/agents/index.js";
+import { createLettaRuntimeClient } from "../../services/letta-runtime/index.js";
 import {
     getStoredSessions,
     addStoredSession,
@@ -75,16 +76,10 @@ const debug = (msg: string, data?: Record<string, unknown>) => {
     log(msg, data);
 };
 
-// Create Letta client helper
+// Use the same local-first, Vera-fallback runtime as active agent turns.
 function createLettaClient(): Letta | null {
     try {
-        const baseURL = (process.env.LETTA_BASE_URL || "https://api.letta.com").trim();
-        const apiKey = (process.env.LETTA_API_KEY || "").trim();
-        if (!apiKey) return null;
-        return new Letta({
-            baseURL,
-            apiKey: apiKey || null,
-        });
+        return createLettaRuntimeClient();
     } catch {
         return null;
     }

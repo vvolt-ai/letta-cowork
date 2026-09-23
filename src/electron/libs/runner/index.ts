@@ -263,7 +263,7 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
         stack: (error as Error).stack,
         agentId: targetAgentId || getCachedAgentId() || process.env.LETTA_AGENT_ID,
         baseURL: process.env.LETTA_BASE_URL,
-        apiKeyMasked: process.env.LETTA_API_KEY ? `${process.env.LETTA_API_KEY.substring(0, 10)  }...` : "not set",
+        localApiKeyConfigured: Boolean(process.env.LETTA_API_KEY?.trim()),
       };
       log("ERROR in runLetta", errorDetails);
 
@@ -274,7 +274,7 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
       // via the "error" status we send below. May 15 cascade incident.
 
       // Send detailed error to UI
-      const errorMessage = `Failed to start session: ${String(error)}\n\nAgent ID: ${errorDetails.agentId}\nBase URL: ${errorDetails.baseURL}\nAPI Key: ${errorDetails.apiKeyMasked}`;
+      const errorMessage = `Failed to start session: ${String(error)}\n\nAgent ID: ${errorDetails.agentId}\nBase URL: ${errorDetails.baseURL}\nLocal API key configured: ${errorDetails.localApiKeyConfigured}`;
       sendSessionStatus(currentSessionId, "error", onEvent, undefined, errorMessage);
     } finally {
       if (sessionKey) {

@@ -30,7 +30,10 @@ import {
     type ReminderState,
 } from "./plan-mode/reminders.js";
 import { getVeraCoworkApiClient } from "../../../api/index.js";
-import { createLettaRuntimeClient } from "../../../services/letta-runtime/index.js";
+import {
+    createLettaRuntimeClient,
+    getLettaRuntimeConfig,
+} from "../../../services/letta-runtime/index.js";
 import { runWithResourceLocks } from "../../../services/agent/subagents/parallelism.js";
 import { clearPendingApprovals } from "../../../services/agents/approval-recovery.js";
 import {
@@ -1118,6 +1121,7 @@ export class WsSession {
         approvalRequests: PendingApproval[];
         sawRequiresApprovalStop: boolean;
     }> {
+        const runtimeConfig = getLettaRuntimeConfig(this.opts.lettaConnectionId);
         const client = getClient(this.opts.lettaConnectionId);
         const conversationId = this._conversationId!;
         const calls = new Map<string, PendingToolCall>();
@@ -1141,7 +1145,7 @@ export class WsSession {
             this.responseStateId = null;
         }
         console.log(
-            `[WsSession] messages.create → conv=${conversationId} account=${this.opts.lettaConnectionId?.trim() || "organization-default"} model=${this.effectiveModel || this.opts.model?.trim() || "agent-default"} client_tools=[${wireTools
+            `[WsSession] messages.create → conv=${conversationId} route=${runtimeConfig.source === "local" ? "local-direct" : "vera-proxy"} account=${this.opts.lettaConnectionId?.trim() || "organization-default"} model=${this.effectiveModel || this.opts.model?.trim() || "agent-default"} client_tools=[${wireTools
                 .map((t) => t.name)
                 .join(", ")}] background=true include_pings=true`
         );
