@@ -20,6 +20,107 @@ function registeredTools(client) {
 }
 
 describe("Vera tools", () => {
+  test("discovers guided MCP capability areas with schemas and natural-language aliases", async () => {
+    const tools = registeredTools({
+      async listMcpTools() {
+        return [
+          {
+            name: "vera_list_email_accounts",
+            description: "List connected Zoho accounts",
+            parameters: { type: "object", properties: {} },
+          },
+          {
+            name: "vera_search_emails",
+            description: "Search a live mailbox",
+            parameters: { type: "object", required: ["channelId", "searchKey"] },
+          },
+          {
+            name: "vera_list_remote_machines",
+            description: "List online machines in a remote environment",
+            parameters: { type: "object", required: ["environmentId"] },
+          },
+          {
+            name: "neo4j_list_instances",
+            description: "List visible knowledge-graph instances",
+            parameters: { type: "object", properties: {} },
+          },
+          {
+            name: "neo4j_read",
+            description: "Run bounded read-only Cypher",
+            parameters: { type: "object", required: ["instance", "cypher"] },
+          },
+          {
+            name: "vera_list_accessible_organization_agents",
+            description: "List agents currently shared with this member",
+            parameters: { type: "object", properties: { scope: { type: "string" } } },
+          },
+          {
+            name: "vera_send_message_to_organization_agent",
+            description: "Send a task to an exact agent publication",
+            parameters: { type: "object", required: ["publicationId", "message"] },
+          },
+          {
+            name: "salesforce__search_records",
+            description: "Search configured CRM records",
+            parameters: { type: "object" },
+          },
+        ];
+      },
+    });
+    const discover = tools.get("vera_mcp_list_tools");
+
+    const email = JSON.parse(
+      await discover.run({
+        args: { area: "email", includeSchemas: true },
+        signal: undefined,
+      }),
+    );
+    expect(email.tools.map((tool) => tool.name)).toEqual(["vera_list_email_accounts", "vera_search_emails"]);
+    expect(email.tools[1].parameters.required).toEqual(["channelId", "searchKey"]);
+    expect(email.guidance.workflow[0]).toContain("vera_list_channels");
+
+    const remote = JSON.parse(
+      await discover.run({
+        args: { query: "remote access", includeSchemas: false },
+        signal: undefined,
+      }),
+    );
+    expect(remote.tools.map((tool) => tool.name)).toEqual(["vera_list_remote_machines"]);
+
+    const knowledgeGraph = JSON.parse(
+      await discover.run({
+        args: { area: "knowledge_graph", includeSchemas: true },
+        signal: undefined,
+      }),
+    );
+    expect(knowledgeGraph.tools.map((tool) => tool.name)).toEqual([
+      "neo4j_list_instances",
+      "neo4j_read",
+    ]);
+    expect(knowledgeGraph.tools[1].parameters.required).toEqual(["instance", "cypher"]);
+    expect(knowledgeGraph.guidance.workflow[0]).toBe("neo4j_list_instances");
+
+    const sharedAgents = JSON.parse(
+      await discover.run({
+        args: { area: "shared_agents", includeSchemas: true },
+        signal: undefined,
+      }),
+    );
+    expect(sharedAgents.tools.map((tool) => tool.name)).toEqual([
+      "vera_list_accessible_organization_agents",
+      "vera_send_message_to_organization_agent",
+    ]);
+    expect(sharedAgents.guidance.workflow[0]).toContain("vera_list_accessible_organization_agents");
+
+    const connectors = JSON.parse(
+      await discover.run({
+        args: { area: "configured_connectors" },
+        signal: undefined,
+      }),
+    );
+    expect(connectors.tools.map((tool) => tool.name)).toEqual(["salesforce__search_records"]);
+  });
+
   test("invokes every MCP tool advertised by Vera behind approval", async () => {
     const calls = [];
     const tools = registeredTools({
@@ -87,9 +188,7 @@ describe("Vera tools", () => {
       },
     };
     const tools = registeredTools(client);
-    const canonicalList = tools.get(
-      "vera_list_accessible_organization_agents",
-    );
+    const canonicalList = tools.get("vera_list_accessible_organization_agents");
     const canonicalSend = tools.get("vera_send_message_to_organization_agent");
     const list = tools.get("vera_list_organization_agents");
     const delegate = tools.get("vera_delegate_to_organization_agent");
@@ -179,9 +278,7 @@ describe("Vera tools", () => {
   test("marks every Master mutation as approval-gated and dynamically scoped", () => {
     const tools = registeredTools({});
     expect(tools.get("vera_list_organization_agents").isEnabled).toBeUndefined();
-    expect(
-      typeof tools.get("vera_master_list_accessible_organizations").isEnabled,
-    ).toBe("function");
+    expect(typeof tools.get("vera_master_list_accessible_organizations").isEnabled).toBe("function");
     for (const name of [
       "vera_master_create_organization_agent",
       "vera_master_update_organization_agent",

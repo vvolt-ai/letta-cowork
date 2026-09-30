@@ -94,6 +94,10 @@ function isNativeVeraMcpTool(toolName) {
   return /^vera_[a-z0-9_]+$/i.test(String(toolName));
 }
 
+function isNeo4jMcpTool(toolName) {
+  return /^neo4j_[a-z0-9_]+$/i.test(String(toolName));
+}
+
 function safeInteger(value, fallback, minimum, maximum) {
   const parsed = Number.parseInt(String(value ?? ""), 10);
   if (!Number.isFinite(parsed)) return fallback;
@@ -595,8 +599,8 @@ export class VeraClient {
     return this.request("/auth/me", { signal });
   }
 
-  async requestNativeMcp(method, params, signal) {
-    const payload = await this.request("/mcp", {
+  async requestMcpEndpoint(path, label, method, params, signal) {
+    const payload = await this.request(path, {
       method: "POST",
       headers: { accept: "application/json, text/event-stream" },
       body: {
@@ -613,23 +617,40 @@ export class VeraClient {
       });
     }
     if (!payload || payload.result === undefined) {
-      throw new VeraApiError("Vera native MCP returned no result");
+      throw new VeraApiError(`${label} returned no result`);
     }
     return payload.result;
+  }
+
+  async requestNativeMcp(method, params, signal) {
+    return this.requestMcpEndpoint("/mcp", "Vera native MCP", method, params, signal);
+  }
+
+  async requestNeo4jMcp(method, params, signal) {
+    return this.requestMcpEndpoint("/neo4j-mcp", "Vera Neo4j MCP", method, params, signal);
   }
 
   async listMcpTools(signal) {
     const connectorTools = await this.request("/mcp/tools", { signal });
     const nativeCatalog = await this.requestNativeMcp("tools/list", {}, signal);
-    const nativeTools = Array.isArray(nativeCatalog?.tools)
-      ? nativeCatalog.tools.map((tool) => ({
-          name: tool.name,
-          description: tool.description ?? "",
-          parameters: tool.inputSchema ?? {},
-        }))
-      : [];
+    let neo4jCatalog = null;
+    try {
+      neo4jCatalog = await this.requestNeo4jMcp("tools/list", {}, signal);
+    } catch {
+      // Neo4j MCP is an optional separately deployed endpoint. Base Vera and
+      // configured-connector discovery must continue when it is unavailable.
+    }
+    const mapMcpTools = (catalog) =>
+      Array.isArray(catalog?.tools)
+        ? catalog.tools.map((tool) => ({
+            name: tool.name,
+            description: tool.description ?? "",
+            parameters: tool.inputSchema ?? {},
+          }))
+        : [];
     const tools = [
-      ...nativeTools,
+      ...mapMcpTools(nativeCatalog),
+      ...mapMcpTools(neo4jCatalog),
       ...(Array.isArray(connectorTools) ? connectorTools : []),
     ];
     return [
@@ -642,8 +663,11 @@ export class VeraClient {
   }
 
   async invokeMcpTool(toolName, args, signal) {
-    if (isNativeVeraMcpTool(toolName)) {
-      const result = await this.requestNativeMcp(
+    if (isNativeVeraMcpTool(toolName) || isNeo4jMcpTool(toolName)) {
+      const requestMcp = isNeo4jMcpTool(toolName)
+        ? this.requestNeo4jMcp.bind(this)
+        : this.requestNativeMcp.bind(this);
+      const result = await requestMcp(
         "tools/call",
         { name: toolName, arguments: args ?? {} },
         signal,

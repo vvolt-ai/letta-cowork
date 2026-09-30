@@ -112,7 +112,7 @@ describe("VeraClient", () => {
 
     await client.listMcpTools();
 
-    expect(requests).toHaveLength(2);
+    expect(requests).toHaveLength(3);
     expect(
       requests.every(
         (request) =>
@@ -149,7 +149,7 @@ describe("VeraClient", () => {
 
     await client.listMcpTools();
 
-    expect(requests).toHaveLength(3);
+    expect(requests).toHaveLength(4);
     expect(requests[0].init.headers.get("authorization")).toBe(
       "Bearer cowork-token-1",
     );
@@ -224,6 +224,7 @@ describe("VeraClient", () => {
       "/auth/refresh",
       "/mcp/tools",
       "/mcp",
+      "/neo4j-mcp",
     ]);
     expect(JSON.parse(requests[0].init.body)).toEqual({
       refreshToken: "refresh-old",
@@ -324,7 +325,8 @@ describe("VeraClient", () => {
       env,
       fetch: async (url, init) => {
         requests.push({ url, init });
-        if (new URL(url).pathname === "/mcp") {
+        const path = new URL(url).pathname;
+        if (path === "/mcp") {
           return nativeMcpTools([
             {
               name: "vera_list_remote_machines",
@@ -337,6 +339,23 @@ describe("VeraClient", () => {
               inputSchema: {
                 type: "object",
                 properties: { environmentId: { type: "string" } },
+              },
+            },
+          ]);
+        }
+        if (path === "/neo4j-mcp") {
+          return nativeMcpTools([
+            {
+              name: "neo4j_list_instances",
+              description: "List visible graph instances",
+              inputSchema: { type: "object", properties: {} },
+            },
+            {
+              name: "neo4j_read",
+              description: "Run bounded Cypher",
+              inputSchema: {
+                type: "object",
+                properties: { instance: { type: "string" }, cypher: { type: "string" } },
               },
             },
           ]);
@@ -356,12 +375,16 @@ describe("VeraClient", () => {
     expect(tools.map((tool) => tool.name)).toEqual([
       "vera_list_remote_machines",
       "vera_run_remote_tool",
+      "neo4j_list_instances",
+      "neo4j_read",
       "odoo__search",
     ]);
     expect(tools[1].parameters.properties.environmentId.type).toBe("string");
+    expect(tools[3].parameters.properties.cypher.type).toBe("string");
     expect(requests.map(({ url }) => new URL(url).pathname)).toEqual([
       "/mcp/tools",
       "/mcp",
+      "/neo4j-mcp",
     ]);
     expect(JSON.parse(requests[1].init.body)).toMatchObject({
       jsonrpc: "2.0",
@@ -400,6 +423,49 @@ describe("VeraClient", () => {
       jsonrpc: "2.0",
       method: "tools/call",
       params: { name: "vera_list_remote_machines", arguments: {} },
+    });
+  });
+
+  test("routes governed Neo4j tool calls through the Neo4j MCP endpoint", async () => {
+    const env = await testEnv();
+    await writeFile(
+      env.VERA_COWORK_ENV_PATH,
+      "export COWORK_TOKEN=cowork-access-token\n",
+      "utf8",
+    );
+    const requests = [];
+    const client = new VeraClient({
+      env,
+      fetch: async (url, init) => {
+        requests.push({ url, init });
+        return nativeMcpResult({
+          content: [{ type: "text", text: '{"records":[{"name":"Acme"}]}' }],
+          isError: false,
+        });
+      },
+    });
+
+    const result = await client.invokeMcpTool("neo4j_read", {
+      instance: "operations-graph",
+      cypher: "MATCH (c:Customer) RETURN c.name AS name LIMIT 1",
+      maxRecords: 1,
+    });
+
+    expect(result).toEqual({
+      output: '{"records":[{"name":"Acme"}]}',
+      isError: false,
+    });
+    expect(new URL(requests[0].url).pathname).toBe("/neo4j-mcp");
+    expect(JSON.parse(requests[0].init.body)).toMatchObject({
+      jsonrpc: "2.0",
+      method: "tools/call",
+      params: {
+        name: "neo4j_read",
+        arguments: {
+          instance: "operations-graph",
+          maxRecords: 1,
+        },
+      },
     });
   });
 
