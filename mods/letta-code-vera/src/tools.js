@@ -854,7 +854,12 @@ export function registerTools(letta, client) {
     },
   };
   const memoryBlockFields = {
-    label: { type: "string", minLength: 1, maxLength: 120, pattern: "^[A-Za-z0-9_.-]+$" },
+    label: {
+      type: "string",
+      minLength: 1,
+      maxLength: 120,
+      pattern: "^[A-Za-z0-9_-][A-Za-z0-9_.-]*(?:/[A-Za-z0-9_-][A-Za-z0-9_.-]*)*$",
+    },
     value: { type: "string", maxLength: 500000 },
     description: { type: "string", maxLength: 4096 },
     limit: {
@@ -863,6 +868,13 @@ export function registerTools(letta, client) {
       maximum: 500000,
       description: "Character limit; defaults to 5000. Value must fit within it.",
     },
+  };
+  const memoryStorageField = {
+    type: "string",
+    enum: ["memfs", "legacy-blocks"],
+    default: "memfs",
+    description:
+      "MemFS is the default. Legacy blocks are opt-in and do not prove file/runtime visibility.",
   };
   const confirmedMutation = {
     type: "boolean",
@@ -897,6 +909,7 @@ export function registerTools(letta, client) {
         type: "object",
         properties: {
           organizationId: organizationAgentFields.organizationId,
+          memoryStorage: memoryStorageField,
           name: { type: "string", minLength: 1, maxLength: 255 },
           model: { type: "string", minLength: 1, maxLength: 512 },
           description: { type: "string", maxLength: 4096 },
@@ -926,6 +939,7 @@ export function registerTools(letta, client) {
           ...(ctx.args.model !== undefined ? { model: ctx.args.model } : {}),
           ...(ctx.args.description !== undefined ? { description: ctx.args.description } : {}),
           ...(ctx.args.memoryBlocks !== undefined ? { memoryBlocks: ctx.args.memoryBlocks } : {}),
+          memoryStorage: ctx.args.memoryStorage ?? "memfs",
           confirm: ctx.args.confirm === true,
         });
       },
@@ -933,12 +947,13 @@ export function registerTools(letta, client) {
     {
       name: "vera_master_create_agent_memory_block",
       description:
-        "Create and attach a new memory block to an approved agent. Covered by agents.manage; does not permit replacing existing memory values. Read the target agent first and supply its current updated_at. Requires human approval.",
+        "Create a core MemFS Markdown file using the target organization's connection, commit/push and read it back, then recompile. Requires agents.manage, current target updated_at and human approval. Does not migrate/delete legacy blocks or overwrite files. Saved/file-visible is not runtime-loaded. legacy-blocks is explicit opt-in.",
       parameters: {
         type: "object",
         properties: {
           ...organizationAgentFields,
           ...memoryBlockFields,
+          memoryStorage: memoryStorageField,
           expectedUpdatedAt: { type: "string", minLength: 1, maxLength: 128 },
           confirm: confirmedMutation,
         },
@@ -959,6 +974,7 @@ export function registerTools(letta, client) {
           {
             label: requiredString(ctx.args.label, "label"),
             value: ctx.args.value,
+            memoryStorage: ctx.args.memoryStorage ?? "memfs",
             ...(ctx.args.description !== undefined ? { description: ctx.args.description } : {}),
             ...(ctx.args.limit !== undefined ? { limit: ctx.args.limit } : {}),
             expectedUpdatedAt: requiredString(ctx.args.expectedUpdatedAt, "expectedUpdatedAt"),
@@ -970,24 +986,19 @@ export function registerTools(letta, client) {
     {
       name: "vera_master_attach_agent_memory_block",
       description:
-        "Attach an existing block from a readable approved source agent in the same organization. Requires agents.manage on the target and memory.read on the source. Use a verified block ID; labels cannot overwrite another block. Read target updated_at first. Requires human approval.",
+        "Attach a shared MemFS repository from an approved readable source agent using repositoryId. New links are read-only; primary agent-owned memory cannot be shared this way. Requires target agents.manage, source memory.read, current target updated_at and human approval. Legacy blockId sharing requires memoryStorage: legacy-blocks; API attachment does not prove file/runtime visibility.",
       parameters: {
         type: "object",
         properties: {
           ...organizationAgentFields,
           sourceAgentId: { type: "string", minLength: 1, maxLength: 255 },
           blockId: { type: "string", pattern: "^block-[a-fA-F0-9-]{36}$" },
+          repositoryId: { type: "string", minLength: 1, maxLength: 255 },
+          memoryStorage: memoryStorageField,
           expectedUpdatedAt: { type: "string", minLength: 1, maxLength: 128 },
           confirm: confirmedMutation,
         },
-        required: [
-          "organizationId",
-          "agentId",
-          "sourceAgentId",
-          "blockId",
-          "expectedUpdatedAt",
-          "confirm",
-        ],
+        required: ["organizationId", "agentId", "sourceAgentId", "expectedUpdatedAt", "confirm"],
         additionalProperties: false,
       },
       approvalPolicy: "ask",
@@ -1002,7 +1013,11 @@ export function registerTools(letta, client) {
           `${masterAgentPath(organizationId, agentId)}/memory/attach`,
           {
             sourceAgentId: requiredString(ctx.args.sourceAgentId, "sourceAgentId"),
-            blockId: requiredString(ctx.args.blockId, "blockId"),
+            ...(ctx.args.blockId ? { blockId: requiredString(ctx.args.blockId, "blockId") } : {}),
+            ...(ctx.args.repositoryId
+              ? { repositoryId: requiredString(ctx.args.repositoryId, "repositoryId") }
+              : {}),
+            memoryStorage: ctx.args.memoryStorage ?? "memfs",
             expectedUpdatedAt: requiredString(ctx.args.expectedUpdatedAt, "expectedUpdatedAt"),
             confirm: ctx.args.confirm === true,
           },
@@ -1159,7 +1174,7 @@ export function registerTools(letta, client) {
             type: "string",
             minLength: 1,
             maxLength: 120,
-            pattern: "^[A-Za-z0-9_.-]+$",
+            pattern: "^[A-Za-z0-9_-][A-Za-z0-9_.-]*(?:/[A-Za-z0-9_-][A-Za-z0-9_.-]*)*$",
           },
         },
         required: ["organizationId", "agentId", "label"],
@@ -1182,7 +1197,7 @@ export function registerTools(letta, client) {
     {
       name: "vera_master_update_agent_memory_block",
       description:
-        "Replace one core-memory block using its current SHA-256 hash. Requires memory.write and human approval.",
+        "Update a MemFS file body with expectedSha256 and expectedContentSha256 from the current read; preserve existing frontmatter, commit/push, read back and recompile. Requires memory.write and human approval. Runtime visibility is not checked by this write. Legacy API blocks require explicit legacy-blocks storage.",
       parameters: {
         type: "object",
         properties: {
@@ -1191,13 +1206,20 @@ export function registerTools(letta, client) {
             type: "string",
             minLength: 1,
             maxLength: 120,
-            pattern: "^[A-Za-z0-9_.-]+$",
+            pattern: "^[A-Za-z0-9_-][A-Za-z0-9_.-]*(?:/[A-Za-z0-9_-][A-Za-z0-9_.-]*)*$",
           },
           value: { type: "string", maxLength: 500000 },
           expectedSha256: {
             type: "string",
             pattern: "^[a-fA-F0-9]{64}$",
           },
+          expectedContentSha256: {
+            type: "string",
+            pattern: "^[a-fA-F0-9]{64}$",
+            description:
+              "Required for MemFS updates; use contentSha256 from the current file read.",
+          },
+          memoryStorage: memoryStorageField,
           confirm: confirmedMutation,
         },
         required: ["organizationId", "agentId", "label", "value", "expectedSha256", "confirm"],
@@ -1216,6 +1238,15 @@ export function registerTools(letta, client) {
           `${masterAgentPath(organizationId, agentId)}/memory/${encodeURIComponent(label)}`,
           {
             value: String(ctx.args.value ?? ""),
+            memoryStorage: ctx.args.memoryStorage ?? "memfs",
+            ...(ctx.args.expectedContentSha256
+              ? {
+                  expectedContentSha256: requiredString(
+                    ctx.args.expectedContentSha256,
+                    "expectedContentSha256",
+                  ),
+                }
+              : {}),
             expectedSha256: requiredString(ctx.args.expectedSha256, "expectedSha256"),
             confirm: ctx.args.confirm === true,
           },

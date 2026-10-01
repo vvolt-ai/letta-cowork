@@ -147,11 +147,11 @@ Agent sharing is directional: the publishing organization owns the agent and gra
 | `vera_master_delete_organization_agent`      | Permanently delete an approved agent with optimistic concurrency                                                                    | Always asks |
 | `vera_master_get_agent_instructions`         | Read system instructions and their concurrency hash                                                                                 | Automatic   |
 | `vera_master_update_agent_instructions`      | Update system instructions while preserving protected marked layers                                                                 | Always asks |
-| `vera_master_create_agent_memory_block` | Create and attach a new block under target `agents.manage`; duplicate labels are refused and target version is checked | Always asks |
-| `vera_master_attach_agent_memory_block` | Attach a block proven on an approved same-organization source; target `agents.manage` plus source `memory.read` required | Always asks |
+| `vera_master_create_agent_memory_block` | Create/read-back a scoped MemFS file under `agents.manage`; legacy API blocks are opt-in | Always asks |
+| `vera_master_attach_agent_memory_block` | Attach a read-only shared repository proven on an approved source; target `agents.manage` plus source `memory.read` | Always asks |
 | `vera_master_list_agent_memory`              | List approved-agent core-memory blocks                                                                                              | Automatic   |
 | `vera_master_get_agent_memory_block`         | Read one core-memory block and its concurrency hash                                                                                 | Automatic   |
-| `vera_master_update_agent_memory_block`      | Update one core-memory block with optimistic concurrency                                                                            | Always asks |
+| `vera_master_update_agent_memory_block`      | Update MemFS body with value/full-file hashes; API block edits are explicit legacy mode                                                                            | Always asks |
 | `vera_master_git_read`                       | Run grant-scoped read-only Git operations                                                                                           | Automatic   |
 | `vera_master_git_write`                      | Run grant-scoped mutating Git operations                                                                                            | Always asks |
 | `vera_master_delegate_to_organization_agent` | Delegate through a new isolated Letta conversation                                                                                  | Always asks |
@@ -166,15 +166,19 @@ The generic MCP bridge does not silently remove server-advertised capabilities, 
 
 Master tools are dynamically hidden unless `ctx.agent.id` exactly matches the locally enrolled Master Clio identity. Non-Master agents see only the normal user-authorized organization listing and delegation tools, preventing ambiguous organization-access requests from invoking the Master control plane. Every Master operation also requires a current Vera token with `userRole=super_admin`; an MCP token must carry `vera:mcp`. Vera binds challenge creation and exchange to the same super-admin user before issuing the operation-bound Master token.
 
-### Master memory setup (mod 0.5.6)
+### Master memory setup (mod 0.5.7)
 
-Agent creation accepts optional `memoryBlocks: [{ label, value, description?, limit? }]` (up to 20 unique labels). They are passed as Letta `memory_blocks` in the same creation request, under the existing organization-wide `agents.manage` grant. A label has 1–120 ASCII letters, digits, dots, underscores or hyphens. Default block limit is 5000 characters; the value must fit its supplied limit.
+Existing tool names now default to `memoryStorage: "memfs"`. Agent creation seeds the structural `MEMORY` block, Letta v1 type, git-memory tag and inherited system prompt, plus caller-supplied `memoryBlocks` (up to 20 unique labels). It separately verifies file materialization; an accepted API create is not proof of a usable memory setup. If file checks fail, the response keeps the created agent ID and warns against recreating it.
 
-For an existing approved agent, `vera_master_create_agent_memory_block` creates and attaches a new block. `vera_master_attach_agent_memory_block` shares an existing block by ID from a readable, allowlisted `sourceAgentId` in the same organization. Both require the target's current `expectedUpdatedAt`, confirmation and human approval. They return sanitized block metadata, not existing block values, and verify attachment by read-back. They do not replace conflicting labels or detach blocks.
+For existing agents, the create-memory tool writes actual Markdown through the target organization's MemFS Git remote. Bare labels resolve to root-level files when `MEMORY.md` exists, otherwise `system/` files. Safe nested paths are supported but are not always pinned/projected in the newer root layout. The default character limit is 5000. Creation refuses existing paths and symlinks; update preserves all frontmatter and checks the current value hash plus `expectedContentSha256` for the entire file. Commits are non-force pushes and the remote file is read back. Credentials remain ephemeral and are never accepted in tool arguments, stored in repo config, or returned.
 
-Existing value edits remain gated by `memory.write` and a matching value hash; shared edits additionally check write access on every referenced agent. The current bounded reference check refuses lists of 100 or more. No live grants are expanded. Setup writes are serialized per target inside one server process; external Letta writers and multiple server workers are not covered by that lock. If creation succeeds but attachment fails or cannot be verified, the error includes the created block ID: inspect state through authorized administration before retrying. No automatic orphan-block deletion is performed.
+Target `agents.manage` covers initialization; content updates retain `memory.write`. The target organization must have an explicit Letta connection: environment/personal credentials are not fallback routes. Recompilation is requested after saves, without replacing the target's system instructions. Receipts distinguish saved, file-visible, prompt-recompiled, and runtime-loaded. `runtimeLoaded: "not_checked"` must be verified through a fresh target conversation before claiming the agent can use it.
 
-These tools require the updated backend and an updated/reloaded mod; installing the mod alone does not deploy server support.
+Shared attachment uses `repositoryId` proven on an approved readable `sourceAgentId` in the same organization, with target `agents.manage` plus source `memory.read`. New links are read-only. Primary agent-owned repositories cannot be attached as shared memory. Shared repositories are discoverable references—not automatically the target's pinned identity.
+
+Legacy block operations require explicit `memoryStorage: "legacy-blocks"`; attachment then takes `blockId`. Legacy read-back only establishes API storage/attachment, not MemFS file visibility or runtime loading. Existing API records are retained: no automatic migration, deletion, or duplicate API block creation is performed by a MemFS write. Legacy shared value edits still check write coverage on every referenced agent.
+
+Setup locks serialize one server process; external writers and multiple workers are not covered. Hash mismatches or rejected pushes stop rather than overwrite/rebase blindly. Both the updated backend and updated/reloaded mod are required. The unrelated global runtime MemFsService is not used by these scoped Master operations.
 
 ## Authentication and local state
 

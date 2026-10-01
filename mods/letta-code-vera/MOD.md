@@ -240,11 +240,14 @@ Master rules:
 - Preserve optimistic-concurrency hashes and protected instruction layers.
 - Never infer that an organization grant authorizes every capability.
 - Mutations require human approval; deletion is permanent.
-- `agents.manage` includes initial memory setup: pass `memoryBlocks` during creation, or create and attach a new block to an approved existing agent. Do not automatically expand grants or invent initial content.
-- New blocks default to a 5000-character limit unless supplied otherwise. Labels must be unique; creation/attachment must not replace an existing label.
-- To share an existing block, supply a verified `blockId` and `sourceAgentId` in the same organization. The target requires `agents.manage`; the source requires `memory.read` and must be allowlisted.
-- Read the target agent's current `updated_at` before standalone creation or attachment and pass `expectedUpdatedAt`. The response reports attachment only after read-back; partial creation failures return the created block ID for inspection. Do not blindly retry or delete it.
-- Updating existing/shared content still requires `memory.write` and the current SHA-256. Since shared edits affect every attached agent, the grant must cover all referenced agents; reference lists at the current verification bound of 100 fail closed. Preserve managed governance.
+- Memory tools default to `memoryStorage: "memfs"`. New agents use a Letta v1/git-memory request with the structural `MEMORY` root block. Initial content comes only from caller-supplied `memoryBlocks`; do not invent it or expand grants.
+- The existing create-memory tool writes an actual Markdown file using the target organization's connection, commits/pushes, reads back, then requests recompilation. `agents.manage` covers this setup. Existing API records are not automatically migrated or deleted, and no duplicate API blocks are created by a MemFS write.
+- Bare labels resolve to root Markdown files when `MEMORY.md` exists; otherwise they resolve under `system/`. Use list/read to inspect the actual layout. Safe nested labels are supported; subdirectory files are not necessarily pinned or projected in the latest root layout.
+- File values default to a 5000-character limit. Creation refuses existing paths and symlinks. Updates preserve existing frontmatter and require `memory.write`, `expectedSha256` and `expectedContentSha256` from the latest read. Never overwrite managed governance implicitly.
+- For sharing, supply `repositoryId` verified on a readable, allowlisted `sourceAgentId` in the same organization. The target requires `agents.manage`; new shared links are read-only. An agent-owned primary MemFS repository cannot be shared via this operation. Shared repositories are discoverable knowledge, not automatically the target's own pinned memory.
+- Legacy API block operations are explicit `memoryStorage: "legacy-blocks"`; sharing then uses `blockId`. Shared legacy content edits still require write coverage for every referenced agent, with bounded reference verification.
+- Read target `updated_at` before creation/attachment and supply `expectedUpdatedAt`. Interpret receipts separately: saved/API-attached, file-visible, prompt-recompiled and runtime-loaded. `runtimeLoaded: "not_checked"` is not completed memory setup. Verify a fresh target conversation separately before claiming usability. A failed recompile/read-back is not a reason to blindly create another agent, duplicate records, or delete memory.
+- Only the target organization's explicit Letta credentials are used; global or personal fallback is refused.
 
 ## Safety and error handling
 

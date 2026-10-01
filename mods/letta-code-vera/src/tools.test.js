@@ -270,6 +270,7 @@ describe("Vera tools", () => {
           body: {
             name: "New agent",
             description: "Created through Master Clio",
+            memoryStorage: "memfs",
             confirm: true,
           },
           signal: undefined,
@@ -317,7 +318,7 @@ describe("Vera tools", () => {
       args: {
         ...common,
         sourceAgentId: "agent-source",
-        blockId: "block-11111111-1111-4111-8111-111111111111",
+        repositoryId: "repo-shared",
       },
     });
     expect(calls[0][0]).toBe("/master-agent-access/organizations/org-1/agents/agent-target/memory");
@@ -333,6 +334,54 @@ describe("Vera tools", () => {
     }
     expect(calls[0][2].body.value).toBe("");
     expect(calls[1][2].body.sourceAgentId).toBe("agent-source");
+    expect(calls[1][2].body.repositoryId).toBe("repo-shared");
+    expect(calls[0][2].body.memoryStorage).toBe("memfs");
+    expect(calls[1][2].body.memoryStorage).toBe("memfs");
+  });
+
+  test("uses full-file preconditions and encoded MemFS labels on the existing update tool", async () => {
+    const calls = [];
+    const tools = registeredTools({
+      async requestAsMaster(...args) {
+        calls.push(args);
+        return { storage: "memfs", verification: { runtimeLoaded: "not_checked" } };
+      },
+    });
+    await tools
+      .get("vera_master_update_agent_memory_block")
+      .run({
+        agent: { id: "agent-master" },
+        args: {
+          organizationId: "org-1",
+          agentId: "agent-target",
+          label: "system/persona",
+          value: "New",
+          expectedSha256: "a".repeat(64),
+          expectedContentSha256: "b".repeat(64),
+          confirm: true,
+        },
+      });
+    expect(calls[0][0]).toEndWith("/memory/system%2Fpersona");
+    expect(calls[0][2].body).toMatchObject({
+      memoryStorage: "memfs",
+      expectedContentSha256: "b".repeat(64),
+    });
+    await tools
+      .get("vera_master_attach_agent_memory_block")
+      .run({
+        agent: { id: "agent-master" },
+        args: {
+          organizationId: "org-1",
+          agentId: "agent-target",
+          sourceAgentId: "agent-source",
+          blockId: "block-11111111-1111-4111-8111-111111111111",
+          memoryStorage: "legacy-blocks",
+          expectedUpdatedAt: "version-1",
+          confirm: true,
+        },
+      });
+    expect(calls[1][2].body.memoryStorage).toBe("legacy-blocks");
+    expect(calls[1][2].body.blockId).toStartWith("block-");
   });
 
   test("marks every Master mutation as approval-gated and dynamically scoped", () => {
