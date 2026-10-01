@@ -55,6 +55,8 @@ describe("Vera mod", () => {
       "vera_master_list_organization_agents",
       "vera_master_get_organization_agent",
       "vera_master_create_organization_agent",
+      "vera_master_create_agent_memory_block",
+      "vera_master_attach_agent_memory_block",
       "vera_master_update_organization_agent",
       "vera_master_delete_organization_agent",
       "vera_master_get_agent_instructions",

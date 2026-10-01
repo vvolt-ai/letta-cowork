@@ -62,8 +62,14 @@ const MCP_DISCOVERY_AREAS = {
     "neo4j_explain",
     "neo4j_write",
   ],
-  organization_agents: ["vera_list_accessible_organization_agents", "vera_send_message_to_organization_agent"],
-  shared_agents: ["vera_list_accessible_organization_agents", "vera_send_message_to_organization_agent"],
+  organization_agents: [
+    "vera_list_accessible_organization_agents",
+    "vera_send_message_to_organization_agent",
+  ],
+  shared_agents: [
+    "vera_list_accessible_organization_agents",
+    "vera_send_message_to_organization_agent",
+  ],
   profiles: [
     "vera_list_profile_shares",
     "vera_create_profile_share",
@@ -142,7 +148,13 @@ const MCP_DISCOVERY_QUERY_ALIASES = {
   knowledge: ["knowledge", "search", "indexed"],
   knowledge_graph: ["knowledge graph", "neo4j", "cypher", "node", "relationship", "graph schema"],
   organization_agents: ["organization agent", "agent communication", "delegate", "publication"],
-  shared_agents: ["shared agent", "share agent", "published agent", "agent access", "publication grant"],
+  shared_agents: [
+    "shared agent",
+    "share agent",
+    "published agent",
+    "agent access",
+    "publication grant",
+  ],
   profiles: ["profile", "share", "sharing"],
   mcp: ["mcp", "connector", "server configuration"],
   skills: ["skill", "installed skill", "trusted skill"],
@@ -206,12 +218,16 @@ function discoveryHelp(area) {
 }
 
 async function assertNonEmailChannel(client, channelId, signal) {
-  const channel = (await client.listChannels(signal)).find((candidate) => candidate.id === channelId);
+  const channel = (await client.listChannels(signal)).find(
+    (candidate) => candidate.id === channelId,
+  );
   if (!channel) {
     throw new Error("Channel is not accessible to the connected Vera user");
   }
   if (EMAIL_CHANNEL_PROVIDERS.has(String(channel.provider).toLowerCase())) {
-    throw new Error("Agents may draft email content but cannot send, schedule, queue, or transmit email");
+    throw new Error(
+      "Agents may draft email content but cannot send, schedule, queue, or transmit email",
+    );
   }
   return channel;
 }
@@ -223,7 +239,10 @@ export function formatJson(value, maxChars = MAX_TOOL_OUTPUT_CHARS) {
 }
 
 function toolError(error) {
-  const prefix = error instanceof VeraApiError && error.status ? `Vera HTTP ${error.status}` : "Vera integration error";
+  const prefix =
+    error instanceof VeraApiError && error.status
+      ? `Vera HTTP ${error.status}`
+      : "Vera integration error";
   return {
     status: "error",
     isError: true,
@@ -354,7 +373,10 @@ export function registerTools(letta, client) {
             .toLowerCase();
           const terms = discoveryTerms(ctx.args.query);
           const includeSchemas = ctx.args.includeSchemas === true;
-          const limit = Math.min(200, Math.max(1, Number.parseInt(String(ctx.args.limit ?? 50), 10) || 50));
+          const limit = Math.min(
+            200,
+            Math.max(1, Number.parseInt(String(ctx.args.limit ?? 50), 10) || 50),
+          );
           const allTools = await client.listMcpTools(ctx.signal);
           const matching = allTools.filter((tool) => {
             if (!toolMatchesArea(tool, area)) return false;
@@ -411,7 +433,9 @@ export function registerTools(letta, client) {
           const toolName = requiredString(ctx.args.toolName, "toolName");
           const args = ctx.args.args === undefined ? {} : ctx.args.args;
           if (!isRecord(args)) throw new Error("args must be an object");
-          const definition = (await client.listMcpTools(ctx.signal)).find((tool) => tool.name === toolName);
+          const definition = (await client.listMcpTools(ctx.signal)).find(
+            (tool) => tool.name === toolName,
+          );
           if (!definition) {
             throw new Error("The requested MCP tool is not available to the connected Vera user");
           }
@@ -629,7 +653,9 @@ export function registerTools(letta, client) {
           const scope = String(ctx.args.scope ?? "all");
           const directory = await client.listAccessibleOrganizationAgents(ctx.signal);
           const agents =
-            scope === "all" ? directory.agents : directory.agents.filter((agent) => agent.grantedThrough === scope);
+            scope === "all"
+              ? directory.agents
+              : directory.agents.filter((agent) => agent.grantedThrough === scope);
           return formatJson({
             scope,
             summary: directory.summary,
@@ -655,7 +681,8 @@ export function registerTools(letta, client) {
             type: "string",
             minLength: 1,
             maxLength: 512,
-            description: "Exact opaque publicationId returned by vera_list_accessible_organization_agents.",
+            description:
+              "Exact opaque publicationId returned by vera_list_accessible_organization_agents.",
           },
           message: {
             type: "string",
@@ -806,7 +833,9 @@ export function registerTools(letta, client) {
         try {
           const agentId = runtimeAgentId(ctx);
           const organizationId = requiredString(ctx.args.organizationId, "organizationId");
-          return formatJson(await client.listMasterOrganizationAgents(agentId, organizationId, ctx.signal));
+          return formatJson(
+            await client.listMasterOrganizationAgents(agentId, organizationId, ctx.signal),
+          );
         } catch (error) {
           return toolError(error);
         }
@@ -822,6 +851,17 @@ export function registerTools(letta, client) {
     agentId: {
       type: "string",
       description: "Target agent ID returned by vera_master_list_organization_agents.",
+    },
+  };
+  const memoryBlockFields = {
+    label: { type: "string", minLength: 1, maxLength: 120, pattern: "^[A-Za-z0-9_.-]+$" },
+    value: { type: "string", maxLength: 500000 },
+    description: { type: "string", maxLength: 4096 },
+    limit: {
+      type: "integer",
+      minimum: 1,
+      maximum: 500000,
+      description: "Character limit; defaults to 5000. Value must fit within it.",
     },
   };
   const confirmedMutation = {
@@ -852,7 +892,7 @@ export function registerTools(letta, client) {
     {
       name: "vera_master_create_organization_agent",
       description:
-        "Create an agent through a granted organization's Letta connection. Requires an organization-wide agents.manage grant and human approval.",
+        "Create an agent through a granted organization's Letta connection, optionally with initial memoryBlocks created and attached in the same request. Requires an organization-wide agents.manage grant and human approval.",
       parameters: {
         type: "object",
         properties: {
@@ -860,6 +900,18 @@ export function registerTools(letta, client) {
           name: { type: "string", minLength: 1, maxLength: 255 },
           model: { type: "string", minLength: 1, maxLength: 512 },
           description: { type: "string", maxLength: 4096 },
+          memoryBlocks: {
+            type: "array",
+            maxItems: 20,
+            items: {
+              type: "object",
+              properties: memoryBlockFields,
+              required: ["label", "value"],
+              additionalProperties: false,
+            },
+            description:
+              "Optional initial blocks created and attached as part of agent creation; labels must be unique.",
+          },
           confirm: confirmedMutation,
         },
         required: ["organizationId", "name", "confirm"],
@@ -873,8 +925,88 @@ export function registerTools(letta, client) {
           name: requiredString(ctx.args.name, "name"),
           ...(ctx.args.model !== undefined ? { model: ctx.args.model } : {}),
           ...(ctx.args.description !== undefined ? { description: ctx.args.description } : {}),
+          ...(ctx.args.memoryBlocks !== undefined ? { memoryBlocks: ctx.args.memoryBlocks } : {}),
           confirm: ctx.args.confirm === true,
         });
+      },
+    },
+    {
+      name: "vera_master_create_agent_memory_block",
+      description:
+        "Create and attach a new memory block to an approved agent. Covered by agents.manage; does not permit replacing existing memory values. Read the target agent first and supply its current updated_at. Requires human approval.",
+      parameters: {
+        type: "object",
+        properties: {
+          ...organizationAgentFields,
+          ...memoryBlockFields,
+          expectedUpdatedAt: { type: "string", minLength: 1, maxLength: 128 },
+          confirm: confirmedMutation,
+        },
+        required: ["organizationId", "agentId", "label", "value", "expectedUpdatedAt", "confirm"],
+        additionalProperties: false,
+      },
+      approvalPolicy: "ask",
+      parallelSafe: false,
+      async run(ctx) {
+        const organizationId = requiredString(ctx.args.organizationId, "organizationId");
+        const agentId = requiredString(ctx.args.agentId, "agentId");
+        if (typeof ctx.args.value !== "string") throw new Error("value must be a string");
+        return masterRequest(
+          client,
+          ctx,
+          "POST",
+          `${masterAgentPath(organizationId, agentId)}/memory`,
+          {
+            label: requiredString(ctx.args.label, "label"),
+            value: ctx.args.value,
+            ...(ctx.args.description !== undefined ? { description: ctx.args.description } : {}),
+            ...(ctx.args.limit !== undefined ? { limit: ctx.args.limit } : {}),
+            expectedUpdatedAt: requiredString(ctx.args.expectedUpdatedAt, "expectedUpdatedAt"),
+            confirm: ctx.args.confirm === true,
+          },
+        );
+      },
+    },
+    {
+      name: "vera_master_attach_agent_memory_block",
+      description:
+        "Attach an existing block from a readable approved source agent in the same organization. Requires agents.manage on the target and memory.read on the source. Use a verified block ID; labels cannot overwrite another block. Read target updated_at first. Requires human approval.",
+      parameters: {
+        type: "object",
+        properties: {
+          ...organizationAgentFields,
+          sourceAgentId: { type: "string", minLength: 1, maxLength: 255 },
+          blockId: { type: "string", pattern: "^block-[a-fA-F0-9-]{36}$" },
+          expectedUpdatedAt: { type: "string", minLength: 1, maxLength: 128 },
+          confirm: confirmedMutation,
+        },
+        required: [
+          "organizationId",
+          "agentId",
+          "sourceAgentId",
+          "blockId",
+          "expectedUpdatedAt",
+          "confirm",
+        ],
+        additionalProperties: false,
+      },
+      approvalPolicy: "ask",
+      parallelSafe: false,
+      async run(ctx) {
+        const organizationId = requiredString(ctx.args.organizationId, "organizationId");
+        const agentId = requiredString(ctx.args.agentId, "agentId");
+        return masterRequest(
+          client,
+          ctx,
+          "POST",
+          `${masterAgentPath(organizationId, agentId)}/memory/attach`,
+          {
+            sourceAgentId: requiredString(ctx.args.sourceAgentId, "sourceAgentId"),
+            blockId: requiredString(ctx.args.blockId, "blockId"),
+            expectedUpdatedAt: requiredString(ctx.args.expectedUpdatedAt, "expectedUpdatedAt"),
+            confirm: ctx.args.confirm === true,
+          },
+        );
       },
     },
     {
@@ -948,7 +1080,12 @@ export function registerTools(letta, client) {
       async run(ctx) {
         const organizationId = requiredString(ctx.args.organizationId, "organizationId");
         const agentId = requiredString(ctx.args.agentId, "agentId");
-        return masterRequest(client, ctx, "GET", `${masterAgentPath(organizationId, agentId)}/instructions`);
+        return masterRequest(
+          client,
+          ctx,
+          "GET",
+          `${masterAgentPath(organizationId, agentId)}/instructions`,
+        );
       },
     },
     {
@@ -974,16 +1111,23 @@ export function registerTools(letta, client) {
       async run(ctx) {
         const organizationId = requiredString(ctx.args.organizationId, "organizationId");
         const agentId = requiredString(ctx.args.agentId, "agentId");
-        return masterRequest(client, ctx, "PUT", `${masterAgentPath(organizationId, agentId)}/instructions`, {
-          system: requiredString(ctx.args.system, "system"),
-          expectedSha256: requiredString(ctx.args.expectedSha256, "expectedSha256"),
-          confirm: ctx.args.confirm === true,
-        });
+        return masterRequest(
+          client,
+          ctx,
+          "PUT",
+          `${masterAgentPath(organizationId, agentId)}/instructions`,
+          {
+            system: requiredString(ctx.args.system, "system"),
+            expectedSha256: requiredString(ctx.args.expectedSha256, "expectedSha256"),
+            confirm: ctx.args.confirm === true,
+          },
+        );
       },
     },
     {
       name: "vera_master_list_agent_memory",
-      description: "List core-memory blocks for an approved organization agent. Requires memory.read.",
+      description:
+        "List core-memory blocks for an approved organization agent. Requires memory.read.",
       parameters: {
         type: "object",
         properties: organizationAgentFields,
@@ -995,7 +1139,12 @@ export function registerTools(letta, client) {
       async run(ctx) {
         const organizationId = requiredString(ctx.args.organizationId, "organizationId");
         const agentId = requiredString(ctx.args.agentId, "agentId");
-        return masterRequest(client, ctx, "GET", `${masterAgentPath(organizationId, agentId)}/memory`);
+        return masterRequest(
+          client,
+          ctx,
+          "GET",
+          `${masterAgentPath(organizationId, agentId)}/memory`,
+        );
       },
     },
     {
@@ -1083,11 +1232,21 @@ export function registerTools(letta, client) {
           organizationId: organizationAgentFields.organizationId,
           repositoryKey: {
             type: "string",
-            description: "Repository key returned in the organization's allowedRepositoryKeys grant.",
+            description:
+              "Repository key returned in the organization's allowedRepositoryKeys grant.",
           },
           operation: {
             type: "string",
-            enum: ["ensure_checkout", "status", "diff", "log", "show", "branches", "tags", "remote_info"],
+            enum: [
+              "ensure_checkout",
+              "status",
+              "diff",
+              "log",
+              "show",
+              "branches",
+              "tags",
+              "remote_info",
+            ],
           },
           paths: { type: "array", items: { type: "string" } },
           ref: { type: "string" },
@@ -1124,7 +1283,8 @@ export function registerTools(letta, client) {
           organizationId: organizationAgentFields.organizationId,
           repositoryKey: {
             type: "string",
-            description: "Repository key returned in the organization's allowedRepositoryKeys grant.",
+            description:
+              "Repository key returned in the organization's allowedRepositoryKeys grant.",
           },
           operation: {
             type: "string",

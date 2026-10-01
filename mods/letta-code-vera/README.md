@@ -147,6 +147,8 @@ Agent sharing is directional: the publishing organization owns the agent and gra
 | `vera_master_delete_organization_agent`      | Permanently delete an approved agent with optimistic concurrency                                                                    | Always asks |
 | `vera_master_get_agent_instructions`         | Read system instructions and their concurrency hash                                                                                 | Automatic   |
 | `vera_master_update_agent_instructions`      | Update system instructions while preserving protected marked layers                                                                 | Always asks |
+| `vera_master_create_agent_memory_block` | Create and attach a new block under target `agents.manage`; duplicate labels are refused and target version is checked | Always asks |
+| `vera_master_attach_agent_memory_block` | Attach a block proven on an approved same-organization source; target `agents.manage` plus source `memory.read` required | Always asks |
 | `vera_master_list_agent_memory`              | List approved-agent core-memory blocks                                                                                              | Automatic   |
 | `vera_master_get_agent_memory_block`         | Read one core-memory block and its concurrency hash                                                                                 | Automatic   |
 | `vera_master_update_agent_memory_block`      | Update one core-memory block with optimistic concurrency                                                                            | Always asks |
@@ -163,6 +165,16 @@ The generic MCP bridge avoids placing every Vera-native, Neo4j, or configured-co
 The generic MCP bridge does not silently remove server-advertised capabilities, including email tools. Every generic invocation uses Letta Code's `ask` approval policy. The separate `vera_channel_send` and file-send helpers continue to reject email channels so they cannot bypass the generic MCP approval boundary.
 
 Master tools are dynamically hidden unless `ctx.agent.id` exactly matches the locally enrolled Master Clio identity. Non-Master agents see only the normal user-authorized organization listing and delegation tools, preventing ambiguous organization-access requests from invoking the Master control plane. Every Master operation also requires a current Vera token with `userRole=super_admin`; an MCP token must carry `vera:mcp`. Vera binds challenge creation and exchange to the same super-admin user before issuing the operation-bound Master token.
+
+### Master memory setup (mod 0.5.6)
+
+Agent creation accepts optional `memoryBlocks: [{ label, value, description?, limit? }]` (up to 20 unique labels). They are passed as Letta `memory_blocks` in the same creation request, under the existing organization-wide `agents.manage` grant. A label has 1–120 ASCII letters, digits, dots, underscores or hyphens. Default block limit is 5000 characters; the value must fit its supplied limit.
+
+For an existing approved agent, `vera_master_create_agent_memory_block` creates and attaches a new block. `vera_master_attach_agent_memory_block` shares an existing block by ID from a readable, allowlisted `sourceAgentId` in the same organization. Both require the target's current `expectedUpdatedAt`, confirmation and human approval. They return sanitized block metadata, not existing block values, and verify attachment by read-back. They do not replace conflicting labels or detach blocks.
+
+Existing value edits remain gated by `memory.write` and a matching value hash; shared edits additionally check write access on every referenced agent. The current bounded reference check refuses lists of 100 or more. No live grants are expanded. Setup writes are serialized per target inside one server process; external Letta writers and multiple server workers are not covered by that lock. If creation succeeds but attachment fails or cannot be verified, the error includes the created block ID: inspect state through authorized administration before retrying. No automatic orphan-block deletion is performed.
+
+These tools require the updated backend and an updated/reloaded mod; installing the mod alone does not deploy server support.
 
 ## Authentication and local state
 
@@ -212,6 +224,8 @@ POST /master-agent-auth/tokens/exchange
 GET    /master-agent-access/organizations
 GET    /master-agent-access/organizations/:organizationId/agents
 POST   /master-agent-access/organizations/:organizationId/agents
+POST   /master-agent-access/organizations/:organizationId/agents/:agentId/memory
+POST   /master-agent-access/organizations/:organizationId/agents/:agentId/memory/attach
 GET    /master-agent-access/organizations/:organizationId/agents/:agentId
 PATCH  /master-agent-access/organizations/:organizationId/agents/:agentId
 DELETE /master-agent-access/organizations/:organizationId/agents/:agentId

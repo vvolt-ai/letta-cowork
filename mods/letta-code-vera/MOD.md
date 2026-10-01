@@ -223,7 +223,9 @@ Read tools:
 
 Approval-gated mutation/delegation tools:
 
-- `vera_master_create_organization_agent`
+- `vera_master_create_organization_agent` — optionally include `memoryBlocks` for initial setup.
+- `vera_master_create_agent_memory_block`
+- `vera_master_attach_agent_memory_block`
 - `vera_master_update_organization_agent`
 - `vera_master_delete_organization_agent`
 - `vera_master_update_agent_instructions`
@@ -238,6 +240,11 @@ Master rules:
 - Preserve optimistic-concurrency hashes and protected instruction layers.
 - Never infer that an organization grant authorizes every capability.
 - Mutations require human approval; deletion is permanent.
+- `agents.manage` includes initial memory setup: pass `memoryBlocks` during creation, or create and attach a new block to an approved existing agent. Do not automatically expand grants or invent initial content.
+- New blocks default to a 5000-character limit unless supplied otherwise. Labels must be unique; creation/attachment must not replace an existing label.
+- To share an existing block, supply a verified `blockId` and `sourceAgentId` in the same organization. The target requires `agents.manage`; the source requires `memory.read` and must be allowlisted.
+- Read the target agent's current `updated_at` before standalone creation or attachment and pass `expectedUpdatedAt`. The response reports attachment only after read-back; partial creation failures return the created block ID for inspection. Do not blindly retry or delete it.
+- Updating existing/shared content still requires `memory.write` and the current SHA-256. Since shared edits affect every attached agent, the grant must cover all referenced agents; reference lists at the current verification bound of 100 fail closed. Preserve managed governance.
 
 ## Safety and error handling
 

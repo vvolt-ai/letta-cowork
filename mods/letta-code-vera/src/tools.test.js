@@ -75,7 +75,10 @@ describe("Vera tools", () => {
         signal: undefined,
       }),
     );
-    expect(email.tools.map((tool) => tool.name)).toEqual(["vera_list_email_accounts", "vera_search_emails"]);
+    expect(email.tools.map((tool) => tool.name)).toEqual([
+      "vera_list_email_accounts",
+      "vera_search_emails",
+    ]);
     expect(email.tools[1].parameters.required).toEqual(["channelId", "searchKey"]);
     expect(email.guidance.workflow[0]).toContain("vera_list_channels");
 
@@ -275,16 +278,77 @@ describe("Vera tools", () => {
     ]);
   });
 
+  test("forwards initial memory blocks during agent creation", async () => {
+    const calls = [];
+    const tools = registeredTools({
+      async requestAsMaster(...args) {
+        calls.push(args);
+        return { id: "agent-new" };
+      },
+    });
+    const memoryBlocks = [{ label: "guidance", value: "Initial instructions", limit: 5000 }];
+    await tools.get("vera_master_create_organization_agent").run({
+      agent: { id: "agent-master" },
+      args: { organizationId: "org-1", name: "New agent", memoryBlocks, confirm: true },
+    });
+    expect(calls[0][1]).toBe("agent-master");
+    expect(calls[0][2].body.memoryBlocks).toEqual(memoryBlocks);
+  });
+
+  test("creates and attaches memory through trusted Master identity and versioned routes", async () => {
+    const calls = [];
+    const tools = registeredTools({
+      async requestAsMaster(...args) {
+        calls.push(args);
+        return { attached: true };
+      },
+    });
+    const common = {
+      organizationId: "org-1",
+      agentId: "agent-target",
+      expectedUpdatedAt: "version-1",
+      confirm: true,
+    };
+    await tools
+      .get("vera_master_create_agent_memory_block")
+      .run({ agent: { id: "agent-master" }, args: { ...common, label: "guidance", value: "" } });
+    await tools.get("vera_master_attach_agent_memory_block").run({
+      agent: { id: "agent-master" },
+      args: {
+        ...common,
+        sourceAgentId: "agent-source",
+        blockId: "block-11111111-1111-4111-8111-111111111111",
+      },
+    });
+    expect(calls[0][0]).toBe("/master-agent-access/organizations/org-1/agents/agent-target/memory");
+    expect(calls[1][0]).toBe(
+      "/master-agent-access/organizations/org-1/agents/agent-target/memory/attach",
+    );
+    for (const call of calls) {
+      expect(call[1]).toBe("agent-master");
+      expect(call[2].method).toBe("POST");
+      expect(call[2].body.expectedUpdatedAt).toBe("version-1");
+      expect(call[2].body.confirm).toBe(true);
+      expect(call[2].body.organizationId).toBeUndefined();
+    }
+    expect(calls[0][2].body.value).toBe("");
+    expect(calls[1][2].body.sourceAgentId).toBe("agent-source");
+  });
+
   test("marks every Master mutation as approval-gated and dynamically scoped", () => {
     const tools = registeredTools({});
     expect(tools.get("vera_list_organization_agents").isEnabled).toBeUndefined();
-    expect(typeof tools.get("vera_master_list_accessible_organizations").isEnabled).toBe("function");
+    expect(typeof tools.get("vera_master_list_accessible_organizations").isEnabled).toBe(
+      "function",
+    );
     for (const name of [
       "vera_master_create_organization_agent",
       "vera_master_update_organization_agent",
       "vera_master_delete_organization_agent",
       "vera_master_update_agent_instructions",
       "vera_master_update_agent_memory_block",
+      "vera_master_create_agent_memory_block",
+      "vera_master_attach_agent_memory_block",
       "vera_master_git_write",
       "vera_master_delegate_to_organization_agent",
     ]) {
