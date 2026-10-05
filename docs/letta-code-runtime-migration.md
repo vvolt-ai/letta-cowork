@@ -1,5 +1,99 @@
 # Letta Code Runtime Migration Notes
 
+## 2026-10-05 — Shell producer lifecycle plumbing (not background enablement)
+
+Existing ShellSpawnOptions now accepts a trusted onSpawn child hook, fired only on the native successful spawn event; callback failure terminates the process group and rejects. This permits later integration with existing owned process registries without another launcher. Abort escalation bug fixed: ChildProcess.killed only means a signal was sent, not process exit, so SIGKILL escalation now checks exitCode rather than skipping a child that ignored SIGTERM.
+
+Verified with real harmless Node fixtures: successful/missing executable hook behavior and a SIGTERM-ignoring child terminated by escalation. 4 lifecycle/ownership tests passed in each runtime; server build and desktop Electron transpilation passed. Actual run_in_background dispatch and exactly-once session notification bridge remain unimplemented; these hooks are not advertised as completed background support. Full pending migration still incomplete. No commits, pushes or deployment.
+
+## 2026-10-05 — Background registry ownership gate (partial lifecycle foundation)
+
+Existing process/task managers now use an owner-scoped Map wrapper, not another task engine. Entries capture immutable trusted agent/conversation/connection (and server organization/member) metadata at registration. Lookup, has/delete, enumeration/forEach and scoped clear reject or hide other owners; authenticated runtime cannot access legacy unowned entries or register work with incomplete identity. Outside-runtime unowned fixtures/admin cleanup remain compatibility paths. Host running-capacity accounting deliberately uses raw Map aggregate iteration so tenant-filtered views cannot bypass global limits.
+
+Validation: overlapping context and ownership suites passed 4 desktop / 4 server tests before enumeration extension; enumeration/clear isolation subsequently passed server test/build, desktop transpilation passed. No live process execution or notification delivery was tested. This is NOT background Bash/Task or Monitor/WatchPR/Workflow support yet: producers, cancellation trees and real session notification bridge remain pending. Other missing tool families remain pending. No commits, pushes or deployment.
+
+## 2026-10-05 — Agent compatibility and server ReadLSP
+
+Local source now registers Agent as a compatibility alias of the existing Task executor/schema in both runtimes. Task stays available for old calls/history. This does not add upstream background spawning, native Claude/Codex workers, model override or broader grants. Both names retain the existing no-model-override delegation contract.
+
+Vera now registers ReadLSP through one canonical letta_tools adapter, with a real per-read/disposed TypeScript language service. TS/JS project tsconfig and existing Read path expansion/scoped CWD are reused; errors are bounded to ten messages/2000 chars each. Source is capped at 500KB and project roots at 1000 files; unavailable/failed diagnostics preserve ordinary Read. Unsupported languages are plain reads, not full protocol LSP. TypeScript 6.0.3 is an exact production dependency with matching lockfile, so production omission of dev packages does not disable it.
+
+Validation: Agent/Task schema equality and no model override, real TS type error output, plain text and include_types=false checks passed. Combined ReadLSP/Wake suites passed 8 tests; server build and desktop Electron transpilation passed. No live/account/filesystem conformance beyond hermetic fixtures was claimed. The asynchronous helper task timed out; its source edits were subsequently inspected and consolidated to avoid duplicate registry implementations.
+
+Still incomplete: Monitor, WatchPR, Workflow, owned background execution/notifications, async questions, interactive shell/worktree/artifact families, and other runtime/memory parity. No commits, pushes or deployment.
+
+## 2026-10-05 — Wake adapter on the existing scheduler
+
+**Partial batch, not completion of remaining tool parity.** Verified existing scheduler first: server supports timestamp-based one-off rows, creator/organization revalidation, server polling, same-conversation runs and run history. Desktop scheduler currently validates cron expressions; timestamp wakes therefore deliberately execute on the existing **server** target, not desktop timers.
+
+Wake is now registered in both source registries. Model inputs contain timing/name/prompt/id only; runtime injects agent, conversation and selected connection. Backend `/schedules/wakes` validates membership/account connection and conversation→agent ownership, rejects global credential fallback, and creates/list/cancels only wake-kind owned schedule rows. Connection ID persists to execution and is re-resolved; no tokens/keys are stored. Cancel pauses future dispatch and preserves history; it does not abort a turn already running. Poll resolution is up to 30 seconds. Cron requires five UTC fields and a single minute (hourly-or-slower). These are explicit adaptation limits, not exact listener scheduling parity.
+
+Additive SQL `services/vera-cowork-server/sql/20261005-add-conversation-wakes.sql` is required before deployment when synchronize is disabled. It adds runtimeKind/connection fields and an owner/conversation index to existing rows; no separate scheduler/table was created. SQL **not applied**. Existing normal schedules remain schedule-kind by default.
+
+Validation: **8 server tests passed** covering scheduler ownership, timing, connection/identity forging refusal, cancellation and organization availability; server build and Cowork Electron transpilation passed. Desktop bridge is compiled, not live-tested. End-to-end timed firing after restart and named-account execution require deployment/integration validation. No live schedules were created and no commits/pushes/deployment performed.
+
+Still pending: WatchPR, Monitor, Workflow, background process/task lifecycle, interactive shells, async questions, Agent alias and other parity items. No unsupported tools were registered as placeholders.
+
+## 2026-10-02 — Foundation fixes and first missing tool (implementation)
+
+**Partial implementation, not all-tool parity.** Existing unrelated stream/email/UI work is preserved. No commit, push, deployment or live agent-memory migration in this pass.
+
+- Master MemFS new-file creation now detects layout for its header as well as its path: legacy description/limit remains; root v2 uses name/description; root MEMORY.md indexes have no frontmatter. Non-default root per-file limits fail explicitly rather than writing an unsupported limit key. Existing headers are not silently rewritten.
+- Both runtime-context copies now use AsyncLocalStorage rather than a module-global activeSnapshot. Tool dispatch establishes trusted agent/conversation/CWD context; session routes supply execution-host directory. Nested and overlapping flows are covered by tests. Compatibility setters affect their async chain only.
+- Vera channel sessions now select MemFsService.forClient(actualLettaClient), not the global service hook. Cache namespaces separate base/key and rotate with credentials; scoped credential helpers do not persist keys. Other global managed-policy/background memory writers and UI/controller routes still require scoped-account review; this does not claim every memory access path is migrated.
+- **SetWorkingDirectory added in both registries:** validates a real directory relative to trusted current CWD; persists through the owning session callback, never process.chdir. Unsupported execution routes fail rather than pretending to switch. Scope survives later calls in that live session, not process restart or conversation reopen. Full upstream instruction/skill refresh and remote-host routing parity remain pending.
+- Task/Agent compatibility, Wake, WatchPR, async questions, background execution/Monitor/Workflow, interactive shells, worktrees, artifacts, native image returns and dependency upgrade are still pending. No schema-only placeholders added for them.
+
+Validation so far: Cowork Electron transpilation passed; 19 focused context/security/shell tests passed before the new directory test. Vera 31 focused MemFS/context/security tests plus 3 connection-cache tests passed; SetWorkingDirectory/context suites passed 3 tests; server build passed after each batch. Final combined receipt: **20 Cowork focused tests passed**, production build passed; **35 Vera focused tests passed** and server build passed. Whole Cowork diff-check reports pre-existing EOF whitespace in unrelated email/sidebar files; owned-file checks are separate and those user edits were not changed.
+
+## 2026-10-02 — Deep source parity audit (follow-up)
+
+See [the source-backed parity matrix](letta-code-parity-audit.md). This supersedes any inference that the selected security batch achieved complete migration.
+
+- Upstream definition inventory: 31 internal tools; new since `b69da0ee`: Wake, WatchPR, and asynchronous AskUserQuestion implementation. Task now has Agent wire alias.
+- Cowork has 12 exact upstream implementation-name gaps after question-name normalization; Vera Server has 14. These are bundled-source gaps, not dynamic MCP/session tool counts or proof that every upstream tool is enabled.
+- Important confirmed compatibility finding: Master's newly created root-layout files use legacy description/limit frontmatter; actual upstream v2 validation rejects limit and requires name. Legacy system/ format passes the same synthetic probe.
+- Priority risks: separate organization-scoped Master versus global runtime MemFS adapters; global runtime-context shim versus upstream per-turn state; image tool-return omission; Task/Bash background contract and async-question differences.
+- Shared-name examples reviewed: duplicate patch-path guards already exist; TaskUpdate validation sample aligns; real TS/JS ReadLSP exists in Cowork but is not bundled in Vera. Keep guide-required no-model-override and Vera authorization boundaries.
+- Audit added documentation and pure source/synthetic checks only. Implementation fixes and live conformance gates remain pending; no commits/pushes/deployment or live agent-memory changes.
+
+## 2026-10-02 — v0.34.1+ review and tested security-port batch
+
+- **Status:** Partial migration. The security ports below are implemented/tested; the Cowork package upgrade and architecture-dependent features remain blocked/deferred. This is not full v0.34 runtime parity.
+- **Upstream pull:** `letta-ai/letta-code` main fast-forwarded from `b69da0ee2aa2afa348e6975055ed804cb127f172` to `37c2ab0fc80b58bff0fc2ccdbe838a2d72d45bf7` (`v0.34.1-10-g37c2ab0fc`). Review range: 155 commits, 738 changed files.
+- **Destination base:** standalone Cowork `c29d7c671fa215c43d8a0ecd61d87c3202f96776`; Vera Server monorepo `43810ba5ba5d08fc47f2672e35dc118802fa05b7`.
+- **Boundary:** port observable API-driven runtime contracts, not the upstream CLI/listener. Existing uncommitted stream-stop/email/UI changes are preserved and are not claimed as ports from this batch.
+
+### Ported into both runtimes
+
+1. **Ambient credential redaction** (`36d79eef7`): credential-named process environment values are included at redaction boundaries. Ordinary environment settings are not automatically treated as secrets. Existing explicit per-turn secrets remain covered.
+2. **Launch-time retention** (`9b3fbe0fa`): tool dispatch captures secrets before execution/extensions can rotate or remove them. Final success/error output and Cowork trace sanitization retain that snapshot. Async-local inheritance protects delayed callbacks. No credential values are written into new configuration or returned to the model.
+3. **Protected Windows cmd removals** (`62d23b3b3`): both Bash runners validate commands with resolved CWD and child environment before spawning. The guard covers cmd.exe removal aliases, quoted targets, environment expansion and nested PowerShell wrappers; protected drive/top-level/home targets are blocked independently of approvals. Project targets remain subject to existing policies. Tests parse strings only; no destructive Windows commands were run.
+
+### Dependencies: verified and blocked states
+
+- Published release compatibility was checked: Letta Code `0.34.1`, Agent SDK `0.8.27` (internally pins Code `0.34.1`), REST client `1.12.1`.
+- Vera Server now pins REST client `1.12.1` exactly, with matching `package-lock.json`; build and focused tests pass.
+- Cowork attempted exact Code/SDK/client upgrades with Bun 1.3.9 and an isolated Bun 1.3.14 launcher. Resolution repeatedly stalled before lockfile creation. A project-root npm launcher also hit the existing direct-dependency override conflict; no npm lockfile/manager conversion was introduced.
+- Cowork's manifest changes from those attempts were reverted precisely; its existing Code `0.32.15` and Agent SDK `0.8.11` pins remain aligned with the unchanged Bun lockfile. The upgrade is **blocked**, not installed or completed. Both build gates below used these retained dependencies.
+
+### Reviewed/not claimed as directly ported
+
+- Root-MemFS creation/default Cloud prompt inheritance (`1f55d3dc6`, `643a19576`, `5b66a222c`, `20332a3c7`): the recently implemented scoped Master tools already use root metadata and explicit runtime-verification receipts; desktop migration/default-prompt parity remains separate. Never replace existing custom/protected prompts as an upgrade side effect.
+- New root-memory frontmatter, whole-tree constraints, Windows large-repo hooks and local config-write avoidance (`673974cf2`, `0abe7a99e`): require a coordinated owned MemFS adapter update. Existing legacy hooks and global runtime MemFS are not presented as complete v2 parity. No live agent memory was changed.
+- Workflow streaming/local workers, native Claude/Codex workers, Wake/WatchPR, asynchronous questions/client preferences, listener auto-backgrounding, memory doctor/Palace and channel auto-relay are upstream architecture/toolset features. No unowned CLI process, new provider, durable queue, approval protocol or background execution contract was copied wholesale.
+- Retired TaskOutput/tool catalogs do not justify deleting Cowork/Vera compatibility tools. Native image tool returns require a separate typed/redaction wire-contract change; existing attachment vision is preserved.
+- Correlated terminal/remote evidence is reviewed separately from the existing semantic stop-reason changes in the working tree; no exact-remote-ownership parity is claimed.
+
+### Validation receipt
+
+- Cowork Electron transpilation: **passed**.
+- Cowork production build: **passed**, existing large-chunk warning remains.
+- Cowork focused Node tests: **17 passed** (new migration security, existing runtime-secret Bash and Windows shell contracts).
+- Vera focused Jest tests: **27 passed** (new migration security, Bash policy and return-clamp contracts).
+- Vera `npm run build`: **passed**; targeted changed server files lint without errors.
+- Source pull is verified; code ports are local. No branches changed in destinations, and no commits, pushes, deployment, publication or live business/agent-memory mutations were performed in this batch.
+
 ## 2026-09-21 — Letta Code v0.32.15 / Agent SDK v0.8.11 migration
 
 - **Upstream checkout:** fast-forwarded `letta-ai/letta-code` `main` from `2f0fb7c1` to `b69da0ee` (`v0.32.15-1-gb69da0ee`).

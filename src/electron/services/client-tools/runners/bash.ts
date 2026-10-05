@@ -16,15 +16,12 @@ import {
 } from "./_shared/runtime-context.js";
 import { redactRuntimeSecrets } from "./_shared/runtime-secrets.js";
 import { LIMITS, truncateByChars } from "./_shared/truncation.js";
+import { assertSafeWindowsCommand } from "./_shared/windows-command-safety.js";
 import { getShellEnv } from "./shell/shellEnv.js";
 import { buildShellLaunchers } from "./shell/shellLaunchers.js";
 import { type ShellExecutionError, spawnWithLauncher } from "./shell/shellRunner.js";
 
-import type {
-    ClientToolDefinition,
-    ToolRunContext,
-    ToolRunResult,
-} from "../types.js";
+import type { ClientToolDefinition, ToolRunContext, ToolRunResult } from "../types.js";
 
 const DEFAULT_TIMEOUT_MS = 2 * 60 * 1000;
 const MAX_TIMEOUT_MS = 10 * 60 * 1000;
@@ -49,9 +46,7 @@ function rebuildCachedLauncher(command: string): string[] | null {
     const cachedExe = cachedWorkingLauncher[0]?.toLowerCase();
     if (!cachedExe) return null;
     const launchers = buildShellLaunchers(command);
-    return (
-        launchers.find((l) => l[0]?.toLowerCase() === cachedExe) ?? null
-    );
+    return launchers.find((l) => l[0]?.toLowerCase() === cachedExe) ?? null;
 }
 
 /**
@@ -67,11 +62,11 @@ async function spawnCommand(
         signal?: AbortSignal;
     }
 ): Promise<{ stdout: string; stderr: string; exitCode: number | null }> {
+    assertSafeWindowsCommand(command, { cwd: options.cwd, env: options.env });
     // On Unix we can use the simple direct invocation — original cowork-gui
     // logic notes ARM64 CI fallback issues, so they keep this fast path.
     if (process.platform !== "win32") {
-        const executable =
-            process.platform === "darwin" ? "/bin/zsh" : "bash";
+        const executable = process.platform === "darwin" ? "/bin/zsh" : "bash";
         return spawnWithLauncher([executable, "-c", command], {
             cwd: options.cwd,
             env: options.env,
@@ -131,9 +126,7 @@ async function spawnCommand(
 }
 
 // ─────────────────────── Tool definition ────────────────────────────
-export function buildBashToolDescription(
-    platform: NodeJS.Platform = process.platform
-): string {
+export function buildBashToolDescription(platform: NodeJS.Platform = process.platform): string {
     const platformGuidance =
         platform === "win32"
             ? "On Windows, the runner prefers Git Bash when installed and otherwise uses PowerShell. Prefer portable one-line commands; do not use Unix heredocs for cross-shell work. Use Write for multiline scripts/files. If a PowerShell environment blocks an npm shim, invoke npm.cmd or npx.cmd. "
@@ -174,10 +167,7 @@ export const bashTool: ClientToolDefinition = {
     run: async (args, ctx) => runBash(args, ctx),
 };
 
-async function runBash(
-    args: Record<string, unknown>,
-    ctx: ToolRunContext
-): Promise<ToolRunResult> {
+async function runBash(args: Record<string, unknown>, ctx: ToolRunContext): Promise<ToolRunResult> {
     const command = String(args.command ?? "").trim();
     if (!command) {
         return { output: "Bash: missing 'command' argument", isError: true };
@@ -230,11 +220,7 @@ async function runBash(
             killed?: boolean;
             signal?: string;
         };
-        if (
-            ctx.signal.aborted ||
-            e.code === "ABORT_ERR" ||
-            e.name === "AbortError"
-        ) {
+        if (ctx.signal.aborted || e.code === "ABORT_ERR" || e.name === "AbortError") {
             return { output: "[cancelled]", isError: true };
         }
         let msg = "";

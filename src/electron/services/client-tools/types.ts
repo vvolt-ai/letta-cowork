@@ -25,6 +25,11 @@ export interface ClientToolDefinition {
 export interface ToolRunContext {
     /** Cancellation signal — runners should bail out promptly. */
     signal: AbortSignal;
+    /** Execution-host directory, supplied by the trusted session, not tool arguments. */
+    workingDirectory?: string;
+    /** Trusted setter owned by this session; no process/global state mutation. */
+    setWorkingDirectory?: (directory: string) => void | Promise<void>;
+    workingDirectoryOwnerConversationId?: string;
     /** Conversation/agent scope, in case a runner wants to log/route on it. */
     agentId?: string;
     conversationId?: string;

@@ -17,6 +17,7 @@ export type ShellSpawnOptions = {
   timeoutMs: number;
   signal?: AbortSignal;
   onOutput?: (chunk: string, stream: "stdout" | "stderr") => void;
+  onSpawn?: (child: ReturnType<typeof spawn>) => void;
 };
 
 const ABORT_KILL_TIMEOUT_MS = 2000;
@@ -84,6 +85,11 @@ export function spawnWithLauncher(
       detached: process.platform !== "win32",
     });
 
+    childProcess.once("spawn", () => {
+      try { options.onSpawn?.(childProcess); }
+      catch (error) { killProcessGroup("SIGTERM"); reject(error); }
+    });
+
     // Helper to kill the entire process group
     const killProcessGroup = (signal: "SIGTERM" | "SIGKILL") => {
       if (childProcess.pid) {
@@ -123,7 +129,7 @@ export function spawnWithLauncher(
       killProcessGroup("SIGTERM");
       if (!killTimer) {
         killTimer = setTimeout(() => {
-          if (childProcess.exitCode === null && !childProcess.killed) {
+          if (childProcess.exitCode === null) {
             killProcessGroup("SIGKILL");
           }
         }, ABORT_KILL_TIMEOUT_MS);

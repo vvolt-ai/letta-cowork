@@ -1,3 +1,4 @@
+import { OwnedBackgroundMap, type BackgroundOwner } from './owned-background-map.js';
 import {
   appendFileSync,
   chmodSync,
@@ -11,6 +12,7 @@ import { join } from "node:path";
 type TimerHandle = ReturnType<typeof setTimeout>;
 
 export interface BackgroundProcess {
+  readonly owner?: Readonly<BackgroundOwner>;
   process: import("child_process").ChildProcess;
   command: string;
   stdout: string[];
@@ -26,6 +28,7 @@ export interface BackgroundProcess {
 }
 
 export interface BackgroundTask {
+  readonly owner?: Readonly<BackgroundOwner>;
   description: string;
   subagentType: string;
   subagentId: string;
@@ -38,8 +41,8 @@ export interface BackgroundTask {
   cleanupTimer?: TimerHandle;
 }
 
-export const backgroundProcesses = new Map<string, BackgroundProcess>();
-export const backgroundTasks = new Map<string, BackgroundTask>();
+export const backgroundProcesses = new OwnedBackgroundMap<BackgroundProcess>();
+export const backgroundTasks = new OwnedBackgroundMap<BackgroundTask>();
 let backgroundOutputDir: string | undefined;
 let bashIdCounter = 1;
 export const getNextBashId = () => `bash_${bashIdCounter++}`;
@@ -182,7 +185,8 @@ function countRunningEntries<
   T extends { status: "running" | "completed" | "failed" },
 >(entries: Map<string, T>): number {
   let count = 0;
-  for (const entry of entries.values()) {
+  // Capacity is host-global even though public registry views are owner-scoped.
+  for (const entry of Map.prototype.values.call(entries) as Iterable<T>) {
     if (entry.status === "running") {
       count += 1;
     }

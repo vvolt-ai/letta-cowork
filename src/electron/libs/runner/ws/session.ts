@@ -749,6 +749,9 @@ export class WsSession {
                                         argsToRun,
                                         {
                                             signal: ctrl.signal,
+                                            workingDirectory: this.opts.cwd ?? process.cwd(),
+                                            setWorkingDirectory: (directory) => { this.opts.cwd = directory; },
+                                            workingDirectoryOwnerConversationId: this._conversationId ?? undefined,
                                             agentId: this._agentId ?? undefined,
                                             conversationId:
                                                 this._conversationId ?? undefined,
@@ -872,6 +875,9 @@ export class WsSession {
                                 args,
                                 {
                                     signal: ctrl.signal,
+                                    workingDirectory: this.opts.cwd ?? process.cwd(),
+                                            setWorkingDirectory: (directory) => { this.opts.cwd = directory; },
+                                            workingDirectoryOwnerConversationId: this._conversationId ?? undefined,
                                     agentId: this._agentId ?? undefined,
                                     conversationId:
                                         this._conversationId ?? undefined,

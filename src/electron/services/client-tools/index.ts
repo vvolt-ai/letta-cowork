@@ -9,6 +9,9 @@
  *   • registerClientTool(def)   — add new tool at runtime (for tests / extensions)
  */
 
+import { getRuntimeContext, runWithRuntimeContext } from "./runners/_shared/runtime-context.js";
+import { wakeTool } from './runners/wake.js';
+import { setWorkingDirectoryTool } from "./runners/setWorkingDirectory.js";
 import { bashTool } from "./runners/bash.js";
 import { browserTools } from "./runners/browser.js";
 import { codingTools } from "./runners/coding.js";
@@ -19,6 +22,7 @@ import { listSkillsTool, skillTool } from "./runners/skill.js";
 import { appendToolTrace, runTimelineTool, toolTraceSearchTool } from "./runners/tool-traces.js";
 import { veraMcpTools } from "./runners/veraMcp.js";
 import {
+    captureRuntimeSecretValues,
     redactRuntimeSecrets,
     runWithRuntimeSecrets,
 } from "./runners/_shared/runtime-secrets.js";
@@ -59,7 +63,13 @@ function register(def: ClientToolDefinition): void {
 //   Task/TaskOutput/TaskStop, ViewImage, Memory/MemoryApplyPatch,
 //   MessageChannel, ReadLSP.
 register(bashTool);
+register(setWorkingDirectoryTool);
+register(wakeTool);
 for (const tool of lettaCodeTools) register(tool);
+// Upstream renamed the wire-facing Task to Agent. Preserve Task for replay;
+// both names use exactly the same executor and no-model-override schema.
+const delegatedTaskTool = registry.get("Task");
+if (delegatedTaskTool) register({ ...delegatedTaskTool, name: "Agent" });
 register(skillTool);
 register(listSkillsTool);
 for (const tool of productivityTools) register(tool);
@@ -97,12 +107,23 @@ export function getClientToolsForWire(): ClientToolWireDef[] {
     }));
 }
 
-export async function runClientTool(
+export async function runClientTool(name: string, args: Record<string, unknown>, ctx: ToolRunContext): Promise<ToolRunResult> {
+    return runWithRuntimeContext({
+        ...getRuntimeContext(),
+        lettaConnectionId: ctx.lettaConnectionId,
+        agentId: ctx.agentId,
+        conversationId: ctx.conversationId,
+        workingDirectory: ctx.workingDirectory ?? getRuntimeContext()?.workingDirectory,
+    }, () => executeClientTool(name, args, ctx));
+}
+
+async function executeClientTool(
     name: string,
     args: Record<string, unknown>,
     ctx: ToolRunContext
 ): Promise<ToolRunResult> {
     const startedAt = new Date();
+    const runtimeSecrets = captureRuntimeSecretValues(Object.values(ctx.runtimeEnv ?? {}));
     const def = registry.get(name);
     let argsToRun = args;
     let status: ToolTraceStatus = "error";
@@ -132,41 +153,39 @@ export async function runClientTool(
                     isError: true,
                 };
             } else {
-                result = await runWithRuntimeSecrets(
-                    Object.values(ctx.runtimeEnv ?? {}),
-                    () => def.run(argsToRun, ctx)
-                );
+                result = await runWithRuntimeSecrets(runtimeSecrets, () => def.run(argsToRun, ctx));
                 status = result.isError ? "error" : "success";
             }
         } catch (err) {
             result = {
                 output: `Client tool '${name}' threw: ${
-                    err instanceof Error ? err.stack ?? err.message : String(err)
+                    err instanceof Error ? (err.stack ?? err.message) : String(err)
                 }`,
                 isError: true,
             };
         }
     }
 
-    const runtimeSecrets = Object.values(ctx.runtimeEnv ?? {});
     result = {
         ...result,
         output: clampToolReturnContent(
-            redactRuntimeSecrets(result.output, ctx.runtimeEnv),
+            redactRuntimeSecrets(result.output, ctx.runtimeEnv, runtimeSecrets),
             name,
             runtimeSecrets
         ),
     };
 
     try {
-        await appendToolTrace({
-            toolName: name,
-            status,
-            startedAt,
-            args: argsToRun,
-            result,
-            context: ctx,
-        });
+        await runWithRuntimeSecrets(runtimeSecrets, () =>
+            appendToolTrace({
+                toolName: name,
+                status,
+                startedAt,
+                args: argsToRun,
+                result,
+                context: ctx,
+            })
+        );
     } catch (error) {
         // Observability must never change the outcome of the tool being observed.
         console.warn("[client-tools] Failed to persist tool trace", error);

@@ -80,6 +80,10 @@ export class SchedulerEndpoints {
   // All scheduler calls use suppressAuthExpired: true so that a transient 401
   // from the /schedules endpoints never triggers the global logout flow.
 
+  wake(body: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return this.client.request<Record<string, unknown>>("/schedules/wakes", { method: "POST", body, suppressAuthExpired: true });
+  }
+
   listTasks(): Promise<ScheduledTask[]> {
     return this.client.request<ScheduledTask[]>("/schedules", { suppressAuthExpired: true });
   }

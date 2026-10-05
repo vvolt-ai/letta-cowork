@@ -11,6 +11,7 @@
  * widen this without changing the call sites.
  */
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import { statSync } from "node:fs";
 import { homedir } from "node:os";
 
@@ -22,6 +23,9 @@ export type RuntimePermissionMode =
     | "bypassPermissions";
 
 export interface RuntimeContextSnapshot {
+    organizationId?: string;
+    userId?: string;
+    lettaConnectionId?: string;
     agentId?: string | null;
     conversationId?: string | null;
     workingDirectory?: string | null;
@@ -30,16 +34,22 @@ export interface RuntimeContextSnapshot {
     permissionMode?: RuntimePermissionMode;
 }
 
-let activeSnapshot: RuntimeContextSnapshot | undefined;
+const runtimeContextStorage = new AsyncLocalStorage<RuntimeContextSnapshot>();
+
+/** Each invocation owns its mutable snapshot; nested calls inherit explicitly. */
+export function runWithRuntimeContext<T>(snapshot: RuntimeContextSnapshot, fn: () => T): T {
+    return runtimeContextStorage.run({ ...snapshot }, fn);
+}
 
 export function setRuntimeContext(
     snapshot: RuntimeContextSnapshot | undefined
 ): void {
-    activeSnapshot = snapshot;
+    // Compatibility setter is local to the current async chain, never process-global.
+    runtimeContextStorage.enterWith({ ...snapshot });
 }
 
 export function getRuntimeContext(): RuntimeContextSnapshot | undefined {
-    return activeSnapshot;
+    return runtimeContextStorage.getStore();
 }
 
 export function isUsableDirectory(dirPath: string | null | undefined): boolean {
@@ -75,6 +85,7 @@ function getFallbackWorkingDirectory(): string {
 }
 
 export function getCurrentWorkingDirectory(): string {
+    const activeSnapshot = getRuntimeContext();
     const fromCtx = activeSnapshot?.workingDirectory;
     if (fromCtx && typeof fromCtx === "string" && isUsableDirectory(fromCtx)) {
         return fromCtx;
@@ -94,6 +105,7 @@ export function getCurrentWorkingDirectory(): string {
 }
 
 export function consumeWorkingDirectoryRecovery(): string | null {
+    const activeSnapshot = getRuntimeContext();
     const recoveredFrom = activeSnapshot?.workingDirectoryRecoveredFrom;
     if (!activeSnapshot || !recoveredFrom) return null;
     activeSnapshot.workingDirectoryRecoveredFrom = null;
@@ -102,7 +114,7 @@ export function consumeWorkingDirectoryRecovery(): string | null {
 
 export function getCurrentAgentId(): string | null {
     return (
-        activeSnapshot?.agentId ??
+        getRuntimeContext()?.agentId ??
         process.env.LETTA_AGENT_ID ??
         process.env.AGENT_ID ??
         null
@@ -111,7 +123,7 @@ export function getCurrentAgentId(): string | null {
 
 export function getCurrentConversationId(): string | null {
     return (
-        activeSnapshot?.conversationId ??
+        getRuntimeContext()?.conversationId ??
         process.env.LETTA_CONVERSATION_ID ??
         process.env.CONVERSATION_ID ??
         null
@@ -119,5 +131,5 @@ export function getCurrentConversationId(): string | null {
 }
 
 export function getPermissionMode(): RuntimePermissionMode {
-    return activeSnapshot?.permissionMode ?? "default";
+    return getRuntimeContext()?.permissionMode ?? "default";
 }
