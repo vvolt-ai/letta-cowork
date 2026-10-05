@@ -21,6 +21,7 @@ export interface RunnerRegisterMessage {
   environmentName: string;
   machineId: string;
   capabilities: string[];
+  toolDefinitions?: Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
   allowedDirectories: string[];
   cwd?: string;
   os?: string;

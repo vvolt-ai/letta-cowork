@@ -1,5 +1,11 @@
 # Letta Code Runtime Migration Notes
 
+## 2026-10-05 — Authenticated remote tool schema registration
+
+The remote runner sends wire tool definitions and capabilities from one catalog snapshot. Vera validates bounded schemas matching capabilities before exposing desktop-only tools; legacy registrations remain compatible for server-known tools. Native WhatsApp Vera discovery is implemented server-side under the verified sender, not by invoking desktop-owner credentials. It is independent of desktop connectivity and separate from database connectors.
+
+Validation: Electron transpilation and the registration-method snapshot regression test; backend schema/routing/native-email tests are recorded in Vera's runtime migration notes. Desktop email/UI/stream and existing skill edits remain untouched. No commit, push or deployment for this fix. Reconnect/update runners after deployment to register the new schemas; no live draft or email was created by this work.
+
 ## 2026-10-05 — Shell producer lifecycle plumbing (not background enablement)
 
 Existing ShellSpawnOptions now accepts a trusted onSpawn child hook, fired only on the native successful spawn event; callback failure terminates the process group and rejects. This permits later integration with existing owned process registries without another launcher. Abort escalation bug fixed: ChildProcess.killed only means a signal was sent, not process exit, so SIGKILL escalation now checks exitCode rather than skipping a child that ignored SIGTERM.

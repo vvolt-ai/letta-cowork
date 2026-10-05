@@ -143,11 +143,13 @@ export class RemoteRunnerClient {
 
   private register(): void {
     const cwd = this.settings.allowedDirectories[0] || process.cwd();
+    const toolDefinitions = getClientToolsForWire();
     this.send({
       type: "runner.register",
       environmentName: this.settings.environmentName || os.hostname() || "cowork-desktop",
       machineId: getMachineId(),
-      capabilities: getClientToolsForWire().map((tool) => tool.name),
+      capabilities: toolDefinitions.map((tool) => tool.name),
+      toolDefinitions,
       allowedDirectories: this.settings.allowedDirectories,
       cwd,
       os: `${process.platform}-${process.arch}`,
