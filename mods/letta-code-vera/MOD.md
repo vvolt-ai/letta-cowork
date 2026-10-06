@@ -52,7 +52,7 @@ Natural queries such as `email data`, `remote access`, and `channel messages` ar
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `identity`              | `vera_whoami`                                                                                                                                                                                                                                                                                                                                    |
 | `channels`              | `vera_list_channels`, `vera_get_channel_status`, `vera_create_channel`, `vera_update_channel`, `vera_start_channel`, `vera_stop_channel`, `vera_send_channel_message`, `vera_delete_channel`, `vera_list_channel_shares`, `vera_share_channel`, `vera_revoke_channel_share`                                                                      |
-| `email`                 | `vera_list_zoho_mail_read_operations`, `vera_describe_zoho_mail_read_operation`, `vera_call_zoho_mail_read`, `vera_list_email_accounts`, `vera_list_email_folders`, `vera_list_emails`, `vera_search_emails`, `vera_get_email`, `vera_generate_email_draft`, `vera_save_email_draft`, `vera_list_email_attachments`, `vera_get_email_attachment` |
+| `email`                 | `vera_list_zoho_mail_read_operations`, `vera_describe_zoho_mail_read_operation`, `vera_call_zoho_mail_read`, `vera_list_email_accounts`, `vera_list_email_folders`, `vera_list_emails`, `vera_search_emails`, `vera_get_email`, `vera_generate_email_draft`, `vera_save_email_draft`, `vera_list_email_attachments`, `vera_get_email_attachment`, `vera_read_artifact` |
 | `responses`             | `vera_respond`                                                                                                                                                                                                                                                                                                                                   |
 | `schedules`             | `vera_list_schedules`, `vera_get_schedule`, `vera_list_schedule_runs`, `vera_create_schedule`, `vera_update_schedule`, `vera_toggle_schedule`, `vera_delete_schedule`                                                                                                                                                                            |
 | `knowledge`             | `vera_search_knowledge`                                                                                                                                                                                                                                                                                                                          |
@@ -78,7 +78,7 @@ Do not use channel history as a substitute for live mailbox access.
 5. Use `vera_list_emails` for a bounded page or `vera_search_emails` for a live query.
 6. Search uses Zoho syntax, for example `entire: inventory`, `content: requested parts`, `sender: user@example.com`, or `subject: invoice::has:attachment`; combine conditions with `::`.
 7. Call `vera_get_email` using the exact returned `accountId`, `folderId`, and message ID. A bare message ID is not enough.
-8. Call `vera_list_email_attachments` before `vera_get_email_attachment`. Small files may return base64; larger supported files may return an authorized short-lived artifact path.
+8. Call `vera_list_email_attachments` before `vera_get_email_attachment`. Small files may return base64; larger supported files return a short-lived artifact ID, integrity digest and download path. Follow the artifact workflow below; retrieving a server artifact does not mean it was saved locally.
 9. Use `vera_generate_email_draft` for draft text. Review the exact mailbox, recipients, subject, body, and format before `vera_save_email_draft` with `confirm: true`.
 
 Email rules:
@@ -89,6 +89,21 @@ Email rules:
 - Every call revalidates channel ownership/share/profile access.
 - For broader safe Zoho GET coverage, list operations, describe one, then call it through `vera_call_zoho_mail_read`; Vera injects credentials and blocks non-read methods and unsafe paths.
 - For indexed historical context rather than live mailbox truth, use `vera_search_knowledge` with email/Zoho sources.
+
+## Save an attachment artifact locally (mod 0.5.8)
+
+Preferred path when this mod is active:
+
+1. Fetch the attachment using this same Vera connection. Keep its `artifactId`, `size` and `sha256` reference.
+2. Call the registered **local** tool `vera_download_artifact` with `artifactId`, a new `filePath` inside the current session workspace, and `expectedSha256` when supplied. Approve the local file write. No URL, token or remote environment is an argument.
+3. The trusted helper calls native `vera_read_artifact` internally through protected MCP authentication, decodes bounded chunks and verifies total size/SHA-256. It saves a private file without replacing an existing one; its response contains completion metadata, not base64 or credentials.
+4. Only after `saved:true`, open/inspect the file before downstream business actions. Saving a PDF does not authorize a vendor bill or any other write.
+
+The mod's active Vera server/user/organization must match the connection that created the artifact. A file fetched through a separate `verivolt_stage` connector is not automatically downloadable with a production Cowork login. Check `/vera-status`; change the active connection through its authorized owner/login workflow, or use the matching connector's MCP fallback. Never copy its Bearer token into a shell or chat.
+
+**MCP-only Linux/server session:** discover native `vera_read_artifact` on the same connector that fetched the attachment, using the exact namespaced name returned by discovery. Read from `offset:0` with the default 4096-byte chunks, decode/append locally in order, continue at `nextOffset` until `eof:true`, and verify full size and SHA-256 before opening. MCP retains authentication; local decoding needs no network token and no Windows/remote machine. For automated bulk transfers prefer the mod helper to avoid passing bytes through model context. Never treat a truncated result, partial file, or unverified digest as a successful download.
+
+Artifacts expire (default 15 minutes), disappear on restart, and remain process-local; multi-replica routing/storage is still a deployment limitation. Re-fetch expired/unavailable artifacts instead of blindly retrying. The local helper defaults to 25 MiB and 120 seconds, rejects path/symlink escapes and existing destinations, and removes its partial file on transfer failure. Unsupported publication filesystems or denied workspace access are separate errors, not a reason to bypass permissions.
 
 ## Channel workflow
 

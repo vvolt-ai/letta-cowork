@@ -1,5 +1,6 @@
 import { VeraApiError } from "./client.js";
 import { isEnrolledMasterRuntime, runtimeAgentId } from "./master-identity.js";
+import { downloadVeraArtifact } from "./artifact-download.js";
 
 const MAX_TOOL_OUTPUT_CHARS = 30_000;
 
@@ -43,6 +44,7 @@ const MCP_DISCOVERY_AREAS = {
     "vera_save_email_draft",
     "vera_list_email_attachments",
     "vera_get_email_attachment",
+    "vera_read_artifact",
   ],
   responses: ["vera_respond"],
   schedules: [
@@ -94,6 +96,7 @@ const MCP_DISCOVERY_WORKFLOWS = {
     "vera_list_emails or vera_search_emails",
     "vera_get_email with the returned accountId, folderId, and messageId",
     "vera_list_email_attachments before vera_get_email_attachment",
+    "For artifact:true use the local vera_download_artifact helper when available; MCP-only sessions can read vera_read_artifact chunks through the same authenticated MCP connection and save/verify decoded bytes without a remote machine or a separate Bearer token",
     "vera_generate_email_draft, then review and optionally vera_save_email_draft with confirm=true; email sending is not supported",
   ],
   channels: [
@@ -314,6 +317,24 @@ function normalizeMcpResult(result) {
 export function registerTools(letta, client) {
   if (!letta.capabilities.tools) return [];
   const disposers = [];
+
+  disposers.push(letta.tools.register({
+    name: "vera_download_artifact",
+    description: "Download a temporary attachment artifact from the active Vera connection into a NEW file inside this session's approved workspace. Reuses protected MCP authentication; no token, URL or remote machine required. Binary chunks are handled internally, verified by total size/SHA-256 and saved with private permissions; bytes are not returned to the model. Must use the same Vera server/user/org that retrieved the artifact. Never overwrites files. Expired artifacts must be re-fetched.",
+    parameters: { type: "object", properties: {
+      artifactId: { type: "string", description: "UUID returned by vera_get_email_attachment." },
+      filePath: { type: "string", minLength: 1, maxLength: 4096, description: "New destination path inside the current session workspace." },
+      expectedSha256: { type: "string", description: "Optional SHA-256 from the original artifact reference." },
+      maxBytes: { type: "integer", minimum: 1, maximum: 262144000, description: "Maximum total download bytes. Defaults to 25 MiB." },
+      timeoutMs: { type: "integer", minimum: 1000, maximum: 300000, description: "Transfer timeout; default 120 seconds." },
+    }, required: ["artifactId", "filePath"], additionalProperties: false },
+    requiresApproval: true,
+    parallelSafe: false,
+    async run(ctx) {
+      try { return formatJson(await downloadVeraArtifact(client, ctx.args, ctx)); }
+      catch (error) { return toolError(error); }
+    },
+  }));
 
   disposers.push(
     letta.tools.register({

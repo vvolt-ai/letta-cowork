@@ -41,6 +41,7 @@ describe("Vera mod", () => {
       "vera-master-status",
     ]);
     expect([...letta.tools.keys()]).toEqual([
+      "vera_download_artifact",
       "vera_mcp_list_tools",
       "vera_mcp_call_tool",
       "vera_channels_list",
