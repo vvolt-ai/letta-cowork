@@ -14,19 +14,13 @@
  * letta-cowork doesn't have those subsystems on the same layer.
  */
 
-import { createRequire } from "node:module";
 import * as path from "node:path";
-import { fileURLToPath } from "node:url";
 
-function getRipgrepBinDir(): string | undefined {
-    try {
-        const __filename = fileURLToPath(import.meta.url);
-        const require = createRequire(__filename);
-        const rgPackage = require("@vscode/ripgrep") as { rgPath: string };
-        return path.dirname(rgPackage.rgPath);
-    } catch {
-        return undefined;
-    }
+import { resolveRipgrep } from "../_shared/ripgrepManager.js";
+
+function getRipgrepBinDir(env: NodeJS.ProcessEnv): string | undefined {
+    const executable = resolveRipgrep({ env });
+    return executable && path.isAbsolute(executable) ? path.dirname(executable) : undefined;
 }
 
 export function getShellEnv(
@@ -45,7 +39,7 @@ export function getShellEnv(
         Object.keys(env).find((k) => k.toUpperCase() === "PATH") || "PATH";
 
     const pathPrefixes: string[] = [];
-    const rgBinDir = getRipgrepBinDir();
+    const rgBinDir = getRipgrepBinDir(env);
     if (rgBinDir) pathPrefixes.push(rgBinDir);
 
     if (pathPrefixes.length > 0) {

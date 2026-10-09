@@ -38,6 +38,26 @@ For domain tasks:
 - Code → coding tools
 - Shell → fallback only
 
+### Packaged prerequisite and PDF-reader contract
+
+The app owns its `@vscode/ripgrep` dependency and unpacks the platform binary in
+packaged builds. Grep/Glob and shell subprocesses use the same resolver: a verified
+managed executable, PATH, then the bundled unpacked executable. Never execute a
+binary inside an ASAR path or claim an advertised tool is operational before its
+prerequisite check succeeds.
+
+Read preserves binary-file protection. PDFs are the explicit exception: the
+existing local `pdftotext` executable extracts text with bounded time/output and
+page markers, with no network upload or install. `PDFTOTEXT_PATH` may identify an
+explicit local executable. Text-only extraction does not verify signatures or
+images; scanned/blank pages remain a visual/OCR gate. Delegated tasks inherit
+this same Read behavior.
+
+Git-hook Node resolution remains owned by Letta Code's supported MemFS setup.
+Do not disable hooks, add a fake Node wrapper, or alter global PATH to hide an
+old hook/runtime mismatch. On the affected host, verify the real runtime and
+regenerate hooks through supported setup/sync before treating commits as working.
+
 ## Final tool list
 
 ### Planning

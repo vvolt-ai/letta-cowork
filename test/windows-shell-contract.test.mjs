@@ -1,17 +1,19 @@
 import assert from "node:assert/strict";
+import { join } from "node:path";
 import test from "node:test";
 
 import { buildBashToolDescription } from "../dist-electron/services/client-tools/runners/bash.js";
 import { buildWindowsShellLaunchers } from "../dist-electron/services/client-tools/runners/shell/shellLaunchers.js";
 
 test("Windows shell contract prefers an installed Git Bash", () => {
+  const installedBash = join("/programs", "Git", "bin", "bash.exe");
   const launchers = buildWindowsShellLaunchers("printf 'ok'", [], {
     env: { ProgramFiles: "/programs" },
-    pathExists: (path) => path === "/programs/Git/bin/bash.exe",
+    pathExists: (path) => path === installedBash,
   });
 
   assert.deepEqual(launchers[0], [
-    "/programs/Git/bin/bash.exe",
+    installedBash,
     "-lc",
     "printf 'ok'",
   ]);

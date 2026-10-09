@@ -5,6 +5,7 @@
         "dist-electron",
         "dist-react",
         "node_modules/@letta-ai/letta-code/**/*",
+        "node_modules/@vscode/ripgrep*/**/*",
         "node_modules/ws/**/*"
     ],
     "extraResources": [
@@ -21,6 +22,7 @@
         "node_modules/@letta-ai/letta-code-sdk/**/*",
         "node_modules/@letta-ai/letta-code/**/*",
         "node_modules/@letta-ai/letta-code/**/*",
+        "node_modules/@vscode/ripgrep*/**/*",
         "node_modules/ws/**/*"
     ],
     "mac": {
