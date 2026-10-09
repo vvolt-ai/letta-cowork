@@ -20,16 +20,19 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 24
 
-      - name: Install dependencies (IMPORTANT → npm)
-        run: npm install
+      - name: Install locked dependencies
+        run: bun install --frozen-lockfile
 
       - name: Rebuild native modules
-        run: npx electron-rebuild -f
+        run: bunx --no-install electron-rebuild -f
 
       - name: Build Windows app
-        run: npm run dist:win
+        run: bun run dist:win
+
+      - name: Verify repaired runtime contracts
+        run: node --test test/odoo-attachment-adapter.test.mjs test/permission-handler.test.mjs test/native-tool-prerequisites.test.mjs test/windows-shell-contract.test.mjs test/runtime-context-isolation.test.mjs test/email-processing-fast-path.test.mjs
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -61,16 +64,19 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 24
 
-      - name: Install dependencies (npm, not bun)
-        run: npm install
+      - name: Install locked dependencies
+        run: bun install --frozen-lockfile
 
       - name: Rebuild native modules
-        run: npx electron-rebuild -f
+        run: bunx --no-install electron-rebuild -f
 
       - name: Build Linux app
-        run: npm run dist:linux
+        run: bun run dist:linux
+
+      - name: Verify repaired runtime contracts
+        run: node --test test/odoo-attachment-adapter.test.mjs test/permission-handler.test.mjs test/native-tool-prerequisites.test.mjs test/windows-shell-contract.test.mjs test/runtime-context-isolation.test.mjs test/email-processing-fast-path.test.mjs
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
