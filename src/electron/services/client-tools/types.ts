@@ -44,6 +44,8 @@ export interface ToolRunContext {
      * Values are process-memory-only and must never be logged or persisted.
      */
     runtimeEnv?: Readonly<Record<string, string>>;
+    /** Opaque, single-use renderer permission response; never accepted in tool arguments. */
+    attachmentApproval?: unknown;
     /**
      * Per-session plan-mode manager. Threaded through so plan tools
      * can mutate per-session state without a global singleton.

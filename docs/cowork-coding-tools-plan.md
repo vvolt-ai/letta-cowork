@@ -58,6 +58,28 @@ Do not disable hooks, add a fake Node wrapper, or alter global PATH to hide an
 old hook/runtime mismatch. On the affected host, verify the real runtime and
 regenerate hooks through supported setup/sync before treating commits as working.
 
+### Guarded original-PDF attachment pilot
+
+`OdooAttachPdf` is enabled only for AndrOptimus Prime. It requires a fresh human
+permission response for each exact call even in unrestricted/session-granted
+mode. Model-supplied confirmation cannot create an approval capability; headless,
+delegated and remote calls without the trusted response are blocked.
+
+The input identifies an existing SO/customer/PO, the exact local original PDF and
+its SHA-256, and its Zoho account/folder/message source. The file must be in the
+trusted session working directory and exact downloaded source bucket; the pilot
+accepts at most 2 MiB. Bytes remain inside the adapter and existing authenticated
+Odoo proxy, not model context or tool traces. No raw credential route or grant is
+added. Existing model/field whitelist and live Odoo ACL rejection remain binding.
+
+Only `ir.attachment` creation and internal `sale.order.message_post` are used.
+Completion requires direct read-back of target, name, size, Odoo SHA-1 checksum and
+the internal Log Note's attachment IDs. Durable byte-free intent markers retain
+ambiguous operations across restarts. Recovery reads existing state; it never
+blindly re-creates attachments, re-posts notes or deletes ERP records. Partial
+success is reported distinctly. ADO deployment, connector-profile compatibility,
+and supervised authorized live execution remain separate acceptance gates.
+
 ## Final tool list
 
 ### Planning

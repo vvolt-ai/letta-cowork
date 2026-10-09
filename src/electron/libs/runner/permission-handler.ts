@@ -2,6 +2,8 @@
  * Tool permission handling for the runner.
  */
 
+import { ODOO_ATTACHMENT_TOOL, recordAttachmentApproval } from "../../services/client-tools/runners/_shared/attachmentApproval.js";
+
 import type { RunnerSession } from "./types.js";
 import type { CanUseToolResponse } from "@letta-ai/letta-agent-sdk";
 
@@ -53,16 +55,17 @@ export function createCanUseToolHandler(
   permissionMode: "standard" | "acceptEdits" | "unrestricted" | "strict" = "unrestricted"
 ): (toolName: string, input: unknown) => Promise<CanUseToolResponse> {
   return async (toolName: string, input: unknown): Promise<CanUseToolResponse> => {
-    // AskUserQuestion needs an actual human answer, so it can never inherit an
-    // automatic session grant. Every other tool may be granted for this session.
-    const isGrantedForSession = toolName !== "AskUserQuestion"
+    // Questions and the attachment-write pilot require a fresh human response;
+    // neither may inherit an unrestricted mode or automatic session grant.
+    const alwaysHuman = toolName === "AskUserQuestion" || toolName === ODOO_ATTACHMENT_TOOL;
+    const isGrantedForSession = !alwaysHuman
       && Boolean(
         session.permissionGrants?.allowAll
         || session.permissionGrants?.allowedTools.has(toolName)
       );
     const requiresPrompt = !isGrantedForSession && (
       permissionMode === "strict"
-      || toolName === "AskUserQuestion"
+      || alwaysHuman
       || (permissionMode === "standard" && !isReadOnlyRequest(toolName, input))
       || (permissionMode === "acceptEdits" && !isReadOnlyRequest(toolName, input) && !EDIT_TOOLS.has(toolName))
     );
@@ -79,6 +82,7 @@ export function createCanUseToolHandler(
         input,
         resolve: (result) => {
           session.pendingPermissions.delete(toolUseId);
+          if (toolName === ODOO_ATTACHMENT_TOOL) recordAttachmentApproval(result, input);
           resolve(result);
         }
       });

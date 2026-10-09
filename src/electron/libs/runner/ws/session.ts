@@ -44,6 +44,7 @@ import {
 import { debug } from "../logger.js";
 import { createTerminalEofGuard } from "./stream-terminal-eof-guard.js";
 import { createStreamStallGuard } from "./stream-stall-guard.js";
+import { ODOO_ATTACHMENT_TOOL } from "../../../services/client-tools/runners/_shared/attachmentApproval.js";
 
 import type {
     SDKAssistantMessage,
@@ -760,6 +761,7 @@ export class WsSession {
                                             runtimeEnv,
                                             lettaClient: toolLettaClient,
                                             lettaConnectionId: this.opts.lettaConnectionId,
+                                            attachmentApproval: req.toolName === ODOO_ATTACHMENT_TOOL ? permissionDecision : undefined,
                                         }
                                     );
                                     // Mirror to the renderer so the user
@@ -847,7 +849,11 @@ export class WsSession {
                         (call) => call.name,
                         (call) => parseToolArgs(call.argumentsRaw),
                         async (call) => {
-                            const args = parseToolArgs(call.argumentsRaw);
+                            let args = parseToolArgs(call.argumentsRaw);
+                            const attachmentDecision = call.name === ODOO_ATTACHMENT_TOOL && this.opts.canUseTool
+                                ? await this.opts.canUseTool(call.name, args)
+                                : undefined;
+                            if (attachmentDecision) args = getPermissionUpdatedInput(attachmentDecision, args);
                             // Plan-mode gate (Branch 3 — no approval path).
                             const planCheck = this.planMode.checkPermission(
                                 call.name,
@@ -886,6 +892,7 @@ export class WsSession {
                                     runtimeEnv,
                                     lettaClient: toolLettaClient,
                                     lettaConnectionId: this.opts.lettaConnectionId,
+                                    attachmentApproval: attachmentDecision,
                                 }
                             );
                             this.enqueue({
