@@ -11,6 +11,17 @@ const ALLOWED_TOOLS = new Set([
   'vera_whoami',
   'vera_list_channels',
   'vera_get_channel_status',
+  'vera_list_zoho_mail_read_operations',
+  'vera_describe_zoho_mail_read_operation',
+  'vera_call_zoho_mail_read',
+  'vera_list_email_accounts',
+  'vera_list_email_folders',
+  'vera_list_emails',
+  'vera_search_emails',
+  'vera_get_email',
+  'vera_list_email_attachments',
+  'vera_get_email_attachment',
+  'vera_read_artifact',
   'vera_list_schedules',
   'vera_get_schedule',
   'vera_list_schedule_runs',
@@ -23,21 +34,29 @@ const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 const DELEGATION_REQUEST_TIMEOUT_MS = 300_000;
 
-function fail(message) {
-  throw new Error(message);
+class SafeClientError extends Error {}
+function fail(message) { throw new SafeClientError(message); }
+function safeEndpoint(value) {
+  let url;
+  try { url = new URL(value); } catch { fail('Invalid Vera endpoint configuration.'); }
+  if (url.username || url.password || url.search || url.hash) fail('Vera endpoints must not contain credentials, query values or fragments.');
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))) fail('Vera requires HTTPS except explicit loopback development endpoints.');
+  return url;
 }
 
 function resolveEndpoint(coworkServerUrl) {
   const explicitEndpoint = process.env[ENDPOINT_ENV]?.trim();
-  if (explicitEndpoint) return new URL(explicitEndpoint);
-
   const baseUrl =
     coworkServerUrl ||
     process.env.VERA_COWORK_API_URL?.trim() ||
     process.env.VERA_SERVER_URL?.trim() ||
     process.env.COWORK_SERVER_URL?.trim() ||
     DEFAULT_SERVER_URL;
-  return new URL(ENDPOINT_PATH, baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`);
+  const bound = safeEndpoint(baseUrl);
+  const endpoint = explicitEndpoint ? safeEndpoint(explicitEndpoint) : new URL(ENDPOINT_PATH, bound);
+  if (endpoint.origin !== bound.origin) fail('Vera endpoint override does not match the authenticated session server; use an authorized matching connection.');
+  if (!['/mcp', '/mcp/'].includes(endpoint.pathname)) fail('Native Vera fallback requires the /mcp endpoint.');
+  return endpoint;
 }
 
 function unwrapEnvValue(value) {
@@ -77,7 +96,7 @@ async function resolveAuthentication() {
       };
     }
   } catch (error) {
-    if (error?.code !== 'ENOENT') throw error;
+    if (error?.code !== 'ENOENT') fail('Could not read the protected Cowork session; resolve its local access before retrying.');
   }
 
   const coworkToken = process.env.COWORK_TOKEN?.trim();
@@ -111,7 +130,7 @@ async function readArguments() {
   try {
     parsed = JSON.parse(input);
   } catch (error) {
-    fail(`Tool arguments must be valid JSON: ${error.message}`);
+    fail('Tool arguments must be valid JSON; input values are not printed.');
   }
 
   if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
@@ -141,11 +160,21 @@ function parsePayload(body) {
   fail('Vera returned a response that was neither JSON nor MCP event-stream data.');
 }
 
-function errorMessage(payload) {
-  const message = payload?.error?.message;
-  return typeof message === 'string' && message.trim()
-    ? message.trim()
-    : 'Unknown MCP error';
+async function boundedResponse(response) {
+  const length = Number(response.headers.get('content-length'));
+  if (Number.isFinite(length) && length > MAX_RESPONSE_BYTES) { await response.body?.cancel(); fail('Vera MCP response exceeds the byte limit.'); }
+  if (!response.body) return '';
+  const reader = response.body.getReader();
+  const chunks = []; let size = 0;
+  try {
+    while (true) {
+      const { value, done } = await reader.read(); if (done) break;
+      size += value.byteLength;
+      if (size > MAX_RESPONSE_BYTES) { await reader.cancel(); fail('Vera MCP response exceeds the byte limit.'); }
+      chunks.push(Buffer.from(value));
+    }
+    return Buffer.concat(chunks).toString('utf8');
+  } finally { reader.releaseLock(); }
 }
 
 function renderResult(result) {
@@ -178,6 +207,7 @@ async function main() {
   }
 
   const argumentsObject = await readArguments();
+  const endpoint = resolveEndpoint(authentication.serverUrl);
   const controller = new AbortController();
   const requestTimeoutMs =
     toolName === 'vera_send_message_to_organization_agent'
@@ -187,7 +217,8 @@ async function main() {
   let response;
 
   try {
-    response = await fetch(resolveEndpoint(authentication.serverUrl), {
+    response = await fetch(endpoint, {
+      redirect: 'error',
       method: 'POST',
       headers: {
         Accept: 'application/json, text/event-stream',
@@ -204,38 +235,24 @@ async function main() {
       }),
       signal: controller.signal,
     });
+    if (!response.ok) { await response.body?.cancel(); fail(`Vera MCP HTTP ${response.status}; upstream error content is not printed.`); }
+    const payload = parsePayload(await boundedResponse(response));
+    if (payload?.error) fail('Vera MCP returned a protocol error; upstream error content is not printed.');
+    if (!payload || payload.result === undefined) fail('Vera MCP response did not contain a tool result.');
+    if (payload.result?.isError) fail('Vera tool reported failure; inspect sanitized server diagnostics through the authorized owner.');
+    const output = renderResult(payload.result);
+    if (output) process.stdout.write(`${output}\n`);
   } catch (error) {
-    if (error?.name === 'AbortError') {
-      fail(`Vera MCP request timed out after ${requestTimeoutMs / 1000} seconds.`);
-    }
-    fail(`Could not reach Vera MCP: ${error.message}`);
+    if (controller.signal.aborted || error?.name === 'AbortError') fail(`Vera MCP request/body timed out after ${requestTimeoutMs / 1000} seconds; outcome may be unknown. Do not blindly retry a non-idempotent operation.`);
+    if (error instanceof SafeClientError) throw error;
+    fail('Vera MCP request failed; verify the matching endpoint, connection and redirect policy without sharing secrets.');
   } finally {
     clearTimeout(timeout);
+    controller.abort();
   }
-
-  const contentLength = Number(response.headers.get('content-length'));
-  if (Number.isFinite(contentLength) && contentLength > MAX_RESPONSE_BYTES) {
-    fail(`Vera MCP response exceeds ${MAX_RESPONSE_BYTES} bytes.`);
-  }
-
-  const body = await response.text();
-  if (Buffer.byteLength(body) > MAX_RESPONSE_BYTES) {
-    fail(`Vera MCP response exceeds ${MAX_RESPONSE_BYTES} bytes.`);
-  }
-
-  const payload = parsePayload(body);
-  if (!response.ok) fail(`Vera MCP HTTP ${response.status}: ${errorMessage(payload)}`);
-  if (payload?.error) fail(`Vera MCP error: ${errorMessage(payload)}`);
-  if (!payload || payload.result === undefined) {
-    fail('Vera MCP response did not contain a tool result.');
-  }
-
-  const output = renderResult(payload.result);
-  if (output) process.stdout.write(`${output}\n`);
-  if (payload.result?.isError) process.exitCode = 1;
 }
 
 main().catch((error) => {
-  process.stderr.write(`Error: ${error.message}\n`);
+  process.stderr.write(`Error: ${error instanceof SafeClientError ? error.message : 'Native Vera helper failed; inspect local setup without sharing secret values.'}\n`);
   process.exitCode = 1;
 });
