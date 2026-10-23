@@ -33,6 +33,8 @@ import { redactRuntimeSecrets } from '../../../services/client-tools/runners/_sh
 import { PlanModeManager } from '../plan-mode/mode-manager.js';
 import { buildTurnReminders, createReminderState } from '../plan-mode/reminders.js';
 import { DesktopNativeControls } from './native-controls.js';
+import {delegatedToolNames} from './tool-grants.js';
+import {ODOO_ATTACHMENT_TOOL} from '../../../services/client-tools/runners/_shared/attachmentApproval.js';
 import { classifyStreamTermination } from './terminal-stop.js';
 
 export interface DesktopSdkScope {
@@ -503,6 +505,9 @@ export class DesktopSdkSession {
           lettaClient: this.scope!.client,
           lettaConnectionId: getLettaConnectionScope(this.options.lettaConnectionId),
           runtimeEnv: this.runtimeEnv,
+          // Preserve the incoming single-use exact human approval, not a model
+          // field or an inherited parent decision. All other tools get none.
+          attachmentApproval:name===ODOO_ATTACHMENT_TOOL?decision:undefined,
           planMode: this.planMode,
           agentMemory: this.memoryAccess,
           memoryDir: (await this.memoryAccess?.snapshot())?.memoryDir ?? undefined,
@@ -588,14 +593,7 @@ export class DesktopSdkSession {
           signal: request.signal,
           runtimeEnv: request.agentId === this._agentId ? this.runtimeEnv : undefined,
         },
-        tools: getClientToolsForWire()
-          .map((t) => t.name)
-          .filter(
-            (name) =>
-              name !== 'Task' &&
-              name !== 'Agent' &&
-              (!this.options.tools || this.options.tools.includes(name)),
-          ),
+        tools: delegatedToolNames(getClientToolsForWire().map(tool=>tool.name),this.options.tools),
         maxTurns: 25,
       },
       this.dependencies,

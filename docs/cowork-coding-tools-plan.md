@@ -38,6 +38,48 @@ For domain tasks:
 - Code → coding tools
 - Shell → fallback only
 
+### Packaged prerequisite and PDF-reader contract
+
+The app owns its `@vscode/ripgrep` dependency and unpacks the platform binary in
+packaged builds. Grep/Glob and shell subprocesses use the same resolver: a verified
+managed executable, PATH, then the bundled unpacked executable. Never execute a
+binary inside an ASAR path or claim an advertised tool is operational before its
+prerequisite check succeeds.
+
+Read preserves binary-file protection. PDFs are the explicit exception: the
+existing local `pdftotext` executable extracts text with bounded time/output and
+page markers, with no network upload or install. `PDFTOTEXT_PATH` may identify an
+explicit local executable. Text-only extraction does not verify signatures or
+images; scanned/blank pages remain a visual/OCR gate. Delegated tasks inherit
+this same Read behavior.
+
+Git-hook Node resolution remains owned by Letta Code's supported MemFS setup.
+Do not disable hooks, add a fake Node wrapper, or alter global PATH to hide an
+old hook/runtime mismatch. On the affected host, verify the real runtime and
+regenerate hooks through supported setup/sync before treating commits as working.
+
+### Guarded original-PDF attachment pilot
+
+`OdooAttachPdf` is enabled only for AndrOptimus Prime. It requires a fresh human
+permission response for each exact call even in unrestricted/session-granted
+mode. Model-supplied confirmation cannot create an approval capability; headless,
+delegated and remote calls without the trusted response are blocked.
+
+The input identifies an existing SO/customer/PO, the exact local original PDF and
+its SHA-256, and its Zoho account/folder/message source. The file must be in the
+trusted session working directory and exact downloaded source bucket; the pilot
+accepts at most 2 MiB. Bytes remain inside the adapter and existing authenticated
+Odoo proxy, not model context or tool traces. No raw credential route or grant is
+added. Existing model/field whitelist and live Odoo ACL rejection remain binding.
+
+Only `ir.attachment` creation and internal `sale.order.message_post` are used.
+Completion requires direct read-back of target, name, size, Odoo SHA-1 checksum and
+the internal Log Note's attachment IDs. Durable byte-free intent markers retain
+ambiguous operations across restarts. Recovery reads existing state; it never
+blindly re-creates attachments, re-posts notes or deletes ERP records. Partial
+success is reported distinctly. ADO deployment, connector-profile compatibility,
+and supervised authorized live execution remain separate acceptance gates.
+
 ## Final tool list
 
 ### Planning

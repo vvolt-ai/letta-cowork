@@ -5,6 +5,7 @@ import { SYSTEM_REMINDER_CLOSE, SYSTEM_REMINDER_OPEN } from "../_shared/constant
 import { debugLog } from "../_shared/debug.js";
 import { expandFilePath } from "../_shared/filePath.js";
 import { resizeImageIfNeeded } from "../_shared/imageResize.js";
+import { extractLocalPdf } from "../_shared/localPdf.js";
 import { OVERFLOW_CONFIG, writeOverflowFile } from "../_shared/overflow.js";
 import { getCurrentWorkingDirectory } from "../_shared/runtime-context.js";
 import { LIMITS, truncateByChars } from "../_shared/truncation.js";
@@ -248,6 +249,10 @@ export async function read(args: ReadArgs): Promise<ReadResult> {
       throw new Error(
         `File too large: ${stats.size} bytes (max ${maxSize} bytes)`,
       );
+    if (path.extname(resolvedPath).toLowerCase() === ".pdf") {
+      const content = await extractLocalPdf(resolvedPath);
+      return { content: formatWithLineNumbers(content, offset, limit, userCwd) };
+    }
     if (await isBinaryFile(resolvedPath))
       throw new Error(`Cannot read binary file: ${resolvedPath}`);
     const content = await fs.readFile(resolvedPath, "utf-8");

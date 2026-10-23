@@ -24,6 +24,59 @@ test('process cleanup never treats a live or uninspectable group as zombie-only'
   assert.throws(() => processGroupHasLiveMembers('unexpected output', 100), /INSPECTION_INVALID/);
 });
 import { registerClientTool } from '../dist-electron/services/client-tools/index.js';
+import { odooAttachmentTool } from '../dist-electron/services/client-tools/runners/odooAttachment.js';
+import { createCanUseToolHandler } from '../dist-electron/libs/runner/permission-handler.js';
+import { consumeAttachmentApproval } from '../dist-electron/services/client-tools/runners/_shared/attachmentApproval.js';
+test(
+  'SDK delegation of protected attachment tool preserves a fresh single-use human decision even in Full Access',
+  { timeout: 15000 },
+  async () => {
+    const original = odooAttachmentTool.run;
+    let effects = 0,
+      prompts = 0;
+    odooAttachmentTool.run = async (args, ctx) => {
+      effects++;
+      assert.equal(consumeAttachmentApproval(ctx.attachmentApproval, args), true);
+      assert.equal(consumeAttachmentApproval(ctx.attachmentApproval, args), false);
+      return {
+        output: 'Fixture protected decision consumed; no ERP write performed.',
+        isError: false,
+      };
+    };
+    const pendingPermissions = new Map();
+    const session = {
+      id: 'guarded-sdk',
+      title: 'Fixture',
+      status: 'running',
+      pendingPermissions,
+      permissionGrants: { allowAll: true, allowedTools: new Set(['OdooAttachPdf']) },
+    };
+    const policy = createCanUseToolHandler(
+      session,
+      (id, name) => {
+        prompts++;
+        assert.equal(name, 'OdooAttachPdf');
+        pendingPermissions.get(id).resolve({ behavior: 'allow' });
+      },
+      'unrestricted',
+    );
+    const f = await fixture(true),
+      s = f.make({ tools: ['OdooAttachPdf'], canUseTool: policy });
+    try {
+      await s.send('Fixture protected attachment approval only.');
+      for await (const _ of s.stream()) {
+      }
+      assert.equal(effects, 1);
+      assert.equal(prompts, 1);
+      assert.equal(pendingPermissions.size, 0);
+      await s.abort();
+    } finally {
+      await s.abort().catch(() => undefined);
+      odooAttachmentTool.run = original;
+      await f.close();
+    }
+  },
+);
 const A = 'agent-11111111-1111-1111-1111-111111111111',
   C = 'conv-22222222-2222-2222-2222-222222222222',
   R = 'run-fixture',

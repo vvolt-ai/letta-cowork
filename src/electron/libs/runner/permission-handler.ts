@@ -1,15 +1,12 @@
-/**
- * Tool permission handling for the runner.
- */
-
+/** Cowork's user approval policy, separate from SDK transport permissions. */
+import {
+  ODOO_ATTACHMENT_TOOL,
+  recordAttachmentApproval,
+} from '../../services/client-tools/runners/_shared/attachmentApproval.js';
 import type { RunnerSession } from './types.js';
 import type { CanUseToolResponse } from '@letta-ai/letta-agent-sdk';
 
-/**
- * Send a permission request event.
- */
 export type SendPermissionRequest = (toolUseId: string, toolName: string, input: unknown) => void;
-
 const READ_ONLY_TOOLS = new Set([
   'Read',
   'ReadLSP',
@@ -48,7 +45,6 @@ const READ_ONLY_TOOLS = new Set([
   'odoo_get_fields',
   'odoo_health_check_health_odoo_get',
 ]);
-
 const EDIT_TOOLS = new Set([
   'Edit',
   'MultiEdit',
@@ -62,70 +58,44 @@ const EDIT_TOOLS = new Set([
   'ProjectMemoryWrite',
   'LiveApplyPatch',
 ]);
-
 function isReadOnlyRequest(toolName: string, input: unknown): boolean {
   if (READ_ONLY_TOOLS.has(toolName)) return true;
-  if (toolName === 'AgentMemory' && input && typeof input === 'object')
-    return ['status', 'list', 'read', 'search'].includes(
-      String((input as { action?: unknown }).action),
-    );
-  if (toolName === 'Git' && input && typeof input === 'object') {
-    const operation = (input as { operation?: unknown }).operation;
-    return (
-      operation === 'status' ||
-      operation === 'diff' ||
-      operation === 'log' ||
-      operation === 'branch'
-    );
-  }
-  if (toolName === 'MemoryNotes' && input && typeof input === 'object') {
-    const action = (input as { action?: unknown }).action;
-    return action === 'list' || action === 'search';
-  }
-  if (toolName === 'UserPreferences' && input && typeof input === 'object') {
-    return (input as { action?: unknown }).action === 'get';
-  }
-  if (toolName === 'Reminders' && input && typeof input === 'object') {
-    return (input as { action?: unknown }).action === 'list';
-  }
+  if (!input || typeof input !== 'object') return false;
+  const args = input as Record<string, unknown>;
+  if (toolName === 'AgentMemory')
+    return ['status', 'list', 'read', 'search'].includes(String(args.action));
+  if (toolName === 'Git')
+    return ['status', 'diff', 'log', 'branch'].includes(String(args.operation));
+  if (toolName === 'MemoryNotes') return args.action === 'list' || args.action === 'search';
+  if (toolName === 'UserPreferences') return args.action === 'get';
+  if (toolName === 'Reminders') return args.action === 'list';
   return false;
 }
-
-/**
- * Create a canUseTool handler for a session.
- */
 export function createCanUseToolHandler(
   session: RunnerSession,
   sendPermissionRequest: SendPermissionRequest,
   permissionMode: 'standard' | 'acceptEdits' | 'unrestricted' | 'strict' = 'unrestricted',
   onCancelled?: (toolUseId: string) => void,
 ): (toolName: string, input: unknown, signal?: AbortSignal) => Promise<CanUseToolResponse> {
-  return async (
-    toolName: string,
-    input: unknown,
-    signal?: AbortSignal,
-  ): Promise<CanUseToolResponse> => {
+  return async (toolName, input, signal) => {
     if (signal?.aborted) return { behavior: 'deny', message: 'Cancelled.' };
-    // AskUserQuestion needs an actual human answer, so it can never inherit an
-    // automatic session grant. Every other tool may be granted for this session.
-    const isGrantedForSession =
-      toolName !== 'AskUserQuestion' &&
+    // Neither Full Access nor prior grants authorize a question answer or an
+    // original-attachment business write. Both need a fresh exact human reply.
+    const alwaysHuman = toolName === 'AskUserQuestion' || toolName === ODOO_ATTACHMENT_TOOL;
+    const granted =
+      !alwaysHuman &&
       Boolean(
         session.permissionGrants?.allowAll || session.permissionGrants?.allowedTools.has(toolName),
       );
     const requiresPrompt =
-      !isGrantedForSession &&
+      !granted &&
       (permissionMode === 'strict' ||
-        toolName === 'AskUserQuestion' ||
+        alwaysHuman ||
         (permissionMode === 'standard' && !isReadOnlyRequest(toolName, input)) ||
         (permissionMode === 'acceptEdits' &&
           !isReadOnlyRequest(toolName, input) &&
           !EDIT_TOOLS.has(toolName)));
-
-    if (!requiresPrompt) {
-      return { behavior: 'allow' as const };
-    }
-
+    if (!requiresPrompt) return { behavior: 'allow' };
     const toolUseId = crypto.randomUUID();
     return new Promise<CanUseToolResponse>((resolve) => {
       let settled = false;
@@ -134,9 +104,11 @@ export function createCanUseToolHandler(
         settled = true;
         session.pendingPermissions.delete(toolUseId);
         signal?.removeEventListener('abort', cancel);
+        if (toolName === ODOO_ATTACHMENT_TOOL) recordAttachmentApproval(result, input);
         resolve(result);
       };
       const cancel = () => {
+        if (settled) return;
         finish({ behavior: 'deny', message: 'Cancelled.' });
         try {
           onCancelled?.(toolUseId);
@@ -150,7 +122,6 @@ export function createCanUseToolHandler(
         cancel();
         return;
       }
-      // Register before notification; a fast UI answer cannot miss its resolver.
       try {
         sendPermissionRequest(toolUseId, toolName, input);
       } catch {
