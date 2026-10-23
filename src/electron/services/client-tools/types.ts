@@ -7,6 +7,8 @@
  * tool_call_message; we execute; we send a tool_return back.
  */
 
+import type { SessionMemoryAccess } from '../memfs/scoped-memory.js';
+
 /** JSON Schema parameter spec, the format Letta's `client_tools` array expects. */
 export type JsonSchema = Record<string, unknown>;
 
@@ -37,6 +39,10 @@ export interface ToolRunContext {
     lettaClient?: unknown;
     /** Non-secret Vera Letta connection UUID; absent means organization-default. */
     lettaConnectionId?: string;
+    /** Verified current-agent checkout, separate from process-global secrets. */
+    memoryDir?: string;
+    agentMemory?: SessionMemoryAccess;
+    prepareAgentMemory?: (agentId: string) => Promise<SessionMemoryAccess>;
     /** Upstream call id used to correlate UI calls, returns, and local traces. */
     toolCallId?: string;
     /**
@@ -50,6 +56,8 @@ export interface ToolRunContext {
      * Typed as `unknown` to avoid a circular import — narrow at usage.
      */
     planMode?: unknown;
+    /** Main-owned SDK delegation capability, never accepted from model JSON. */
+    sdkSubagent?: (request: { agentId: string; conversationId?: string; prompt: string; description: string; signal: AbortSignal }) => Promise<{ conversationId: string; finalText: string; toolCallCount: number; turnCount: number; durationMs: number }>;
 }
 
 export interface ToolRunResult {

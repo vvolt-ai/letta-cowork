@@ -17,7 +17,7 @@
  *   • run_in_background — IGNORED in this build (Option C deferred)
  */
 
-import { Letta } from "@letta-ai/letta-client";
+import type { Letta } from "@letta-ai/letta-client";
 
 import {
     runSubagent,
@@ -51,10 +51,7 @@ interface TaskResult {
 
 export function getTaskClient(runtimeClient?: unknown): Letta {
     if (runtimeClient) return runtimeClient as Letta;
-    const apiKey = (process.env.LETTA_API_KEY ?? "").trim();
-    if (!apiKey) throw new Error("LETTA_API_KEY is not configured");
-    const baseURL = (process.env.LETTA_BASE_URL ?? "").trim() || undefined;
-    return new Letta({ apiKey, baseURL });
+    throw new Error('SDK_SUBAGENT_SCOPE_UNAVAILABLE: no active parent account client; no ambient fallback was attempted.');
 }
 
 export async function task(args: TaskArgs): Promise<TaskResult> {
@@ -77,16 +74,13 @@ export async function task(args: TaskArgs): Promise<TaskResult> {
     }
 
     const parentAgentId =
-        args._runtime_agent_id ||
-        process.env.LETTA_AGENT_ID ||
-        process.env.AGENT_ID ||
-        "";
+        args._runtime_agent_id || "";
     if (!args.agent_id && !args.conversation_id && !parentAgentId) {
         return {
             content: [
                 {
                     type: "text",
-                    text: "Task: no agent context — pass agent_id or conversation_id, or set LETTA_AGENT_ID in the environment.",
+                    text: "Task: no active SDK agent context. Start delegation from its parent Cowork session.",
                 },
             ],
             status: "error",

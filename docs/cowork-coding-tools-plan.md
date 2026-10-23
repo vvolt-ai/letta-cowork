@@ -57,6 +57,17 @@ Future UI improvements:
 
 ### Project understanding
 
+#### Package-aware context and memory reuse (2026-10-05)
+
+`ProjectContext` and `ProjectDetect` distinguish the trusted working directory, git `repoRoot`, and nearest package `projectRoot`. Nested services expose their own files/scripts rather than the monorepo root. `ProjectRunScript` and `CodeDiagnostics` execute from that package and recognize ancestor workspace lockfiles. `ProjectMap` stays scoped to the requested package while returning repository-relative file paths for editing tools.
+
+Context/detection include bounded saved-profile excerpts, source paths/timestamps and durable-note pointers. These notes are not fresh verification; package files and test results remain authoritative. Prefer one context/detection call, then a focused `ProjectMemorySearch` before broad discovery. Do not repeatedly load the same notes unless their source or task scope changed.
+
+The existing `.cowork/` store is reused: reads/writes select the nearest existing memory root; search includes its ancestor repository notes, with memory results before package docs. If no service-local store exists, repository memory remains the fallback. No profile migration, automatic rewrite, new memory engine, or stale cross-session cache is introduced. Traversal/symlink memory escapes are rejected. Save only distilled verified decisions and gotchas through the existing memory tools, never credentials or transcripts.
+
+Validation: Electron transpilation, seven new package/memory/session regressions, and the desktop Node regression suite. The repaired tool implementation was also exercised against `services/vera-cowork-server`, correctly finding its build/test scripts and running `npm run build`. Reload/restart the desktop runtime to activate rebuilt tools; no deployment or publication is implied by local tests.
+
+
 Implemented MVP:
 
 - `ProjectDetect` — detects repo root, package manager, scripts, frameworks, important dirs.

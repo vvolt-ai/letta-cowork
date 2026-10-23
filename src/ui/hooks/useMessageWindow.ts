@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { getAssistantDraft, subscribeAssistantDraft } from '../store/assistantDraftStore';
 
 import type { ServerEvent, StreamMessage } from "../types";
 
@@ -10,12 +11,6 @@ const HISTORY_PAGE_SIZE = 50;
 type StreamEventMessage = {
   type: "stream_event";
   event: { type: string; delta?: { text?: string; reasoning?: string } };
-};
-
-type AssistantDeltaMessage = {
-  type: "assistant";
-  content?: string;
-  uuid?: string;
 };
 
 const getMessageTimestamp = (message: StreamMessage): number => {
@@ -48,6 +43,9 @@ export function useMessageWindow(
   onNewMessage?: () => void,
   scheduleScrollToBottom?: (behavior?: ScrollBehavior) => void
 ): MessageWindowState {
+  const subscribeDraft = useCallback((listener:()=>void)=>subscribeAssistantDraft(sessionId,listener),[sessionId]);
+  const readDraft = useCallback(()=>getAssistantDraft(sessionId),[sessionId]);
+  const assistantDraft = useSyncExternalStore(subscribeDraft,readDraft,()=>null);
   const [partialMessage, setPartialMessage] = useState("");
   const [showPartialMessage, setShowPartialMessage] = useState(false);
   const [partialReasoning, setPartialReasoning] = useState("");
@@ -176,6 +174,11 @@ export function useMessageWindow(
     [onNewMessage, performAutoScroll, shouldAutoScroll]
   );
 
+  useEffect(()=>{
+    if(!assistantDraft?.content)return;
+    if(shouldAutoScroll)performAutoScroll('auto');else onNewMessage?.();
+  },[assistantDraft,shouldAutoScroll,performAutoScroll,onNewMessage]);
+
   const orderedMessages = useMemo(
     () => messages
       .map((message, index) => ({ originalIndex: index, message }))
@@ -250,21 +253,9 @@ export function useMessageWindow(
         return;
       }
 
-      if (partialEvent.payload.message.type === "assistant") {
-        const message = partialEvent.payload.message as AssistantDeltaMessage;
-        const deltaText = typeof message.content === "string" ? message.content : "";
-        if (!deltaText) return;
-
-        if (partialResetTimeoutRef.current) {
-          window.clearTimeout(partialResetTimeoutRef.current);
-          partialResetTimeoutRef.current = null;
-        }
-
-        partialMessageRef.current += deltaText;
-        setShowPartialMessage(true);
-        schedulePartialFlush({ message: true, notify: true });
-        return;
-      }
+      // Typed SDK assistant chunks are accumulated once by the shared draft
+      // store. All viewers subscribe there, including viewers mounted mid-turn.
+      if (partialEvent.payload.message.type === 'assistant') return;
 
       if (partialEvent.payload.message.type !== "stream_event") {
         return;
@@ -321,8 +312,8 @@ export function useMessageWindow(
     totalMessages: messages.length,
     hasMoreHistory,
     visibleHistoryCount,
-    partialMessage,
-    showPartialMessage,
+    partialMessage: assistantDraft?.content ?? partialMessage,
+    showPartialMessage: Boolean(assistantDraft?.content) || showPartialMessage,
     partialReasoning,
     handlePartialMessages,
     loadMoreHistory,

@@ -1,25 +1,19 @@
 interface IntegrationListProps {
   isEmailConnected: boolean;
   unreadLabel: string;
-  autoSyncEnabled: boolean;
-  onToggleAutoSync: (enabled: boolean) => void;
   onConnect: () => void;
   onDisconnect: () => void;
   onOpenInbox: () => void;
   onRefresh?: () => void;
-  onManageRules?: () => void;
 }
 
 export function IntegrationList({
   isEmailConnected,
   unreadLabel,
-  autoSyncEnabled,
-  onToggleAutoSync,
   onConnect,
   onDisconnect,
   onOpenInbox,
   onRefresh,
-  onManageRules,
 }: IntegrationListProps) {
   return (
     <div className="space-y-3 text-sm text-ink-700">
@@ -47,28 +41,6 @@ export function IntegrationList({
           />
         </div>
 
-        {isEmailConnected ? (
-          <div className="mt-3 flex items-center justify-between gap-2 text-xs">
-            <span className="text-muted">Auto-sync unread email</span>
-            <button
-              onClick={() => onToggleAutoSync(!autoSyncEnabled)}
-              className={`inline-flex h-5 w-9 items-center rounded-full border p-0.5 transition-all duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/20 ${
-                autoSyncEnabled
-                  ? "border-[var(--color-accent)] bg-[var(--color-accent)]"
-                  : "border-[var(--color-bg-400)] bg-[var(--color-bg-300)] hover:border-[var(--color-border-hover)]"
-              }`}
-              aria-pressed={autoSyncEnabled}
-              aria-label="Toggle auto-sync"
-            >
-              <span
-                className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200 ease-out ${
-                  autoSyncEnabled ? "translate-x-4" : "translate-x-0"
-                }`}
-              />
-            </button>
-          </div>
-        ) : null}
-
         <div className="mt-2 flex flex-wrap gap-2 text-xs">
           {isEmailConnected ? (
             <>
@@ -84,14 +56,6 @@ export function IntegrationList({
               >
                 Disconnect
               </button>
-              {onManageRules ? (
-                <button
-                  onClick={onManageRules}
-                  className="rounded-md px-2 py-1 text-[var(--color-accent)] transition hover:bg-[var(--color-sidebar-hover)] hover:text-[var(--color-accent-hover)]"
-                >
-                  Configure automation
-                </button>
-              ) : null}
             </>
           ) : (
             <button

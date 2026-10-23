@@ -1,13 +1,13 @@
-import Letta from "@letta-ai/letta-client";
+import Letta from '@letta-ai/letta-client';
 
-import { getVeraCoworkApiClient } from "../../api/index.js";
+import { getVeraCoworkApiClient } from '../../api/index.js';
 
 export interface LettaRuntimeConfig {
   apiKey: string;
   baseURL: string;
   defaultHeaders?: Record<string, string>;
   fetch?: typeof fetch;
-  source: "vera" | "local";
+  source: 'vera' | 'local';
 }
 
 /**
@@ -17,7 +17,7 @@ export interface LettaRuntimeConfig {
  * propagate its conversation account. Keeping the default explicit prevents a
  * later multi-account flow from accidentally inheriting unrelated state.
  */
-export const ORGANIZATION_DEFAULT_LETTA_CONNECTION = "organization-default";
+export const ORGANIZATION_DEFAULT_LETTA_CONNECTION = 'organization-default';
 
 export function getLettaConnectionScope(connectionId?: string): string {
   return connectionId?.trim() || ORGANIZATION_DEFAULT_LETTA_CONNECTION;
@@ -28,10 +28,11 @@ function withBearerToken(
   init: RequestInit | undefined,
   accessToken: string,
 ): RequestInit {
-  const sourceHeaders = init?.headers
-    ?? (typeof Request !== "undefined" && input instanceof Request ? input.headers : undefined);
+  const sourceHeaders =
+    init?.headers ??
+    (typeof Request !== 'undefined' && input instanceof Request ? input.headers : undefined);
   const headers = new Headers(sourceHeaders);
-  headers.set("Authorization", `Bearer ${accessToken}`);
+  headers.set('Authorization', `Bearer ${accessToken}`);
   return { ...init, headers };
 }
 
@@ -40,30 +41,55 @@ function withBearerToken(
  * is open, so retry one unauthorized request after BaseHttpClient refreshes it.
  */
 function createVeraRuntimeFetch(): typeof fetch {
+  const capturedApi = getVeraCoworkApiClient();
+  const actor = JSON.stringify([
+    capturedApi.apiBaseUrl,
+    capturedApi.currentUser?.id,
+    capturedApi.currentUser?.organizationId,
+  ]);
+  const assertActor = () => {
+    const api = getVeraCoworkApiClient();
+    if (
+      !api.accessToken ||
+      JSON.stringify([api.apiBaseUrl, api.currentUser?.id, api.currentUser?.organizationId]) !==
+        actor
+    )
+      throw Error('LETTA_RUNTIME_ACTOR_CHANGED');
+  };
   return async (input, init) => {
+    assertActor();
     const api = getVeraCoworkApiClient();
     const firstToken = api.accessToken;
     if (!firstToken) {
-      throw new Error("Sign in to Vera before using organization Letta accounts.");
+      throw new Error('Sign in to Vera before using organization Letta accounts.');
     }
 
-    const retryInput = typeof Request !== "undefined" && input instanceof Request
-      ? input.clone()
-      : input;
+    const retryInput =
+      typeof Request !== 'undefined' && input instanceof Request ? input.clone() : input;
     let response = await fetch(input, withBearerToken(input, init, firstToken));
+    try {
+      assertActor();
+    } catch (error) {
+      await response.body?.cancel().catch(() => undefined);
+      throw error;
+    }
     if (response.status !== 401) return response;
 
     // Any authenticated endpoint is enough to invoke BaseHttpClient's guarded
     // refresh-and-retry path. The refreshed token remains inside the API client.
-    await api.request("/auth/me", { suppressAuthExpired: true });
+    await api.request('/auth/me', { suppressAuthExpired: true });
+    assertActor();
     const refreshedToken = api.accessToken;
     if (!refreshedToken || refreshedToken === firstToken) return response;
 
     await response.body?.cancel().catch(() => undefined);
-    response = await fetch(
-      retryInput,
-      withBearerToken(retryInput, init, refreshedToken),
-    );
+    response = await fetch(retryInput, withBearerToken(retryInput, init, refreshedToken));
+    try {
+      assertActor();
+    } catch (error) {
+      await response.body?.cancel().catch(() => undefined);
+      throw error;
+    }
     return response;
   };
 }
@@ -71,34 +97,34 @@ function createVeraRuntimeFetch(): typeof fetch {
 export function selectLettaRuntimeSource(
   localApiKey?: string | null,
   veraAccessToken?: string | null,
-): LettaRuntimeConfig["source"] | null {
-  if (localApiKey?.trim()) return "local";
-  if (veraAccessToken?.trim()) return "vera";
+): LettaRuntimeConfig['source'] | null {
+  if (localApiKey?.trim()) return 'local';
+  if (veraAccessToken?.trim()) return 'vera';
   return null;
 }
 
 export function getLettaRuntimeConfig(connectionId?: string): LettaRuntimeConfig {
-  const localApiKey = (process.env.LETTA_API_KEY || "").trim();
+  const localApiKey = (process.env.LETTA_API_KEY || '').trim();
   const api = getVeraCoworkApiClient();
   const accessToken = api.accessToken?.trim();
   const source = selectLettaRuntimeSource(localApiKey, accessToken);
 
-  if (source === "local") {
+  if (source === 'local') {
     return {
       apiKey: localApiKey,
-      baseURL: (process.env.LETTA_BASE_URL || "https://api.letta.com").trim(),
+      baseURL: (process.env.LETTA_BASE_URL || 'https://api.letta.com').trim(),
       source,
     };
   }
 
-  if (source === "vera" && accessToken) {
+  if (source === 'vera' && accessToken) {
     const defaultHeaders: Record<string, string> = {
-      "X-Letta-Source": "vera-cowork-desktop",
+      'X-Letta-Source': 'vera-cowork-desktop',
     };
-    defaultHeaders["x-letta-connection-id"] = getLettaConnectionScope(connectionId);
+    defaultHeaders['x-letta-connection-id'] = getLettaConnectionScope(connectionId);
     return {
       apiKey: accessToken,
-      baseURL: `${api.apiBaseUrl.replace(/\/$/, "")}/letta/runtime`,
+      baseURL: `${api.apiBaseUrl.replace(/\/$/, '')}/letta/runtime`,
       defaultHeaders,
       fetch: createVeraRuntimeFetch(),
       source,
@@ -106,15 +132,15 @@ export function getLettaRuntimeConfig(connectionId?: string): LettaRuntimeConfig
   }
 
   throw new Error(
-    "No Letta account is available. Configure a local LETTA_API_KEY or sign in to Vera.",
+    'No Letta account is available. Configure a local LETTA_API_KEY or sign in to Vera.',
   );
 }
 
 export function getLettaRuntimeRequestBase(
-  config: Pick<LettaRuntimeConfig, "baseURL" | "source">,
+  config: Pick<LettaRuntimeConfig, 'baseURL' | 'source'>,
 ): string {
-  const trimmedBase = config.baseURL.replace(/\/$/, "");
-  return config.source === "local" && !trimmedBase.endsWith("/v1")
+  const trimmedBase = config.baseURL.replace(/\/$/, '');
+  return config.source === 'local' && !trimmedBase.endsWith('/v1')
     ? `${trimmedBase}/v1`
     : trimmedBase;
 }
@@ -128,9 +154,9 @@ export async function fetchLettaRuntime(
   const requestBase = getLettaRuntimeRequestBase(config);
   const headers = new Headers(config.defaultHeaders);
   new Headers(init.headers).forEach((value, name) => headers.set(name, value));
-  headers.set("Authorization", `Bearer ${config.apiKey}`);
+  headers.set('Authorization', `Bearer ${config.apiKey}`);
   const runtimeFetch = config.fetch ?? fetch;
-  return runtimeFetch(`${requestBase}/${path.replace(/^\//, "")}`, {
+  return runtimeFetch(`${requestBase}/${path.replace(/^\//, '')}`, {
     ...init,
     headers,
   });

@@ -5,6 +5,7 @@ import { WebSocket } from "ws";
 import { RemoteToolDispatcher } from "./remoteToolDispatcher.js";
 import { getVeraCoworkApiClient } from "../../api/index.js";
 import { getClientToolsForWire } from "../client-tools/index.js";
+import {remoteFileExportDefinition} from './remoteFileExport.js';
 
 import type {
   RemoteAccessSettings,
@@ -143,7 +144,7 @@ export class RemoteRunnerClient {
 
   private register(): void {
     const cwd = this.settings.allowedDirectories[0] || process.cwd();
-    const toolDefinitions = getClientToolsForWire();
+    const toolDefinitions = [...getClientToolsForWire(), ...(process.platform==='win32'?[]:[remoteFileExportDefinition])];
     this.send({
       type: "runner.register",
       environmentName: this.settings.environmentName || os.hostname() || "cowork-desktop",
@@ -200,7 +201,10 @@ export class RemoteRunnerClient {
   }
 
   private async handleToolRequest(message: ServerToolRequestMessage): Promise<void> {
-    const dispatcher = new RemoteToolDispatcher(this.settings);
+    const socket=this.socket, settings=this.settings;
+    const principal=()=>{const api=getVeraCoworkApiClient();return JSON.stringify([api.apiBaseUrl,api.currentUser?.id,api.currentUser?.organizationId]);};
+    const actor=principal();
+    const dispatcher = new RemoteToolDispatcher(settings);
     const result = await dispatcher.runTool({
       requestId: message.requestId,
       toolName: message.toolName,
@@ -210,6 +214,8 @@ export class RemoteRunnerClient {
       agentId: message.agentId,
       conversationId: message.conversationId,
     });
+    // Never carry an old request/file onto a replacement connection/principal.
+    if(this.socket!==socket||this.settings!==settings||principal()!==actor)return;
     this.send({
       type: "tool.result",
       requestId: message.requestId,

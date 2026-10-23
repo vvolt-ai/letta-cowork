@@ -1,3 +1,4 @@
+import { getAssistantDraft, setAssistantDraft, clearAssistantDraft } from './assistantDraftStore';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
@@ -431,7 +432,8 @@ function upsertToolExecution(ephemeral: EphemeralState, message: StreamMessage):
 // Keep their growing payload outside Zustand so every token does not replace
 // the full sessions tree and rerender the application. The completed message is
 // committed to the canonical transcript when the result event arrives.
-const bufferedAssistantDrafts = new Map<string, SDKAssistantMessage>();
+// Draft publication lives in a per-session external store; it does not notify
+// Zustand's global sessions/persistence subscribers for every token.
 
 function updateAssistantDraft(ephemeral: EphemeralState, message: StreamMessage): EphemeralState {
   if (message.type !== "assistant") {
@@ -442,7 +444,9 @@ function updateAssistantDraft(ephemeral: EphemeralState, message: StreamMessage)
   const existingDraft = ephemeral.assistantDraft;
   const delta = typeof (message as any).content === "string" ? (message as any).content : "";
 
-  if (existingDraft && "uuid" in message && existingDraft.uuid === message.uuid) {
+  const sameRun = !existingDraft?.runId || !message.runId || existingDraft.runId === message.runId;
+  const sameLineage = Boolean(existingDraft?.otid && message.otid && existingDraft.otid === message.otid);
+  if (existingDraft && sameRun && (existingDraft.uuid === message.uuid || sameLineage)) {
     return {
       ...ephemeral,
       assistantDraft: {
@@ -725,7 +729,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
   newConversationAgentId: "",
   rejectedModels: [],
   showReasoningInChat: true,
-  permissionMode: "standard",
+  permissionMode: "unrestricted",
   notifications: [],
   ipcSendEvent: null,
 
@@ -1197,7 +1201,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
       case "session.status": {
         const { sessionId, status, title, cwd, error, agentName, agentId, lettaConnectionId, model, background, isEmailSession } = event.payload;
         if (status === "idle" || status === "error") {
-          bufferedAssistantDrafts.delete(sessionId);
+          clearAssistantDraft(sessionId);
         }
         const existing = rootState.sessions[sessionId] ?? createSession(sessionId);
         const previousStatus = existing.status;
@@ -1316,6 +1320,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
 
       case "session.deleted": {
         const { sessionId } = event.payload;
+        clearAssistantDraft(sessionId);
         const state = get();
         const nextSessions = { ...state.sessions };
         delete nextSessions[sessionId];
@@ -1344,8 +1349,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
           console.debug("[ui] received tool message", {
             sessionId,
             type: message.type,
-            keys: Object.keys((message as unknown as Record<string, unknown>) ?? {}),
-            payload: message,
+            toolCallId: (message as { toolCallId?: string }).toolCallId,
           });
         }
         if (message.type === "stream_event") {
@@ -1356,13 +1360,13 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
         if (message.type === "assistant") {
           const existing = rootState.sessions[sessionId] ?? createSession(sessionId);
           const currentEphemeral = existing.ephemeral ?? initialEphemeralState();
-          const bufferedDraft = bufferedAssistantDrafts.get(sessionId);
+          const bufferedDraft = getAssistantDraft(sessionId);
           const updatedDraft = updateAssistantDraft(
             bufferedDraft ? { ...currentEphemeral, assistantDraft: bufferedDraft } : currentEphemeral,
             message,
           );
           if (updatedDraft.assistantDraft) {
-            bufferedAssistantDrafts.set(sessionId, updatedDraft.assistantDraft);
+            setAssistantDraft(sessionId, updatedDraft.assistantDraft);
           }
 
           // Once the generating transition has been published, avoid calling
@@ -1500,7 +1504,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
             }
             case "result": {
               if (message.success) {
-                const draft = bufferedAssistantDrafts.get(sessionId) ?? currentEphemeral.assistantDraft;
+                const draft = getAssistantDraft(sessionId) ?? currentEphemeral.assistantDraft;
                 if (draft) {
                   const existingIndex = messages.findIndex(
                     (m) => m.type === "assistant" && "uuid" in m && "uuid" in draft && m.uuid === draft.uuid
@@ -1515,7 +1519,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
                 }
               }
 
-              bufferedAssistantDrafts.delete(sessionId);
+              clearAssistantDraft(sessionId);
               const hasPendingPermissions = (existing.permissionRequests?.length ?? 0) > 0;
 
               if (hasPendingPermissions) {
@@ -1604,7 +1608,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
 
       case "stream.user_prompt": {
         const { sessionId, prompt, attachments, content } = event.payload;
-        bufferedAssistantDrafts.delete(sessionId);
+        clearAssistantDraft(sessionId);
         set((state) => {
           const existing = state.sessions[sessionId] ?? createSession(sessionId);
           const newMessages = [
@@ -1622,6 +1626,37 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
                 latestRunId: undefined,
                 latestClientRunId: undefined,
                 ephemeral: nextEphemeral,
+              },
+            },
+          };
+        });
+        break;
+      }
+
+      case "permission.cancelled": {
+        const { sessionId, toolUseId } = event.payload;
+        set((state) => {
+          const existing = state.sessions[sessionId];
+          if (!existing) return state;
+          const permissionRequests = existing.permissionRequests.filter(
+            (request) => request.toolUseId !== toolUseId,
+          );
+          if (permissionRequests.length === existing.permissionRequests.length) return state;
+          return {
+            sessions: {
+              ...state.sessions,
+              [sessionId]: {
+                ...existing,
+                permissionRequests,
+                ephemeral: {
+                  ...existing.ephemeral,
+                  status: permissionRequests.length
+                    ? "waiting_approval"
+                    : existing.ephemeral.status === "waiting_approval"
+                      ? "thinking"
+                      : existing.ephemeral.status,
+                  lastUpdated: Date.now(),
+                },
               },
             },
           };

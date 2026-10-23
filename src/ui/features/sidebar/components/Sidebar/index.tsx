@@ -2,14 +2,13 @@ import { memo, useCallback, useEffect, useState } from "react";
 
 import { useAppStore } from "../../../../store/useAppStore";
 import { EmailInboxModal } from "../../../email/components/EmailInboxModal";
-import { NewMailPipelineSetting, ResumeSessionDialog } from "../index";
+import { ResumeSessionDialog } from "../index";
 
 // veraLogo kept for future use
 // import veraLogo from "../../../../assets/vera-logo.svg";
 import { SessionsTab } from "../SessionsTab";
 
 import type { ZohoEmail } from "../../../../types";
-import type { AutoSyncProcessingMode } from "../../types";
 
 export interface SidebarProps {
   connected: boolean;
@@ -26,24 +25,8 @@ export interface SidebarProps {
   onUseEmailAsInput: (email: ZohoEmail) => void;
   isProcessingEmailInput?: boolean;
   isFetchingEmails: boolean;
-  autoSyncEnabled: boolean;
-  onToggleAutoSync: (enabled: boolean) => void;
-  autoSyncAgentIds: string[];
-  onAddAutoSyncAgent: (agentId: string) => void;
-  onRemoveAutoSyncAgent: (agentId: string) => void;
-  autoSyncRoutingRules: { fromPattern: string; agentId: string; }[];
-  onAddAutoSyncRoutingRule: (fromPattern: string, agentId: string) => void;
-  onRemoveAutoSyncRoutingRule: (index: number) => void;
-  autoSyncSinceDate: string;
-  onSetAutoSyncSinceDate: (date: string) => void;
-  autoSyncProcessingMode: AutoSyncProcessingMode;
-  onSetAutoSyncProcessingMode: (mode: AutoSyncProcessingMode) => void;
-  autoSyncMarkAsRead: boolean;
-  onSetAutoSyncMarkAsRead: (enabled: boolean) => void;
-  autoSyncAccountId: string;
-  autoSyncFolderId: string;
-  onRunAutoSyncNow: () => Promise<void>;
-  onRefreshEmailMailbox?: () => void | Promise<unknown>;
+  accountId: string;
+  folderId: string;
   selectedAgentId?: string;
   onProcessEmailToAgent?: (email: ZohoEmail, agentId: string) => void;
   processingEmailId?: string | null;
@@ -78,24 +61,8 @@ export const Sidebar = memo(function Sidebar({
   onUseEmailAsInput,
   isProcessingEmailInput,
   isFetchingEmails,
-  autoSyncEnabled: _autoSyncEnabled,
-  onToggleAutoSync: _onToggleAutoSync,
-  autoSyncAgentIds,
-  onAddAutoSyncAgent,
-  onRemoveAutoSyncAgent,
-  autoSyncRoutingRules,
-  onAddAutoSyncRoutingRule,
-  onRemoveAutoSyncRoutingRule,
-  autoSyncSinceDate,
-  onSetAutoSyncSinceDate,
-  autoSyncProcessingMode,
-  onSetAutoSyncProcessingMode,
-  autoSyncMarkAsRead,
-  onSetAutoSyncMarkAsRead,
-  autoSyncAccountId,
-  autoSyncFolderId,
-  onRunAutoSyncNow,
-  onRefreshEmailMailbox,
+  accountId,
+  folderId,
   selectedAgentId,
   onProcessEmailToAgent,
   processingEmailId,
@@ -118,7 +85,6 @@ export const Sidebar = memo(function Sidebar({
 
   const [resumeSessionId, setResumeSessionId] = useState<string | null>(null);
   const [showEmailView, setShowEmailView] = useState(false);
-  const [showAddAgentsModal, setShowAddAgentsModal] = useState(false);
 
   useEffect(() => {
     if (!isEmailConnected) {
@@ -208,27 +174,6 @@ export const Sidebar = memo(function Sidebar({
         }}
       />
 
-      <NewMailPipelineSetting
-        open={showAddAgentsModal}
-        onOpenChange={setShowAddAgentsModal}
-        autoSyncAgentIds={autoSyncAgentIds}
-        onAddAutoSyncAgent={onAddAutoSyncAgent}
-        onRemoveAutoSyncAgent={onRemoveAutoSyncAgent}
-        autoSyncRoutingRules={autoSyncRoutingRules}
-        onAddAutoSyncRoutingRule={onAddAutoSyncRoutingRule}
-        onRemoveAutoSyncRoutingRule={onRemoveAutoSyncRoutingRule}
-        autoSyncSinceDate={autoSyncSinceDate}
-        onSetAutoSyncSinceDate={onSetAutoSyncSinceDate}
-        autoSyncProcessingMode={autoSyncProcessingMode}
-        onSetAutoSyncProcessingMode={onSetAutoSyncProcessingMode}
-        autoSyncMarkAsRead={autoSyncMarkAsRead}
-        onSetAutoSyncMarkAsRead={onSetAutoSyncMarkAsRead}
-        accountId={autoSyncAccountId}
-        folderId={autoSyncFolderId}
-        onRunAutoSyncNow={onRunAutoSyncNow}
-        onRefreshEmailMailbox={onRefreshEmailMailbox}
-      />
-
       {/* User Section */}
       {userEmail && (
         <div className="mt-auto flex-shrink-0 border-t border-[var(--color-border)] p-3">
@@ -303,8 +248,8 @@ export const Sidebar = memo(function Sidebar({
         hasMore={hasMoreEmails}
         isLoadingMore={isLoadingMoreEmails}
         onLoadMore={onLoadMoreEmails}
-        accountId={autoSyncAccountId || undefined}
-        folderId={autoSyncFolderId || undefined}
+        accountId={accountId || undefined}
+        folderId={folderId || undefined}
       />
     </aside>
   );

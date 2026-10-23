@@ -1,0 +1,18 @@
+// Fake sessions/local HTTP only. No real credentials or Vera/customer operations.
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {createServer} from 'node:http';
+import {spawn} from 'node:child_process';
+import {mkdtemp,writeFile,readFile,rm} from 'node:fs/promises';
+import {join} from 'node:path';
+import {tmpdir} from 'node:os';
+const source=await readFile(new URL('./call-mcp.mjs',import.meta.url),'utf8');
+async function fixture(handler,run){const dir=await mkdtemp(join(tmpdir(),'vera-client-safety-'));const server=createServer(handler);await new Promise(r=>server.listen(0,'127.0.0.1',r));const url=`http://127.0.0.1:${server.address().port}/mcp`;
+ try{await writeFile(join(dir,'client.mjs'),source.replace('DEFAULT_REQUEST_TIMEOUT_MS = 30_000','DEFAULT_REQUEST_TIMEOUT_MS = 200'));
+ const call=(extra={},input='{}')=>new Promise((resolve,reject)=>{const child=spawn(process.execPath,[join(dir,'client.mjs'),'vera_whoami'],{env:{PATH:process.env.PATH??'',HOME:dir,VERA_COWORK_ENV_PATH:join(dir,'cowork.env'),COWORK_TOKEN:'fixture-token-only',VERA_COWORK_API_URL:url,VERA_MCP_URL:url,...extra}});let out='',err='';const deadline=setTimeout(()=>{child.kill();reject(Error('fixture exceeded deadline'));},3000);child.stdout.on('data',v=>out+=v);child.stderr.on('data',v=>err+=v);child.on('error',reject);child.on('exit',code=>{clearTimeout(deadline);resolve({code,out,err});});child.stdin.end(input);});await run({call,dir,url});
+ }finally{server.closeAllConnections();await new Promise(r=>server.close(r));await rm(dir,{recursive:true,force:true});}}
+test('managed credential cannot be sent to a mismatched endpoint',async()=>{let calls=0;await fixture((req,res)=>{calls++;res.end('{}');},async({call,dir,url})=>{await writeFile(join(dir,'cowork.env'),'COWORK_TOKEN=managed-fixture-only\nVERA_COWORK_API_URL=http://127.0.0.1:1\n');const result=await call();assert.notEqual(result.code,0);assert.equal(calls,0);assert.ok(result.err.includes('does not match'));assert.ok(!result.err.includes('managed-fixture-only'));});});
+test('timeout includes stalled response body',async()=>fixture((req,res)=>{res.writeHead(200,{'content-type':'application/json'});res.flushHeaders();},async({call})=>{const result=await call();assert.notEqual(result.code,0);assert.ok(result.err.includes('request/body timed out'));}));
+test('oversized chunked body rejected before completion',async()=>fixture((req,res)=>{res.writeHead(200,{'content-type':'application/json'});res.write('x'.repeat(2*1024*1024+1));},async({call})=>{const result=await call();assert.notEqual(result.code,0);assert.ok(result.err.includes('byte limit'));}));
+test('redirects are rejected and never followed',async()=>{let follow=0;await fixture((req,res)=>{if(req.url==='/other'){follow++;res.end('{}');}else{res.writeHead(307,{location:'/other'});res.end();}},async({call})=>{const result=await call();assert.notEqual(result.code,0);assert.equal(follow,0);});});
+test('invalid/insecure/credential-bearing targets and raw errors do not leak input',async()=>fixture((req,res)=>{res.writeHead(403,{'content-type':'application/json'});res.end(JSON.stringify({error:{message:'fixture-private-error-marker'}}));},async({call})=>{for(const target of ['http://external.invalid/mcp','https://user:secret@example.invalid/mcp','https://example.invalid/mcp?token=marker','https://example.invalid/other']){const r=await call({VERA_MCP_URL:target});assert.notEqual(r.code,0);assert.ok(!r.err.includes('user:secret'));}const bad=await call({},'{"secret":"private-input-marker",bad}');assert.ok(!bad.err.includes('private-input-marker'));const denied=await call();assert.notEqual(denied.code,0);assert.ok(!denied.err.includes('fixture-private-error-marker'));}));

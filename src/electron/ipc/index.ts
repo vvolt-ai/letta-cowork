@@ -233,9 +233,9 @@ export function registerAllIpcHandlers(mainWindow: BrowserWindow): void {
     });
 
     // Memory files
-    ipcMain.handle("list-agent-memory-files", async () => {
+    ipcMain.handle("list-agent-memory-files", async (_, scope: {agentId?: string;lettaConnectionId?: string}) => {
         try {
-            return await listAgentMemoryFiles();
+            return await listAgentMemoryFiles(scope);
         } catch (error) {
             console.error("Failed to list agent memory files:", error);
             throw error;

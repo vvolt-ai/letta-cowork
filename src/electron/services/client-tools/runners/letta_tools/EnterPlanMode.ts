@@ -9,7 +9,7 @@
 
 import { relative } from "node:path";
 
-import type { PlanModeManager } from "../../../../libs/runner/ws/plan-mode/mode-manager.js";
+import type { PlanModeManager } from "../../../../libs/runner/plan-mode/mode-manager.js";
 
 interface EnterPlanModeArgs {
     name?: string;

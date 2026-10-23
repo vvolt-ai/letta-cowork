@@ -28,7 +28,7 @@ import {
 
 import type { SendPermissionRequest } from "./permission-handler.js";
 import type { RunnerLettaSession as LettaSession , RunnerOptions, RunnerHandle } from "./types.js";
-import type { WsSession } from "./ws/session.js";
+
 
 
 // Re-export types
@@ -94,10 +94,11 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
   const runPromise = (async () => {
     try {
       // Create canUseTool handler
-      const canUseTool = createCanUseToolHandler(session, sendPermissionRequest, options.permissionMode);
+      const canUseTool = createCanUseToolHandler(session, sendPermissionRequest, options.permissionMode,(toolUseId)=>onEvent({type:'permission.cancelled',payload:{sessionId:currentSessionId,toolUseId}}));
 
       // Create or resume session
       const lettaSession = createOrResumeSession(options, canUseTool);
+      lettaSessionRef = lettaSession;
       debug("session created successfully");
 
       // Initialize session - async wait for real conversation ID from Letta
@@ -117,15 +118,15 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
       lettaSessionRef = lettaSession;
 
       // ── Plan-mode bridge ──────────────────────────────────────────
-      // WsSession (cast back from LettaSession) exposes a per-session
+      // The SDK lifecycle adapter exposes a per-session
       // PlanModeManager. Subscribe to mode changes and forward as
       // `plan_mode_state` events; when the agent ExitPlanMode'd, also
       // read the plan file body and emit `plan_mode_plan`. The UI
       // surfaces the banner + plan viewer from these events.
       try {
-        const ws = lettaSession as unknown as WsSession;
-        if (ws && typeof ws.planMode?.onChange === "function") {
-          ws.planMode.onChange((state) => {
+        const planMode = lettaSession.planMode;
+        if (planMode && typeof planMode.onChange === "function") {
+          planMode.onChange((state) => {
             onEvent({
               type: "plan_mode_state",
               payload: {
@@ -246,9 +247,13 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
       debug("stream ended", { totalMessages: messageCount });
 
       // Normal completion is emitted as a stamped stream.message result by
-      // WsSession. Do not send an additional unstamped session.status=completed;
+      // the SDK adapter. Do not send an additional unstamped session.status=completed;
       // it can arrive after the next prompt starts and overwrite the live state.
     } catch (error) {
+      if(lettaSessionRef?.cancellationRequested&&!signal.aborted){
+        try{await lettaSessionRef.abort();abortController.abort();}
+        catch(stopError){sendSessionStatus(currentSessionId,'error',onEvent,undefined,stopError instanceof Error?stopError.message:'SDK stop could not be verified.');return;}
+      }
       // Check if this was an abort
       if (signal.aborted || (error as Error).name === "AbortError") {
         debug("session aborted (caught)");

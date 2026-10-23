@@ -4,6 +4,8 @@
 
 **Vera Cowork** is an Electron + React desktop app for working with **Letta Code agents**.
 
+Execution uses the native Agent SDK only. Start with [desktop SDK runtime](docs/desktop-agent-sdk-runtime.md) for the current chat/delegation, approvals, memory and cancellation contracts.
+
 Core capabilities:
 
 - chat with Letta agents in a desktop UI
@@ -29,7 +31,7 @@ Electron main
       ├─ main.ts
       ├─ preload.cts
       ├─ ipc-handlers.ts
-      ├─ libs/runner.ts
+      ├─ libs/runner/index.ts
       ├─ emails/
       └─ bridges/
 ```
@@ -42,16 +44,16 @@ Electron main
 2. `project-feature.md`
 3. `src/ui/App.tsx`
 4. `src/ui/store/useAppStore.ts`
-5. `src/electron/main.ts`
-6. `src/electron/ipc-handlers.ts`
+5. `src/electron/main/index.ts`
+6. `src/electron/ipc/index.ts`
 
 ---
 
 ## Most important subsystems
 
 ### Sessions / chat
-- `src/electron/libs/runner.ts`
-- `src/electron/ipc-handlers.ts`
+- `src/electron/libs/runner/index.ts`
+- `src/electron/ipc/index.ts`
 - `src/ui/store/useAppStore.ts`
 
 ### Email automation
@@ -78,7 +80,7 @@ Electron main
 
 ### Start session
 ```text
-UI -> sendClientEvent(session.start) -> ipc-handlers -> runner.ts -> Letta stream -> useAppStore -> chat UI
+UI -> sendClientEvent(session.start) -> ipc-handlers -> runner.ts -> native Agent SDK -> useAppStore -> chat UI
 ```
 
 ### Unread email auto-sync

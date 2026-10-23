@@ -1,5 +1,9 @@
 # Letta Code Runtime Migration Notes
 
+## Current execution — 2026-10-22
+
+Desktop execution is SDK-only; the copied WS/SSE model and subagent loops are retired. See [the current SDK runtime contract](desktop-agent-sdk-runtime.md). Older execution-path descriptions below are historical; active product tools, account boundaries and remote schema registration remain supported.
+
 ## 2026-10-05 — Authenticated remote tool schema registration
 
 The remote runner sends wire tool definitions and capabilities from one catalog snapshot. Vera validates bounded schemas matching capabilities before exposing desktop-only tools; legacy registrations remain compatible for server-known tools. Native WhatsApp Vera discovery is implemented server-side under the verified sender, not by invoking desktop-owner credentials. It is independent of desktop connectivity and separate from database connectors.

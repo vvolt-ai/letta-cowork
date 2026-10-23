@@ -11,6 +11,7 @@
 
 import { getRuntimeContext, runWithRuntimeContext } from "./runners/_shared/runtime-context.js";
 import { wakeTool } from './runners/wake.js';
+import { agentMemoryTool } from './runners/agentMemory.js';
 import { setWorkingDirectoryTool } from "./runners/setWorkingDirectory.js";
 import { bashTool } from "./runners/bash.js";
 import { browserTools } from "./runners/browser.js";
@@ -65,6 +66,7 @@ function register(def: ClientToolDefinition): void {
 register(bashTool);
 register(setWorkingDirectoryTool);
 register(wakeTool);
+register(agentMemoryTool);
 for (const tool of lettaCodeTools) register(tool);
 // Upstream renamed the wire-facing Task to Agent. Preserve Task for replay;
 // both names use exactly the same executor and no-model-override schema.
@@ -108,11 +110,15 @@ export function getClientToolsForWire(): ClientToolWireDef[] {
 }
 
 export async function runClientTool(name: string, args: Record<string, unknown>, ctx: ToolRunContext): Promise<ToolRunResult> {
+    if(ctx.agentId&&ctx.agentMemory){try{const memory=await ctx.agentMemory.snapshot();ctx=memory.agentId===ctx.agentId?{...ctx,memoryDir:memory.memoryDir??undefined}:{...ctx,memoryDir:undefined,agentMemory:undefined};}catch{ctx={...ctx,memoryDir:undefined};}}
     return runWithRuntimeContext({
         ...getRuntimeContext(),
         lettaConnectionId: ctx.lettaConnectionId,
         agentId: ctx.agentId,
         conversationId: ctx.conversationId,
+        memoryDir: ctx.memoryDir,
+        agentMemory: ctx.agentMemory,
+        prepareAgentMemory: ctx.prepareAgentMemory,
         workingDirectory: ctx.workingDirectory ?? getRuntimeContext()?.workingDirectory,
     }, () => executeClientTool(name, args, ctx));
 }

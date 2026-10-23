@@ -8,7 +8,7 @@ import { writeFile } from "node:fs/promises";
 import {
     ensurePlanDir,
     type PlanModeManager,
-} from "../../../../libs/runner/ws/plan-mode/mode-manager.js";
+} from "../../../../libs/runner/plan-mode/mode-manager.js";
 
 interface UpdatePlanArgs {
     plan: string;

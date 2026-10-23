@@ -8,14 +8,12 @@ import { FormData, File } from 'undici';
 
 import { BASE_URL, clearEmailCredentials, getAccessToken, getAccountId, getInboxFolderId, getRefreshToken, saveAccountId, saveInboxFolderId } from "./helper.js";
 import { serverApiRequest, zohoApiRequest } from "./zohoApi.js";
-import { getVeraCoworkApiClient } from "../api/index.js";
 
 import type {
   AttachmentInfoResponse,
   AccountsResponse,
   EmailListParams,
   SearchEmailParams,
-  StoreEmailPayload,
   UpdateMessageRequest,
   UploadedEmailAttachment,
 } from "./types.js";
@@ -82,62 +80,6 @@ export const fetchEmails = async (
   if (resp && resp.data && Array.isArray(resp.data)) {
     resp.data = resp.data.map((e: any) => ({ ...e, accountId: resolvedAccountId }));
 
-    // process each email asynchronously; don't block the response
-    resp.data.forEach((email: any) => {
-      void (async () => {
-        const attachmentUrl = "";
-
-        // try {
-        //   if (email.hasAttachment === "1" || email.attachments?.length > 0) {
-        //     const result = await downloadEmailAttachment(
-        //       String(email.folderId || params.folderId),
-        //       String(email.messageId),
-        //       accountId
-        //     );
-        //     if (result && typeof result.path === "string") {
-        //       attachmentUrl = result.path;
-        //     }
-        //   }
-        // } catch (err) {
-        //   console.error("Failed to download attachments for message", email.messageId, err);
-        // }
-
-        const api = getVeraCoworkApiClient();
-        const userId = api.currentUser?.id;
-
-        const payload: StoreEmailPayload = {
-          calendarType: 0,
-          ccAddress: email.ccAddress ?? "Not Provided",
-          flagid: email.flagid ?? "flag_not_set",
-          folderId: String(email.folderId ?? resolvedParams.folderId),
-          fromAddress: email.fromAddress || "",
-          hasAttachment: email.hasAttachment || "0",
-          hasInline: email.hasInline || "false",
-          messageId: String(email.messageId),
-          priority: email.priority || "",
-          receivedTime: email.receivedTime || "",
-          sender: email.sender || "",
-          sentDateInGMT: email.sentDateInGMT || "",
-          size: email.size || "",
-          status: email.status || "",
-          status2: email.status2 || "",
-          subject: email.subject || "",
-          summary: email.summary || "",
-          threadCount: email.threadCount || "",
-          threadId: String(email.threadId || email.messageId),
-          toAddress: email.toAddress || "",
-          accountId: resolvedAccountId,
-          attachmentUrl,
-          userId,
-        };
-
-        try {
-          await storeEmail(payload);
-        } catch (err) {
-          console.error("Failed to store email", email.messageId, err);
-        }
-      })();
-    });
   }
 
   return resp;
@@ -619,21 +561,3 @@ export const searchEmails = async (
   return resp;
 };
 
-
-
-// post an email object to our local server for storage
-export const storeEmail = async (payload: StoreEmailPayload) => {
-  // delegate to centralized server API helper which adds auth and base URL
-  try {
-    return await serverApiRequest("/store_email", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-  } catch (err) {
-    // normalize error message similar to previous implementation
-    if (err instanceof Error) {
-      throw new Error(`Failed to store email: ${err.message}`);
-    }
-    throw err;
-  }
-};

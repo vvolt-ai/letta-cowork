@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import {REMOTE_FILE_EXPORT_TOOL,exportRemoteFile} from './remoteFileExport.js';
 
 import { runClientTool, isClientTool } from "../client-tools/index.js";
 
@@ -37,11 +38,13 @@ export class RemoteToolDispatcher {
     if (!this.settings.autoApprove) {
       return { status: "error", output: "Remote access manual approval is not implemented in Phase 1." };
     }
-    if (!isClientTool(input.toolName)) {
+    if (!isClientTool(input.toolName) && input.toolName!==REMOTE_FILE_EXPORT_TOOL) {
       return { status: "error", output: `Client tool '${input.toolName}' is not registered on this device.` };
     }
 
-    const validationError = this.validateRequest(input.toolName, input.args, input.cwd);
+    // The private exporter performs its own descriptor/canonical workspace
+    // checks, not the legacy lexical-only generic tool path validator.
+    const validationError = input.toolName===REMOTE_FILE_EXPORT_TOOL?null:this.validateRequest(input.toolName, input.args, input.cwd);
     if (validationError) return { status: "error", output: validationError };
 
     const controller = new AbortController();
@@ -49,6 +52,11 @@ export class RemoteToolDispatcher {
       ? setTimeout(() => controller.abort(new Error("Remote tool timed out")), input.timeoutMs)
       : undefined;
     try {
+      if(input.toolName===REMOTE_FILE_EXPORT_TOOL){
+        if(Object.keys(input.args).some(key=>key!=='filePath'))return{status:'error',output:'REMOTE_FILE_ARGUMENTS_INVALID'};
+        const fileTransfer=await exportRemoteFile(input.args.filePath,this.settings.allowedDirectories,input.cwd,controller.signal);
+        return{status:'success',output:'Remote file prepared for the authorized transfer coordinator.',metadata:{fileTransfer}};
+      }
       const result = await runClientTool(input.toolName, input.args, {
         signal: controller.signal,
         agentId: input.agentId,

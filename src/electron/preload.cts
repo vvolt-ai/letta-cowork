@@ -100,8 +100,8 @@ electron.contextBridge.exposeInMainWorld("electron", {
     electron.ipcRenderer.invoke("cancel-stuck-run", runId),
   getRunStatus: (runId: string) =>
     electron.ipcRenderer.invoke("get-run-status", runId),
-  listAgentMemoryFiles: () =>
-    electron.ipcRenderer.invoke("list-agent-memory-files"),
+  listAgentMemoryFiles: (scope: { agentId: string; lettaConnectionId?: string }) =>
+    electron.ipcRenderer.invoke("list-agent-memory-files", scope),
   updateLettaEnv: (values: { LETTA_API_KEY: string; LETTA_BASE_URL: string; LETTA_AGENT_ID: string; }) =>
     electron.ipcRenderer.invoke("update-letta-env", values),
   isAdmin: () =>

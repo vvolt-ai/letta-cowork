@@ -14,29 +14,15 @@ A desktop application for running Letta Code agents with a visual interface.
 
 ## What is Vera Cowork?
 
-Vera Cowork is a fork of [Claude-Cowork](https://github.com/DevAgentForge/Claude-Cowork) that replaces the Claude SDK with the [`@letta-ai/letta-code-sdk`](https://www.npmjs.com/package/@letta-ai/letta-code-sdk). It provides a native desktop GUI for interacting with [Letta Code](https://github.com/letta-ai/letta-code) agents.
+Vera Cowork is an Electron desktop GUI for [Letta Code](https://github.com/letta-ai/letta-code) agents, using [`@letta-ai/letta-agent-sdk`](https://www.npmjs.com/package/@letta-ai/letta-agent-sdk) for native execution. It originated as a fork of [Claude-Cowork](https://github.com/DevAgentForge/Claude-Cowork).
 
-### Why Letta Code SDK?
+See [per-agent memory checkout, shared mounts and freshness](docs/agent-memory-runtime.md) for the current scoped desktop memory behavior and read-only Vera download transport.
 
-The [Letta Code SDK](https://github.com/letta-ai/letta-code-sdk) is the SDK interface to [Letta Code](https://github.com/letta-ai/letta-code). Build agents with persistent memory that learn over time.
+### Native Agent SDK runtime
 
-```typescript
-import { createSession, resumeSession } from '@letta-ai/letta-code-sdk';
+The SDK owns chat and delegated-agent model execution, while Cowork preserves its tools, UI approvals, selected account, memory access and remote routing. The copied WS/SSE execution engine is removed; there is no legacy execution fallback.
 
-// First session - agent learns something
-const session1 = createSession();
-await session1.send('Remember: the secret word is "banana"');
-for await (const msg of session1.stream()) { /* ... */ }
-const agentId = session1.agentId;
-session1.close();
-
-// Later... agent still remembers
-await using session2 = resumeSession(agentId);
-await session2.send('What is the secret word?');
-for await (const msg of session2.stream()) {
-  if (msg.type === 'assistant') console.log(msg.content); // "banana"
-}
-```
+See [desktop SDK architecture, cancellation, packaging and checks](docs/desktop-agent-sdk-runtime.md).
 
 **Key concepts:**
 - **Agent** (`agentId`): Persistent entity with memory that survives across sessions
@@ -70,7 +56,7 @@ letta-cowork/
 │   │   │   ├── types.ts         # Email type definitions
 │   │   │   └── zohoApi.ts       # Zoho Mail API
 │   │   └── libs/                # Core libraries
-│   │       ├── runner.ts        # Agent runner
+│   │       ├── runner/          # Native SDK runner and lifecycle adapter
 │   │       └── runtime-state.ts # Runtime state management
 │   └── ui/                      # React frontend
 │       ├── App.tsx             # Main App component

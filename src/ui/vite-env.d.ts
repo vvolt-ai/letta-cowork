@@ -150,7 +150,7 @@ interface Window {
     killLettaCli: (processId: string) => Promise<void>;
     registerLettaCodeTools: (enabled: boolean) => Promise<{ registered: string[]; skipped: string[]; }>;
     attachLettaCodeToolsToAgent: (agentId: string) => Promise<{ attached: string[]; failed: string[]; }>;
-    listAgentMemoryFiles: () => Promise<any>;
+    listAgentMemoryFiles: (scope: { agentId: string; lettaConnectionId?: string }) => Promise<any>;
     getLivePatchProposal: (proposalId: string) => Promise<LivePatchProposalView>;
     applyLivePatchProposal: (proposalId: string, selection?: { fileIds?: string[]; hunkIds?: string[]; }) => Promise<{ proposal: LivePatchProposalView; output: string; }>;
     undoLivePatchProposal: (proposalId: string) => Promise<{ proposal: LivePatchProposalView; output: string; }>;

@@ -65,32 +65,6 @@ export interface EmailListParams {
   threadedMails?: boolean;
 }
 
-export interface StoreEmailPayload {
-  calendarType: number;
-  ccAddress: string;
-  flagid: string;
-  folderId: string;
-  fromAddress: string;
-  hasAttachment: string;
-  hasInline: string;
-  messageId: string;
-  priority: string;
-  receivedTime: string;
-  sender: string;
-  sentDateInGMT: string;
-  size: string;
-  status: string;
-  status2: string;
-  subject: string;
-  summary: string;
-  threadCount: string;
-  threadId: string;
-  toAddress: string;
-  accountId: string;
-  attachmentUrl: string;
-  userId?: string;
-}
-
 // request body for Zoho update message endpoint
 export interface UpdateMessageRequest {
   mode: "markAsRead" | "markAsUnread" | string;

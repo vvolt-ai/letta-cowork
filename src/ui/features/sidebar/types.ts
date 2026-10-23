@@ -25,5 +25,3 @@ export interface AgentGroupData {
 
 export type SidebarTab = "sessions" | "configuration";
 
-// Re-export from new location for backward compatibility
-export type { AutoSyncProcessingMode } from "../email/types";

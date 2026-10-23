@@ -3,11 +3,12 @@ import { execSync } from "child_process";
 import { app, globalShortcut } from "electron";
 
 import { cleanupAllSessions } from "../ipc/index.js";
-import { shutdownListener as shutdownWsListener } from "../libs/runner/ws/index.js";
+import { shutdownDesktopSdkSessions } from '../libs/runner/sdk/index.js';
 import { isDev, DEV_PORT } from "../utils/index.js";
 import { stopPolling } from "../utils/test-helper.js";
 
 let cleanupComplete = false;
+let cleanupPromise:Promise<void>|undefined;
 
 /**
  * Kill the Vite dev server if running
@@ -30,13 +31,16 @@ export function killViteDevServer(): void {
  */
 export async function cleanup(): Promise<void> {
     if (cleanupComplete) return;
-    cleanupComplete = true;
-
-    globalShortcut.unregisterAll();
-    stopPolling();
-    await cleanupAllSessions();
-    shutdownWsListener();
-    killViteDevServer();
+    if(cleanupPromise)return cleanupPromise;
+    cleanupPromise=(async()=>{
+      stopPolling();
+      await cleanupAllSessions();
+      await shutdownDesktopSdkSessions();
+      globalShortcut.unregisterAll();
+      killViteDevServer();
+      cleanupComplete=true;
+    })().catch(error=>{cleanupPromise=undefined;throw error;});
+    return cleanupPromise;
 }
 
 /**
@@ -44,17 +48,20 @@ export async function cleanup(): Promise<void> {
  */
 export function handleSignal(): void {
     (app as unknown as { isQuitting?: boolean }).isQuitting = true;
-    cleanup();
-    app.quit();
+    void cleanup().then(()=>app.quit()).catch(()=>{
+      (app as unknown as {isQuitting?:boolean}).isQuitting=false;
+      console.error('[lifecycle] Quit paused: owned SDK execution stop could not be verified.');
+    });
 }
 
 /**
  * Setup app lifecycle event handlers
  */
 export function setupLifecycleHandlers(): void {
-    app.on("before-quit", () => {
-        (app as unknown as { isQuitting?: boolean }).isQuitting = true;
-        void cleanup();
+    app.on('before-quit',event=>{
+      if(cleanupComplete)return;
+      event.preventDefault();
+      handleSignal();
     });
     app.on("will-quit", cleanup);
     app.on("window-all-closed", () => {
@@ -74,8 +81,7 @@ export function setupLifecycleHandlers(): void {
 export function registerGlobalShortcuts(): void {
     globalShortcut.register('CommandOrControl+Q', () => {
         (app as unknown as { isQuitting?: boolean }).isQuitting = true;
-        cleanup();
-        app.quit();
+        handleSignal();
     });
 }
 

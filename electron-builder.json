@@ -4,6 +4,8 @@
     "files": [
         "dist-electron",
         "dist-react",
+        "node_modules/@letta-ai/letta-agent-sdk/**/*",
+        "node_modules/@vscode/ripgrep*/**/*",
         "node_modules/@letta-ai/letta-code/**/*",
         "node_modules/ws/**/*"
     ],
@@ -18,8 +20,13 @@
         }
     ],
     "asarUnpack": [
-        "node_modules/@letta-ai/letta-code-sdk/**/*",
-        "node_modules/@letta-ai/letta-code/**/*",
+        "node_modules/sharp/**/*",
+        "node_modules/@img/**/*",
+        "node_modules/@janhapke/sharp-electron/**/*",
+        "node_modules/detect-libc/**/*",
+        "node_modules/semver/**/*",
+        "node_modules/@letta-ai/letta-agent-sdk/**/*",
+        "node_modules/@vscode/ripgrep*/**/*",
         "node_modules/@letta-ai/letta-code/**/*",
         "node_modules/ws/**/*"
     ],

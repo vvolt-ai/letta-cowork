@@ -1,52 +1,9 @@
-import type { ProcessedUnreadEmailDebugInfo } from "../../../electron/services/settings/index.js";
 import type { AgentDisplayStatus } from "../../store/useAppStore";
 import type { ZohoEmail } from "../../types";
 
 /**
  * Email Inbox Types
  */
-
-export type AutoSyncProcessingMode = "unread_only" | "today_all";
-
-export interface RoutingRule {
-  fromPattern: string;
-  agentId: string;
-}
-
-export interface NewMailPipelineSettingProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  autoSyncAgentIds: string[];
-  onAddAutoSyncAgent: (agentId: string) => void;
-  onRemoveAutoSyncAgent: (agentId: string) => void;
-  autoSyncRoutingRules: RoutingRule[];
-  onAddAutoSyncRoutingRule: (fromPattern: string, agentId: string) => void;
-  onRemoveAutoSyncRoutingRule: (index: number) => void;
-  autoSyncSinceDate: string;
-  onSetAutoSyncSinceDate: (date: string) => void;
-  autoSyncProcessingMode: AutoSyncProcessingMode;
-  onSetAutoSyncProcessingMode: (mode: AutoSyncProcessingMode) => void;
-  autoSyncMarkAsRead: boolean;
-  onSetAutoSyncMarkAsRead: (enabled: boolean) => void;
-  accountId: string;
-  folderId: string;
-  onRunAutoSyncNow: () => Promise<void>;
-  onRefreshEmailMailbox?: () => void | Promise<unknown>;
-}
-
-export interface SettingsSectionProps {
-  eyebrow?: string;
-  title: string;
-  description: string;
-  children: React.ReactNode;
-}
-
-export interface ProcessedEmailEntry {
-  id: string;
-  processedAt: number;
-}
-
-export type { ProcessedUnreadEmailDebugInfo };
 
 export interface EmailInboxModalProps {
   open: boolean;

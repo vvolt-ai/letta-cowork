@@ -29,7 +29,9 @@ function getBundledRipgrepPath(): string | null {
     const __filename = fileURLToPath(import.meta.url);
     const require = createRequire(__filename);
     const rgPackage = require("@vscode/ripgrep") as { rgPath?: unknown };
-    return typeof rgPackage.rgPath === "string" ? rgPackage.rgPath : null;
+    if(typeof rgPackage.rgPath!=='string')return null;
+    const unpacked=rgPackage.rgPath.replace(/app\.asar([/\\])/,'app.asar.unpacked$1');
+    return unpacked!==rgPackage.rgPath&&existsSync(unpacked)?unpacked:rgPackage.rgPath;
   } catch {
     return null;
   }

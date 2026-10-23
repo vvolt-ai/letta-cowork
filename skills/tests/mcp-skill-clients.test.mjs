@@ -37,7 +37,7 @@ function runClient(client, tool, input, env = {}) {
   });
 }
 
-async function startMcpServer() {
+async function startMcpServer(toolError = false) {
   const requests = [];
   const server = createServer(async (request, response) => {
     const chunks = [];
@@ -62,7 +62,7 @@ async function startMcpServer() {
       return;
     }
 
-    if (request.url === '/mcp-error') {
+    if (request.url === '/mcp' && toolError) {
       response.writeHead(200, { 'Content-Type': 'application/json' });
       response.end(
         JSON.stringify({
@@ -169,19 +169,52 @@ test('Vera client prefers the current Cowork session over a stale VERA_TOKEN', a
   assert.equal(mock.requests[0].url, '/mcp');
 });
 
-test('explicit endpoint override is supported and MCP tool errors fail', async (t) => {
+test('Vera client permits governed live email body reads', async (t) => {
   const mock = await startMcpServer();
+  t.after(mock.close);
+
+  const result = await runClient(
+    veraClient,
+    'vera_get_email',
+    JSON.stringify({
+      channelId: 'channel-1',
+      accountId: 'account-1',
+      folderId: 'folder-1',
+      messageId: 'message-1',
+    }),
+    {
+      VERA_TOKEN: 'test-token',
+      VERA_SERVER_URL: mock.url,
+    },
+  );
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.deepEqual(mock.requests[0].body.params, {
+    name: 'vera_get_email',
+    arguments: {
+      channelId: 'channel-1',
+      accountId: 'account-1',
+      folderId: 'folder-1',
+      messageId: 'message-1',
+    },
+  });
+});
+
+test('explicit native endpoint override is supported and MCP tool errors fail', async (t) => {
+  const mock = await startMcpServer(true);
   t.after(mock.close);
 
   const result = await runClient(veraClient, 'vera_whoami', '{}', {
     VERA_TOKEN: 'test-token',
-    VERA_MCP_URL: `${mock.url}/mcp-error`,
+    VERA_SERVER_URL: mock.url,
+    VERA_MCP_URL: `${mock.url}/mcp`,
   });
 
   assert.equal(result.code, 1);
-  assert.equal(result.stdout, 'Authorized resource not found\n');
-  assert.equal(result.stderr, '');
-  assert.equal(mock.requests[0].url, '/mcp-error');
+  assert.equal(result.stdout, '');
+  assert.match(result.stderr, /Vera tool reported failure/);
+  assert.doesNotMatch(result.stderr, /Authorized resource not found/);
+  assert.equal(mock.requests[0].url, '/mcp');
 });
 
 test('clients reject missing secrets, unknown tools, and invalid argument JSON', async () => {

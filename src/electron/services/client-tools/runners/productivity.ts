@@ -5,6 +5,8 @@ import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 
 import type { ClientToolDefinition, ToolRunResult } from "../types.js";
+import { getCurrentWorkingDirectory } from "./_shared/runtime-context.js";
+import { resolveProjectScope, projectMemorySummary } from "./_shared/project-scope.js";
 
 const execFileAsync = promisify(execFile);
 const MAX_OUTPUT = 32_000;
@@ -14,7 +16,7 @@ const PREFS_FILE = join(STORE_DIR, "user-preferences.json");
 const REMINDERS_FILE = join(STORE_DIR, "reminders.json");
 
 function cwd(): string {
-  return process.env.USER_CWD || process.env.HOME || process.env.USERPROFILE || process.cwd();
+  return getCurrentWorkingDirectory();
 }
 
 function truncate(text: string, max = MAX_OUTPUT): string {
@@ -72,18 +74,20 @@ export const projectContextTool: ClientToolDefinition = {
   },
   run: async (args) => {
     try {
-      const start = typeof args.path === "string" && args.path.trim() ? resolve(args.path) : cwd();
-      const root = await gitRoot(start);
+      const scope = await resolveProjectScope(typeof args.path === "string" ? args.path : undefined);
+      const start = scope.directory;
+      const root = scope.repoRoot;
       let branch = "";
       try { branch = (await run("git", ["branch", "--show-current"], { cwd: root })).trim(); } catch { /* Detached HEAD or non-Git directory. */ }
-      const entries = existsSync(root) ? (await fs.readdir(root)).slice(0, 80) : [];
-      const pkgPath = join(root, "package.json");
+      const entries = (await fs.readdir(scope.projectRoot)).sort().slice(0, 80);
+      const pkgPath = join(scope.projectRoot, "package.json");
       let scripts: Record<string, string> | undefined;
       if (args.includeScripts !== false && existsSync(pkgPath)) {
         const pkg = JSON.parse(await fs.readFile(pkgPath, "utf-8"));
         scripts = pkg.scripts ?? undefined;
       }
-      return ok(JSON.stringify({ cwd: start, gitRoot: root, branch, entries, scripts }, null, 2));
+      const projectMemory = await projectMemorySummary(scope);
+      return ok(JSON.stringify({ cwd: start, gitRoot: root, projectRoot: scope.projectRoot, packageRoot: scope.packageRoot, branch, entries, scripts, projectMemory }, null, 2));
     } catch (e) { return fail(e); }
   },
 };

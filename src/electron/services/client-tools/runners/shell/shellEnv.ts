@@ -15,6 +15,7 @@
  */
 
 import { createRequire } from "node:module";
+import { getRuntimeContext, getCurrentMemoryDir } from '../_shared/runtime-context.js';
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -38,6 +39,14 @@ export function getShellEnv(
     // process.env, where concurrent sessions or unrelated app code could see them.
     for (const [key, value] of Object.entries(runtimeEnv)) {
         env[key] = value;
+    }
+
+    const context = getRuntimeContext();
+    if (context?.agentId) {
+        delete env.MEMORY_DIR; delete env.LETTA_MEMORY_DIR;
+        env.AGENT_ID = context.agentId; env.LETTA_AGENT_ID = context.agentId;
+        const memoryDir = getCurrentMemoryDir();
+        if (memoryDir) { env.MEMORY_DIR = memoryDir; env.LETTA_MEMORY_DIR = memoryDir; }
     }
 
     // Locate the PATH variable case-insensitively (Windows uses "Path").

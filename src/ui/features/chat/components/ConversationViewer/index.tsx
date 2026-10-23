@@ -32,7 +32,7 @@ export const ConversationViewer = memo(function ConversationViewer({
   const shouldAutoScroll = true;
 
   // Use message window hook to get visible messages
-  const { visibleMessages } = useMessageWindow(
+  const { visibleMessages, partialMessage, showPartialMessage } = useMessageWindow(
     messages,
     sessionId,
     messagesEndRef,
@@ -61,12 +61,6 @@ export const ConversationViewer = memo(function ConversationViewer({
   // Get agent status and ephemeral state
   const showReasoningInChat = useAppStore((state) => state.showReasoningInChat);
   const agentStatus = session?.ephemeral?.status || "idle";
-  const partialMessage = session?.ephemeral?.assistantDraft?.content 
-    ? (typeof session.ephemeral.assistantDraft.content === "string" 
-        ? session.ephemeral.assistantDraft.content 
-        : "")
-    : "";
-  const showPartialMessage = partialMessage.length > 0 && agentStatus !== "completed" && agentStatus !== "idle";
   const reasoningSteps = session?.ephemeral?.reasoning || [];
   const toolExecutions = session?.ephemeral?.tools || [];
   const errorMessage = session?.ephemeral?.errorMessage;

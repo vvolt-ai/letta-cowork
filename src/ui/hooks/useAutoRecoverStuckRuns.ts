@@ -15,10 +15,11 @@ import type { SessionStatus } from "../types";
  * This hook watches the active session's status. As soon as it
  * transitions to a terminal state (completed / idle / error), we ask the
  * electron side to query Letta for stuck runs on this session+agent and
- * auto-approve them so the conversation is unblocked for the next turn.
+ * replay any still-live approval cards. Native SDK ownership, not renderer
+ * status, determines execution recovery; this hook must not approve/cancel runs.
  *
- * The recovery endpoint (`recoverPendingApprovals`) is idempotent: if
- * nothing is stuck, it returns an empty list and is effectively a no-op.
+ * The compatibility endpoint (`recoverPendingApprovals`) is replay-only:
+ * it never treats an absent local resolver as authority to mutate a backend run.
  * Debouncing by `delayMs` gives any in-flight cleanup events a chance to
  * settle before we probe the server.
  */
@@ -57,7 +58,7 @@ export function useAutoRecoverStuckRuns(params: {
         );
         if (Array.isArray(recovered) && recovered.length > 0) {
           console.log(
-            `[auto-recover] Resolved ${recovered.length} stuck run(s) on session ${sessionId}`,
+            `[approval-replay] Replayed ${recovered.length} request(s) on session ${sessionId}`,
             recovered.map((r) => ({ runId: r.runId, tool: r.toolName })),
           );
         }

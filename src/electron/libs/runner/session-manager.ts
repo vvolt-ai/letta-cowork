@@ -1,236 +1,102 @@
-/**
- * Session creation, resumption, and lifecycle management.
- */
-
-import { log, debug } from "./logger.js";
-import { DEFAULT_CWD, storeSession, removeSession, setActiveLettaSession, getCachedAgentId, setCachedAgentId, getActiveLettaSession } from "./state.js";
+import { createSdkSession, resumeSdkSession, type DesktopSdkSessionOptions } from './sdk/index.js';
+import { captureDesktopSdkScope } from './sdk/session.js';
 import {
-  createWsSession as createSession,
-  resumeWsSession as resumeSession,
-} from "./ws/index.js";
+  DEFAULT_CWD,
+  storeSession,
+  removeSession,
+  getSession,
+  getActiveLettaSession,
+  setActiveLettaSession,
+} from './state.js';
+import type { RunnerLettaSession, RunnerSession, RunnerOptions } from './types.js';
+import type { CanUseToolResponse } from '@letta-ai/letta-agent-sdk';
 
-import type { RunnerLettaSession as LettaSession , RunnerSession, RunnerOptions } from "./types.js";
-// Engine swap: was the SDK's CLI-subprocess-backed
-// createSession/resumeSession. Now backed by letta-code's WebSocket
-// listener pattern (./ws/), keeping the same Session contract so the
-// rest of the runner is unchanged.
-
-import type { CanUseToolResponse } from "@letta-ai/letta-agent-sdk";
-
-/**
- * Session options for creating/resuming sessions.
- */
-export type SessionOptions = {
-  cwd: string;
-  permissionMode: "standard" | "acceptEdits" | "unrestricted" | "strict";
-  canUseTool: (toolName: string, input: unknown) => Promise<CanUseToolResponse>;
-  systemInfoReminder: boolean;
-  model?: string;
-  lettaConnectionId?: string;
-  memfs: boolean;
-  memfsStartup: "background";
-};
-
-/**
- * Validate that resumeConversationId looks like a valid Letta ID.
- * Valid IDs are: agent-xxx, conv-xxx, conversation-xxx, or UUIDs
- */
+const agentsByAccount = new Map<string, string>();
+export type SessionOptions = DesktopSdkSessionOptions;
 export function isValidLettaId(id: string | undefined): boolean {
-  if (!id) return false;
-  return /^(agent-|conv-|conversation-|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/.test(id);
+  return Boolean(
+    id &&
+    /^(?:agent-|conv-|conversation-)[a-zA-Z0-9-]+$|^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(
+      id,
+    ),
+  );
 }
-
-/**
- * Create session options object.
- */
 export function createSessionOptions(
   session: RunnerSession,
   model: string | undefined,
-  permissionMode: RunnerOptions["permissionMode"],
-  canUseTool: (toolName: string, input: unknown) => Promise<CanUseToolResponse>,
+  permissionMode: RunnerOptions['permissionMode'],
+  canUseTool: (name: string, input: unknown) => Promise<CanUseToolResponse>,
   lettaConnectionId?: string,
 ): SessionOptions {
   return {
     cwd: session.cwd ?? DEFAULT_CWD,
-    // Preserve unattended/background callers that predate the selector. The
-    // interactive composer always sends its explicit user-selected mode.
-    permissionMode: permissionMode ?? "unrestricted",
-    canUseTool,
-    systemInfoReminder: false,
     model,
+    permissionMode: permissionMode ?? 'unrestricted',
+    canUseTool,
     lettaConnectionId,
-    memfs: true,
-    memfsStartup: "background" as const,
   };
 }
-
-/**
- * Create or resume a Letta session based on options.
- */
 export function createOrResumeSession(
   options: RunnerOptions,
-  canUseTool: (toolName: string, input: unknown) => Promise<CanUseToolResponse>
-): LettaSession {
-  const { session, resumeConversationId, preferredAgentId, model } = options;
-  const targetAgentId = preferredAgentId?.trim() || undefined;
-  const cachedAgentId = getCachedAgentId();
-  const sessionOptions = createSessionOptions(
-    session,
-    model,
-    options.permissionMode,
-    canUseTool,
-    options.lettaConnectionId,
-  );
-
-  if (resumeConversationId && isValidLettaId(resumeConversationId)) {
-    // Resume specific conversation
-    debug("creating session: resumeSession with conversationId", { resumeConversationId });
-    return resumeSession(resumeConversationId, sessionOptions);
-  } else if (resumeConversationId && !isValidLettaId(resumeConversationId)) {
-    // Invalid ID provided - log warning and fall back to cachedAgentId
-    log("WARNING: invalid resumeConversationId, falling back", {
-      invalidId: resumeConversationId,
-      fallbackTo: targetAgentId ? "preferredAgentId" : cachedAgentId ? "cachedAgentId" : "createSession"
+  canUseTool: (name: string, input: unknown) => Promise<CanUseToolResponse>,
+): RunnerLettaSession {
+  const scope = captureDesktopSdkScope(options.lettaConnectionId);
+  const settings = {
+    ...createSessionOptions(
+      options.session,
+      options.model,
+      options.permissionMode,
+      canUseTool,
+      options.lettaConnectionId,
+    ),
+    scope,
+  };
+  if (options.resumeConversationId) {
+    if (!isValidLettaId(options.resumeConversationId))
+      throw Error('Invalid conversation identity; no agent/account fallback was attempted.');
+    return resumeSdkSession(options.resumeConversationId, {
+      ...settings,
+      agentId: options.preferredAgentId,
     });
-    if (targetAgentId) {
-      debug("creating session: createSession with preferredAgentId (fallback)", { preferredAgentId: targetAgentId });
-      return createSession(targetAgentId, sessionOptions);
-    } else if (cachedAgentId) {
-      debug("creating session: resumeSession with cachedAgentId (fallback)", { cachedAgentId });
-      return createSession(cachedAgentId, sessionOptions);
-    } else {
-      debug("creating session: createSession (new agent, fallback)");
-      return createSession(process.env.LETTA_AGENT_ID, sessionOptions);
-    }
-  } else if (targetAgentId) {
-    // Start on explicit agent
-    debug("creating session: createSession with preferredAgentId", { preferredAgentId: targetAgentId });
-    return createSession(targetAgentId, sessionOptions);
-  } else if (cachedAgentId) {
-    // Create new conversation on existing agent
-    debug("creating session: createSession with cachedAgentId", { cachedAgentId });
-    return createSession(cachedAgentId, sessionOptions);
-  } else {
-    // First time - create new agent and session
-    debug("creating session: createSession (new agent)");
-    return createSession(process.env.LETTA_AGENT_ID, sessionOptions);
   }
+  const agentId =
+    options.preferredAgentId?.trim() ||
+    agentsByAccount.get(scope.key) ||
+    process.env.LETTA_AGENT_ID?.trim();
+  return createSdkSession(agentId, settings);
 }
-
-/**
- * Initialize session after creation.
- * Will wait for Letta to provide a real conversationId by calling initialize().
- * For resumed sessions with existing conversationId, uses that directly.
- */
 export async function initializeSession(
-  lettaSession: LettaSession,
-  resumeConversationId: string | undefined,
-  onSessionUpdate?: (updates: { lettaConversationId?: string }) => void
+  session: RunnerLettaSession,
+  _resumeConversationId: string | undefined,
+  onSessionUpdate?: (updates: { lettaConversationId?: string }) => void,
 ): Promise<{ sessionKey: string; currentSessionId: string }> {
-  // For resumed sessions with valid ID, use that
-  if (resumeConversationId && isValidLettaId(resumeConversationId)) {
-    const sessionKey = resumeConversationId;
-    storeSession(sessionKey, lettaSession);
-
-    debug("session initialized (resumed)", { conversationId: resumeConversationId, agentId: lettaSession.agentId });
-    onSessionUpdate?.({ lettaConversationId: resumeConversationId });
-
-    if (lettaSession.agentId && !getCachedAgentId()) {
-      setCachedAgentId(lettaSession.agentId);
-      debug("cached agentId for future conversations", { agentId: lettaSession.agentId });
-    }
-
-    return { sessionKey, currentSessionId: sessionKey };
-  }
-
-  // For new sessions, initialize and wait for real conversationId from SDK
-  debug("initializing new Letta session, waiting for conversationId...");
-
-  // The SDK's initialize() returns an init message with conversation_id
-  // If already initialized, this is a no-op and we check conversationId directly
-  let conversationId = lettaSession.conversationId;
-
-  if (!conversationId) {
-    // Call initialize() to trigger the init message from CLI
-    // This sets _conversationId on the Session object
-    //
-    // Fix C: Wrap initialize() in an explicit timeout. Without this, an invalid
-    // model override (or any other silent SDK failure) can cause initialize()
-    // to hang forever — the UI eventually shows a generic "Failed to start
-    // session" from its 45s timeout but the user has no idea why. With this
-    // timeout, we return a descriptive error that includes the model override
-    // so the failure mode is immediately diagnosable.
-    // Bumped 30s -> 60s on May 15 after a real scheduled-run timeout against
-    // a heavy agent (Shelly). Cold-start of an agent with a large system prompt
-    // routinely takes 20-40s on the first connect against api.letta.com.
-    const INIT_TIMEOUT_MS = 60_000;
-    const selectedModel = (lettaSession as unknown as { _options?: { model?: string } })?._options?.model;
-
-    try {
-      const initPromise = lettaSession.initialize();
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => {
-          const modelHint = selectedModel
-            ? ` (model override: "${selectedModel}" — this model may be unavailable or incompatible with the agent)`
-            : "";
-          reject(
-            new Error(
-              `Letta session initialize() timed out after ${INIT_TIMEOUT_MS / 1000}s${modelHint}`
-            )
-          );
-        }, INIT_TIMEOUT_MS);
-      });
-
-      const initResult = await Promise.race([initPromise, timeoutPromise]);
-      conversationId = initResult.conversationId;
-      debug("session initialized via initialize()", { conversationId, agentId: initResult.agentId });
-    } catch (initError) {
-      const errMsg = String(initError);
-      log("ERROR: failed to initialize Letta session", { error: errMsg, selectedModel });
-      const modelContext = selectedModel ? ` [model: ${selectedModel}]` : "";
-      throw new Error(`Session initialization failed${modelContext}: ${errMsg}`);
-    }
-  }
-
-  // Now conversationId should be available
-  if (!conversationId) {
-    log("ERROR: no conversationId available after initialize()");
-    throw new Error("Session initialization failed: no conversationId received from Letta");
-  }
-
-  // Store session for abort handling using the real conversation ID
-  const sessionKey = conversationId;
-  storeSession(sessionKey, lettaSession);
-
-  debug("session initialized (new)", { conversationId, agentId: lettaSession.agentId });
-  onSessionUpdate?.({ lettaConversationId: conversationId });
-
-  // Cache agentId for future conversations
-  if (lettaSession.agentId && !getCachedAgentId()) {
-    setCachedAgentId(lettaSession.agentId);
-    debug("cached agentId for future conversations", { agentId: lettaSession.agentId });
-  }
-
-  return { sessionKey, currentSessionId: sessionKey };
-}
-
-/**
- * Cleanup session after completion or error.
- */
-export function cleanupSession(
-  sessionKey: string,
-  lettaSessionRef: LettaSession | null
-): void {
-  debug("runLetta finally block");
-  if (sessionKey) {
-    removeSession(sessionKey);
-  }
-  if (lettaSessionRef && getActiveLettaSession() === lettaSessionRef) {
-    setActiveLettaSession(null);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const result = await Promise.race([
+      session.initialize(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(Error('SDK_SESSION_INITIALIZATION_TIMEOUT')), 60000);
+      }),
+    ]);
+    if (!result.conversationId || !result.agentId)
+      throw Error('Native SDK did not return canonical conversation/agent identity.');
+    const key = result.conversationId;
+    storeSession(key, session);
+    if (session.accountScopeKey) agentsByAccount.set(session.accountScopeKey, result.agentId);
+    onSessionUpdate?.({ lettaConversationId: key });
+    return { sessionKey: key, currentSessionId: key };
+  } catch (error) {
+    void session.abort().catch(() => undefined);
+    throw error;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
-
-/**
- * Get the active Letta session (re-exported from state).
- */
-export { getActiveLettaSession } from "./state.js";
+export function cleanupSession(sessionKey: string, session: RunnerLettaSession | null): void {
+  // UI bookkeeping is not proof that native execution has stopped. The SDK
+  // owner registry keeps unresolved executions fenced until verified disposal.
+  if (sessionKey && getSession(sessionKey) === session) removeSession(sessionKey);
+  if (session && getActiveLettaSession() === session) setActiveLettaSession(null);
+  session?.close?.();
+}
+export { getActiveLettaSession } from './state.js';

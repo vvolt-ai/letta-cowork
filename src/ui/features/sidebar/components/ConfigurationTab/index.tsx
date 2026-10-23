@@ -15,13 +15,10 @@ interface ConfigurationTabProps {
   onOpenSuperAdmin?: () => void;
   isEmailConnected: boolean;
   unreadLabel: string;
-  autoSyncEnabled: boolean;
-  onToggleAutoSync: (enabled: boolean) => void;
   onConnectEmail: () => void;
   onDisconnectEmail: () => void;
   onOpenEmailView: () => void;
   onRefreshEmails: () => void;
-  onOpenAddAgentsModal: () => void;
 }
 
 interface CoworkSettings {
@@ -118,13 +115,10 @@ export const ConfigurationTab = memo(function ConfigurationTab({
   onOpenSuperAdmin,
   isEmailConnected,
   unreadLabel,
-  autoSyncEnabled,
-  onToggleAutoSync,
   onConnectEmail,
   onDisconnectEmail,
   onOpenEmailView,
   onRefreshEmails,
-  onOpenAddAgentsModal,
 }: ConfigurationTabProps) {
   const [profile, setProfile] = useState({
     firstName: '',
@@ -461,13 +455,10 @@ export const ConfigurationTab = memo(function ConfigurationTab({
             <IntegrationList
               isEmailConnected={isEmailConnected}
               unreadLabel={unreadLabel}
-              autoSyncEnabled={autoSyncEnabled}
-              onToggleAutoSync={onToggleAutoSync}
               onConnect={onConnectEmail}
               onDisconnect={onDisconnectEmail}
               onOpenInbox={onOpenEmailView}
               onRefresh={onRefreshEmails}
-              onManageRules={onOpenAddAgentsModal}
             />
           </Panel>
         </div>

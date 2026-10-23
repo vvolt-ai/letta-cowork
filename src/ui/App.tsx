@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ActivityPanel } from "./features/activity/components/ActivityPanel";
 import { SuperAdminPanel } from "./features/admin/SuperAdminPanel";
@@ -33,7 +33,6 @@ import { EnvironmentSettings } from "./features/settings/components/EnvironmentS
 import { ChangeEnv } from "./features/settings/components/ChangeEnv";
 import { useSessionController } from "./hooks/useSessionController";
 import { useCoworkSettings } from "./hooks/useCoworkSettings";
-import { useAutoSyncUnread } from "./hooks/useAutoSyncUnread";
 import { useProcessEmailToAgent } from "./hooks/useProcessEmailToAgent";
 import { useAuth } from "./hooks/useAuth";
 import { SessionNotifications } from "./features/system/components/SessionNotifications";
@@ -42,7 +41,6 @@ import { SettingsWorkspace, type SettingsSection } from "./features/settings/com
 const SCROLL_THRESHOLD = 50;
 const SESSION_CHANGE_SCROLL_DELAY_MS = 100;
 const LOAD_EARLIER_SCROLL_THRESHOLD_PX = 240;
-const AUTO_SYNC_ENABLED_KEY = "auto_sync_unread_enabled";
 const SIDEBAR_WIDTH_STORAGE_KEY = "sidebar_width_px";
 const DEFAULT_SIDEBAR_WIDTH = 280;
 const MIN_SIDEBAR_WIDTH = 220;
@@ -54,83 +52,6 @@ const isNearBottom = (container: HTMLDivElement) => {
   const { scrollTop, scrollHeight, clientHeight } = container;
   return scrollTop + clientHeight >= scrollHeight - SCROLL_THRESHOLD;
 };
-const AUTO_SYNC_AGENT_IDS_KEY = "auto_sync_selected_agent_ids";
-const AUTO_SYNC_ROUTING_RULES_KEY = "auto_sync_routing_rules";
-const AUTO_SYNC_SINCE_DATE_KEY = "auto_sync_since_date";
-
-type AutoSyncRoutingRule = {
-  fromPattern: string;
-  agentId: string;
-};
-
-const DEFAULT_AUTO_SYNC_CONFIG = {
-  enabled: false,
-  agentIds: [],
-  routingRules: [],
-  sinceDate: "",
-  processingMode: "unread_only",
-  markAsReadAfterProcess: true,
-} satisfies AutoSyncUnreadConfig;
-
-const hasCustomAutoSyncConfig = (config: AutoSyncUnreadConfig): boolean => {
-  return config.enabled
-    || config.agentIds.length > 0
-    || config.routingRules.length > 0
-    || config.sinceDate.length > 0;
-};
-
-const readLegacyAutoSyncConfig = (): AutoSyncUnreadConfig => {
-  const enabled = localStorage.getItem(AUTO_SYNC_ENABLED_KEY) === "true";
-
-  let agentIds: string[] = [];
-  try {
-    const raw = localStorage.getItem(AUTO_SYNC_AGENT_IDS_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as string[];
-      if (Array.isArray(parsed)) {
-        agentIds = parsed.filter((id) => typeof id === "string" && id.trim().length > 0);
-      }
-    }
-  } catch {
-    agentIds = [];
-  }
-
-  let routingRules: AutoSyncRoutingRule[] = [];
-  try {
-    const raw = localStorage.getItem(AUTO_SYNC_ROUTING_RULES_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as AutoSyncRoutingRule[];
-      if (Array.isArray(parsed)) {
-        routingRules = parsed.filter(
-          (rule) =>
-            typeof rule?.fromPattern === "string"
-            && rule.fromPattern.trim().length > 0
-            && typeof rule?.agentId === "string"
-            && rule.agentId.trim().length > 0
-        );
-      }
-    }
-  } catch {
-    routingRules = [];
-  }
-
-  return {
-    enabled,
-    agentIds,
-    routingRules,
-    sinceDate: localStorage.getItem(AUTO_SYNC_SINCE_DATE_KEY) ?? "",
-    processingMode: "unread_only",
-    markAsReadAfterProcess: true,
-  };
-};
-
-const clearLegacyAutoSyncConfig = () => {
-  localStorage.removeItem(AUTO_SYNC_ENABLED_KEY);
-  localStorage.removeItem(AUTO_SYNC_AGENT_IDS_KEY);
-  localStorage.removeItem(AUTO_SYNC_ROUTING_RULES_KEY);
-  localStorage.removeItem(AUTO_SYNC_SINCE_DATE_KEY);
-};
-
 function App() {
   // Authentication
   const { isAuthenticated, isLoading: isAuthLoading, checkAuth, user, switchOrganization, logout, handleAuthError } = useAuth();
@@ -181,13 +102,6 @@ function App() {
     const stored = Number(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY));
     return Number.isFinite(stored) ? clampSidebarWidth(stored) : DEFAULT_SIDEBAR_WIDTH;
   });
-  const [autoSyncConfigLoaded, setAutoSyncConfigLoaded] = useState(false);
-  const [autoSyncEnabled, setAutoSyncEnabled] = useState<boolean>(DEFAULT_AUTO_SYNC_CONFIG.enabled);
-  const [autoSyncAgentIds, setAutoSyncAgentIds] = useState<string[]>(DEFAULT_AUTO_SYNC_CONFIG.agentIds);
-  const [autoSyncRoutingRules, setAutoSyncRoutingRules] = useState<AutoSyncRoutingRule[]>(DEFAULT_AUTO_SYNC_CONFIG.routingRules);
-  const [autoSyncSinceDate, setAutoSyncSinceDate] = useState<string>(DEFAULT_AUTO_SYNC_CONFIG.sinceDate);
-  const [autoSyncProcessingMode, setAutoSyncProcessingMode] = useState<AutoSyncProcessingMode>(DEFAULT_AUTO_SYNC_CONFIG.processingMode);
-  const [autoSyncMarkAsRead, setAutoSyncMarkAsRead] = useState<boolean>(DEFAULT_AUTO_SYNC_CONFIG.markAsReadAfterProcess);
   const handleServerEvent = useAppStore((s) => s.handleServerEvent);
   const { coworkSettings, showCoworkSettings, setShowCoworkSettings, updateCoworkSettings } = useCoworkSettings();
 
@@ -247,43 +161,12 @@ function App() {
     refreshEmailsForFolder,
   });
   const emails = zohoEmailsResponse?.data ?? [];
-  const selectedAutoSyncAgentIds = useMemo(() => autoSyncAgentIds, [autoSyncAgentIds]);
-
   // Handler for loading more emails
   const handleLoadMoreEmails = useCallback(() => {
     if (folderId && hasMoreEmails && !isLoadingMoreEmails) {
       fetchMoreEmails(folderId);
     }
   }, [folderId, hasMoreEmails, isLoadingMoreEmails, fetchMoreEmails]);
-
-  const handleAddAutoSyncAgent = useCallback((agentId: string) => {
-    const trimmed = agentId.trim();
-    if (!trimmed) return;
-    setAutoSyncAgentIds((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
-  }, []);
-
-  const handleRemoveAutoSyncAgent = useCallback((agentId: string) => {
-    setAutoSyncAgentIds((prev) => prev.filter((id) => id !== agentId));
-  }, []);
-
-  const handleAddAutoSyncRoutingRule = useCallback((fromPattern: string, agentId: string) => {
-    const normalizedFrom = fromPattern.trim().toLowerCase();
-    const normalizedAgent = agentId.trim();
-    if (!normalizedFrom || !normalizedAgent) return;
-    setAutoSyncRoutingRules((prev) => {
-      const exists = prev.some(
-        (rule) =>
-          rule.fromPattern.toLowerCase() === normalizedFrom &&
-          rule.agentId === normalizedAgent
-      );
-      if (exists) return prev;
-      return [...prev, { fromPattern: normalizedFrom, agentId: normalizedAgent }];
-    });
-  }, []);
-
-  const handleRemoveAutoSyncRoutingRule = useCallback((index: number) => {
-    setAutoSyncRoutingRules((prev) => prev.filter((_, idx) => idx !== index));
-  }, []);
 
   // Store handlePartialMessages in a ref so it can be used in onEvent before useMessageWindow is called
   const handlePartialMessagesRef = useRef<((event: ServerEvent) => void) | null>(null);
@@ -359,6 +242,7 @@ function App() {
     });
   }, []);
 
+  const notifyNewMessage = useCallback(() => setHasNewMessages(true), []);
   const {
     visibleMessages,
     hasMoreHistory,
@@ -372,7 +256,7 @@ function App() {
     activeSessionId,
     messagesEndRef,
     shouldAutoScroll,
-    () => setHasNewMessages(true),
+    notifyNewMessage,
     scheduleScrollToBottom
   );
 
@@ -446,47 +330,6 @@ function App() {
     };
   }, [isLettaEnvConfigured, setShowStartModal, showStartModal]);
 
-  useEffect(() => {
-    const loadAutoSyncConfig = async () => {
-      try {
-        const storedConfig = window.electron?.getAutoSyncUnreadConfig
-          ? await window.electron.getAutoSyncUnreadConfig()
-          : readLegacyAutoSyncConfig();
-        const legacyConfig = readLegacyAutoSyncConfig();
-        const nextConfig = hasCustomAutoSyncConfig(storedConfig) || !hasCustomAutoSyncConfig(legacyConfig)
-          ? storedConfig
-          : legacyConfig;
-
-        if (!hasCustomAutoSyncConfig(storedConfig) && hasCustomAutoSyncConfig(legacyConfig)) {
-          if (window.electron?.updateAutoSyncUnreadConfig) {
-            await window.electron.updateAutoSyncUnreadConfig(legacyConfig);
-          }
-        }
-
-        setAutoSyncEnabled(nextConfig.enabled);
-        setAutoSyncAgentIds(nextConfig.agentIds);
-        setAutoSyncRoutingRules(nextConfig.routingRules);
-        setAutoSyncSinceDate(nextConfig.sinceDate);
-        setAutoSyncProcessingMode(nextConfig.processingMode);
-        setAutoSyncMarkAsRead(nextConfig.markAsReadAfterProcess ?? true);
-        clearLegacyAutoSyncConfig();
-      } catch (err) {
-        console.error("Failed to load auto-sync unread config:", err);
-        const legacyConfig = readLegacyAutoSyncConfig();
-        setAutoSyncEnabled(legacyConfig.enabled);
-        setAutoSyncAgentIds(legacyConfig.agentIds);
-        setAutoSyncRoutingRules(legacyConfig.routingRules);
-        setAutoSyncSinceDate(legacyConfig.sinceDate);
-        setAutoSyncProcessingMode(legacyConfig.processingMode);
-        setAutoSyncMarkAsRead(legacyConfig.markAsReadAfterProcess ?? true);
-      } finally {
-        setAutoSyncConfigLoaded(true);
-      }
-    };
-
-    void loadAutoSyncConfig();
-  }, [isAuthenticated]); // Reload config when authentication state changes
-
   // Listen for auth-expired event from main process
   useEffect(() => {
     const unsubscribe = window.electron?.onAuthExpired?.(() => {
@@ -503,28 +346,6 @@ function App() {
     localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidth));
   }, [sidebarWidth]);
 
-  useEffect(() => {
-    if (!autoSyncConfigLoaded) return;
-
-    const persistAutoSyncConfig = async () => {
-      try {
-        if (!window.electron?.updateAutoSyncUnreadConfig) return;
-        await window.electron.updateAutoSyncUnreadConfig({
-          enabled: autoSyncEnabled,
-          agentIds: selectedAutoSyncAgentIds,
-          routingRules: autoSyncRoutingRules,
-          sinceDate: autoSyncSinceDate,
-          processingMode: autoSyncProcessingMode,
-          markAsReadAfterProcess: autoSyncMarkAsRead,
-        });
-      } catch (err) {
-        console.error("Failed to persist auto-sync unread config:", err);
-      }
-    };
-
-    void persistAutoSyncConfig();
-  }, [autoSyncConfigLoaded, autoSyncEnabled, autoSyncProcessingMode, autoSyncRoutingRules, autoSyncSinceDate, selectedAutoSyncAgentIds, autoSyncMarkAsRead]);
-
   // Load cowork settings on mount
   useEffect(() => {
     const loadSettings = async () => {
@@ -538,19 +359,6 @@ function App() {
     };
     loadSettings();
   }, [updateCoworkSettings]);
-
-  const { runAutoSyncNow } = useAutoSyncUnread(
-    sendEvent,
-    accountId,
-    folderId,
-    selectedAutoSyncAgentIds,
-    autoSyncRoutingRules,
-    autoSyncEnabled,
-    1,
-    autoSyncSinceDate,
-    autoSyncProcessingMode,
-    autoSyncMarkAsRead
-  );
 
   useEffect(() => {
     return () => {
@@ -730,7 +538,6 @@ function App() {
     }
 
     useAppStore.getState().resetOrganizationState();
-    clearLegacyAutoSyncConfig();
     window.location.reload();
   };
 
@@ -777,25 +584,8 @@ function App() {
             onUseEmailAsInput={setEmailAsInput}
             isProcessingEmailInput={isProcessingEmailInput}
             isFetchingEmails={isFetchingEmailContent}
-            autoSyncEnabled={autoSyncEnabled}
-            onToggleAutoSync={setAutoSyncEnabled}
-            autoSyncAgentIds={selectedAutoSyncAgentIds}
-            onAddAutoSyncAgent={handleAddAutoSyncAgent}
-            onRemoveAutoSyncAgent={handleRemoveAutoSyncAgent}
-            autoSyncRoutingRules={autoSyncRoutingRules}
-            onAddAutoSyncRoutingRule={handleAddAutoSyncRoutingRule}
-            onRemoveAutoSyncRoutingRule={handleRemoveAutoSyncRoutingRule}
-            autoSyncSinceDate={autoSyncSinceDate}
-            onSetAutoSyncSinceDate={setAutoSyncSinceDate}
-            autoSyncProcessingMode={autoSyncProcessingMode}
-            onSetAutoSyncProcessingMode={setAutoSyncProcessingMode}
-            autoSyncMarkAsRead={autoSyncMarkAsRead}
-            onSetAutoSyncMarkAsRead={setAutoSyncMarkAsRead}
-            autoSyncAccountId={accountId}
-            autoSyncFolderId={folderId}
-            onRunAutoSyncNow={runAutoSyncNow}
-            onRefreshEmailMailbox={refetchEmails}
-            selectedAgentId={selectedAutoSyncAgentIds[0]}
+            accountId={accountId}
+            folderId={folderId}
             onProcessEmailToAgent={processEmailToAgent}
             processingEmailId={processingEmailId}
             awaitingConversationEmailId={awaitingConversationEmailId}
@@ -862,13 +652,10 @@ function App() {
                 }}
                 isEmailConnected={isMailConnected}
                 unreadLabel={""}
-                autoSyncEnabled={autoSyncEnabled}
-                onToggleAutoSync={setAutoSyncEnabled}
                 onConnectEmail={connectEmail}
                 onDisconnectEmail={disconnectEmail}
                 onOpenEmailView={() => setShowConfiguration(false)}
                 onRefreshEmails={refetchEmails}
-                onOpenAddAgentsModal={() => setShowConfiguration(false)}
               />
             </InnerPageLayout>
           ) : (
@@ -981,13 +768,10 @@ function App() {
                 onOpenSuperAdmin={() => setSettingsSection("administration")}
                 isEmailConnected={isMailConnected}
                 unreadLabel=""
-                autoSyncEnabled={autoSyncEnabled}
-                onToggleAutoSync={setAutoSyncEnabled}
                 onConnectEmail={connectEmail}
                 onDisconnectEmail={disconnectEmail}
                 onOpenEmailView={() => setShowSettings(false)}
                 onRefreshEmails={refetchEmails}
-                onOpenAddAgentsModal={() => setShowSettings(false)}
               />
             </InnerPageLayout>
           )}
@@ -1029,7 +813,7 @@ function App() {
         onOpenChange={setShowCoworkSettings}
         onAuthError={handleAuthError}
       />
-      <MemoryDialog open={isMemoryOpen} onOpenChange={setIsMemoryOpen} />
+      <MemoryDialog key={`${user?.id ?? ''}:${user?.organizationId ?? ''}:${activeSession?.agentId ?? ''}:${activeSession?.lettaConnectionId ?? ''}`} open={isMemoryOpen} onOpenChange={setIsMemoryOpen} agentId={activeSession?.agentId} lettaConnectionId={activeSession?.lettaConnectionId} />
 
       {/* Skill Download Dialog */}
       <SkillDownloadDialog

@@ -23,7 +23,7 @@ export type RunnerSession = {
   permissionGrants?: SessionPermissionGrants;
 };
 
-/** Session surface shared by the SDK and Cowork's REST-streaming adapter. */
+/** Desktop lifecycle adapter around native SDK execution. */
 export type RunnerLettaSession = {
   initialize(): Promise<SDKInitMessage>;
   send(message: SendMessage): Promise<void>;
@@ -31,6 +31,10 @@ export type RunnerLettaSession = {
   abort(): Promise<void>;
   readonly agentId: string | null;
   readonly conversationId: string | null;
+  readonly accountScopeKey?: string;
+  readonly cancellationRequested?: boolean;
+  readonly planMode?: import('./plan-mode/mode-manager.js').PlanModeManager;
+  close?(): void;
 };
 
 /**

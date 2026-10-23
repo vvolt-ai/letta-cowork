@@ -12,6 +12,7 @@
  */
 
 import { AsyncLocalStorage } from "node:async_hooks";
+import type { SessionMemoryAccess } from '../../../memfs/scoped-memory.js';
 import { statSync } from "node:fs";
 import { homedir } from "node:os";
 
@@ -32,6 +33,9 @@ export interface RuntimeContextSnapshot {
     /** Original cwd when a missing working directory was repaired mid-turn. */
     workingDirectoryRecoveredFrom?: string | null;
     permissionMode?: RuntimePermissionMode;
+    memoryDir?: string | null;
+    agentMemory?: SessionMemoryAccess;
+    prepareAgentMemory?: (agentId: string) => Promise<SessionMemoryAccess>;
 }
 
 const runtimeContextStorage = new AsyncLocalStorage<RuntimeContextSnapshot>();
@@ -128,6 +132,12 @@ export function getCurrentConversationId(): string | null {
         process.env.CONVERSATION_ID ??
         null
     );
+}
+
+export function getCurrentMemoryDir(): string | null {
+    const ctx = getRuntimeContext();
+    if (ctx?.agentId) return ctx.memoryDir ?? null;
+    return process.env.MEMORY_DIR ?? process.env.LETTA_MEMORY_DIR ?? null;
 }
 
 export function getPermissionMode(): RuntimePermissionMode {

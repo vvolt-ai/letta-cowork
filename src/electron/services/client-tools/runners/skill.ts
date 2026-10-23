@@ -10,10 +10,10 @@
  * Returns the markdown body (sans frontmatter) trimmed.
  */
 
-import { existsSync, readFileSync, readdirSync, statSync } from "fs";
+import { existsSync, readFileSync, readdirSync, statSync, lstatSync, realpathSync } from "fs";
 import type { Dirent } from "fs";
 import { homedir } from "os";
-import { dirname, join } from "path";
+import { dirname, join, relative, resolve } from "path";
 
 import type {
     ClientToolDefinition,
@@ -40,7 +40,7 @@ export const skillTool: ClientToolDefinition = {
         },
         required: ["name"],
     },
-    run: async (args, ctx) => loadSkill(args, ctx),
+    run: async (args, ctx) => loadSkill(args, await scopedSkillContext(ctx)),
 };
 
 /** A companion tool that lists available skills with their descriptions. */
@@ -50,31 +50,34 @@ export const listSkillsTool: ClientToolDefinition = {
         "List the skills available on this device, with each skill's description. " +
         "Use this to discover what's available before calling Skill(name).",
     parameters: { type: "object", properties: {} },
-    run: async (_args, ctx) => listSkills(ctx),
+    run: async (_args, ctx) => listSkills(await scopedSkillContext(ctx)),
 };
 
 // ─────────────────────────────────────────────────────────────────────
 // Implementation
 // ─────────────────────────────────────────────────────────────────────
 
+type ScopedSkillContext=ToolRunContext&{memorySkillRoots?:Array<{root:string;source:string}>};
+async function scopedSkillContext(ctx?:ToolRunContext):Promise<ScopedSkillContext|undefined>{
+ if(!ctx?.agentId||!ctx.agentMemory)return ctx;
+ try{const s=await ctx.agentMemory.snapshot();if(s.agentId!==ctx.agentId)throw Error('MEMORY_IDENTITY_MISMATCH');return{...ctx,memoryDir:s.memoryDir??undefined,memorySkillRoots:s.repositories.filter(r=>r.path&&['ready','cached','blocked_dirty','diverged','conflict'].includes(r.state)&&(r.isPrimary||s.sharedDiscovery==='verified')).map(r=>({root:join(r.path!,'skills'),source:r.isPrimary?'agent-memory':`shared-memory:${r.name}`}))};}catch{return{...ctx,memoryDir:undefined,memorySkillRoots:[]};}
+}
 function getSkillRoots(ctx?: ToolRunContext): Array<{ root: string; source: string }> {
     const out: Array<{ root: string; source: string }> = [];
     const seen = new Set<string>();
     const add = (root: string, source: string) => {
         if (!seen.has(root) && existsSync(root)) {
+            if(source.includes('memory')){try{if(relative(resolve(root),realpathSync(root))!=='')return;}catch{return;}}
             seen.add(root);
             out.push({ root, source });
         }
     };
-    add(join(process.cwd(), "skills"), "project");
+    add(join(ctx?.workingDirectory ?? process.cwd(), "skills"), "project");
     const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
     if (resourcesPath) add(join(resourcesPath, "skills"), "packaged");
-    const memoryDir =
-        process.env.MEMORY_DIR ||
-        (ctx?.agentId
-            ? join(homedir(), ".letta", "agents", ctx.agentId, "memory")
-            : "");
+    const memoryDir = ctx?.agentId ? ctx.memoryDir ?? '' : process.env.MEMORY_DIR ?? '';
     if (memoryDir) add(join(memoryDir, "skills"), "agent-memory");
+    for(const entry of (ctx as ScopedSkillContext|undefined)?.memorySkillRoots??[])add(entry.root,entry.source);
     add(join(homedir(), ".letta", "skills"), "global");
     return out;
 }
@@ -87,7 +90,10 @@ function findSkillPath(
     if (!sanitized) return null;
     for (const { root, source } of getSkillRoots(ctx)) {
         const candidate = join(root, sanitized, "SKILL.md");
-        if (existsSync(candidate)) return { path: candidate, source };
+        if (existsSync(candidate)) {
+            if(source.includes('memory')){try{if(lstatSync(candidate).isSymbolicLink()||relative(resolve(root),realpathSync(candidate)).startsWith('..'))continue;}catch{continue;}}
+            return { path: candidate, source };
+        }
     }
     return null;
 }
@@ -236,6 +242,7 @@ function listSkills(ctx?: ToolRunContext): ToolRunResult {
             const md = join(dir, "SKILL.md");
             if (!existsSync(md)) continue;
             try {
+                if(source.includes('memory')&&(lstatSync(dir).isSymbolicLink()||lstatSync(md).isSymbolicLink()||relative(resolve(root),realpathSync(md)).startsWith('..')))continue;
                 const raw = readFileSync(md, "utf-8");
                 const { frontmatter } = parseSkillContents(raw);
                 seen.set(entry, {

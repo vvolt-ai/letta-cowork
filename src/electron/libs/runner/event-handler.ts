@@ -2,7 +2,6 @@
  * Event processing and dispatching for the runner.
  */
 
-import { createLettaClient } from "./client.js";
 import { debug } from "./logger.js";
 
 import type { ServerEvent } from "../../types.js";
@@ -65,9 +64,10 @@ export function sendSessionStatus(
  */
 export function logMessageDetails(message: SDKMessage, messageCount: number): void {
   debug("received message", {
-    message,
     type: message.type,
     count: messageCount,
+    errorCode: message.type === 'error' || message.type === 'result' ? (message as any).errorCode : undefined,
+    errorMessage: message.type === 'error' || message.type === 'result' ? (message as any).error ?? (message as any).message ?? (message as any).errorDetail : undefined,
     toolName: (message as any).toolName ?? (message as any).name ?? (message as any).tool_name,
     toolCallId: (message as any).toolCallId ?? (message as any).tool_call_id,
     inputPreview: (() => {
@@ -87,75 +87,21 @@ export function logMessageDetails(message: SDKMessage, messageCount: number): vo
       }
     })(),
   });
-
-  if (message.type === "tool_call" || message.type === "tool_result") {
-    debug("tool payload detail", {
-      type: message.type,
-      keys: Object.keys((message as unknown as Record<string, unknown>) ?? {}),
-      payload: (() => {
-        try {
-          return JSON.parse(JSON.stringify(message));
-        } catch {
-          return { failedToSerialize: true };
-        }
-      })(),
-    });
-  }
-}
-
-/**
- * Recover a stuck conversation that has an orphaned pending approval.
- *
- * When the CLI runner fails with an approval conflict and the SDK's built-in
- * recovery can't resolve it (e.g., the CLI process is gone), the conversation
- * gets stuck — the Letta API blocks new messages until the pending approval
- * is resolved. We recover by sending a message directly via the REST API,
- * which bypasses the CLI approval gate and clears the stuck state.
- */
-async function recoverApprovalConflict(
-  agentId: string | null | undefined,
-  conversationId: string | null | undefined,
-): Promise<boolean> {
-  if (!agentId || !conversationId) {
-    debug("recoverApprovalConflict: missing agentId or conversationId, skipping");
-    return false;
-  }
-
-  const client = createLettaClient();
-  if (!client) {
-    debug("recoverApprovalConflict: no Letta client available");
-    return false;
-  }
-
-  try {
-    debug("recoverApprovalConflict: sending recovery message via API", { agentId, conversationId });
-    await client.agents.messages.create(agentId, {
-      messages: [{ role: "user", content: "[system] Pending approval cleared — please continue." }],
-    });
-    debug("recoverApprovalConflict: recovery message sent successfully");
-    return true;
-  } catch (err) {
-    debug("recoverApprovalConflict: failed to send recovery message", {
-      error: err instanceof Error ? err.message : String(err),
-    });
-    return false;
-  }
 }
 
 /**
  * Handle a result message.
  *
- * When the result indicates an approval conflict (the conversation is stuck
- * because of an orphaned pending tool approval), automatically attempts
- * recovery via the Letta API so the conversation doesn't remain blocked.
+ * SDK results are observations only. Recovery must stay in the owned SDK
+ * execution; a UI callback never submits a second direct REST model turn.
  */
 export function handleResultMessage(
   message: SDKMessage & { type: "result"; success: boolean },
   currentSessionId: string,
   onEvent: (event: ServerEvent) => void,
   agentName?: string,
-  agentId?: string | null,
-  conversationId?: string | null,
+  _agentId?: string | null,
+  _conversationId?: string | null,
 ): void {
   const status = message.success ? "completed" : "error";
   debug("result received", {
@@ -165,40 +111,8 @@ export function handleResultMessage(
     approvalConflict: (message as any).approvalConflict,
   });
 
-  // Auto-recover from approval conflicts
-  const isApprovalConflict =
-    (message as any).approvalConflict === true ||
-    (message as any).errorCode === "approval_conflict" ||
-    (message as any).errorCode === "approval_conflict_terminal";
-
-  if (isApprovalConflict) {
-    debug("approval conflict detected, attempting auto-recovery", {
-      agentId,
-      conversationId,
-      errorCode: (message as any).errorCode,
-      errorDetail: (message as any).errorDetail,
-    });
-
-    // Fire-and-forget recovery — don't block the result handler
-    recoverApprovalConflict(agentId, conversationId).then((recovered) => {
-      if (recovered) {
-        debug("approval conflict auto-recovered successfully");
-        // Send a "completed" status since the conversation is now unblocked
-        sendSessionStatus(currentSessionId, "completed", onEvent, agentName);
-      } else {
-        debug("approval conflict auto-recovery failed, conversation may be stuck");
-        sendSessionStatus(currentSessionId, "error", onEvent, agentName,
-          "Session stuck due to pending approval. Try sending a new message to resume.");
-      }
-    });
-
-    // Don't send error status immediately — wait for recovery result
-    sendSessionStatus(currentSessionId, "running", onEvent, agentName);
-    return;
-  }
-
   // Propagate the error string carried on the result message (set e.g. by
-  // WsSession's stream-pump catch handler with the underlying API error)
+  // native SDK with its underlying API error)
   // so headless callers like runScheduledPrompt see the real cause instead
   // of a bare status=error.
   const resultError =

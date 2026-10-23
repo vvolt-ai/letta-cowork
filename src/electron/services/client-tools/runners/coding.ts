@@ -6,6 +6,8 @@ import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } 
 import { promisify } from "node:util";
 
 import { redactRuntimeSecrets } from "./_shared/runtime-secrets.js";
+import { getCurrentWorkingDirectory } from "./_shared/runtime-context.js";
+import { resolveProjectScope, projectMemorySummary, resolveProjectMemoryFile } from "./_shared/project-scope.js";
 
 import type { ClientToolDefinition, ToolRunContext, ToolRunResult } from "../types.js";
 
@@ -103,7 +105,7 @@ interface AgentTouchedStore {
 }
 
 function cwd(): string {
-  return process.env.USER_CWD || process.env.HOME || process.env.USERPROFILE || process.cwd();
+  return getCurrentWorkingDirectory();
 }
 
 function truncate(text: string, max = MAX_OUTPUT): string {
@@ -200,12 +202,14 @@ async function readPackage(root: string): Promise<Record<string, unknown> | unde
   return JSON.parse(await fs.readFile(pkgPath, "utf-8")) as Record<string, unknown>;
 }
 
-function detectPackageManager(root: string): string {
-  if (existsSync(join(root, "bun.lock")) || existsSync(join(root, "bun.lockb"))) return "bun";
-  if (existsSync(join(root, "pnpm-lock.yaml"))) return "pnpm";
-  if (existsSync(join(root, "yarn.lock"))) return "yarn";
-  if (existsSync(join(root, "package-lock.json"))) return "npm";
-  return "unknown";
+function detectPackageManager(root: string, boundary = root): string {
+  for (let current = root; ; current = dirname(current)) {
+    if (existsSync(join(current, "bun.lock")) || existsSync(join(current, "bun.lockb"))) return "bun";
+    if (existsSync(join(current, "pnpm-lock.yaml"))) return "pnpm";
+    if (existsSync(join(current, "yarn.lock"))) return "yarn";
+    if (existsSync(join(current, "package-lock.json"))) return "npm";
+    if (current === boundary || dirname(current) === current) return "unknown";
+  }
 }
 
 function runCommandForPackageManager(pm: string): string {
@@ -1084,22 +1088,26 @@ const projectDetectTool: ClientToolDefinition = {
   },
   run: async (args) => {
     try {
-      const start = resolve(asString(args.path, cwd()));
-      const root = await gitRoot(start);
+      const scope = await resolveProjectScope(asString(args.path) || undefined);
+      const start = scope.directory;
+      const root = scope.projectRoot;
       const pkg = await readPackage(root);
       const scripts = (pkg?.scripts as Record<string, string> | undefined) ?? {};
-      const packageManager = detectPackageManager(root);
+      const packageManager = detectPackageManager(root, scope.repoRoot);
       const entries = existsSync(root) ? await fs.readdir(root) : [];
       const result = {
         cwd: start,
-        repoRoot: root,
+        repoRoot: scope.repoRoot,
+        projectRoot: root,
+        packageRoot: scope.packageRoot,
+        projectMemory: await projectMemorySummary(scope),
         packageManager,
         packageCommand: runCommandForPackageManager(packageManager),
         name: pkg?.name ?? basename(root),
         frameworks: inferFrameworks(pkg, root),
         scripts,
         importantDirs: entries.filter((entry) => ["src", "test", "tests", "docs", "scripts", "packages", "services", "apps"].includes(entry)),
-        hasGit: existsSync(join(root, ".git")),
+        hasGit: scope.hasGit,
       };
       return ok(JSON.stringify(result, null, 2));
     } catch (e) {
@@ -1121,11 +1129,13 @@ const projectMapTool: ClientToolDefinition = {
   },
   run: async (args) => {
     try {
-      const root = await gitRoot(resolve(asString(args.path, cwd())));
+      const scope = await resolveProjectScope(asString(args.path) || undefined);
+      const root = scope.projectRoot;
       const files = await listFiles(root, Math.min(Math.max(Number(args.limit) || 200, 20), 1000));
-      const mapped = files.map((file) => ({ path: file, role: classifyFile(file) }));
+      const mapped = files.map((file) => ({ path: relative(scope.repoRoot, join(root, file)).split(sep).join("/"), role: classifyFile(file) }));
       const result = {
-        repoRoot: root,
+        repoRoot: scope.repoRoot,
+        projectRoot: root,
         entrypoints: mapped.filter((f) => f.role === "entrypoint").map((f) => f.path).slice(0, 30),
         configs: mapped.filter((f) => f.role === "config").map((f) => f.path).slice(0, 40),
         tests: mapped.filter((f) => f.role === "test").map((f) => f.path).slice(0, 50),
@@ -1154,13 +1164,14 @@ const projectRunScriptTool: ClientToolDefinition = {
   },
   run: async (args, ctx) => {
     try {
-      const root = await gitRoot(resolve(asString(args.path, cwd())));
+      const scope = await resolveProjectScope(asString(args.path) || undefined);
+      const root = scope.projectRoot;
       const script = asString(args.script).trim();
       if (!script) return fail("script is required");
       const pkg = await readPackage(root);
       const scripts = (pkg?.scripts as Record<string, string> | undefined) ?? {};
       if (!scripts[script]) return fail(`Script '${script}' not found. Available scripts: ${Object.keys(scripts).join(", ") || "none"}`);
-      const pm = detectPackageManager(root);
+      const pm = detectPackageManager(root, scope.repoRoot);
       const command = runCommandForPackageManager(pm);
       const commandArgs = runArgsForScript(pm, script, asStringArray(args.args));
       const started = Date.now();
@@ -1169,10 +1180,11 @@ const projectRunScriptTool: ClientToolDefinition = {
           cwd: root,
           timeout: Math.min(Math.max(Number(args.timeoutMs) || 300_000, 1000), 900_000),
           runtimeEnv: ctx.runtimeEnv,
+          signal: ctx.signal,
         });
-        return ok(JSON.stringify({ command: `${command} ${commandArgs.join(" ")}`, status: "success", durationMs: Date.now() - started, output }, null, 2));
+        return ok(JSON.stringify({ projectRoot: root, repoRoot: scope.repoRoot, command: `${command} ${commandArgs.join(" ")}`, status: "success", durationMs: Date.now() - started, output }, null, 2));
       } catch (e) {
-        return ok(JSON.stringify({ command: `${command} ${commandArgs.join(" ")}`, status: "failed", durationMs: Date.now() - started, output: e instanceof Error ? e.message : String(e) }, null, 2));
+        return ok(JSON.stringify({ projectRoot: root, repoRoot: scope.repoRoot, command: `${command} ${commandArgs.join(" ")}`, status: "failed", durationMs: Date.now() - started, output: e instanceof Error ? e.message : String(e) }, null, 2));
       }
     } catch (e) {
       return fail(e);
@@ -1364,7 +1376,7 @@ const codeDiagnosticsTool: ClientToolDefinition = {
   parameters: { type: "object", properties: { path: { type: "string" }, script: { type: "string", description: "Optional script override, e.g. build or transpile:electron." }, timeoutMs: { type: "number" } }, additionalProperties: false },
   run: async (args, ctx) => {
     try {
-      const root = await gitRoot(resolve(asString(args.path, cwd())));
+      const { projectRoot: root } = await resolveProjectScope(asString(args.path) || undefined);
       const pkg = await readPackage(root);
       const scripts = (pkg?.scripts as Record<string, string> | undefined) ?? {};
       const preferred = asString(args.script) || (scripts["transpile:electron"] ? "transpile:electron" : scripts["typecheck"] ? "typecheck" : scripts["build"] ? "build" : "");
@@ -1967,19 +1979,22 @@ const projectMemoryBootstrapTool: ClientToolDefinition = {
   },
   run: async (args) => {
     try {
-      const root = await gitRoot(resolve(asString(args.projectPath, cwd())));
+      const scope = await resolveProjectScope(asString(args.projectPath) || undefined);
+      const root = scope.memoryRoot;
       const base = await projectMemoryBase(root);
       const target = join(base, "project.md");
       if (existsSync(target)) {
         return ok(JSON.stringify({
           status: "existing",
-          repoRoot: root,
+          repoRoot: scope.repoRoot,
+          projectRoot: scope.projectRoot,
+          memoryRoot: root,
           profile: ".cowork/project.md",
           created: [],
         }, null, 2));
       }
 
-      const content = await createProjectProfile(root);
+      const content = await createProjectProfile(scope.projectRoot);
       await projectMemoryBase(root, true);
       try {
         await fs.writeFile(target, content, { encoding: "utf-8", flag: "wx" });
@@ -1987,14 +2002,18 @@ const projectMemoryBootstrapTool: ClientToolDefinition = {
         if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
         return ok(JSON.stringify({
           status: "existing",
-          repoRoot: root,
+          repoRoot: scope.repoRoot,
+          projectRoot: scope.projectRoot,
+          memoryRoot: root,
           profile: ".cowork/project.md",
           created: [],
         }, null, 2));
       }
       return ok(JSON.stringify({
         status: "created",
-        repoRoot: root,
+        repoRoot: scope.repoRoot,
+        projectRoot: scope.projectRoot,
+        memoryRoot: root,
         profile: ".cowork/project.md",
         created: [".cowork/project.md"],
       }, null, 2));
@@ -2010,21 +2029,17 @@ const projectMemoryStatusTool: ClientToolDefinition = {
   parameters: { type: "object", properties: { projectPath: { type: "string" } }, additionalProperties: false },
   run: async (args) => {
     try {
-      const root = await gitRoot(resolve(asString(args.projectPath, cwd())));
-      const base = await projectMemoryBase(root);
-      const files: string[] = [];
-      async function walk(dir: string): Promise<void> {
-        if (!existsSync(dir)) return;
-        for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
-          const full = join(dir, entry.name);
-          if (entry.isDirectory()) await walk(full);
-          else files.push(relative(root, full));
-        }
-      }
-      await walk(base);
-      const hasProjectProfile = existsSync(join(base, "project.md"));
+      const scope = await resolveProjectScope(asString(args.projectPath) || undefined);
+      const root = scope.memoryRoot;
+      await projectMemoryBase(root);
+      const summary = await projectMemorySummary(scope);
+      const files = summary.memoryFiles;
+      const hasProjectProfile = summary.hasProjectProfile;
       return ok(JSON.stringify({
-        repoRoot: root,
+        repoRoot: scope.repoRoot,
+        projectRoot: scope.projectRoot,
+        memoryRoot: root,
+        memoryRoots: scope.memoryRoots,
         hasProjectProfile,
         memoryFiles: files.sort(),
         recommendedAction: hasProjectProfile
@@ -2048,10 +2063,10 @@ const projectMemoryReadTool: ClientToolDefinition = {
   },
   run: async (args) => {
     try {
-      const root = await gitRoot(resolve(asString(args.projectPath, cwd())));
+      const { memoryRoot: root } = await resolveProjectScope(asString(args.projectPath) || undefined);
       const file = asString(args.file);
       if (!file || file.includes("..") || file.startsWith("/")) return fail("file must be a relative path under .cowork/");
-      const target = join(root, ".cowork", file);
+      const target = await resolveProjectMemoryFile(root, file);
       return ok(truncate(await fs.readFile(target, "utf-8")));
     } catch (e) {
       return fail(e);
@@ -2075,7 +2090,7 @@ const projectMemoryWriteTool: ClientToolDefinition = {
   },
   run: async (args) => {
     try {
-      const root = await gitRoot(resolve(asString(args.projectPath, cwd())));
+      const { memoryRoot: root } = await resolveProjectScope(asString(args.projectPath) || undefined);
       const file = asString(args.file);
       const content = asString(args.content);
       if (!file || file.includes("..") || file.startsWith("/")) return fail("file must be a relative path under .cowork/");
@@ -2083,7 +2098,7 @@ const projectMemoryWriteTool: ClientToolDefinition = {
       if (/secret|password|token|api[_-]?key/i.test(file) || /BEGIN (RSA|OPENSSH|PRIVATE) KEY|api[_-]?key\s*=|password\s*=/i.test(content)) {
         return fail("Refusing to write likely secret material to project memory.");
       }
-      const target = join(root, ".cowork", file);
+      const target = await resolveProjectMemoryFile(root, file);
       await fs.mkdir(dirname(target), { recursive: true });
       if (args.mode === "overwrite") await fs.writeFile(target, content, "utf-8");
       else await fs.appendFile(target, `${content.endsWith("\n") ? content : `${content}\n`}`, "utf-8");
@@ -2105,22 +2120,25 @@ const projectMemorySearchTool: ClientToolDefinition = {
   },
   run: async (args) => {
     try {
-      const root = await gitRoot(resolve(asString(args.projectPath, cwd())));
-      const query = asString(args.query).toLowerCase();
+      const scope = await resolveProjectScope(asString(args.projectPath) || undefined);
+      const query = asString(args.query).trim().toLowerCase();
+      if (!query) return fail("query is required");
       const limit = Math.min(Math.max(Number(args.limit) || 20, 1), 100);
-      const tracked = await listFiles(root, 2000);
-      const coworkFiles = await walkFiles(root, join(root, ".cowork"), 1000);
-      const candidates = Array.from(new Set([...tracked, ...coworkFiles])).filter((file) =>
-        file.startsWith(".cowork/") || file.toLowerCase().includes("readme") || file.startsWith("docs/") || file === "AGENT-README.md"
-      );
+      const summary = await projectMemorySummary(scope);
+      // Search durable memory first so it cannot be crowded out by repository docs.
+      const notes = summary.memoryFiles.map(file => join(scope.repoRoot, file));
+      const documents = (await listFiles(scope.projectRoot, 2000))
+        .filter(file => /\.(md|txt)$/i.test(file) && (file.toLowerCase().includes("readme") || file.startsWith("docs/") || file === "AGENTS.md"))
+        .map(file => join(scope.projectRoot, file));
       const matches: Array<{ file: string; line: number; text: string }> = [];
-      for (const file of candidates) {
+      for (const full of new Set([...notes, ...documents])) {
         if (matches.length >= limit) break;
-        const full = join(root, file);
-        if (!existsSync(full) || extname(full) && !/[.](md|txt|json|ts|tsx|js)$/i.test(full)) continue;
+        const stat = await fs.lstat(full).catch(() => undefined);
+        if (!stat?.isFile() || stat.isSymbolicLink() || stat.size > 256000) continue;
+        if (!await resolveRepoFile(scope.repoRoot, relative(scope.repoRoot, full)).catch(() => undefined)) continue;
         const lines = (await fs.readFile(full, "utf-8")).split(/\r?\n/);
         lines.forEach((line, index) => {
-          if (matches.length < limit && line.toLowerCase().includes(query)) matches.push({ file, line: index + 1, text: line.trim() });
+          if (matches.length < limit && line.toLowerCase().includes(query)) matches.push({ file: relative(scope.repoRoot, full), line: index + 1, text: line.trim() });
         });
       }
       return ok(JSON.stringify(matches, null, 2));
