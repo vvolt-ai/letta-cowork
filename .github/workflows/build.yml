@@ -3,53 +3,72 @@ name: Build Electron App
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# These are build artifacts, not GitHub Releases. No release token is needed.
+permissions:
+  contents: read
+
+concurrency:
+  group: cowork-build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
 jobs:
   build-windows:
     runs-on: windows-latest
-
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      # 👇 Bun (optional, for consistency)
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
-
-      # 👇 Node REQUIRED for native builds
+        with:
+          persist-credentials: false
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 24
-
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: '1.3.9'
       - name: Install locked dependencies
         run: bun install --frozen-lockfile
-
+      - name: Verify build-only publishing policy
+        run: node --test test/ci-build-workflow.test.mjs
       - name: Rebuild native modules
         run: bunx --no-install electron-rebuild -f
-
       - name: Build Windows app
         run: bun run dist:win
-
       - name: Verify repaired runtime contracts
         run: node --test test/odoo-attachment-adapter.test.mjs test/permission-handler.test.mjs test/native-tool-prerequisites.test.mjs test/windows-shell-contract.test.mjs test/runtime-context-isolation.test.mjs test/email-processing-fast-path.test.mjs
-
-      - name: Upload artifact
+      - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
           name: windows-build
-          path: dist/**
+          path: dist/*.exe
+          if-no-files-found: error
+          retention-days: 14
 
   build-linux:
     runs-on: ubuntu-latest
-
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
+        with:
+          persist-credentials: false
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
-
+        with:
+          bun-version: '1.3.9'
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -60,26 +79,60 @@ jobs:
             libx11-dev \
             libxkbfile-dev \
             libsecret-1-dev
+      - name: Install locked dependencies
+        run: bun install --frozen-lockfile
+      - name: Verify build-only publishing policy
+        run: node --test test/ci-build-workflow.test.mjs
+      - name: Rebuild native modules
+        run: bunx --no-install electron-rebuild -f
+      - name: Build Linux app
+        run: bun run dist:linux
+      - name: Verify repaired runtime contracts
+        run: node --test test/odoo-attachment-adapter.test.mjs test/permission-handler.test.mjs test/native-tool-prerequisites.test.mjs test/windows-shell-contract.test.mjs test/runtime-context-isolation.test.mjs test/email-processing-fast-path.test.mjs
+      - name: Upload Linux installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-build
+          path: |
+            dist/*.deb
+            dist/*.tar.xz
+          if-no-files-found: error
+          retention-days: 14
 
+  build-macos-arm64:
+    # Validate the existing platforms before spending a macOS runner slot.
+    needs: [build-windows, build-linux]
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 24
-
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: '1.3.9'
+      - name: Verify Apple Silicon runner
+        run: node -e "if (process.platform !== 'darwin' || process.arch !== 'arm64') throw new Error('Apple Silicon runner required')"
       - name: Install locked dependencies
         run: bun install --frozen-lockfile
-
+      - name: Verify build-only publishing policy
+        run: node --test test/ci-build-workflow.test.mjs
       - name: Rebuild native modules
         run: bunx --no-install electron-rebuild -f
-
-      - name: Build Linux app
-        run: bun run dist:linux
-
+      - name: Build unsigned macOS Apple Silicon app
+        run: bun run dist:mac-arm64
       - name: Verify repaired runtime contracts
         run: node --test test/odoo-attachment-adapter.test.mjs test/permission-handler.test.mjs test/native-tool-prerequisites.test.mjs test/windows-shell-contract.test.mjs test/runtime-context-isolation.test.mjs test/email-processing-fast-path.test.mjs
-
-      - name: Upload artifact
+      - name: Upload macOS installer
         uses: actions/upload-artifact@v4
         with:
-          name: linux-build
-          path: dist/**
+          name: macos-arm64-build
+          path: dist/*.dmg
+          if-no-files-found: error
+          retention-days: 14

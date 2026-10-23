@@ -264,6 +264,14 @@ bun run dist:win
 bun run dist:linux
 ```
 
+### GitHub automatic builds
+
+`.github/workflows/build.yml` runs on pushes and pull requests to `main`, or manually from **Actions → Build Electron App → Run workflow**. Node24 and Bun1.3.9 use the frozen lockfile. Windows/Linux build first; Apple Silicon macOS follows only after both succeed.
+
+Download the successful run's **Artifacts**: `windows-build` (`.exe`), `linux-build` (`.deb`/`.tar.xz`), and `macos-arm64-build` (`.dmg`). Artifacts are retained for14days. Missing installers fail the upload step rather than reporting an empty artifact as success.
+
+All `dist:*` commands explicitly use `--publish never`. Builds do not create GitHub Releases and need no `GH_TOKEN`. This avoids electron-builder26's implicit CI publishing/token failure. Mac CI builds are unsigned/unnotarized; Apple signing/notarization is a separate setup, and Gatekeeper may block these internal builds.
+
 ### Other Commands
 
 ```bash

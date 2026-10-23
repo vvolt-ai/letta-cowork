@@ -42,3 +42,7 @@ git diff --cached --check
 ```
 
 Stage only intended files. Known unrelated/dirty files may include `.gitattributes` and `dist-react/index.html`.
+
+## Build-only CI publishing regression (2026-10-23)
+
+Confirmed from GitHub run#83 (607f9e6) and Bhavesh's Linux log: Windows packaging/artifact upload passed; Linux installer packaging reached electron-builder's implicit CI publisher and failed for missing GH_TOKEN. Do not add a release secret to fix build-only CI. All four dist:* scripts must pass --publish never. test/ci-build-workflow.test.mjs validates actual builder CLI parsing and PublishManager.isPublish=false under CI=true without credentials, plus workflow safety/targets. See README GitHub automatic builds section for intended rollout and artifact names. Workflow adds readonly push/PR/manual builds, Bun1.3.9/Node24 frozen install, installer-only artifacts and macos-15 arm64 after Win/Linux success. Unsigned macOS DMG built locally in CI mode; actionlint,124 Node and18 Bun tests passed. Revised Windows/Linux/macOS GitHub execution needs a fresh successful run; source publication or a local macOS build alone does not prove hosted Linux/macOS success.
