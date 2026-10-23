@@ -266,11 +266,11 @@ bun run dist:linux
 
 ### GitHub automatic builds
 
-`.github/workflows/build.yml` runs on pushes and pull requests to `main`, or manually from **Actions → Build Electron App → Run workflow**. Node24 and Bun1.3.9 use the frozen lockfile. Windows/Linux build first; Apple Silicon macOS follows only after both succeed.
+`.github/workflows/build.yml` runs on pushes and pull requests to `main`, or manually from **Actions → Build Electron App → Run workflow**. Node24 and Bun1.3.9 use the frozen lockfile. Windows/Linux build first; Apple Silicon macOS follows only after both succeed on trusted push/manual runs. Pull requests validate Windows/Linux; macOS artifact generation is skipped rather than overriding electron-builder's PR signing safeguards.
 
 Download the successful run's **Artifacts**: `windows-build` (`.exe`), `linux-build` (`.deb`/`.tar.xz`), and `macos-arm64-build` (`.dmg`). Artifacts are retained for14days. Missing installers fail the upload step rather than reporting an empty artifact as success.
 
-All `dist:*` commands explicitly use `--publish never`. Builds do not create GitHub Releases and need no `GH_TOKEN`. This avoids electron-builder26's implicit CI publishing/token failure. Mac CI builds are unsigned/unnotarized; Apple signing/notarization is a separate setup, and Gatekeeper may block these internal builds.
+All `dist:*` commands explicitly use `--publish never`. Builds do not create GitHub Releases and need no `GH_TOKEN`. This avoids electron-builder26's implicit CI publishing/token failure. Mac CI builds use an explicit ad-hoc signature (`identity: "-"`) to seal the bundle correctly. CI verifies the bundle with `codesign --verify --deep --strict` and verifies the DMG checksum before uploading. This prevents distributing a broken Electron linker signature, but is **not** Apple Developer ID signing or notarization: Gatekeeper can still block these internal builds. Apple-trusted signing/notarization is a separate setup. Do not disable Gatekeeper or remove quarantine as a packaging fix.
 
 ### Other Commands
 

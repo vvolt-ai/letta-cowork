@@ -31,6 +31,8 @@
         "node_modules/ws/**/*"
     ],
     "mac": {
+        "identity": "-",
+        "notarize": false,
         "target": "dmg",
         "icon": "assets/vera-icon.png"
     },

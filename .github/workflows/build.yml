@@ -38,7 +38,7 @@ jobs:
       - name: Install locked dependencies
         run: bun install --frozen-lockfile
       - name: Verify build-only publishing policy
-        run: node --test test/ci-build-workflow.test.mjs
+        run: node --test test/ci-build-workflow.test.mjs test/macos-packaging.test.mjs
       - name: Rebuild native modules
         run: bunx --no-install electron-rebuild -f
       - name: Build Windows app
@@ -82,7 +82,7 @@ jobs:
       - name: Install locked dependencies
         run: bun install --frozen-lockfile
       - name: Verify build-only publishing policy
-        run: node --test test/ci-build-workflow.test.mjs
+        run: node --test test/ci-build-workflow.test.mjs test/macos-packaging.test.mjs
       - name: Rebuild native modules
         run: bunx --no-install electron-rebuild -f
       - name: Build Linux app
@@ -100,6 +100,9 @@ jobs:
           retention-days: 14
 
   build-macos-arm64:
+    # Electron-builder skips signing untrusted PR builds. Do not weaken that
+    # safeguard; distribute macOS artifacts only from trusted main/manual runs.
+    if: github.event_name != 'pull_request'
     # Validate the existing platforms before spending a macOS runner slot.
     needs: [build-windows, build-linux]
     runs-on: macos-15
@@ -122,11 +125,15 @@ jobs:
       - name: Install locked dependencies
         run: bun install --frozen-lockfile
       - name: Verify build-only publishing policy
-        run: node --test test/ci-build-workflow.test.mjs
+        run: node --test test/ci-build-workflow.test.mjs test/macos-packaging.test.mjs
       - name: Rebuild native modules
         run: bunx --no-install electron-rebuild -f
-      - name: Build unsigned macOS Apple Silicon app
+      - name: Build ad-hoc-signed macOS Apple Silicon app
         run: bun run dist:mac-arm64
+      - name: Verify macOS bundle and disk image integrity
+        run: |
+          node scripts/verify-macos-bundle.mjs "dist/mac-arm64/Vera Cowork.app"
+          hdiutil verify dist/*.dmg
       - name: Verify repaired runtime contracts
         run: node --test test/odoo-attachment-adapter.test.mjs test/permission-handler.test.mjs test/native-tool-prerequisites.test.mjs test/windows-shell-contract.test.mjs test/runtime-context-isolation.test.mjs test/email-processing-fast-path.test.mjs
       - name: Upload macOS installer
