@@ -77,6 +77,11 @@ interface Window {
     // Statistics
     subscribeStatistics: (callback: (statistics: any) => void) => () => void;
     getStaticData: () => Promise<any>;
+    getDesktopUpdateState: () => Promise<import('../electron/services/desktop-updates/update-types').DesktopUpdateState>;
+    checkDesktopUpdates: (manual?:boolean) => Promise<import('../electron/services/desktop-updates/update-types').DesktopUpdateState>;
+    dismissDesktopUpdate: (version:string) => Promise<import('../electron/services/desktop-updates/update-types').DesktopUpdateState>;
+    downloadDesktopUpdate: (version:string) => Promise<{opened:boolean}>;
+    onDesktopUpdateState: (callback:(state:import('../electron/services/desktop-updates/update-types').DesktopUpdateState)=>void) => () => void;
 
     // Client events
     sendClientEvent: (event: any) => void;

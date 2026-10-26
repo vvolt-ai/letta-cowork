@@ -36,6 +36,7 @@ import { useCoworkSettings } from "./hooks/useCoworkSettings";
 import { useProcessEmailToAgent } from "./hooks/useProcessEmailToAgent";
 import { useAuth } from "./hooks/useAuth";
 import { SessionNotifications } from "./features/system/components/SessionNotifications";
+import {AppUpdateNotice,AppUpdatesPanel} from './features/updates/DesktopUpdates';
 import { SettingsWorkspace, type SettingsSection } from "./features/settings/components/SettingsWorkspace";
 
 const SCROLL_THRESHOLD = 50;
@@ -723,7 +724,11 @@ function App() {
           onSectionChange={setSettingsSection}
           onClose={() => setShowSettings(false)}
         >
-          {settingsSection === "skills" ? (
+          {settingsSection === 'app-updates' ? (
+            <InnerPageLayout title="App updates" description="Check for approved Vera Cowork releases." onClose={() => setShowSettings(false)} contentWidthClassName="max-w-4xl">
+              <AppUpdatesPanel key={`${user?.id??''}:${user?.organizationId??''}`} />
+            </InnerPageLayout>
+          ) : settingsSection === "skills" ? (
             <SkillsPanel onClose={() => setShowSettings(false)} />
           ) : settingsSection === "schedules" ? (
             <SchedulesPanel agents={scheduleAgents} onClose={() => setShowSettings(false)} />
@@ -807,6 +812,7 @@ function App() {
         <GlobalErrorToast message={globalError} onClose={() => setGlobalError(null)} />
       )}
       <SessionNotifications />
+      <AppUpdateNotice key={`${user?.id??''}:${user?.organizationId??''}`} />
       <ChangeEnv open={lettaEnvOpen} onOpenChange={setLettaEnvOpen} className="hidden" />
       <CoworkSettingsDialog
         open={showCoworkSettings}

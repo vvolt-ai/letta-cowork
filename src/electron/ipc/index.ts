@@ -34,6 +34,7 @@ import { registerChannelHandlers, initializeBridges } from "./handlers/channel-h
 import { getLettaEnvConfig, updateLettaEnvConfig, type LettaEnvConfig } from "../services/env/index.js";
 import { registerLivePatchHandlers } from "./handlers/live-patch-handlers.js";
 import { registerProjectFilesHandlers } from "./handlers/project-files-handlers.js";
+import { registerDesktopUpdateHandlers } from './handlers/desktop-update-handlers.js';
 import { registerLettaCodeTools, attachLettaCodeToolsToAgent, listRegisteredLettaCodeTools } from "../services/tools/index.js";
 import { downloadSkillsFromGitHub } from "../services/skills/index.js";
 import { handleSessionEvent, recoverPendingApprovalsForSession, cancelRecoveredRun, cleanupAllSessions } from "./handlers/session/index.js";
@@ -566,6 +567,7 @@ export function registerAllIpcHandlers(mainWindow: BrowserWindow): void {
     registerAgentMigrationHandlers();
     registerLivePatchHandlers();
     registerProjectFilesHandlers();
+    registerDesktopUpdateHandlers(mainWindow);
 }
 
 /**

@@ -266,7 +266,14 @@ interface LivePatchProposalView {
     }>;
 }
 
+type DesktopUpdateState = import('./src/electron/services/desktop-updates/update-types').DesktopUpdateState;
+
 type EventPayloadMapping = {
+    'desktop-updates:get': DesktopUpdateState;
+    'desktop-updates:check': DesktopUpdateState;
+    'desktop-updates:dismiss': DesktopUpdateState;
+    'desktop-updates:download': {opened:boolean};
+    'desktop-updates:state': DesktopUpdateState;
     statistics: Statistics;
     getStaticData: StaticData;
     "generate-session-title": string;
@@ -322,6 +329,11 @@ interface Window {
     electron: {
         subscribeStatistics: (callback: (statistics: Statistics) => void) => UnsubscribeFunction;
         getStaticData: () => Promise<StaticData>;
+        getDesktopUpdateState: () => Promise<DesktopUpdateState>;
+        checkDesktopUpdates: (manual?:boolean) => Promise<DesktopUpdateState>;
+        dismissDesktopUpdate: (version:string) => Promise<DesktopUpdateState>;
+        downloadDesktopUpdate: (version:string) => Promise<{opened:boolean}>;
+        onDesktopUpdateState: (callback:(state:DesktopUpdateState)=>void) => () => void;
         // Letta Agent IPC APIs
         sendClientEvent: (event: any) => void;
         onServerEvent: (callback: (event: any) => void) => UnsubscribeFunction;

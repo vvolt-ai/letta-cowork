@@ -6,6 +6,11 @@ electron.contextBridge.exposeInMainWorld("electron", {
       callback(stats);
     }),
   getStaticData: () => ipcInvoke("getStaticData"),
+  getDesktopUpdateState: () => ipcInvoke('desktop-updates:get'),
+  checkDesktopUpdates: (manual = true) => ipcInvoke('desktop-updates:check',manual),
+  dismissDesktopUpdate: (version:string) => ipcInvoke('desktop-updates:dismiss',version),
+  downloadDesktopUpdate: (version:string) => ipcInvoke('desktop-updates:download',version),
+  onDesktopUpdateState: (callback:(state:DesktopUpdateState)=>void) => ipcOn('desktop-updates:state',callback),
 
   // Letta Agent IPC APIs
   sendClientEvent: (event: any) => {

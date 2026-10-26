@@ -9,7 +9,8 @@ export type SettingsSection =
   | "runtime-secrets"
   | "vera-environment"
   | "remote-access"
-  | "administration";
+  | "administration"
+  | "app-updates";
 
 interface SettingsWorkspaceProps {
   activeSection: SettingsSection;
@@ -46,6 +47,7 @@ const groups: Array<{
   {
     label: "System",
     items: [
+      { id: 'app-updates', label: 'App updates', description: 'Version and downloads', icon: <><path d="M12 3v12m-4-4 4 4 4-4M4 17v4h16v-4"/></> },
       { id: "vera-environment", label: "Vera Environment", description: "Runtime configuration", icon: <><circle cx="12" cy="12" r="3"/><path d="M19.1 4.9a10 10 0 0 1 0 14.2M4.9 4.9a10 10 0 0 0 0 14.2"/></> },
       { id: "remote-access", label: "Remote access", description: "Desktop tool runner", icon: <><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></> },
       { id: "administration", label: "Administration", description: "Users and organizations", icon: <><path d="M12 3 4 7v6c0 5 3.4 7.6 8 8 4.6-.4 8-3 8-8V7l-8-4Z"/><path d="m9 12 2 2 4-4"/></> },
