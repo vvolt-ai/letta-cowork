@@ -299,7 +299,6 @@ export async function attachLettaCodeToolsToAgent(agentId: string): Promise<{ at
  */
 export async function listRegisteredLettaCodeTools(): Promise<Array<{ name: string; id: string; registered: boolean }>> {
     const client = createLettaClient();
-    const toolNames = new Set(LETTA_CODE_TOOLS.map((t) => t.name));
 
     try {
         const allTools = await (client.tools as any).list({ limit: 200 });

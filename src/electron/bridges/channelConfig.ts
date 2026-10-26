@@ -67,16 +67,6 @@ export type ChannelBridgeConfig = {
 
 const CONFIG_PATH = join(homedir(), ".letta-cowork.channels.json");
 
-const defaultPlaceholderChannel = (): PlaceholderChannelConfig => ({
-  enabled: false,
-  botName: "",
-  defaultAgentId: "",
-  webhookUrl: "",
-  token: "",
-  signingSecret: "",
-  extra: "",
-});
-
 const defaultTelegramChannel = (): TelegramBridgeConfig => ({
   enabled: false,
   autoStart: false,
@@ -133,23 +123,6 @@ const normalizeAllowedUsers = (value: unknown): string[] => {
   return value
     .map((entry) => String(entry ?? "").trim())
     .filter((entry) => entry.length > 0);
-};
-
-const normalizePlaceholderChannel = (
-  value: unknown,
-  fallback: PlaceholderChannelConfig
-): PlaceholderChannelConfig => {
-  if (!value || typeof value !== "object") return fallback;
-  const raw = value as Partial<PlaceholderChannelConfig>;
-  return {
-    enabled: Boolean(raw.enabled),
-    botName: String(raw.botName ?? ""),
-    defaultAgentId: String(raw.defaultAgentId ?? ""),
-    webhookUrl: String(raw.webhookUrl ?? ""),
-    token: String(raw.token ?? ""),
-    signingSecret: String(raw.signingSecret ?? ""),
-    extra: String(raw.extra ?? ""),
-  };
 };
 
 const normalizeTelegramChannel = (

@@ -2,7 +2,20 @@
 // never a user profile, source tree, or a path through a linked build directory.
 import { lstat, rm } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+const retiredModules = [
+  'ipc/handlers/session-handlers',
+  'emails/emailServerClient',
+  'emails/lettaProxy',
+  'emails/pdfConverter',
+  'emails/express/odoo-handlers',
+  'services/client-tools/runners/fs',
+  'services/skill-sync/index',
+];
 const artifacts = [
+  ...retiredModules.flatMap((name) => [
+    [name + '.js', name + '.ts'],
+    [name + '.js.map', name + '.ts'],
+  ]),
   ['libs/runner/ws', 'libs/runner/ws/session.ts'],
   ['services/agents/approval-recovery.js', 'services/agents/approval-recovery.ts'],
   ['services/agents/approval-recovery.js.map', 'services/agents/approval-recovery.ts'],

@@ -8,7 +8,6 @@ import { createAbortHandler } from "./abort-handler.js";
 import { getAgentName } from "./client.js";
 import {
   createMessageSender,
-  createPermissionRequestSender,
   sendSessionStatus,
   logMessageDetails,
   handleResultMessage,
@@ -73,7 +72,6 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
   let currentSessionId = session.id;
 
   // Create message and permission request senders
-  const sendMessage = createMessageSender(currentSessionId, onEvent);
   const sendPermissionRequest: SendPermissionRequest = (toolUseId, toolName, input) => {
     onEvent({
       type: "permission.request",
@@ -164,7 +162,6 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
 
       // Update senders with correct session ID
       const sendMessageWithId = createMessageSender(currentSessionId, onEvent);
-      const sendPermissionRequestWithId = createPermissionRequestSender(currentSessionId, onEvent);
 
       // Send the prompt (session is already initialized above)
       debug("calling send()");

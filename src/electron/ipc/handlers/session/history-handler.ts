@@ -4,12 +4,11 @@
  */
 
 import { emit } from "./session-creation.js";
-import { debug, createLettaClient, extractMessageText } from "./utils.js";
+import { debug, createLettaClient } from "./utils.js";
 import { normaliseHistoryBatch, type LettaMessage } from "../../../libs/conversation.js";
 import { getSession } from "../../../libs/runtime-state.js";
 import { getStoredSessions } from "../../../services/settings/index.js";
 
-import type { StreamMessage } from "../../../types.js";
 
 /**
  * Check if an ID looks like a valid Letta conversation/agent ID.
@@ -26,44 +25,6 @@ function isValidLettaId(id: string | undefined): boolean {
  */
 function isValidHistoryCursor(cursor: string | undefined): cursor is string {
     return Boolean(cursor && cursor.length >= 44 && !cursor.includes("::"));
-}
-
-/**
- * Map Letta messages to stream messages format
- */
-function mapLettaMessagesToStreamMessages(rawMessages: LettaMessage[]): StreamMessage[] {
-    const sorted = [...rawMessages].sort((a, b) => (a.created_at ?? 0) - (b.created_at ?? 0));
-    const messages: StreamMessage[] = [];
-
-    for (const msg of sorted) {
-        const msgType = (msg.message_type || msg.type || "").toLowerCase();
-
-        if (msgType === "user_message") {
-            const promptText = extractMessageText(msg.content).trim();
-            if (!promptText) continue;
-            messages.push({
-                type: "user_prompt",
-                prompt: promptText,
-                attachments: undefined,
-                content: undefined,
-                id: (msg as any).id || (msg as any).message_id || (msg as any).uuid,
-            } as StreamMessage);
-            continue;
-        }
-
-        if (msgType === "assistant_message") {
-            const agentText = extractMessageText(msg.content).trim();
-            if (!agentText) continue;
-            messages.push({
-                type: "assistant",
-                content: agentText,
-                uuid: (msg as any).id || (msg as any).message_id || (msg as any).uuid,
-            } as StreamMessage);
-            continue;
-        }
-    }
-
-    return messages;
 }
 
 /**
