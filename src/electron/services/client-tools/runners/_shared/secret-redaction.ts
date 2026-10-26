@@ -13,6 +13,17 @@ export function isCredentialName(key: string): boolean {
   const name = normalizedKey(key);
   return !CONFIG_SUFFIX.test(name) && CREDENTIAL_KEY.test(name);
 }
+/** Text labels must end in a credential role, not merely contain Secret/Token.
+ * Structured JSON/env records retain their stronger context below. */
+function isPlainCredentialName(key: string): boolean {
+  const name = normalizedKey(key.split('.').at(-1) ?? key);
+  return (
+    isCredentialName(name) &&
+    /(?:^|_)(?:TOKENS?|SECRETS?|PASSWORD|PASSCODE|PIN|OTP|PAT|CREDENTIALS?|API_KEY|APIKEY|PRIVATE_KEY|COOKIE|AUTHORIZATION)(?:_(?:VALUE|DATA|KEY))?$/i.test(
+      name,
+    )
+  );
+}
 function globalCandidate(value: string): boolean {
   // Numeric/short/config values are ambiguous without credential context. They
   // must not become search-and-replace rules for IDs, quantities or timestamps.
@@ -52,7 +63,7 @@ function entries(node: Node): Array<[string, Node, Node]> {
  * scalar token ranges are replaced, preserving large IDs and number lexemes.
  * Opaque IDs are NOT exempt: a complete distinctive secret still redacts.
  * Low-information values redact in credential contexts, not arbitrary fields;
- * an otherwise ambiguous standalone exact secret is conservatively masked. */
+ * unlabelled weak/numeric scalars remain data rather than guessed credentials. */
 export function redactSecretText(
   text: string,
   values: readonly string[],
@@ -89,7 +100,7 @@ export function redactSecretText(
     );
     result = result.replace(jsonAssignment, (all, key, separator, raw) => {
       try {
-        return isCredentialName(JSON.parse(key)) &&
+        return isPlainCredentialName(JSON.parse(key)) &&
           raw !== 'null' &&
           raw !== '""'
           ? key + separator + JSON.stringify(SECRET_MARKER)
@@ -98,10 +109,24 @@ export function redactSecretText(
         return all;
       }
     });
-    result = result.replace(assignment, (all, prefix, key, separator, raw) =>
-      isCredentialName(key) && raw !== SECRET_MARKER
-        ? prefix + key + separator + SECRET_MARKER
-        : all,
+    result = result.replace(
+      assignment,
+      (all, prefix, key, separator, raw, offset) => {
+        if (!isPlainCredentialName(key) || raw === SECRET_MARKER) return all;
+        const leading = result
+          .slice(result.lastIndexOf('\n', offset) + 1, offset)
+          .trimEnd();
+        const declaration =
+          /^\s*(?:(?:export|declare|async)\s+)*(?:const|let|var|type|function|interface|class|return)\b/.test(
+            leading,
+          );
+        const literal =
+          /^["']/.test(raw) ||
+          /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(raw);
+        // Preserve factory calls/types/identifiers, but never literal credentials.
+        if (declaration && !literal) return all;
+        return prefix + key + separator + SECRET_MARKER;
+      },
     );
     // A natural-language credential label only redacts a known value, avoiding
     // changing prose such as 'password is required'.
@@ -127,7 +152,7 @@ export function redactSecretText(
       return JSON.stringify(SECRET_MARKER);
     }
     if (!tree || errors.length) {
-      return known.has(input.trim()) ? SECRET_MARKER : plain(input);
+      return plain(input);
     }
     const edits: Array<{ start: number; end: number; text: string }> = [];
     function edit(node: Node, replacement: string) {
@@ -206,11 +231,7 @@ export function redactSecretText(
       } else if (node.type === 'string') {
         const value = String(node.value);
         if (value === SECRET_MARKER) return;
-        if (
-          (sensitive && value !== '') ||
-          (environment && known.has(value)) ||
-          (depth === 0 && known.has(value))
-        ) {
+        if ((sensitive && value !== '') || (environment && known.has(value))) {
           edit(node, JSON.stringify(SECRET_MARKER));
           return;
         }
@@ -224,11 +245,7 @@ export function redactSecretText(
         if (result !== value) edit(node, JSON.stringify(result));
       } else if (node.type !== 'null') {
         const raw = input.slice(node.offset, node.offset + node.length);
-        if (
-          sensitive ||
-          (environment && known.has(raw)) ||
-          (depth === 0 && known.has(raw))
-        )
+        if (sensitive || (environment && known.has(raw)))
           edit(node, JSON.stringify(SECRET_MARKER));
       }
     }

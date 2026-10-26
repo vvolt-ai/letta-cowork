@@ -120,7 +120,7 @@ test('secret descriptors and env namespaces stay protected; business IDs are not
   assert.equal(value.value, SECRET_MARKER);
   assert.equal(value.env.BANK_CODE, SECRET_MARKER);
   assert.equal(value.orderId, '1234');
-  assert.equal(JSON.parse(redactSecretText('1234', ['1234'])), SECRET_MARKER);
+  assert.equal(redactSecretText('1234', ['1234']), '1234');
 });
 test('desktop wrapper preserves async scoped secrets and ordinary numbers', async () => {
   await runWithRuntimeSecrets(['1234', secret], async () => {
@@ -158,6 +158,46 @@ test('typed credential records cannot masquerade as tool-schema metadata', () =>
     ),
   );
   assert.equal(record.credentials.value, SECRET_MARKER);
+});
+test('unlabelled scalar measurements and config values stay lossless even when candidates collide', () => {
+  for (const raw of [
+    '4242',
+    '4242\n',
+    '"4242"',
+    'true',
+    '"true"',
+    '"2026-10-26T00:00:00Z"',
+  ])
+    assert.equal(
+      redactSecretText(raw, ['4242', 'true', '2026-10-26T00:00:00Z']),
+      raw,
+    );
+  assert.equal(
+    redactSecretText('suppression from 1 to 4242 MHz', ['4242']),
+    'suppression from 1 to 4242 MHz',
+  );
+});
+test('source identifiers and expressions are not credential assignments', () => {
+  for (const raw of [
+    'const runtimeSecretStorage = new AsyncLocalStorage();',
+    'return known ? SECRET_MARKER : plain(input);',
+    'export const apiToken = createToken();',
+    'type Token = string;',
+    'function accept(apiToken: string) {}',
+    'const options = {apiToken: createToken()};',
+  ])
+    assert.equal(redactSecretText(raw, []), raw);
+});
+test('real labelled credentials and literal credentials in source still mask short values', () => {
+  for (const raw of [
+    'password=4242',
+    'GITHUB_TOKEN=short',
+    'client_secret: short',
+    'const password = "4242";',
+    'const token = "x";',
+    'Authorization: Bearer 4242',
+  ])
+    assert.ok(redactSecretText(raw, []).includes(SECRET_MARKER));
 });
 test('non-secret prose and empty output stay intact', () => {
   assert.equal(redactSecretText('', []), '');
