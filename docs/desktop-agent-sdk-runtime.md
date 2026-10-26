@@ -8,6 +8,14 @@ Electron main runs **Letta Agent SDK 0.8.50 with Letta Code 0.34.20**, using a p
 
 The SDK's `backend: 'remote'` means its authenticated **loopback App Server transport**, not a selection of a Vera Remote computer. The native server's provider backend is `api`. Existing tool-specific local/remote execution selection remains authoritative.
 
+## Electron runtime baseline
+
+As of2026-10-26 the desktop is exact-pinned to Electron45.0.0 (embedded Node24.22.0, native ABI150). The pinned node-abi4.40.0 mapping and Bun-local rebuild command support that ABI. Removed login-item hidden-state fields are replaced with the macOS wasOpenedAtLogin signal plus the existing --hidden argument; Linux does not call unsupported login-item settings. Manual launches remain visible. macOS13 or later is now required; the supported installer targets remain64-bit.
+
+The SDK/CLI pair remains0.8.50/0.34.20. Electron45 still does NOT meet Code0.34.24's declared Node24.22.1 floor, so the separately deferred SDK upgrade is not silently included. No nightly Electron or global CLI/Node upgrade is used.
+
+Local verification used actual Electron45 against fixture APIs/private homes, including approvals, vision/slow turns and correlated cancellation. An isolated sandboxed renderer tested the real preload/contextBridge/IPC without loading app accounts, starting services or registering login items. PTY/Sharp ran in both development and packaged Electron45; the ad-hoc-signed macOS ARM64 DMG and strict bundle integrity checks passed. Windows/Linux execution and real OS-login behavior remain separate acceptance checks; an ad-hoc signature is still not notarization/Gatekeeper trust.
+
 ## Scope and credentials
 
 - Resource identity includes provider, authenticated account/workspace, explicit organization-default or selected Letta connection, and canonical conversation/agent. A different model/account or process-global active session is never a recovery target.

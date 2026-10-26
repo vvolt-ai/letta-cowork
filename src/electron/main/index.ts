@@ -6,6 +6,7 @@
 import path from "path";
 
 import { app } from "electron";
+import {shouldLaunchHidden,supportsLoginItems} from './startup-policy.js';
 
 // Initialize environment before importing other modules
 initializeLettaEnv();
@@ -92,12 +93,12 @@ if (!singleInstanceLock) {
  * Initialize the application when ready
  */
 app.on("ready", () => {
-    const launchHidden = process.argv.includes("--hidden") || app.getLoginItemSettings().wasOpenedAsHidden;
+    const login = process.platform==='darwin'?app.getLoginItemSettings():{};
+    const launchHidden = shouldLaunchHidden(process.argv,process.platform,login);
 
-    if (app.isPackaged) {
+    if (app.isPackaged && supportsLoginItems(process.platform)) {
         app.setLoginItemSettings({
             openAtLogin: true,
-            openAsHidden: true,
             path: app.getPath("exe"),
             args: ["--hidden"],
         });
