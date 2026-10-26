@@ -1,15 +1,14 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import {isCredentialName,redactSecretText} from './secret-redaction.js';
 
 const runtimeSecretStorage = new AsyncLocalStorage<readonly string[]>();
-const SECRET_ENV_KEY =
-    /(?:^|_)(?:TOKEN|SECRET|PASSWORD|PASSCODE|CREDENTIALS?|API_KEY|PRIVATE_KEY|COOKIE|AUTHORIZATION)(?:_|$)/i;
 
 /** Credential-named ambient values only; ordinary environment settings are not secrets. */
 export function getSensitiveEnvValues(
     env: Readonly<Record<string, string | undefined>> = process.env
 ): string[] {
     return Object.entries(env).flatMap(([key, value]) =>
-        SECRET_ENV_KEY.test(key) && value ? [value] : []
+        isCredentialName(key) && value ? [value] : []
     );
 }
 
@@ -45,13 +44,7 @@ export function redactRuntimeSecrets(
     runtimeEnv?: Readonly<Record<string, string>>,
     retainedValues: Iterable<string | null | undefined> = []
 ): string {
-    if (!text) return text;
-    let redacted = text;
-    for (const value of captureRuntimeSecretValues([
-        ...Object.values(runtimeEnv ?? {}),
-        ...retainedValues,
-    ])) {
-        redacted = redacted.split(value).join("[REDACTED_SECRET]");
-    }
-    return redacted;
+    return redactSecretText(text,captureRuntimeSecretValues([
+        ...Object.values(runtimeEnv ?? {}),...retainedValues,
+    ]));
 }

@@ -42,6 +42,7 @@
     "electron-store": "^11.0.2",
     "express": "^5.2.1",
     "highlight.js": "^11.11.2",
+    "jsonc-parser": "3.3.1",
     "node-cron": "^4.6.0",
     "os-utils": "^0.0.14",
     "picomatch": "^4.0.5",
