@@ -29,6 +29,7 @@ export interface ModeOverrideResult {
 
 /** Tools that are read-only and always allowed in plan mode. */
 const PLAN_MODE_ALLOWED_TOOLS: ReadonlySet<string> = new Set([
+    "ProjectContext",
     "Read",
     "Glob",
     "Grep",
