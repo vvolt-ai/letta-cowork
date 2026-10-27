@@ -47,7 +47,7 @@ Client tools live under:
 - `src/electron/services/client-tools/index.ts`
 - `src/electron/services/client-tools/runners/letta_tools/`
 - `src/electron/services/client-tools/runners/productivity.ts`
-- `src/electron/services/client-tools/runners/odooMcp.ts`
+- `src/electron/services/client-tools/runners/veraMcp.ts` — configured MCP connectors, including Odoo; legacy mounted Odoo transports are removed.
 - `src/electron/services/client-tools/runners/coding.ts`
 
 Recent coding-tool commit:

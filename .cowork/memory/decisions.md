@@ -107,3 +107,7 @@ Source: live post-deployment diagnosis of missing remote-machine tools, 2026-09-
 - In local mode, Vera-specific connection IDs and headers are not sent. In Vera mode, the active organization's default connection scope remains explicit.
 
 Source: Bhavesh request, 2026-09-23.
+
+## 2026-10-27 — Odoo MCP only; remove legacy mounted tool exposure
+
+Bhavesh explicitly requested removing misleading mounted Odoo tools; configured Odoo MCP is the only active ERP path. Removed bare odoo_* registrations/transports and OdooAttachPdf's retired /odoo/run-tool adapter; no connector/account/data change. Kept VeraMcpListTools/VeraMcpCallTool and the attachment proof/approval core (synthetic test registration only, not an advertised PDF writer). Updated routing reminder and removed obsolete bare-name read-only grants. Named stale compiled transports are pruned during transpile. Electron compilation and 29 targeted registry/reminder/SDK-lifecycle/approval/plan tests passed; no live ERP calls or event creation. Current sessions retain old schemas until app restart/new catalog. This does not by itself repair Fama's separate CLI tool-discovery issue. Bhavesh subsequently authorized committing and pushing this removal; no deployment or live ERP write requested. Unrelated pending audit feature and generated output preserved.

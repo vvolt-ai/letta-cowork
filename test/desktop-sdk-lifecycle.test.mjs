@@ -24,14 +24,15 @@ test('process cleanup never treats a live or uninspectable group as zombie-only'
   assert.throws(() => processGroupHasLiveMembers('unexpected output', 100), /INSPECTION_INVALID/);
 });
 import { registerClientTool } from '../dist-electron/services/client-tools/index.js';
-import { odooAttachmentTool } from '../dist-electron/services/client-tools/runners/odooAttachment.js';
 import { createCanUseToolHandler } from '../dist-electron/libs/runner/permission-handler.js';
 import { consumeAttachmentApproval } from '../dist-electron/services/client-tools/runners/_shared/attachmentApproval.js';
 test(
   'SDK delegation of protected attachment tool preserves a fresh single-use human decision even in Full Access',
   { timeout: 15000 },
   async () => {
-    const original = odooAttachmentTool.run;
+    // Synthetic protected tool: the retired Odoo transport is not registered.
+    const odooAttachmentTool = {name:'OdooAttachPdf',description:'Fixture human approval only',parameters:{type:'object',properties:{}},run:async()=>({output:'unused'})};
+    const unregister=registerClientTool(odooAttachmentTool);
     let effects = 0,
       prompts = 0;
     odooAttachmentTool.run = async (args, ctx) => {
@@ -72,7 +73,7 @@ test(
       await s.abort();
     } finally {
       await s.abort().catch(() => undefined);
-      odooAttachmentTool.run = original;
+      unregister();
       await f.close();
     }
   },

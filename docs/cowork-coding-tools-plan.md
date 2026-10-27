@@ -58,9 +58,13 @@ Do not disable hooks, add a fake Node wrapper, or alter global PATH to hide an
 old hook/runtime mismatch. On the affected host, verify the real runtime and
 regenerate hooks through supported setup/sync before treating commits as working.
 
-### Guarded original-PDF attachment pilot
+### Guarded original-PDF attachment pilot — transport retired
 
-`OdooAttachPdf` is enabled only for AndrOptimus Prime. It requires a fresh human
+**2026-10-27:** `OdooAttachPdf` is no longer exposed. Its legacy `/odoo/run-tool` transport was removed; Odoo access uses the configured MCP connector only. The retained proof/approval core and synthetic tests do not make an attachment writer available. No automatic migration to raw MCP attachment writes is authorized by this retirement.
+
+The following is the historical pilot contract, not a currently enabled feature:
+
+`OdooAttachPdf` was enabled only for AndrOptimus Prime. It requires a fresh human
 permission response for each exact call even in unrestricted/session-granted
 mode. Model-supplied confirmation cannot create an approval capability; headless,
 delegated and remote calls without the trusted response are blocked.

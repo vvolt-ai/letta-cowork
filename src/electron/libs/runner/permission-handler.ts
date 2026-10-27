@@ -38,12 +38,6 @@ const READ_ONLY_TOOLS = new Set([
   'BrowserSnapshot',
   'BrowserConsoleMessages',
   'BrowserNetworkRequests',
-  'odoo_search',
-  'odoo_count',
-  'odoo_group',
-  'odoo_get_models',
-  'odoo_get_fields',
-  'odoo_health_check_health_odoo_get',
 ]);
 const EDIT_TOOLS = new Set([
   'Edit',

@@ -27,7 +27,7 @@ const PERMISSION_MODE_DESCRIPTIONS: Record<PermissionMode, string> = {
 };
 
 const ODOO_OPERATIONS_REMINDER = `${SYSTEM_REMINDER_OPEN}
-Odoo/ERP operations routing: for Odoo read/search/count/group/report operations, always use direct mounted Odoo tools when available: odoo_search, odoo_count, odoo_group, odoo_get_models, or odoo_get_fields. Do not use Bash, Python scripts, Task/subagents, or legacy Odoo skills for normal Odoo lookups. Use Odoo skills only as documentation fallback when direct Odoo tools are unavailable, or when explicitly requested.
+Odoo/ERP operations routing: use only the authorized configured Odoo MCP connector through VeraMcpListTools and VeraMcpCallTool, using exact discovered tool names and schemas. Legacy mounted bare odoo_* tools and OdooAttachPdf are retired; do not call /odoo/run-tool. An empty Letta MCP list does not prove Vera connectors are unavailable. Discovery is not proof of successful execution or business-write permission. Do not substitute Bash, raw credentials, Task/subagents, or legacy Odoo skills for the configured MCP route. Business writes require explicit authorization; do not perform test creates.
 ${SYSTEM_REMINDER_CLOSE}`;
 
 export interface ReminderState {

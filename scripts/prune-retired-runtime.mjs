@@ -9,6 +9,8 @@ const retiredModules = [
   'emails/pdfConverter',
   'emails/express/odoo-handlers',
   'services/client-tools/runners/fs',
+  'services/client-tools/runners/odooMcp',
+  'services/client-tools/runners/odooAttachment',
   'services/skill-sync/index',
 ];
 const artifacts = [
