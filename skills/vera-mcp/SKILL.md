@@ -1,5 +1,7 @@
 ---
 name: vera-mcp
+metadata:
+  version: "1.1.0"
 description: Uses Vera's native MCP tools for authenticated identity, channels, live Zoho email search and body/attachment reads, schedules, knowledge search, and secure organization-agent delegation. Trigger for Vera identity, workspace channels, live mailbox evidence, email bodies or attachments, schedule history, Vera knowledge retrieval, organization-agent access, configured-MCP routing, or Vera-mod installation/connection help.
 ---
 
@@ -188,6 +190,12 @@ Example arguments:
 Vera's dedicated `/odoo/*` REST adapter, built-in Odoo services/tools and global Odoo credential fallback are retired. ERP access requires an explicitly configured **visible, enabled MCP connector** and enabled discovered tools, within the current organization/user/profile scope and upstream permissions. No connector/grant means no access through this workflow.
 
 With an active Vera mod, discover `area: "configured_connectors"`, query `Odoo`, and `includeSchemas: true`; invoke only exact returned names/schemas through `vera_mcp_call_tool`. Other runtimes use their exposed scoped MCP discovery/invocation gateway. Fetch current models/argument conventions from actual authorized schemas; do not assume legacy direct names, global endpoints, AND-only domains, JSON-string method args or caller-supplied context. Do not use Bash/curl/scripts, another user's connection or the native fallback helper to bypass missing ERP access. Read/write classification and human business authority remain separate from tool visibility.
+
+### Configured discovery and stale names
+
+Desktop uses VeraMcpListTools (empty args list visible connectors), then an exact selected serverSlug plus query to get enabled schemas; VeraMcpCallTool takes the exact returned namespaced toolName. The mod uses vera_mcp_list_tools with area=configured_connectors and includeSchemas=true, then vera_mcp_call_tool. Native McpFetchTools/McpInvokeTool instead uses serverSlug plus returned nativeName for invocation. Use only fields actually exposed in that runtime's schema.
+
+Where supported, searchAllConnectors:true searches the authorized visible catalog; do not combine it with serverSlug. Namespaced search input is normalized for discovery only. Unavailable connectors/tools can return actual suggestedTools/schemas; confirm the intended account/environment even if one suggestion exists. Execution is never silently redirected, and absence of an old slug is not proof no visible connector exposes Odoo. Read truncation/nextOffset metadata. Do not repeat a stale invocation, invent a replacement namespace or bypass a revoked grant. Query/transport/permission failures are distinct; once dispatched, an uncertain operation must not be blindly replayed.
 
 `scripts/call-mcp.mjs` is for its allowlisted **native Vera** tools only; it is not an Odoo/configured-connector proxy. Do not send a namespaced ERP tool to it or add arbitrary tools to its list. For actual business procedures use the applicable current skill and approved company/document evidence, not this routing paragraph as authority for records or writes.
 
