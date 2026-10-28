@@ -163,7 +163,7 @@ export class McpEndpoints {
    */
   static async fetchVisibleTools(
     client: BaseHttpClient,
-    input: { serverSlug?: string; query?: string; limit?: number },
+    input: { serverSlug?: string; query?: string; limit?: number; searchAllConnectors?: boolean; offset?: number },
   ): Promise<McpToolRunResult> {
     return client.request<McpToolRunResult>("/mcp/tools/fetch", {
       method: "POST",

@@ -166,6 +166,22 @@ The generic MCP bridge does not silently remove server-advertised capabilities, 
 
 Master tools are dynamically hidden unless `ctx.agent.id` exactly matches the locally enrolled Master Clio identity. Non-Master agents see only the normal user-authorized organization listing and delegation tools, preventing ambiguous organization-access requests from invoking the Master control plane. Every Master operation also requires a current Vera token with `userRole=super_admin`; an MCP token must carry `vera:mcp`. Vera binds challenge creation and exchange to the same super-admin user before issuing the operation-bound Master token.
 
+### Connector search (mod 0.5.9)
+
+`vera_mcp_list_tools` delegates `area=configured_connectors`, `serverSlug`, or
+explicit `searchAllConnectors` discovery to the authenticated Vera catalog.
+Without search scope it lists connectors. To search all visible connector tools:
+
+```json
+{"area":"configured_connectors","searchAllConnectors":true,"query":"odoo__search","includeSchemas":true,"limit":20,"offset":0}
+```
+
+Namespaced input is supported for **SEARCH only**. Use `nextOffset` with the same
+search; inspect `suggestedTools` and `selectionRequired` on structured errors.
+Suggestions never select prod/stage or execute a tool. Select the intended
+connector/environment explicitly and invoke the exact returned `toolName` with
+schema-matching arguments. Native/graph/other capability-area discovery is unchanged.
+
 ### Attachment files (mod 0.5.8)
 
 Use `vera_get_email_attachment` to fetch a live attachment. For an artifact reference, the new approval-gated **local** `vera_download_artifact` tool saves a new file inside the current workspace using protected MCP authentication, bounded chunks and SHA-256 verification. No remote machine or exposed Bearer token is needed. With only an MCP connector, use its authenticated `vera_read_artifact` chunk reader and verify decoded size/digest before opening. See [the complete artifact workflow](MOD.md#save-an-attachment-artifact-locally-mod-058). Re-fetch expired/restarted artifacts and ensure the mod/connector points to the same server, user and organization.

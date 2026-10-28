@@ -91,11 +91,11 @@ function nativeMcpToolOutput(result) {
 }
 
 function isNativeVeraMcpTool(toolName) {
-  return /^vera_[a-z0-9_]+$/i.test(String(toolName));
+  return !String(toolName).includes("__") && /^vera_[a-z0-9_]+$/i.test(String(toolName));
 }
 
 function isNeo4jMcpTool(toolName) {
-  return /^neo4j_[a-z0-9_]+$/i.test(String(toolName));
+  return !String(toolName).includes("__") && /^neo4j_[a-z0-9_]+$/i.test(String(toolName));
 }
 
 function safeInteger(value, fallback, minimum, maximum) {
@@ -660,6 +660,14 @@ export class VeraClient {
           .map((tool) => [tool.name, tool]),
       ).values(),
     ];
+  }
+
+  async fetchMcpTools(input = {}, signal) {
+    return this.request("/mcp/tools/fetch", {
+      method: "POST",
+      body: input,
+      signal,
+    });
   }
 
   async invokeMcpTool(toolName, args, signal) {

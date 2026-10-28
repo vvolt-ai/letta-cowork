@@ -758,6 +758,8 @@ export class VeraCoworkApiClient extends BaseHttpClient {
     serverSlug?: string;
     query?: string;
     limit?: number;
+    searchAllConnectors?: boolean;
+    offset?: number;
   }): Promise<McpToolRunResult> {
     return McpEndpoints.fetchVisibleTools(this, input);
   }

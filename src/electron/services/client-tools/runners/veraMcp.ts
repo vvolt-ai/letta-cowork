@@ -15,12 +15,16 @@ interface VeraMcpFetchPayload {
   };
   tools?: Array<{
     name: string;
+    toolName?: string;
+    nativeName?: string;
+    serverSlug?: string;
     description?: string | null;
     inputSchema: Record<string, unknown>;
   }>;
   returned?: number;
   totalMatching?: number;
   truncated?: boolean;
+  selectionRequired?: boolean;
 }
 
 function namespacedFetchOutput(output: string): string {
@@ -28,6 +32,7 @@ function namespacedFetchOutput(output: string): string {
     const payload = JSON.parse(output) as VeraMcpFetchPayload;
     if (Array.isArray(payload.connectors)) {
       return JSON.stringify({
+        ...payload,
         connectors: payload.connectors,
         instruction:
           "Call VeraMcpListTools again with one connector's serverSlug to retrieve its tool descriptions and input schemas.",
@@ -35,20 +40,30 @@ function namespacedFetchOutput(output: string): string {
     }
 
     const server = payload.server;
-    if (!server?.slug || !Array.isArray(payload.tools)) return output;
+    if (!Array.isArray(payload.tools)) return output;
     return JSON.stringify({
-      server,
-      tools: payload.tools.map((tool) => ({
-        name: `${server.slug}__${tool.name}`,
-        nativeName: tool.name,
-        description: tool.description ?? "",
-        parameters: tool.inputSchema,
-      })),
+      ...payload,
+      tools: payload.tools.map((tool) => {
+        const serverSlug = tool.serverSlug ?? server?.slug;
+        const toolName = tool.toolName ?? (serverSlug && !tool.name.startsWith(`${serverSlug}__`)
+          ? `${serverSlug}__${tool.name}` : tool.name);
+        return {
+          ...tool,
+          name: toolName,
+          toolName,
+          nativeName: tool.nativeName ?? (serverSlug && toolName.startsWith(`${serverSlug}__`)
+            ? toolName.slice(serverSlug.length + 2) : tool.name),
+          serverSlug,
+          description: tool.description ?? "",
+          parameters: tool.inputSchema,
+        };
+      }),
       returned: payload.returned ?? payload.tools.length,
       totalMatching: payload.totalMatching ?? payload.tools.length,
       truncated: payload.truncated === true,
-      instruction:
-        "Call VeraMcpCallTool with the exact namespaced name and args matching its parameters schema.",
+      instruction: payload.selectionRequired
+        ? "Confirm the intended connector/account before using an exact returned namespaced name. Discovery suggestions never authorize rerouting."
+        : "Call VeraMcpCallTool with the exact namespaced name and args matching its parameters schema.",
     }, null, 2);
   } catch {
     return output;
@@ -63,7 +78,7 @@ function namespacedFetchOutput(output: string): string {
 const veraMcpListTools: ClientToolDefinition = {
   name: "VeraMcpListTools",
   description:
-    "List visible Vera MCP connectors, or fetch enabled tool names, descriptions, and JSON input schemas for one connector. Use this before VeraMcpCallTool when you do not already know the exact namespaced tool and args.",
+    "List visible Vera MCP connectors, or search enabled tools on one connector or across authorized connectors. Namespaced input is supported for SEARCH only. Use the exact returned toolName and schema for invocation; explicitly select the connector/environment, never infer prod/stage from suggestions.",
   parameters: {
     type: "object",
     properties: {
@@ -73,7 +88,16 @@ const veraMcpListTools: ClientToolDefinition = {
       },
       query: {
         type: "string",
-        description: "Optional case-insensitive tool-name/description filter used with serverSlug.",
+        description: "Optional server-owned tool search; native or namespaced search input is supported. Does not rewrite invocation names.",
+      },
+      searchAllConnectors: {
+        type: "boolean",
+        description: "Search tools across authorized visible connectors. Empty args still lists connectors.",
+      },
+      offset: {
+        type: "integer",
+        minimum: 0,
+        description: "Pagination offset from nextOffset, using the same search input.",
       },
       limit: {
         type: "integer",
@@ -92,6 +116,9 @@ const veraMcpListTools: ClientToolDefinition = {
       query: typeof args.query === "string" && args.query.trim()
         ? args.query.trim()
         : undefined,
+      searchAllConnectors: typeof args.searchAllConnectors === "boolean" ? args.searchAllConnectors : undefined,
+      offset: typeof args.offset === "number" && Number.isFinite(args.offset)
+        ? Math.max(0, Math.floor(args.offset)) : undefined,
       limit: typeof args.limit === "number" && Number.isFinite(args.limit)
         ? Math.max(1, Math.min(50, Math.floor(args.limit)))
         : undefined,

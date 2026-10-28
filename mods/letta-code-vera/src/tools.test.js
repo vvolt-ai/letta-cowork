@@ -22,6 +22,9 @@ function registeredTools(client) {
 describe("Vera tools", () => {
   test("discovers guided MCP capability areas with schemas and natural-language aliases", async () => {
     const tools = registeredTools({
+      async fetchMcpTools() {
+        return { output: JSON.stringify({ tools: [{ name: "salesforce__search_records", toolName: "salesforce__search_records", nativeName: "search_records", serverSlug: "salesforce" }] }) };
+      },
       async listMcpTools() {
         return [
           {

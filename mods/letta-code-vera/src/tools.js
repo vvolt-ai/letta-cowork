@@ -300,12 +300,40 @@ async function masterRequest(client, ctx, method, path, body) {
   );
 }
 
+// Connector search/normalization belongs to Vera, not a second local filter.
+function configuredDiscoveryResult(result, includeSchemas) {
+  const payload = typeof result.output === "string" ? JSON.parse(result.output) : result;
+  const mapTool = (tool) => {
+    const { inputSchema, parameters, ...metadata } = tool;
+    const serverSlug = tool.serverSlug ?? payload.server?.slug;
+    const name = tool.toolName ?? (serverSlug && !tool.name.startsWith(`${serverSlug}__`)
+      ? `${serverSlug}__${tool.name}` : tool.name);
+    return {
+      ...metadata,
+      name,
+      toolName: name,
+      nativeName: tool.nativeName ?? (serverSlug && name.startsWith(`${serverSlug}__`)
+        ? name.slice(serverSlug.length + 2) : tool.name),
+      serverSlug,
+      ...(includeSchemas ? { parameters: inputSchema ?? parameters ?? {} } : {}),
+    };
+  };
+  const output = JSON.stringify({
+    ...payload,
+    ...(Array.isArray(payload.tools) ? { tools: payload.tools.map(mapTool) } : {}),
+    ...(Array.isArray(payload.suggestedTools) ? { suggestedTools: payload.suggestedTools.map(mapTool) } : {}),
+  }, null, 2);
+  // Do not truncate structured errors/suggestions into invalid JSON.
+  return normalizeMcpResult({ ...result, output });
+}
+
 function normalizeMcpResult(result) {
   if (isRecord(result) && result.isError === true) {
     return {
+      ...result,
       status: "error",
       isError: true,
-      content: formatJson(result.output ?? result.content ?? result),
+      content: typeof result.output === "string" ? result.output : JSON.stringify(result.content ?? result),
     };
   }
   if (isRecord(result) && typeof result.output === "string") {
@@ -340,7 +368,7 @@ export function registerTools(letta, client) {
     letta.tools.register({
       name: "vera_mcp_list_tools",
       description:
-        "Discover Vera-native, governed Neo4j, and configured-connector MCP tools available to the connected user. Start with area=email for live mailbox data, area=remote for remote machines, area=channels for channel lifecycle/status, or area=knowledge_graph for Neo4j. Set includeSchemas=true before invoking a tool, then use its exact returned name with vera_mcp_call_tool.",
+        "Discover Vera-native, governed Neo4j, and configured-connector MCP tools available to the connected user. Start with area=email for live mailbox data, area=remote for remote machines, area=channels for channel lifecycle/status, or area=knowledge_graph for Neo4j. Set includeSchemas=true before invoking a tool, then use its exact returned name with vera_mcp_call_tool. Configured connectors support namespaced input for SEARCH only; exact invocation and explicit environment selection remain required.",
       parameters: {
         type: "object",
         properties: {
@@ -371,6 +399,19 @@ export function registerTools(letta, client) {
             description:
               "Optional case-insensitive filter. Natural phrases such as 'email data', 'remote access', and 'channel messages' expand to relevant tool aliases.",
           },
+          serverSlug: {
+            type: "string",
+            description: "Explicit configured connector slug. Delegates discovery to Vera; never chooses prod/stage automatically.",
+          },
+          searchAllConnectors: {
+            type: "boolean",
+            description: "Search tools across authorized configured connectors using Vera's catalog.",
+          },
+          offset: {
+            type: "integer",
+            minimum: 0,
+            description: "Configured-connector page offset from nextOffset; retain the same search input.",
+          },
           includeSchemas: {
             type: "boolean",
             description:
@@ -380,7 +421,7 @@ export function registerTools(letta, client) {
             type: "integer",
             minimum: 1,
             maximum: 200,
-            description: "Maximum tools to return. Defaults to 50.",
+            description: "Maximum tools to return. Native catalog defaults to 50 (max200); configured connector pages default to20 and are capped at50. Follow nextOffset for more.",
           },
         },
         additionalProperties: false,
@@ -392,8 +433,18 @@ export function registerTools(letta, client) {
           const area = String(ctx.args.area ?? "all")
             .trim()
             .toLowerCase();
-          const terms = discoveryTerms(ctx.args.query);
           const includeSchemas = ctx.args.includeSchemas === true;
+          if (area === "configured_connectors" || (area === "all" && String(ctx.args.query ?? "").includes("__")) || ctx.args.serverSlug !== undefined || ctx.args.searchAllConnectors !== undefined) {
+            if (!['all','configured_connectors'].includes(area)) throw new Error('Configured connector options require area=all or configured_connectors; native capability areas are not redirected.');
+            const input = {};
+            for (const key of ["serverSlug", "query", "limit", "searchAllConnectors", "offset"]) {
+              if (ctx.args[key] !== undefined) input[key] = ctx.args[key];
+            }
+            if (!input.serverSlug && input.query && input.searchAllConnectors === undefined) input.searchAllConnectors = true;
+            if (input.limit !== undefined) input.limit = Math.min(50, Math.max(1, Math.floor(Number(input.limit) || 20)));
+            return configuredDiscoveryResult(await client.fetchMcpTools(input, ctx.signal), includeSchemas);
+          }
+          const terms = discoveryTerms(ctx.args.query);
           const limit = Math.min(
             200,
             Math.max(1, Number.parseInt(String(ctx.args.limit ?? 50), 10) || 50),
@@ -454,12 +505,8 @@ export function registerTools(letta, client) {
           const toolName = requiredString(ctx.args.toolName, "toolName");
           const args = ctx.args.args === undefined ? {} : ctx.args.args;
           if (!isRecord(args)) throw new Error("args must be an object");
-          const definition = (await client.listMcpTools(ctx.signal)).find(
-            (tool) => tool.name === toolName,
-          );
-          if (!definition) {
-            throw new Error("The requested MCP tool is not available to the connected Vera user");
-          }
+          // A stale local catalog must not hide authoritative server suggestions.
+          // Invoke only the exact requested name; Vera validates visibility and scope.
           return normalizeMcpResult(await client.invokeMcpTool(toolName, args, ctx.signal));
         } catch (error) {
           return toolError(error);

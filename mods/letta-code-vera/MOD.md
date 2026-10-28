@@ -90,6 +90,21 @@ Email rules:
 - For broader safe Zoho GET coverage, list operations, describe one, then call it through `vera_call_zoho_mail_read`; Vera injects credentials and blocks non-read methods and unsafe paths.
 - For indexed historical context rather than live mailbox truth, use `vera_search_knowledge` with email/Zoho sources.
 
+## Configured-connector discovery (mod 0.5.9)
+
+Use `area=configured_connectors` to list visible connectors; pass `serverSlug` to
+search one connector, or `searchAllConnectors=true` to search all authorized
+connectors. `query` accepts native or namespaced input for **SEARCH only**. Vera
+owns normalization and matching; the mod does not choose prod/stage. Use
+`includeSchemas=true` for `parameters` before invoking the exact returned
+`toolName`. Follow `nextOffset` with the same search to page results.
+
+Structured discovery/invocation errors retain `code`, query/namespace diagnostics,
+`suggestedTools`, counts and `selectionRequired=true`, `executed=false`. Suggestions
+are not executions or authorization to choose an environment. Explicitly select
+the correct connector/environment, then invoke its exact name; never retry a
+missing name on another connector automatically.
+
 ## Save an attachment artifact locally (mod 0.5.8)
 
 Preferred path when this mod is active:
