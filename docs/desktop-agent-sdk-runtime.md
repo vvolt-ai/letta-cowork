@@ -2,7 +2,7 @@
 
 ## Current architecture
 
-Electron main runs **Letta Agent SDK 0.8.50 with Letta Code 0.34.20**, using a private native App Server's **API harness**. The SDK owns model turns, tool continuations, streaming and native retry policy. There is no custom REST/SSE model pump or legacy execution fallback.
+Electron main runs **Letta Agent SDK 0.8.55 with Letta Code 0.34.26**, using a private native App Server's **API harness**. The SDK owns model turns, tool continuations, streaming and native retry policy. There is no custom REST/SSE model pump or legacy execution fallback.
 
 `libs/runner/session-manager.ts` selects the SDK adapter; `libs/runner/sdk/session.ts` supplies Cowork's UI/tool lifecycle. Chat, continuation and existing background callers continue through `runLetta`. Task/Agent use a protected parent capability to create another SDK session; the delegated manager supplies policy, not another model loop.
 
@@ -10,11 +10,11 @@ The SDK's `backend: 'remote'` means its authenticated **loopback App Server tran
 
 ## Electron runtime baseline
 
-As of2026-10-26 the desktop is exact-pinned to Electron45.0.0 (embedded Node24.22.0, native ABI150). The pinned node-abi4.40.0 mapping and Bun-local rebuild command support that ABI. Removed login-item hidden-state fields are replaced with the macOS wasOpenedAtLogin signal plus the existing --hidden argument; Linux does not call unsupported login-item settings. Manual launches remain visible. macOS13 or later is now required; the supported installer targets remain64-bit.
+As of2026-10-28 the desktop is exact-pinned to Electron45.1.0 (embedded Node24.22.1, native ABI150). The pinned node-abi4.40.0 mapping and Bun-local rebuild command support that ABI. Removed login-item hidden-state fields are replaced with the macOS wasOpenedAtLogin signal plus the existing --hidden argument; Linux does not call unsupported login-item settings. Manual launches remain visible. macOS13 or later is now required; the supported installer targets remain64-bit.
 
-The SDK/CLI pair remains0.8.50/0.34.20. Electron45 still does NOT meet Code0.34.24's declared Node24.22.1 floor, so the separately deferred SDK upgrade is not silently included. No nightly Electron or global CLI/Node upgrade is used.
+The SDK/CLI pair is explicitly upgraded together to0.8.55/0.34.26. SDK0.8.55 requires Code>=0.34.26 <0.35.0; that CLI requires Node^22.23.4 || ^24.22.1 || ^26.12.1. Electron45.1.0 now meets the embedded Node floor that blocked45.0.0. The App Server handshake still rejects any CLI version other than the exact pin. Bun lock and runtime contracts verify the trio. No nightly Electron or global CLI/Node upgrade is used.
 
-Local verification used actual Electron45 against fixture APIs/private homes, including approvals, vision/slow turns and correlated cancellation. An isolated sandboxed renderer tested the real preload/contextBridge/IPC without loading app accounts, starting services or registering login items. PTY/Sharp ran in both development and packaged Electron45; the ad-hoc-signed macOS ARM64 DMG and strict bundle integrity checks passed. Windows/Linux execution and real OS-login behavior remain separate acceptance checks; an ad-hoc signature is still not notarization/Gatekeeper trust.
+Current local verification used actual Electron45.1.0 against fixture APIs/private homes, including approvals, vision/slow turns, delegation and correlated cancellation.190 Node tests,17 Bun tests,12 actual-Electron native fixtures and12 final packaged SDK/CLI fixtures passed. An isolated sandboxed renderer tested real preload/contextBridge/IPC without app accounts/services/login items. PTY/Sharp executed from development and the validation ASAR. The isolated ad-hoc-signed macOS ARM64 .app passed deep/strict resource-seal verification; no new DMG or release was generated. One first cold parallel packaged cancellation returned SDK_NATIVE_TREE_CLEANUP_UNVERIFIED; isolated and final full parallel checks passed without weakening cleanup guards. Its initial cause is not established; do not treat that as a fixed cancellation race or live acceptance. Windows/Linux, real OS-login and live-provider acceptance remain separate. Ad-hoc integrity is not notarization/Gatekeeper trust.
 
 ## Scope and credentials
 
@@ -67,7 +67,8 @@ Relevant checks:
 
 ```sh
 bun run transpile:electron
-node --test test/*.mjs
+# Use a CLI-compatible host Node for non-Electron tests (e.g.22.23.4/24.22.1).
+node --test test/*.test.mjs
 bun test test/*.test.ts
 bun run build
 bun run lint

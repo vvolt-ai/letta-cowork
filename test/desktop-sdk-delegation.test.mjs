@@ -5,6 +5,7 @@ import { once } from 'node:events';
 import { promises as fs } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import {pathToFileURL} from 'node:url';
 import {
   DesktopSdkSession,
   getOwnedDesktopSdkSessions,
@@ -150,7 +151,12 @@ test(
             ...options,
             profileRoot: root,
             executablePath: process.execPath,
+            cliPath:process.env.COWORK_SDK_TEST_PACKAGED_CLI,
           }),
+        ...(process.env.COWORK_SDK_TEST_PACKAGED_SDK?{open:async(binding,controls)=>{
+          const {LettaAgentClient}=await import(pathToFileURL(process.env.COWORK_SDK_TEST_PACKAGED_SDK).href);
+          return new LettaAgentClient({backend:'remote',url:binding.url,authToken:binding.authToken,WebSocket:controls.socketConstructor()});
+        }}:{}),
       },
     );
     try {
