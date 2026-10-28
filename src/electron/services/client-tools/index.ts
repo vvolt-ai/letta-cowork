@@ -21,6 +21,7 @@ import { productivityTools } from "./runners/productivity.js";
 import { listSkillsTool, skillTool } from "./runners/skill.js";
 import { appendToolTrace, runTimelineTool, toolTraceSearchTool } from "./runners/tool-traces.js";
 import { veraMcpTools } from "./runners/veraMcp.js";
+import {safetyAuditListOwnTool} from './runners/safetyAuditListOwn.js';
 import {
     captureRuntimeSecretValues,
     redactRuntimeSecrets,
@@ -76,6 +77,7 @@ register(listSkillsTool);
 for (const tool of productivityTools) register(tool);
 for (const tool of codingTools) register(tool);
 for (const tool of veraMcpTools) register(tool);
+register(safetyAuditListOwnTool);
 for (const tool of browserTools) register(tool);
 register(toolTraceSearchTool);
 register(runTimelineTool);

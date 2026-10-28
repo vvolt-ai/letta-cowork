@@ -23,6 +23,7 @@ See [per-agent memory checkout, shared mounts and freshness](docs/agent-memory-r
 The SDK owns chat and delegated-agent model execution, while Cowork preserves its tools, UI approvals, selected account, memory access and remote routing. The copied WS/SSE execution engine is removed; there is no legacy execution fallback.
 
 See [desktop SDK architecture, cancellation, packaging and checks](docs/desktop-agent-sdk-runtime.md).
+Read your own database-backed Vera audit events with [`SafetyAuditListOwn`](docs/own-safety-audit.md).
 
 **Key concepts:**
 - **Agent** (`agentId`): Persistent entity with memory that survives across sessions

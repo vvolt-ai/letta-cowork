@@ -16,6 +16,7 @@ const READ_ONLY_TOOLS = new Set([
   'ViewImage',
   'LogTail',
   'LogSearch',
+  'SafetyAuditListOwn',
   'CodeSearch',
   'CodeGetDefinition',
   'CodeFindReferences',

@@ -144,7 +144,7 @@ export class RemoteRunnerClient {
 
   private register(): void {
     const cwd = this.settings.allowedDirectories[0] || process.cwd();
-    const toolDefinitions = [...getClientToolsForWire(), ...(process.platform==='win32'?[]:[remoteFileExportDefinition])];
+    const toolDefinitions = [...getClientToolsForWire().filter(tool=>tool.name!=='SafetyAuditListOwn'), ...(process.platform==='win32'?[]:[remoteFileExportDefinition])];
     this.send({
       type: "runner.register",
       environmentName: this.settings.environmentName || os.hostname() || "cowork-desktop",

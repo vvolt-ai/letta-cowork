@@ -18,8 +18,8 @@ const register = new Function(
   'remoteFileExportDefinition',
   body,
 );
-test('unsupported Windows secure export is not advertised as a capability', () => {
-  const tools = [{ name: 'DesktopOnly', description: 'fixture', parameters: { type: 'object' } }];
+test('unsupported Windows export and caller-owned audit are not advertised as remote capabilities', () => {
+  const tools = [{ name: 'DesktopOnly', description: 'fixture', parameters: { type: 'object' } },{name:'SafetyAuditListOwn',description:'caller only',parameters:{type:'object'}}];
   let payload;
   register.call(
     {
@@ -39,7 +39,7 @@ test('unsupported Windows secure export is not advertised as a capability', () =
     remoteFileExportDefinition,
   );
   assert.deepEqual(payload.capabilities, ['DesktopOnly']);
-  assert.deepEqual(payload.toolDefinitions, tools);
+  assert.deepEqual(payload.toolDefinitions, tools.filter(tool=>tool.name!=='SafetyAuditListOwn'));
 });
 
 test('runner advertises schema and capabilities from one immutable catalog snapshot', () => {
