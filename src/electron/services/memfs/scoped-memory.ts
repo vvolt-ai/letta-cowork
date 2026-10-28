@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 import { join, parse, resolve, sep } from 'node:path';
 import { PRE_COMMIT_HOOK_SCRIPT } from './preCommitHook.js';
+import { pushMemoryCommit, type MemoryPushRequest, type MemoryPushReceipt } from './memory-push.js';
 
 export type MemorySyncState =
   | 'ready'
@@ -25,6 +26,8 @@ export interface MemoryRepositorySnapshot {
   revision?: string;
   lastSuccessfulSyncAt?: string;
   errorCode?: string;
+  lastPushedRevision?: string;
+  lastSuccessfulPushAt?: string;
 }
 export interface AgentMemorySnapshot {
   agentId: string;
@@ -38,6 +41,7 @@ export interface AgentMemorySnapshot {
 export interface SessionMemoryAccess {
   snapshot(): Promise<AgentMemorySnapshot>;
   refresh(): Promise<AgentMemorySnapshot>;
+  push?(request: MemoryPushRequest): Promise<MemoryPushReceipt>;
   withRead?<T>(repository: string, read: (snapshot: AgentMemorySnapshot) => Promise<T>): Promise<T>;
 }
 export interface ScopedMemoryOptions {
@@ -118,7 +122,7 @@ async function json(
   }
   return JSON.parse(Buffer.concat(parts, size).toString('utf8'));
 }
-function gitEnvironment(headers: string[]): NodeJS.ProcessEnv {
+function gitEnvironment(headers: string[], authRemote?: string): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = Object.fromEntries(
     [
       'PATH',
@@ -145,6 +149,9 @@ function gitEnvironment(headers: string[]): NodeJS.ProcessEnv {
     GIT_ASKPASS: '',
     SSH_ASKPASS: '',
     GIT_CONFIG_NOSYSTEM: '1',
+    GIT_NO_REPLACE_OBJECTS:'1',
+    GIT_GRAFT_FILE:process.platform === 'win32'?'NUL':'/dev/null',
+    GIT_NO_LAZY_FETCH:'1',
     GIT_CONFIG_GLOBAL: process.platform === 'win32' ? 'NUL' : '/dev/null',
   });
   const config: Array<[string, string]> = [
@@ -153,7 +160,10 @@ function gitEnvironment(headers: string[]): NodeJS.ProcessEnv {
     ['http.followRedirects', 'false'],
     ['http.extraHeader', ''],
     ['core.hooksPath', process.platform === 'win32' ? 'NUL' : '/dev/null'],
-    ...headers.map((h) => ['http.extraHeader', h] as [string, string]),
+    ['fetch.recurseSubmodules', 'false'],
+    ['push.recurseSubmodules', 'no'],
+    ['push.followTags', 'false'],
+    ...headers.map((h) => [authRemote ? `http.${authRemote}.extraHeader` : 'http.extraHeader', h] as [string, string]),
   ];
   env.GIT_CONFIG_COUNT = String(config.length);
   config.forEach(([key, value], i) => {
@@ -252,11 +262,12 @@ export function createScopedMemory(options: ScopedMemoryOptions) {
     };
     validatedKey = key;
   }
-  const git = async (path: string, args: string[], headers: string[]) => {
+  const git = async (path: string, args: string[], headers: string[], signal?: AbortSignal, authRemote?: string) => {
     try {
       return await exec('git', args, {
         cwd: path,
-        env: gitEnvironment(headers),
+        env: gitEnvironment(headers, authRemote),
+        signal,
         timeout: 60000,
         maxBuffer: 4 * 1024 * 1024,
       });
@@ -388,7 +399,7 @@ export function createScopedMemory(options: ScopedMemoryOptions) {
         }
       }
       try {
-        const ahead = (
+        const ahead = repo.lastPushedRevision === revision ? '0' : (
           await git(repo.path, ['rev-list', '--count', 'FETCH_HEAD..HEAD'], [])
         ).stdout.trim();
         if (!/^[0-9]+$/.test(ahead)) throw Error('INVALID_MEMORY_HISTORY');
@@ -429,7 +440,7 @@ export function createScopedMemory(options: ScopedMemoryOptions) {
     const vera = /\/letta\/runtime(?:\/v1)?\/?$/.test(base.pathname);
     let discovery: AgentMemorySnapshot['sharedDiscovery'] = 'verified';
     let scope: string;
-    let rows: Array<{ name: string; isPrimary: boolean; readOnly: boolean; remote: string }>;
+    let rows: Array<{ name: string; isPrimary: boolean; readOnly: boolean; remote: string; }>;
     let headers: string[];
     if (vera) {
       const prefix = base.pathname.replace(/\/letta\/runtime(?:\/v1)?\/?$/, '');
@@ -480,7 +491,7 @@ export function createScopedMemory(options: ScopedMemoryOptions) {
     } else {
       if (!['', '/', '/v1', '/v1/'].includes(base.pathname))
         throw Error('UNSUPPORTED_MEMORY_CONNECTION');
-      let catalog: { repositories: any[] } = { repositories: [] };
+      let catalog: { repositories: any[]; } = { repositories: [] };
       try {
         const found = await json(`${base.origin}/v1/agents/${o.agentId}/repositories`, {
           Authorization: `Bearer ${currentKey}`,
@@ -583,6 +594,45 @@ export function createScopedMemory(options: ScopedMemoryOptions) {
     return status();
   }
   return {
+    async push(request: MemoryPushRequest): Promise<MemoryPushReceipt> {
+      if (request.confirm !== true) throw Error('MEMORY_PUSH_CONFIRMATION_REQUIRED');
+      if (typeof request.expectedRevision !== 'string' || !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/i.test(request.expectedRevision)) throw Error('MEMORY_PUSH_EXPECTED_REVISION_REQUIRED');
+      if (o.disabled) throw Error('AGENT_MEMORY_DISABLED');
+      if (inFlight) throw Error('MEMORY_SYNC_IN_PROGRESS');
+      await validateCachedScope();
+      const initial = state.repositories.find(repo => repo.name === 'memory' && repo.isPrimary);
+      if (!initial?.path || !['ready', 'cached', 'diverged', 'blocked_dirty', 'conflict'].includes(initial.state)) throw Error('MEMORY_REPOSITORY_UNAVAILABLE');
+      if (initial.readOnly || /\/letta\/runtime(?:\/v1)?\/?$/.test(new URL(o.baseURL!).pathname)) throw Error('MEMORY_PUSH_TRANSPORT_READ_ONLY');
+      return locked(initial.path, async () => {
+        await validateCachedScope();
+        const credential = currentCredential(), operationGeneration = generation;
+        const primary = state.repositories.find(repo => repo.name === 'memory' && repo.isPrimary);
+        const remote = activeRemotes.get('memory');
+        const guard = () => {
+          if (request.signal?.aborted) throw Error('MEMORY_PUSH_CANCELLED');
+          if (!credential || credential !== currentCredential() || credential !== validatedKey || generation !== operationGeneration) throw Error('MEMORY_PUSH_AUTH_CHANGED');
+          const current = state.repositories.find(repo => repo.name === 'memory' && repo.isPrimary);
+          if (!current?.path || current.path !== initial.path || current.readOnly || activeRemotes.get('memory') !== remote) throw Error('MEMORY_SCOPE_CHANGED');
+        };
+        guard(); if (!primary?.path || !remote) throw Error('MEMORY_REPOSITORY_UNAVAILABLE');
+        await safeDirectory(primary.path); await safeDirectory(join(primary.path, '.git'));
+        for (const marker of ['MERGE_HEAD', 'CHERRY_PICK_HEAD', 'rebase-merge', 'rebase-apply']) {
+          try { await fs.access(join(primary.path, '.git', marker)); throw Error('IN_PROGRESS_OPERATION'); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+        }
+        const headers = [`Authorization: Basic ${Buffer.from(`letta:${credential}`).toString('base64')}`];
+        const result = await pushMemoryCommit({ agentId: o.agentId, path: primary.path, remote, expectedRevision: request.expectedRevision, guard, git: (args, auth) => git(primary.path!, args, auth ? headers : [], request.signal, remote) });
+        if (result.verified) {
+          let observed: MemoryRepositorySnapshot;
+          try { guard(); observed = await inspectLocal(primary); guard(); } catch { return { ...result, state: 'unverified', verified: false, errorCode: 'MEMORY_PUSH_OUTCOME_UNVERIFIED' }; }
+          const sameCleanHead = observed.revision === result.revision && ['cached', 'ready', 'diverged'].includes(observed.state);
+          const published = { ...observed, ...(sameCleanHead ? { state: 'cached' as const, errorCode: undefined } : {}), lastPushedRevision: result.revision, lastSuccessfulPushAt: new Date().toISOString() };
+          const repositories = state.repositories.map(repo => repo.name === 'memory' ? published : repo);
+          const bad = repositories.find(repo => !['ready', 'cached'].includes(repo.state));
+          state = { ...state, state: bad?.state ?? (state.sharedDiscovery === 'verified' ? 'cached' : 'error'), repositories, sampledAt: new Date().toISOString() };
+        }
+        return result;
+      });
+    },
     sync(): Promise<AgentMemorySnapshot> {
       if (inFlight) return inFlight;
       const operationGeneration = ++generation;
@@ -674,11 +724,11 @@ export function createScopedMemory(options: ScopedMemoryOptions) {
       const active = status();
       return active.memoryDir
         ? {
-            MEMORY_DIR: active.memoryDir,
-            LETTA_MEMORY_DIR: active.memoryDir,
-            AGENT_ID: o.agentId,
-            LETTA_AGENT_ID: o.agentId,
-          }
+          MEMORY_DIR: active.memoryDir,
+          LETTA_MEMORY_DIR: active.memoryDir,
+          AGENT_ID: o.agentId,
+          LETTA_AGENT_ID: o.agentId,
+        }
         : { AGENT_ID: o.agentId, LETTA_AGENT_ID: o.agentId };
     },
     notice(): string {
@@ -691,7 +741,7 @@ export function createScopedMemory(options: ScopedMemoryOptions) {
         )
         .join(
           '\n',
-        )}\nUse AgentMemory status/list/read/search/sync; file tools need literal absolute paths. Cached/dirty/error states are not current. A local pull does not prove compiled blocks were reloaded. No automatic commit, push, reset or tag changes.\n</agent_memory>`;
+        )}\nUse AgentMemory status/list/read/search/sync. To publish already committed own-primary memory on a supported writable transport, use action=push with confirm=true and exact expectedRevision from status; no credentials in shell commands. Shared repositories cannot be pushed through this tool; read-only Vera transport stays read-only. File tools need literal absolute paths. Cached/dirty/error states are not current. A local pull does not prove compiled blocks were reloaded. No automatic commit, push, reset or tag changes.\n</agent_memory>`;
     },
   };
 }

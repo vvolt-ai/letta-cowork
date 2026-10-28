@@ -6,8 +6,10 @@ export const AGENT_MEMORY_PARAMETERS = {
   additionalProperties: false,
   required: ['action'],
   properties: {
-    action: { type: 'string', enum: ['status', 'list', 'read', 'search', 'sync'] },
+    action: { type: 'string', enum: ['status', 'list', 'read', 'search', 'sync', 'push'] },
     repository: { type: 'string' },
+    confirm: { type: 'boolean', description: 'Required true for explicit primary-memory push.' },
+    expectedRevision: { type: 'string', pattern: '^[a-fA-F0-9]{40}([a-fA-F0-9]{24})?$', description: 'Exact committed HEAD returned by status; required for push.' },
     path: {
       type: 'string',
       description: 'Relative file/directory in your returned memory repository.',
@@ -17,7 +19,7 @@ export const AGENT_MEMORY_PARAMETERS = {
   },
 };
 export const AGENT_MEMORY_DESCRIPTION =
-  'Inspect your current agent memory checkout and attached shared repositories: status, bounded list/read/search, or safe download/sync. Runtime supplies identity and roots; no arbitrary agentId. Sync does not commit, push, reset, stash or enable agents. A local file is not proof current compiled memory was loaded.';
+  'Inspect your current agent memory checkout and attached shared repositories: status, bounded list/read/search, or safe download/sync. Runtime supplies identity and roots; no arbitrary agentId. Sync does not commit, push, reset, stash or enable agents. Explicit push publishes only the current agent primary memory using scoped credentials, requires confirm=true and expectedRevision from status, and never commits, writes shared repos or force-pushes. Read-only transports remain unsupported for push. Do not bypass governance/managed-memory ownership. A local file or verified remote Git ref is not proof current compiled memory was loaded.';
 const MAX = 256 * 1024;
 function rel(value: unknown) {
   if (value === undefined || value === '') return '';
@@ -56,7 +58,7 @@ async function text(root: string, path: string) {
   return value;
 }
 async function listing(root: string, path: string, limit: number) {
-  const files: Array<{ path: string; description?: string }> = [];
+  const files: Array<{ path: string; description?: string; }> = [];
   let visited = 0,
     truncated = false;
   async function walk(at: string, depth = 0) {
@@ -124,12 +126,22 @@ export async function executeAgentMemory(
   args: Record<string, unknown>,
   access: SessionMemoryAccess | undefined,
   agentId: string | undefined,
+  signal?: AbortSignal,
 ): Promise<unknown> {
   if (
-    Object.keys(args).some((k) => !['action', 'repository', 'path', 'query', 'limit'].includes(k))
+    Object.keys(args).some((k) => !['action', 'repository', 'path', 'query', 'limit', 'confirm', 'expectedRevision'].includes(k))
   )
     throw Error('MEMORY_SCOPE_ARGUMENT_NOT_ALLOWED');
   if (!access || !agentId) throw Error('AGENT_MEMORY_UNAVAILABLE');
+  if (args.action === 'push') {
+    if (args.confirm !== true) throw Error('MEMORY_PUSH_CONFIRMATION_REQUIRED');
+    if (args.repository !== undefined && args.repository !== 'memory') throw Error('SHARED_MEMORY_PUSH_NOT_ALLOWED');
+    if (args.path !== undefined || args.query !== undefined || args.limit !== undefined) throw Error('INVALID_MEMORY_PUSH_ARGUMENT');
+    const before = await access.snapshot(); if (before.agentId !== agentId) throw Error('MEMORY_IDENTITY_MISMATCH');
+    if (!access.push) throw Error('MEMORY_PUSH_UNAVAILABLE');
+    return access.push({ confirm: true, expectedRevision: typeof args.expectedRevision === 'string' ? args.expectedRevision : '', signal });
+  }
+  if (args.confirm !== undefined || args.expectedRevision !== undefined) throw Error('INVALID_MEMORY_ACTION_ARGUMENT');
   if (!['status', 'list', 'read', 'search', 'sync'].includes(String(args.action)))
     throw Error('INVALID_MEMORY_ACTION');
   if (!['status', 'sync'].includes(String(args.action)) && access.withRead) {
@@ -179,7 +191,7 @@ export async function executeAgentMemory(
   if (args.action === 'list') return { ...evidence, ...files };
   if (typeof args.query !== 'string' || !args.query.trim() || args.query.length > 200)
     throw Error('INVALID_MEMORY_QUERY');
-  const matches: Array<{ path: string; line: number; text: string }> = [];
+  const matches: Array<{ path: string; line: number; text: string; }> = [];
   let truncated = files.truncated;
   for (const f of files.files) {
     const lines = (await text(repo.path, f.path.split('/').join(sep))).split(/\r?\n/);

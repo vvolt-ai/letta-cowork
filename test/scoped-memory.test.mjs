@@ -106,6 +106,7 @@ test(
             ['memory', 'core_system'],
           );
           assert(s.repositories.every((r) => r.readOnly));
+          await assert.rejects(memory.push({confirm:true,expectedRevision:s.repositories[0].revision}),/MEMORY_PUSH_TRANSPORT_READ_ONLY/);
           assert.equal(f.calls[0].url, `http://127.0.0.1:43119/letta/memfs/${AGENT}/descriptor`);
           assert.equal(f.calls[0].authorization, 'Bearer fixture-token-A');
           const lines = (await fs.readFile(f.log, 'utf8')).trim().split('\n').map(JSON.parse);

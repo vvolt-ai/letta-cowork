@@ -10,9 +10,10 @@ export const agentMemoryTool: ClientToolDefinition = {
   parameters: AGENT_MEMORY_PARAMETERS,
   async run(args, ctx) {
     try {
+      const result = await executeAgentMemory(args, ctx.agentMemory, ctx.agentId, ctx.signal);
       return {
-        output: JSON.stringify(await executeAgentMemory(args, ctx.agentMemory, ctx.agentId)),
-        isError: false,
+        output: JSON.stringify(result),
+        isError: args.action === 'push' && (!result || typeof result !== 'object' || !('verified' in result) || result.verified !== true),
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : '';

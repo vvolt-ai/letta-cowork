@@ -317,6 +317,7 @@ export class DesktopSdkSession {
         this.memoryAccess = {
           snapshot: () => this.memory!.snapshot(),
           refresh: () => this.memory!.sync(),
+          push:(request)=>this.memory!.push(request),
           withRead: (name, read) => this.memory!.withRead(name, read),
         };
         const refresh = this.memoryAccess.refresh();
@@ -572,6 +573,7 @@ export class DesktopSdkSession {
         const access = {
           snapshot: () => memory.snapshot(),
           refresh: () => memory.sync(),
+          push:(request:import('../../../services/memfs/memory-push.js').MemoryPushRequest)=>memory.push(request),
           withRead: <T>(
             name: string,
             read: (s: Awaited<ReturnType<SessionMemoryAccess['snapshot']>>) => Promise<T>,
