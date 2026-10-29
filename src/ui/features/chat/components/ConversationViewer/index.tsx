@@ -146,7 +146,7 @@ export const ConversationViewer = memo(function ConversationViewer({
           reasoningSteps={reasoningSteps}
           toolExecutions={toolExecutions}
           showReasoning={showReasoningInChat}
-          errorMessage={agentStatus === "error" ? errorMessage : undefined}
+          errorMessage={errorMessage}
         />
         <div ref={messagesEndRef} />
       </div>

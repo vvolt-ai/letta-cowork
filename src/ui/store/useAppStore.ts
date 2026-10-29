@@ -1,5 +1,6 @@
 import { getAssistantDraft, setAssistantDraft, clearAssistantDraft } from './assistantDraftStore';
 import { create } from 'zustand';
+import {sessionErrorMessage,preserveSessionFailure} from '../../electron/libs/runner/session-error-display.js';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
 import { truncateInput } from "../utils/chat";
@@ -677,7 +678,7 @@ export interface AppState {
   fetchSessionHistory: (sessionId: string, limit?: number, before?: string) => void;
   setEmailSessionId: (id: string) => void;
   markHistoryRequested: (sessionId: string) => void;
-  resolvePermissionRequest: (sessionId: string, toolUseId: string) => void;
+  resolvePermissionRequest: (sessionId: string, toolUseId: string, fallbackStatus?:AgentDisplayStatus) => void;
   setCoworkSettings: (settings: CoworkSettings) => void;
   setSelectedModel: (model: string) => void;
   setSessionModel: (sessionId: string, model: string) => void;
@@ -1010,7 +1011,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
     });
   },
 
-  resolvePermissionRequest: (sessionId, toolUseId) => {
+  resolvePermissionRequest: (sessionId, toolUseId, fallbackStatus='generating') => {
     set((state) => {
       const existing = state.sessions[sessionId];
       if (!existing) return {};
@@ -1025,7 +1026,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
         } else if (pendingResult === "completed") {
           nextStatus = "completed";
         } else {
-          nextStatus = "generating";
+          nextStatus = fallbackStatus;
         }
       } else {
         nextStatus = existing.ephemeral.status;
@@ -1158,6 +1159,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
           const existingMessages = ((existing.messages as ConversationStreamMessage[]) ?? [])
             .filter((m) => {
               if (getConversationMessageId(m) !== undefined) return true;
+              if(existing.ephemeral.errorMessage&&m.type==='user_prompt')return true;
               // Keep id-less messages that are still in-flight (newer than server's latest).
               return (m.createdAt ?? 0) > incomingMaxCreatedAt;
             });
@@ -1175,7 +1177,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
               ...state.sessions,
               [sessionId]: {
                 ...existing,
-                status,
+                status:existing.ephemeral.errorMessage?'error':status,
                 messages: mergedMessages,
                 hydrated: true,
                 hasMoreHistory: hasMore,
@@ -1183,7 +1185,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
                 totalDisplayableCount,
                 oldestMessageId: oldestMessageId ?? null,
                 isLoadingHistory: false,
-                ephemeral: clearEphemeral(
+                ephemeral: existing.ephemeral.errorMessage?existing.ephemeral:clearEphemeral(
                   existing.ephemeral ?? initialEphemeralState(),
                   status === "completed" ? "completed" : "idle"
                 ),
@@ -1193,7 +1195,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
         });
 
         if (historyError) {
-          set({ globalError: String(historyError) });
+          set({ globalError: sessionErrorMessage(historyError) });
         }
         break;
       }
@@ -1216,20 +1218,25 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
           const invalidModelMatch = /Invalid model\s+"([^"]+)"/i.exec(error);
           if (invalidModelMatch) {
             const badModel = invalidModelMatch[1];
-            resolvedError = `The model "${badModel}" is not supported by Letta Code's runtime. We've reverted to the agent's default model — please resend your message.`;
-            // Remember that this model is broken so we hide it from future pickers
-            // and clear the selected model so the next send uses the agent default.
-            get().markModelRejected(badModel);
-            if (rootState.selectedModel === badModel || rootState.selectedModel) {
-              set({ selectedModel: "" });
+            resolvedError = sessionErrorMessage(error);
+            // Only act on a known selected identifier, never arbitrary quoted
+            // server text (which could contain URLs, credentials or a body).
+            if(resolvedError===sessionErrorMessage('Invalid model')&&/^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,159}$/.test(badModel)&&(badModel===rootState.selectedModel||badModel===existing.model)){
+              get().markModelRejected(badModel);
+              if(rootState.selectedModel===badModel)set({selectedModel:''});
             }
-          }
+          }else{resolvedError=sessionErrorMessage(error);}
         }
+        if(status==='error'&&!error)resolvedError=sessionErrorMessage(undefined);
+        // An original timeout can be repeated by IPC after cleanup reports an
+        // unverified stop. Do not replace that stronger safety warning.
+        if(status==='error'&&existing.ephemeral.errorMessage===sessionErrorMessage('SDK_STOP_NOT_VERIFIED'))resolvedError=existing.ephemeral.errorMessage;
 
         set((state) => {
           const current = state.sessions[sessionId] ?? createSession(sessionId);
           const nextEphemeral = { ...current.ephemeral };
-          if (status === "completed") {
+          const keepFailure=preserveSessionFailure(current.ephemeral.errorMessage,status);
+          if (status === "completed"&&!keepFailure) {
             nextEphemeral.status = "completed";
             nextEphemeral.errorMessage = undefined;
           }
@@ -1245,10 +1252,11 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
             }
           }
           // When the backend goes idle (e.g. after session.stop), reset display status immediately
-          if (status === "idle") {
+          if (status === "idle"&&!keepFailure) {
             nextEphemeral.status = "idle";
             nextEphemeral.errorMessage = undefined;
           }
+          if(keepFailure)nextEphemeral.status='error';
           if (hadPendingPermissions && status !== "error") {
             nextEphemeral.status = "waiting_approval";
           }
@@ -1257,7 +1265,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
               ...state.sessions,
               [sessionId]: {
                 ...current,
-                status,
+                status:keepFailure?'error':status,
                 title: title ?? current.title,
                 cwd: cwd ?? current.cwd,
                 agentName: agentName ?? current.agentName,
@@ -1274,7 +1282,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
           };
         });
 
-        if (status === "completed" && previousStatus !== "completed" && !hadPendingPermissions) {
+        if (status === "completed" && !existing.ephemeral.errorMessage && previousStatus !== "completed" && !hadPendingPermissions) {
           const activeId = get().activeSessionId;
           if (activeId !== sessionId) {
             get().addNotification({
@@ -1288,6 +1296,9 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
           }
         }
 
+        if(status==='error'&&previousStatus!=='error'&&!rootState.pendingStart&&get().activeSessionId!==sessionId){
+          get().addNotification({id:createNotificationId(),sessionId,title:title??existing.title??'Request failed',agentName:agentName??existing.agentName,status:'error',timestamp:Date.now()});
+        }
         // "Completed" stays visible in the sidebar until the user sends the next message.
         // It is cleared back to "idle" when a new prompt is submitted (see handleSend).
 
@@ -1528,7 +1539,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
                   ...currentEphemeral,
                   assistantDraft: undefined,
                   pendingResultStatus: message.success ? "completed" : "error",
-                  pendingResultError: message.success ? undefined : (message.error ?? "Assistant failed to respond"),
+                  pendingResultError: message.success ? undefined : sessionErrorMessage(message.error),
                 };
                 break;
               }
@@ -1541,8 +1552,14 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
                 };
               } else {
                 status = "error";
-                ephemeral = clearEphemeral(currentEphemeral, "error", message.error ?? "Assistant failed to respond");
+                ephemeral = clearEphemeral(currentEphemeral, "error", sessionErrorMessage(message.error));
               }
+              break;
+            }
+            case "error": {
+              // Native SDK may report an error before its final result. Show
+              // feedback now without discarding running tools/approval state.
+              ephemeral={...currentEphemeral,recoveryMessage:sessionErrorMessage((message as {error?:string;message?:string}).error??(message as {message?:string}).message)};
               break;
             }
             case "init": {
@@ -1635,32 +1652,8 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
 
       case "permission.cancelled": {
         const { sessionId, toolUseId } = event.payload;
-        set((state) => {
-          const existing = state.sessions[sessionId];
-          if (!existing) return state;
-          const permissionRequests = existing.permissionRequests.filter(
-            (request) => request.toolUseId !== toolUseId,
-          );
-          if (permissionRequests.length === existing.permissionRequests.length) return state;
-          return {
-            sessions: {
-              ...state.sessions,
-              [sessionId]: {
-                ...existing,
-                permissionRequests,
-                ephemeral: {
-                  ...existing.ephemeral,
-                  status: permissionRequests.length
-                    ? "waiting_approval"
-                    : existing.ephemeral.status === "waiting_approval"
-                      ? "thinking"
-                      : existing.ephemeral.status,
-                  lastUpdated: Date.now(),
-                },
-              },
-            },
-          };
-        });
+        const existing=get().sessions[sessionId];
+        if(existing?.permissionRequests.some(request=>request.toolUseId===toolUseId))get().resolvePermissionRequest(sessionId,toolUseId,existing.ephemeral.status==='waiting_approval'?'thinking':existing.ephemeral.status);
         break;
       }
 
@@ -1687,7 +1680,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
       }
 
       case "runner.error": {
-        set({ globalError: event.payload.message, pendingStart: false, showStartModal: true });
+        set(state=>({ globalError: state.globalError===sessionErrorMessage('SDK_STOP_NOT_VERIFIED')?state.globalError:sessionErrorMessage(event.payload.message), pendingStart: false, showStartModal: true }));
         break;
       }
 

@@ -5,6 +5,7 @@
 import { readFile } from "node:fs/promises";
 
 import { createAbortHandler } from "./abort-handler.js";
+import {wasUserCancellation,waitForSessionInitialization} from './session-error-display.js';
 import { getAgentName } from "./client.js";
 import {
   createMessageSender,
@@ -55,6 +56,7 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
   // Will be set when Letta provides a real conversation ID
   let sessionKey: string = "";
   let lettaSessionRef: LettaSession | null = null;
+  let userStopRequested=false;
 
   const promptPreview = (prompt ?? "").slice(0, 100);
   debug("runLetta called", {
@@ -234,7 +236,7 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
         }
       } catch (streamError) {
         // Check if this was an abort error
-        if (signal.aborted || (streamError as Error).name === "AbortError") {
+        if (wasUserCancellation(signal.aborted||userStopRequested,streamError)) {
           debug("stream aborted (caught error)");
           sendSessionStatus(currentSessionId, "idle", onEvent, agentName);
         } else {
@@ -247,12 +249,23 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
       // the SDK adapter. Do not send an additional unstamped session.status=completed;
       // it can arrive after the next prompt starts and overwrite the live state.
     } catch (error) {
-      if(lettaSessionRef?.cancellationRequested&&!signal.aborted){
+      const userCancelled=wasUserCancellation(signal.aborted||userStopRequested,error);
+      // Also reject failures before initializeSession's inner try (e.g. missing
+      // connection settings); otherwise the IPC caller can wait forever.
+      rejectConversationId(error instanceof Error?error:new Error(String(error)));
+      const reportFailure=(message:string)=>{
+        if(currentSessionId==='pending')onEvent({type:'runner.error',payload:{message}});
+        else sendSessionStatus(currentSessionId,'error',onEvent,undefined,message);
+      };
+      if(!userCancelled)reportFailure(String(error));
+      // Show the original failure immediately, but retain ownership until the
+      // failed initialization/run has actually completed its owned cleanup.
+      if(lettaSessionRef&&!signal.aborted){
         try{await lettaSessionRef.abort();abortController.abort();}
-        catch(stopError){sendSessionStatus(currentSessionId,'error',onEvent,undefined,stopError instanceof Error?stopError.message:'SDK stop could not be verified.');return;}
+        catch(stopError){reportFailure('SDK_STOP_NOT_VERIFIED: '+(stopError instanceof Error?stopError.message:'Owned stop could not be verified.'));return;}
       }
       // Check if this was an abort
-      if (signal.aborted || (error as Error).name === "AbortError") {
+      if (userCancelled) {
         debug("session aborted (caught)");
         sendSessionStatus(currentSessionId, "idle", onEvent);
         return;
@@ -275,9 +288,8 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
       // The caller (scheduler or UI) handles its own session's failure
       // via the "error" status we send below. May 15 cascade incident.
 
-      // Send detailed error to UI
-      const errorMessage = `Failed to start session: ${String(error)}\n\nAgent ID: ${errorDetails.agentId}\nBase URL: ${errorDetails.baseURL}\nLocal API key configured: ${errorDetails.localApiKeyConfigured}`;
-      sendSessionStatus(currentSessionId, "error", onEvent, undefined, errorMessage);
+      // Failure was already reported before cleanup; do not emit a second
+      // unstamped terminal event after a newer turn could have started.
     } finally {
       if (sessionKey) {
         cleanupSession(sessionKey, lettaSessionRef);
@@ -289,10 +301,10 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
   })();
 
   // Wait for the real conversation ID before returning
-  const realConversationId = await conversationIdPromise;
+  const realConversationId = await waitForSessionInitialization(conversationIdPromise,runPromise);
 
   return {
-    abort: createAbortHandler(realConversationId, lettaSessionRef, abortController),
+    abort: createAbortHandler(realConversationId, lettaSessionRef, abortController,()=>{userStopRequested=true;}),
     sessionId: realConversationId,
     done: runPromise,
   };

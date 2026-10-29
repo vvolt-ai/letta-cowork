@@ -222,15 +222,15 @@ export const ChatWorkspace = memo(function ChatWorkspace({
               </div>
             </div>
           </div>
-          {agentStatus === "error" && errorMessage ? (
-            <div className="mb-4 rounded-2xl border border-[var(--color-status-error)]/30 bg-[var(--color-status-error)]/5 px-4 py-3 text-sm text-[var(--color-status-error)]">
+          {errorMessage ? (
+            <div role="alert" className="mb-4 rounded-2xl border border-[var(--color-status-error)]/30 bg-[var(--color-status-error)]/5 px-4 py-3 text-sm text-[var(--color-status-error)]">
               <div className="flex items-start gap-2">
                 <svg viewBox="0 0 24 24" className="mt-0.5 h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2">
                   <circle cx="12" cy="12" r="10" />
                   <path d="M12 8v4M12 16h.01" />
                 </svg>
                 <div>
-                  <div className="font-medium">Agent error</div>
+                  <div className="font-medium">Couldn’t complete this request</div>
                   <div className="mt-0.5 text-xs leading-5 opacity-90">{errorMessage}</div>
                 </div>
               </div>
@@ -285,7 +285,7 @@ export const ChatWorkspace = memo(function ChatWorkspace({
                 toolExecutions={toolExecutions}
                 cliResults={cliResults}
                 showReasoning={showReasoningInChat}
-                errorMessage={agentStatus === "error" ? errorMessage : undefined}
+                errorMessage={errorMessage}
               />
           {recoveryMessage && showRecoveryNotice && agentStatus !== "error" ? (
                 <div className="mt-3 flex items-start gap-3 rounded-2xl border border-amber-300/70 bg-amber-50/80 px-4 py-3 text-sm text-amber-900">

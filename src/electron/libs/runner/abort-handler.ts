@@ -35,9 +35,11 @@ export function createAbortHandler(
   sessionKey: string,
   session: RunnerLettaSession | null,
   controller: AbortController,
+  onRequested?:()=>void,
 ): () => Promise<void> {
   return async () => {
     if (!session) throw Error('SDK_STOP_SCOPE_UNAVAILABLE');
+    onRequested?.();
     // UI receives an abort only after native/backend/tool settlement verifies.
     // A failed stop leaves its owned control path available for another attempt.
     await session.abort();

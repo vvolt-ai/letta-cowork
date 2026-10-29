@@ -86,6 +86,7 @@ export function usePromptActions(
       }
 
       if (!activeSessionId) {
+        setGlobalError(null);
         setPendingStart(true);
         const derivedTitle = generateSessionTitle(text, options?.attachments ?? []);
         sendEvent({
@@ -102,9 +103,8 @@ export function usePromptActions(
             permissionMode,
           },
         });
-        if (!hasAttachments) {
-          setPrompt("");
-        }
+        // Keep the draft until session.status confirms a real running session.
+        // Startup failure must not erase the user's unsent text.
       } else {
         if (isRunning) {
           setGlobalError("Session is still running. Please wait for it to finish.");

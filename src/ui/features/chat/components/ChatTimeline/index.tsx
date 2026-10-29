@@ -265,13 +265,13 @@ export function ChatTimeline({
       )}
 
       {errorMessage ? (
-        <div className="flex min-w-0 items-start gap-3 rounded-2xl border border-[var(--color-status-error)]/25 bg-[var(--color-status-error)]/5 px-4 py-3 text-sm">
+        <div role="alert" className="flex min-w-0 items-start gap-3 rounded-2xl border border-[var(--color-status-error)]/25 bg-[var(--color-status-error)]/5 px-4 py-3 text-sm">
           <svg viewBox="0 0 24 24" className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-status-error)]" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="12" cy="12" r="10" />
             <path d="M12 8v4M12 16h.01" />
           </svg>
           <div className="min-w-0 break-words">
-            <div className="font-medium text-[var(--color-status-error)]">Agent error</div>
+            <div className="font-medium text-[var(--color-status-error)]">Couldn’t complete this request</div>
             <div className="mt-0.5 text-xs leading-5 text-[var(--color-status-error)]/80">{errorMessage}</div>
           </div>
         </div>

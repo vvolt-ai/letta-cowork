@@ -124,9 +124,9 @@ export async function handleContinueSession(
             },
         });
 
+        let actualConversationId = conversationId;
         try {
             debug("session.continue: calling runLetta", { conversationId });
-            let actualConversationId = conversationId;
 
             const handle = await runLetta({
                 prompt: prompt ?? "",
@@ -215,17 +215,19 @@ export async function handleContinueSession(
             await handle.done;
         } catch (error) {
             log("session.continue: ERROR", { error: String(error) });
-            const activeHandle = runnerHandles.get(conversationId);
-            if (activeHandle) await activeHandle.abort();
-            updateSession(conversationId, { status: "error" });
+            if(isCancelled())return;
+            // Report first: cleanup/abort can take time or fail independently.
+            const activeHandle = runnerHandles.get(actualConversationId);
+            updateSession(actualConversationId, { status: "error" });
             emit({
                 type: "session.status",
                 payload: {
-                    sessionId: conversationId,
+                    sessionId: actualConversationId,
                     status: "error",
                     error: String(error),
                 },
             });
+            if(activeHandle){try{await activeHandle.abort();}catch(cleanupError){log('session.continue: failed cleanup after error',{error:String(cleanupError)});}}
         }
     });
 }

@@ -49,6 +49,16 @@ Failed stop/readback retains the control path and can be retried. Unverified exe
 
 The UI result callback is observational: it never sends a direct REST recovery message or claims an orphan approval was cleared. App quit waits for owned SDK cleanup; a failed verification pauses graceful quit.
 
+## User-visible request failures
+
+Startup/continuation/session failures must produce a visible notice, not only terminal output. Connection/server failures (including `conversation_retrieve` timeouts) show fixed guidance that the interruption may be temporary and suggest waiting about five minutes. The text does not promise recovery. Authentication, permissions, missing/mismatched agent/account/conversation, invalid model and unverified-stop failures use corrective guidance instead; an uncertain stop must not be replaced by advice to resend. Raw stacks, URLs, credential-bearing bodies and arbitrary quoted model names are not presentation text. Detailed diagnostics remain in runtime logs.
+
+SDK cleanup can request abort after initialization fails; that is not proof the user selected Stop. Only the trusted stop callback or owning abort signal suppresses failure feedback. The failed initialization's owned cleanup settles before its IPC turn releases ownership, so an older terminal status cannot overtake a queued retry. A failure is displayed before potentially slow cleanup. Pre-initialize errors reject the awaited identity instead of leaving startup pending; no fake pending conversation is exposed.
+
+The renderer retains terminal feedback across cleanup idle/completed statuses and history refresh, preserves failed optimistic prompts and the new-session draft, and clears it when the user explicitly starts another attempt. Pending approvals remain visible; their cancellation applies a pending terminal result rather than leaving the chat thinking. Error notices render independently of display status. Recoverable SDK/tool errors can show recovery feedback while work remains active. There is no automatic five-minute timer, resubmission or business-write retry; users must inspect already-completed actions before retrying an uncertain request.
+
+Validation uses synthetic store event sequences, deferred ownership/stop fixtures, and server-rendered notice markup. These are not a live-user acceptance receipt. Rebuild/reload is needed to adopt the updated main process and UI. This feedback change is independent of the scheduler's agent/conversation binding validation.
+
 ## Native boundaries
 
 - **SDK timeout distinction (verified 2026-10-23):** `LettaAgentClient.requestTimeoutMs` also arms the complete model-turn timer in SDK0.8.50, including tool/human waits. Do not set it to the 10-second handshake deadline. Production leaves that turn deadline unset; individual probe/control requests retain explicit bounded deadlines. A 12-second native fixture reproduces the previous failure and passes with this separation.
