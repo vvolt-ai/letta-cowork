@@ -23,6 +23,7 @@ export function getVeraCoworkApiClient(): VeraCoworkApiClient {
 }
 
 export function setVeraCoworkApiUrl(url: string): void {
+  apiClientInstance?.retireAuthenticationContext();
   apiClientInstance = new VeraCoworkApiClient(url);
 }
 

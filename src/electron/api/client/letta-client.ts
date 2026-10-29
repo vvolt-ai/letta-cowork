@@ -286,12 +286,13 @@ export class VeraCoworkApiClient extends BaseHttpClient {
     });
   }
 
-  async getAgentSecretRuntimeEnv(agentId: string): Promise<Record<string, string>> {
+  async getAgentSecretRuntimeEnv(agentId: string,options:{signal?:AbortSignal}={}): Promise<Record<string, string>> {
     const result = await this.request<{ env: Record<string, string>; }>(
       "/agent-secrets/runtime-env",
       {
         method: "POST",
         body: { agentId },
+        signal:options.signal,
       },
     );
     return result.env ?? {};

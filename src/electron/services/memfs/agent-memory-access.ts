@@ -19,7 +19,7 @@ export const AGENT_MEMORY_PARAMETERS = {
   },
 };
 export const AGENT_MEMORY_DESCRIPTION =
-  'Inspect your current agent memory checkout and attached shared repositories: status, bounded list/read/search, or safe download/sync. Runtime supplies identity and roots; no arbitrary agentId. Sync does not commit, push, reset, stash or enable agents. Explicit push publishes only the current agent primary memory using scoped credentials, requires confirm=true and expectedRevision from status, and never commits, writes shared repos or force-pushes. Read-only transports remain unsupported for push. Do not bypass governance/managed-memory ownership. A local file or verified remote Git ref is not proof current compiled memory was loaded.';
+  'Inspect your current agent memory checkout and attached shared repositories: status, bounded list/read/search, or safe download/sync. Runtime supplies identity and roots; no arbitrary agentId. Normal chat does not automatically refresh Git memory; explicit sync prepares the scoped local checkout. Read/search require it, otherwise MEMORY_SYNC_REQUIRED is returned. Sync does not commit, push, reset, stash or enable agents. Explicit push publishes only the current agent primary memory using scoped credentials, requires confirm=true and expectedRevision from status, and never commits, writes shared repos or force-pushes. Read-only transports remain unsupported for push. Do not bypass governance/managed-memory ownership. A local file or verified remote Git ref is not proof current compiled memory was loaded.';
 const MAX = 256 * 1024;
 function rel(value: unknown) {
   if (value === undefined || value === '') return '';

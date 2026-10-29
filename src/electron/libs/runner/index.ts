@@ -13,7 +13,8 @@ import {
   logMessageDetails,
   handleResultMessage,
 } from "./event-handler.js";
-import { log, debug, timing } from "./logger.js";
+import { log, debug } from "./logger.js";
+import {StartupTiming} from './sdk/startup-timing.js';
 import { createCanUseToolHandler } from "./permission-handler.js";
 import {
   createOrResumeSession,
@@ -57,6 +58,9 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
   let sessionKey: string = "";
   let lettaSessionRef: LettaSession | null = null;
   let userStopRequested=false;
+  let displayClosed=false;
+  const timing=options.timing??new StartupTiming();
+  timing.mark('request_received');
 
   const promptPreview = (prompt ?? "").slice(0, 100);
   debug("runLetta called", {
@@ -97,9 +101,10 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
       const canUseTool = createCanUseToolHandler(session, sendPermissionRequest, options.permissionMode,(toolUseId)=>onEvent({type:'permission.cancelled',payload:{sessionId:currentSessionId,toolUseId}}));
 
       // Create or resume session
-      const lettaSession = createOrResumeSession(options, canUseTool);
+      const lettaSession = createOrResumeSession({...options,timing}, canUseTool);
       lettaSessionRef = lettaSession;
-      debug("session created successfully");
+      timing.mark('session_object_created');
+      debug("SDK session object created; initializing",{traceId:timing.traceId});
 
       // Initialize session - async wait for real conversation ID from Letta
       let initResult;
@@ -167,12 +172,12 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
 
       // Send the prompt (session is already initialized above)
       debug("calling send()");
-      timing.mark("before send()");
+
       const sendStartTime = Date.now();
       const payload = Array.isArray(content) && content.length > 0 ? content : prompt;
       await lettaSession.send(payload);
       const sendDuration = Date.now() - sendStartTime;
-      debug("send() completed", {
+      debug("send() queued input; model response is still pending", {
         conversationId: lettaSession.conversationId,
         agentId: lettaSession.agentId,
         sendDurationMs: sendDuration,
@@ -182,13 +187,10 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
       }
 
       // Get agent name for display (uses cache if available)
-      let agentName: string | undefined = "Unknown Agent";
+      let agentName: string | undefined;
       try {
-        const name = await getAgentName(
-          lettaSession.agentId || getCachedAgentId() || targetAgentId || undefined,
-          options.lettaConnectionId,
-        );
-        agentName = name || agentName;
+        const nameLookup=lettaSession.getDisplayName?lettaSession.getDisplayName():timing.measure('agent_name',()=>getAgentName(lettaSession.agentId,options.lettaConnectionId));
+        void nameLookup.then(name=>{if(!displayClosed&&!signal.aborted)agentName=name||agentName;}).catch(()=>undefined);
       } catch (e) {
         console.log("[runner] Failed to get agent name:", e);
       }
@@ -291,6 +293,7 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
       // Failure was already reported before cleanup; do not emit a second
       // unstamped terminal event after a newer turn could have started.
     } finally {
+      displayClosed=true;
       if (sessionKey) {
         cleanupSession(sessionKey, lettaSessionRef);
       }

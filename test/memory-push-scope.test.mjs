@@ -13,7 +13,7 @@ test('readonly Vera memory push is refused without requesting a write or changin
   const memory=createScopedMemory({agentId:AGENT,baseURL:'https://fixture.invalid/letta/runtime',apiKey:'fixture',cacheRoot:root,fetch:async()=>{throw Error('No real network allowed');}});
   await assert.rejects(memory.push({confirm:false,expectedRevision:SHA}),/CONFIRMATION_REQUIRED/);
   await assert.rejects(memory.push({confirm:true,expectedRevision:'HEAD'}),/EXPECTED_REVISION/);
-  await assert.rejects(memory.push({confirm:true,expectedRevision:SHA}),/MEMORY_AUTH_REVALIDATION_REQUIRED/);
+  await assert.rejects(memory.push({confirm:true,expectedRevision:SHA}),/MEMORY_SYNC_REQUIRED/);
  }finally{await fs.rm(root,{recursive:true,force:true});}
 });
 test('push controls are not ignored or routed through read-only callbacks',async()=>{

@@ -42,6 +42,7 @@ export function createOrResumeSession(
 ): RunnerLettaSession {
   const scope = captureDesktopSdkScope(options.lettaConnectionId);
   const settings = {
+    timing:options.timing,
     ...createSessionOptions(
       options.session,
       options.model,

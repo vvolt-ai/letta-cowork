@@ -325,6 +325,7 @@ export interface ProcessedEmailRecord {
 // ============================================
 
 export interface RequestOptions {
+  signal?:AbortSignal;
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   requireAuth?: boolean;

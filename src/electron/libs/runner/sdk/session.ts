@@ -36,6 +36,7 @@ import { DesktopNativeControls } from './native-controls.js';
 import {delegatedToolNames} from './tool-grants.js';
 import {ODOO_ATTACHMENT_TOOL} from '../../../services/client-tools/runners/_shared/attachmentApproval.js';
 import { classifyStreamTermination } from './terminal-stop.js';
+import {StartupTiming,abortableSetupRead} from './startup-timing.js';
 
 export interface DesktopSdkScope {
   config: LettaRuntimeConfig;
@@ -56,8 +57,13 @@ export interface DesktopSdkSessionOptions {
   inheritedContext?: ToolRunContext;
   tools?: readonly string[];
   maxTurns?: number;
+  timing?:StartupTiming;
 }
 export interface DesktopSdkDependencies {
+  createMemory?:typeof createScopedMemory;
+  loadRuntimeEnv?:(agentId:string,signal:AbortSignal)=>Promise<Record<string,string>>;
+  runtimeEnvTimeoutMs?:number;
+  runtimeActor?:()=>string;
   launch?: (options: DesktopNativeOptions) => Promise<DesktopNativeBinding>;
   open?: (
     binding: DesktopNativeBinding,
@@ -67,6 +73,7 @@ export interface DesktopSdkDependencies {
 const owners = new Map<string, DesktopSdkSession>();
 const sessions = new Set<DesktopSdkSession>();
 const schedulers = new WeakMap<DesktopSdkScope, SdkToolScheduler>();
+const displayNames=new Map<string,{name:string;at:number}>();
 function actor() {
   const api = getVeraCoworkApiClient();
   return JSON.stringify([api.apiBaseUrl, api.currentUser?.id, api.currentUser?.organizationId]);
@@ -212,6 +219,7 @@ export class DesktopSdkSession {
     private readonly dependencies: DesktopSdkDependencies = {},
   ) {
     this.options = options;
+    this.timing=options.timing??new StartupTiming();
     this._agentId = options.agentId?.trim() || null;
     this._conversationId = options.conversationId?.trim() || null;
     this.cwd = options.cwd ?? process.cwd();
@@ -244,9 +252,47 @@ export class DesktopSdkSession {
       ...(this.binding?.secretValues ?? []),
     ]);
   }
+  private readonly timing:StartupTiming;
+  private async prepareMemory():Promise<void>{
+    this.timing.begin('memory_checkpoint');
+    try{
+      this.checkOpen();
+      if(this.options.inheritedContext?.agentMemory)this.memoryAccess=this.options.inheritedContext.agentMemory;
+      else{
+        // Construct the scoped capability only. No Git/API refresh on a chat
+        // turn; explicit AgentMemory sync prepares this session's access.
+        this.memory=(this.dependencies.createMemory??createScopedMemory)({agentId:this._agentId!,baseURL:this.scope!.config.baseURL,apiKey:this.scope!.config.apiKey,fetch:this.scope!.config.fetch,connectionId:this.options.lettaConnectionId,disabled:this.options.memoryDisabled,getApiKey:this.scope!.config.source==='vera'?()=>getVeraCoworkApiClient().accessToken||undefined:undefined});
+        this.memoryAccess={snapshot:()=>this.memory!.snapshot(),refresh:()=>this.memory!.sync(),push:request=>this.memory!.push(request),withRead:(name,read)=>this.memory!.withRead(name,read)};
+      }
+      this.timing.finish('memory_checkpoint','skipped');
+    }catch{this.memoryAccess=undefined;this.timing.finish('memory_checkpoint','error');}
+  }
+  private async prepareRuntimeEnv():Promise<void>{
+    try{await this.timing.measure('runtime_env',async()=>{
+      this.checkOpen();const inherited=this.options.inheritedContext?.runtimeEnv;
+      if(inherited!==undefined){this.runtimeEnv=Object.freeze({...inherited});return;}
+      const api=this.dependencies.loadRuntimeEnv?undefined:getVeraCoworkApiClient();
+      const currentActor=this.dependencies.runtimeActor??actor;const identity=currentActor();
+      if(!this.dependencies.loadRuntimeEnv&&!api?.accessToken){this.runtimeEnv=Object.freeze({});return;}
+      const timeout=this.dependencies.runtimeEnvTimeoutMs??10000;
+      if(!Number.isSafeInteger(timeout)||timeout<1||timeout>30000)throw Error('INVALID_SETUP_READ_DEADLINE');
+      const signal=AbortSignal.any([this.ctrl.signal,AbortSignal.timeout(timeout)]);
+      const loaded=await abortableSetupRead(this.dependencies.loadRuntimeEnv?this.dependencies.loadRuntimeEnv(this._agentId!,signal):api!.getAgentSecretRuntimeEnv(this._agentId!,{signal}),signal);
+      this.checkOpen();if(currentActor()!==identity)throw Error('SDK_RUNTIME_ENV_ACTOR_CHANGED');
+      this.runtimeEnv=Object.freeze({...loaded});
+    });}catch{this.runtimeEnv=Object.freeze({});}
+  }
+  async getDisplayName():Promise<string|undefined>{
+    return this.timing.measure('agent_name',async()=>{
+      this.checkOpen();const key=this.scope!.key+':'+this._agentId;const cached=displayNames.get(key);if(cached&&Date.now()-cached.at<60000)return cached.name;
+      const agent=await this.scope!.client.agents.retrieve(this._agentId!,{},{signal:this.ctrl.signal});this.checkOpen();
+      if(agent.name){displayNames.set(key,{name:agent.name,at:Date.now()});if(displayNames.size>128)displayNames.delete(displayNames.keys().next().value!);}
+      return agent.name||undefined;
+    });
+  }
   initialize(): Promise<SDKInitMessage> {
     if (!this.init)
-      this.init = this.initializeOnce().catch((error) => {
+      this.init = this.timing.measure('initialization',()=>this.initializeOnce()).catch((error) => {
         this.close();
         throw Error(
           this.safe(error instanceof Error ? error.message : 'SDK_INITIALIZATION_FAILED'),
@@ -266,14 +312,14 @@ export class DesktopSdkSession {
     if (!this._agentId && !this._conversationId) throw Error('SDK_AGENT_ID_REQUIRED');
     const client = this.scope.client;
     if (!this._conversationId) {
-      const created = await client.conversations.create({
+      const created = await this.timing.measure('conversation_create',()=>client.conversations.create({
         agent_id: this._agentId!,
         ...(this.options.model ? { model: this.options.model } : {}),
-      });
+      }));
       this._conversationId = created.id;
     }
     this.checkOpen();
-    const conversation = await client.conversations.retrieve(this._conversationId!);
+    const conversation = await this.timing.measure('conversation_lookup',()=>client.conversations.retrieve(this._conversationId!));
     if (this._agentId && conversation.agent_id !== this._agentId)
       throw Error('SDK_CONVERSATION_AGENT_MISMATCH');
     this._agentId = conversation.agent_id;
@@ -284,63 +330,23 @@ export class DesktopSdkSession {
     const previous = owners.get(this.ownerKey);
     if (previous) {
       if (!previous.isVerified) throw Error('SDK_CONVERSATION_ALREADY_OWNED');
-      await bounded(previous.dispose(), 30000, 'SDK_PREVIOUS_CLEANUP_UNVERIFIED');
+      await this.timing.measure('previous_cleanup',()=>bounded(previous.dispose(), 30000, 'SDK_PREVIOUS_CLEANUP_UNVERIFIED'));
       this.checkOpen();
     }
     if (owners.has(this.ownerKey)) throw Error('SDK_CONVERSATION_ALREADY_OWNED');
     owners.set(this.ownerKey, this);
-    if (this.options.model) {
-      await client.conversations.update(this._conversationId!, { model: this.options.model });
+    if (this.options.model&&this.options.model!==conversation.model) {
+      await this.timing.measure('model_update',()=>client.conversations.update(this._conversationId!, { model: this.options.model }));
       this.checkOpen();
-      const confirmed = await client.conversations.retrieve(this._conversationId!);
+      const confirmed = await this.timing.measure('model_confirm',()=>client.conversations.retrieve(this._conversationId!));
       this.checkOpen();
       if (confirmed.model && confirmed.model !== this.options.model)
         throw Error('SDK_CONVERSATION_MODEL_NOT_CONFIRMED');
       this.model = confirmed.model ?? this.options.model;
-    }
-    try {
-      if (this.options.inheritedContext?.agentMemory)
-        this.memoryAccess = this.options.inheritedContext.agentMemory;
-      else {
-        this.memory = createScopedMemory({
-          agentId: this._agentId,
-          baseURL: this.scope.config.baseURL,
-          apiKey: this.scope.config.apiKey,
-          fetch: this.scope.config.fetch,
-          connectionId: this.options.lettaConnectionId,
-          disabled: this.options.memoryDisabled,
-          getApiKey:
-            this.scope.config.source === 'vera'
-              ? () => getVeraCoworkApiClient().accessToken || undefined
-              : undefined,
-        });
-        this.memoryAccess = {
-          snapshot: () => this.memory!.snapshot(),
-          refresh: () => this.memory!.sync(),
-          push:(request)=>this.memory!.push(request),
-          withRead: (name, read) => this.memory!.withRead(name, read),
-        };
-        const refresh = this.memoryAccess.refresh();
-        void refresh.catch(() => undefined);
-        await Promise.race([
-          refresh,
-          new Promise<void>((resolve) => {
-            const timer = setTimeout(resolve, 8000);
-            timer.unref?.();
-          }),
-        ]);
-      }
-    } catch {
-      this.memoryAccess = undefined;
-    }
-    try {
-      this.runtimeEnv = Object.freeze({
-        ...(this.options.inheritedContext?.runtimeEnv ??
-          (await getVeraCoworkApiClient().getAgentSecretRuntimeEnv(this._agentId))),
-      });
-    } catch {
-      this.runtimeEnv = Object.freeze({});
-    }
+    }else if(this.options.model){this.timing.mark('model_unchanged');}
+    // Build manual local-memory access and load bounded runtime env only after
+    // canonical ownership validation. Normal chat does not refresh local Git.
+    await Promise.all([this.prepareMemory(),this.prepareRuntimeEnv()]);
     this.checkOpen();
     const definitions = getClientToolsForWire().filter(
       (tool) => !this.options.tools || this.options.tools.includes(tool.name),
@@ -357,16 +363,17 @@ export class DesktopSdkSession {
         execute: (id, input, signal) => this.executeTool(id, alias, input, signal),
       };
     });
+    this.timing.mark('tools_registered');
     this.controls = new DesktopNativeControls(
       this._agentId,
       this._conversationId!,
       this.options.maxTurns,
     );
-    this.binding = await (this.dependencies.launch ?? startDesktopAppServer)({
-      agentId: this._agentId,
+    this.binding = await this.timing.measure('native_launch',()=>(this.dependencies.launch ?? startDesktopAppServer)({
+      agentId: this._agentId!,
       conversationId: this._conversationId!,
       cwd: this.cwd,
-      provider: this.scope.config,
+      provider: this.scope!.config,
       assertCurrent: () => this.scope!.assertCurrent(),
       authorizeCancellation: (agentId, ids) => {
         this.scope!.assertCurrent();
@@ -378,9 +385,9 @@ export class DesktopSdkSession {
         );
       },
       signal: this.ctrl.signal,
-    });
+    }));
     this.checkOpen();
-    this.sdk = await (this.dependencies.open ?? openSdk)(this.binding, this.controls);
+    this.sdk = await this.timing.measure('native_connect',()=>(this.dependencies.open ?? openSdk)(this.binding!, this.controls!));
     this.checkOpen();
     this.native = this.sdk.resumeSession(this._conversationId!, {
       cwd: this.cwd,
@@ -409,7 +416,7 @@ export class DesktopSdkSession {
         return decision;
       },
     });
-    const ready = await this.native.ready();
+    const ready = await this.timing.measure('native_ready',()=>this.native!.ready());
     this.checkOpen();
     if (ready.agentId !== this._agentId || ready.conversationId !== this._conversationId)
       throw Error('SDK_RUNTIME_IDENTITY_MISMATCH');
@@ -579,7 +586,8 @@ export class DesktopSdkSession {
             read: (s: Awaited<ReturnType<SessionMemoryAccess['snapshot']>>) => Promise<T>,
           ) => memory.withRead(name, read),
         };
-        await access.refresh();
+        // Child memory also remains explicit-sync; never download merely
+        // because delegation prepared a tool context.
         return access;
       },
     };
@@ -587,6 +595,7 @@ export class DesktopSdkSession {
     const child = new DesktopSdkSession(
       {
         ...this.options,
+        timing:undefined,
         scope: this.scope,
         agentId: request.agentId,
         conversationId: request.conversationId,
@@ -642,7 +651,7 @@ export class DesktopSdkSession {
       this.checkOpen();
       const memoryNotice =
         this.memory?.notice() ??
-        'Scoped local/shared memory status is separate from already-loaded prompt blocks.';
+        'Automatic local/shared Git-memory refresh is off for chat turns. Existing server-side prompt memory is separate. Use AgentMemory sync explicitly before relying on a local checkout; no files were deleted.';
       const context = [
         memoryNotice,
         buildTurnReminders({
@@ -659,7 +668,7 @@ export class DesktopSdkSession {
           : [{ type: 'text', text: context }, ...message];
       this.checkOpen();
       this.sent = true;
-      await this.native!.send(payload, { otid: this.controls!.messageId });
+      await this.timing.measure('input_queued',()=>this.native!.send(payload, { otid: this.controls!.messageId }));
       this.checkOpen();
     } finally {
       complete();
@@ -714,6 +723,9 @@ export class DesktopSdkSession {
     try {
       for await (const message of this.native!.stream()) {
         this.checkOpen();
+        this.timing.markOnce('first_stream_event');
+        if(message.type==='assistant'&&typeof message.content==='string'&&message.content.trim())this.timing.markOnce('first_assistant_text');
+        if(message.type==='tool_call')this.timing.markOnce('first_tool_call');
         const value = { ...message } as SDKMessage & { clientRunId?: string; turnSeq?: number };
         if (value.type === 'tool_call')
           value.toolName = this.aliases.get(value.toolName) ?? value.toolName;
@@ -748,6 +760,7 @@ export class DesktopSdkSession {
             value.error = 'Native execution stopped: ' + this.controls?.stopReason;
           }
           terminal = true;
+          this.timing.markOnce('turn_finished');
         }
         value.clientRunId = this.controls!.messageId;
         value.turnSeq = 1;

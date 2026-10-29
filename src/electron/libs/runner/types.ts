@@ -33,6 +33,7 @@ export type RunnerLettaSession = {
   readonly conversationId: string | null;
   readonly accountScopeKey?: string;
   readonly cancellationRequested?: boolean;
+  getDisplayName?():Promise<string|undefined>;
   readonly planMode?: import('./plan-mode/mode-manager.js').PlanModeManager;
   close?(): void;
 };
@@ -42,6 +43,7 @@ export type RunnerLettaSession = {
  */
 export type RunnerOptions = {
   prompt: string;
+  timing?:import('./sdk/startup-timing.js').StartupTiming;
   content?: MessageContentItem[];
   session: RunnerSession;
   resumeConversationId?: string;

@@ -4,6 +4,7 @@
  */
 
 import { enqueueConversationTurn } from "./conversation-turn-queue.js";
+import {StartupTiming} from '../../../libs/runner/sdk/startup-timing.js';
 import {
     runnerHandles,
     emit,
@@ -41,6 +42,7 @@ export async function handleContinueSession(
         attachments: attachments?.length ?? 0,
     });
 
+    const timing=new StartupTiming();timing.begin('queue_wait');
     await enqueueConversationTurn(conversationId, async (isCancelled) => {
         // A handle may predate the FIFO (for example, the initial session.start
         // turn). Its done promise is the ownership boundary: wait for actual
@@ -54,7 +56,8 @@ export async function handleContinueSession(
         }
         // Stop/delete may have invalidated this queued turn while it waited for
         // the previous owner to release the conversation.
-        if (isCancelled()) return;
+        if (isCancelled()) {timing.finish('queue_wait','skipped');return;}
+        timing.finish('queue_wait');
 
         let runtimeSession = getSession(conversationId);
         if (!runtimeSession) {
@@ -129,6 +132,7 @@ export async function handleContinueSession(
             debug("session.continue: calling runLetta", { conversationId });
 
             const handle = await runLetta({
+                timing,
                 prompt: prompt ?? "",
                 content: content as MessageContentItem[] | undefined,
                 model: resolvedModel,

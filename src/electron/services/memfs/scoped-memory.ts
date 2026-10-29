@@ -181,6 +181,7 @@ export function createScopedMemory(options: ScopedMemoryOptions) {
     repositories: [],
     sharedDiscovery: 'unavailable',
     sampledAt: new Date().toISOString(),
+    errorCode:o.disabled?undefined:'MEMORY_SYNC_REQUIRED',
   };
   let inFlight: Promise<AgentMemorySnapshot> | undefined;
   let boundScope: string | undefined = o.expectedScopeId;
@@ -599,6 +600,7 @@ export function createScopedMemory(options: ScopedMemoryOptions) {
       if (typeof request.expectedRevision !== 'string' || !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/i.test(request.expectedRevision)) throw Error('MEMORY_PUSH_EXPECTED_REVISION_REQUIRED');
       if (o.disabled) throw Error('AGENT_MEMORY_DISABLED');
       if (inFlight) throw Error('MEMORY_SYNC_IN_PROGRESS');
+      if(!state.repositories.length)throw Error('MEMORY_SYNC_REQUIRED');
       await validateCachedScope();
       const initial = state.repositories.find(repo => repo.name === 'memory' && repo.isPrimary);
       if (!initial?.path || !['ready', 'cached', 'diverged', 'blocked_dirty', 'conflict'].includes(initial.state)) throw Error('MEMORY_REPOSITORY_UNAVAILABLE');
@@ -688,6 +690,8 @@ export function createScopedMemory(options: ScopedMemoryOptions) {
       repository: string,
       read: (snapshot: AgentMemorySnapshot) => Promise<T>,
     ): Promise<T> {
+      if(o.disabled)throw Error('AGENT_MEMORY_DISABLED');
+      if(!state.repositories.length)throw Error('MEMORY_SYNC_REQUIRED');
       await validateCachedScope();
       const credential = currentCredential();
       const readGeneration = generation;
@@ -741,7 +745,7 @@ export function createScopedMemory(options: ScopedMemoryOptions) {
         )
         .join(
           '\n',
-        )}\nUse AgentMemory status/list/read/search/sync. To publish already committed own-primary memory on a supported writable transport, use action=push with confirm=true and exact expectedRevision from status; no credentials in shell commands. Shared repositories cannot be pushed through this tool; read-only Vera transport stays read-only. File tools need literal absolute paths. Cached/dirty/error states are not current. A local pull does not prove compiled blocks were reloaded. No automatic commit, push, reset or tag changes.\n</agent_memory>`;
+        )}\nAutomatic local Git refresh is off on normal chat turns. Use AgentMemory sync explicitly to prepare/refresh local files; existing files are preserved and server-side prompt memory is separate. Use AgentMemory status/list/read/search/sync. To publish already committed own-primary memory on a supported writable transport, use action=push with confirm=true and exact expectedRevision from status; no credentials in shell commands. Shared repositories cannot be pushed through this tool; read-only Vera transport stays read-only. File tools need literal absolute paths. Cached/dirty/error states are not current. A local pull does not prove compiled blocks were reloaded. No automatic commit, push, reset or tag changes.\n</agent_memory>`;
     },
   };
 }

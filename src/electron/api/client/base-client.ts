@@ -33,11 +33,19 @@ export class BaseHttpClient {
   protected baseUrl: string;
   protected tokens: AuthTokens | null = null;
   private refreshPromise: Promise<AuthTokens | null> | null = null;
+  private refreshGeneration?: number;
+  private authGeneration = 0;
+  private authRetired = false;
+  retireAuthenticationContext(): void { this.authRetired = true; this.invalidateAuth(); }
+  private lastAuthIdentity?: string;
+  private authIdentity(user = this.tokens?.user): string { return JSON.stringify([this.baseUrl, user?.id ?? null, user?.currentOrganization?.organizationId ?? user?.organizationId ?? null]); }
+  private invalidateAuth(): void { this.authGeneration = (this.authGeneration ?? 0) + 1; this.refreshPromise = null; this.refreshGeneration = undefined; }
   private _onAuthExpired: (() => void) | null = null;
 
   constructor(baseUrl?: string) {
     this.baseUrl = baseUrl || process.env.VERA_COWORK_API_URL || "https://vera-cowork-server.ngrok.app";
     this.loadTokens();
+    this.lastAuthIdentity = this.authIdentity();
   }
 
   /**
@@ -186,7 +194,8 @@ export class BaseHttpClient {
     };
   }
 
-  protected applyAuthResponse(data: AuthResponsePayload): AuthTokens {
+  protected applyAuthResponse(data: AuthResponsePayload, refreshGeneration?: number): AuthTokens {
+    if (this.authRetired) throw Error('API_AUTH_STATE_CHANGED');
     const rawUser = data?.user ?? this.tokens?.user;
     const currentOrganization =
       data?.currentOrganization ?? rawUser?.currentOrganization ?? null;
@@ -196,7 +205,7 @@ export class BaseHttpClient {
       throw new Error("Authentication response did not include a valid user");
     }
 
-    this.tokens = {
+    const next: AuthTokens = {
       accessToken: data.accessToken,
       refreshToken: data.refreshToken ?? this.tokens?.refreshToken ?? "",
       expiresIn: data.expiresIn,
@@ -212,11 +221,26 @@ export class BaseHttpClient {
         memberships,
       },
     };
+    if (refreshGeneration !== undefined) {
+      if (this.authGeneration !== refreshGeneration || this.authIdentity(next.user) !== this.authIdentity()) throw Error('API_AUTH_STATE_CHANGED');
+    } else this.invalidateAuth();
+    this.tokens = next;
+    this.lastAuthIdentity = this.authIdentity();
     this.saveTokens();
     return this.tokens;
   }
 
+  private fenceAuthIdentity(): void {
+    const identity = this.authIdentity();
+    if (this.lastAuthIdentity !== undefined && identity !== this.lastAuthIdentity) this.invalidateAuth();
+    this.lastAuthIdentity = identity;
+  }
+  private resetAuthState(): void {
+    this.invalidateAuth(); this.tokens = null; this.lastAuthIdentity = this.authIdentity();
+  }
   protected saveTokens(): void {
+    if (this.authRetired) throw Error('API_AUTH_STATE_CHANGED');
+    this.fenceAuthIdentity();
     try {
       const dir = dirname(TOKENS_PATH);
       if (!existsSync(dir)) {
@@ -230,7 +254,8 @@ export class BaseHttpClient {
   }
 
   clearTokens(): void {
-    this.tokens = null;
+    if (this.authRetired) { this.resetAuthState(); return; }
+    this.resetAuthState();
     this.syncAuthEnv();
     try {
       if (existsSync(TOKENS_PATH)) {
@@ -268,7 +293,11 @@ export class BaseHttpClient {
     // Default suppressAuthExpired to true — background/IPC calls should never
     // trigger a global logout on their own. Only callers that explicitly need
     // logout-on-401 behaviour should pass suppressAuthExpired: false.
-    const { method = "GET", body, requireAuth = true, suppressAuthExpired = true } = options;
+    const { method = "GET", body, requireAuth = true, suppressAuthExpired = true, signal } = options;
+    signal?.throwIfAborted();
+    if (this.authRetired) throw Error('API_AUTH_STATE_CHANGED');
+    const requestGeneration = this.authGeneration;
+    const sentToken = this.tokens?.accessToken;
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -284,6 +313,7 @@ export class BaseHttpClient {
       : `${this.baseUrl}${path}`;
 
     const response = await fetch(url, {
+      signal,
       method,
       headers,
       body: body ? JSON.stringify(body) : undefined,
@@ -291,13 +321,18 @@ export class BaseHttpClient {
 
     // Handle 401 - try to refresh token
     if (response.status === 401) {
+      if (this.authGeneration !== requestGeneration) throw Error('API_AUTH_STATE_CHANGED');
       // Try to refresh if we have a refresh token
       if (this.tokens?.refreshToken) {
-        const newTokens = await this.refreshAccessToken();
+        signal?.throwIfAborted();
+        const newTokens = this.tokens?.accessToken !== sentToken ? this.tokens : await this.refreshAccessToken(requestGeneration);
+        if (this.authGeneration !== requestGeneration) throw Error('API_AUTH_STATE_CHANGED');
         if (newTokens) {
+          signal?.throwIfAborted();
           // Retry with new token
           headers["Authorization"] = `Bearer ${newTokens.accessToken}`;
           const retryResponse = await fetch(url, {
+            signal,
             method,
             headers,
             body: body ? JSON.stringify(body) : undefined,
@@ -309,6 +344,7 @@ export class BaseHttpClient {
           return retryResponse.status === 204 ? (undefined as unknown as T) : retryResponse.json();
         }
       }
+      if (this.authGeneration !== requestGeneration) throw Error('API_AUTH_STATE_CHANGED');
       // Refresh failed or no refresh token - clear and notify
       if (!suppressAuthExpired) {
         this.clearTokens();
@@ -328,22 +364,16 @@ export class BaseHttpClient {
     return response.json();
   }
 
-  private async refreshAccessToken(): Promise<AuthTokens | null> {
-    // Prevent concurrent refresh
-    if (this.refreshPromise) {
-      return this.refreshPromise;
-    }
-
-    this.refreshPromise = this.doRefreshToken();
-    try {
-      return await this.refreshPromise;
-    } finally {
-      this.refreshPromise = null;
-    }
+  private async refreshAccessToken(generation = this.authGeneration): Promise<AuthTokens | null> {
+    if (generation !== this.authGeneration) return null;
+    if (this.refreshPromise && this.refreshGeneration === generation) return this.refreshPromise;
+    const work = this.doRefreshToken(generation, this.tokens?.refreshToken ?? '');
+    this.refreshPromise = work; this.refreshGeneration = generation;
+    try { return await work; } finally { if (this.refreshPromise === work) { this.refreshPromise = null; this.refreshGeneration = undefined; } }
   }
 
-  private async doRefreshToken(): Promise<AuthTokens | null> {
-    if (!this.tokens?.refreshToken) {
+  private async doRefreshToken(generation: number, refreshToken: string): Promise<AuthTokens | null> {
+    if (!refreshToken || generation !== this.authGeneration) {
       return null;
     }
 
@@ -351,7 +381,7 @@ export class BaseHttpClient {
       const response = await fetch(`${this.baseUrl}/auth/refresh`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken: this.tokens.refreshToken }),
+        body: JSON.stringify({ refreshToken }),
       });
 
       if (!response.ok) {
@@ -359,7 +389,8 @@ export class BaseHttpClient {
       }
 
       const data = await response.json();
-      return this.applyAuthResponse(data);
+      if (generation !== this.authGeneration || this.tokens?.refreshToken !== refreshToken) return null;
+      return this.applyAuthResponse(data, generation);
     } catch (error) {
       console.error("Failed to refresh token:", error);
       return null;

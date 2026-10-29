@@ -4,16 +4,8 @@
 
 const DEBUG = process.env.LETTA_DEBUG === "true" || process.env.NODE_ENV === "development";
 
-/**
- * Simple timing helper for performance tracking.
- */
-export const timing = {
-  start: Date.now(),
-  mark: (label: string) => {
-    const elapsed = Date.now() - timing.start;
-    console.log(`[timing] ${elapsed}ms: ${label}`);
-  }
-};
+// Request-local performance tracing lives in sdk/startup-timing.ts.
+// Do not use module-load time as a request-duration baseline.
 
 /**
  * Standard logger for runner operations.

@@ -16,8 +16,8 @@ export function sessionErrorMessage(value:unknown):string{
  // Permission/identity/configuration errors take precedence over incidental
  // timeout words in a wrapped stack. They must not be labelled temporary.
  if(/SDK_STOP|STOP_PROOF|STOP_UNVERIFIED|STOP_NOT_VERIFIED|SDK_UNSETTLED|SDK_UNCERTAIN|SDK_TOOL_EFFECT|SDK_RUN_VERIFICATION_UNAVAILABLE|MEMORY_WRITE_OUTCOME_UNCERTAIN|SDK_TRANSPORT_CLEANUP_UNVERIFIED|SDK_STREAM_ENDED_WITHOUT_TERMINAL_RESULT|INVALID_SDK_TERMINAL_RESULT|tool effects?.*(?:unverified|reconciliation)/i.test(text))return MESSAGES.stop;
- if(/SCOPE_MISMATCH|IDENTITY_MISMATCH|ACTOR_CHANGED|MEMORY_SCOPE_CHANGED|does not belong to|Invalid conversation ID/i.test(text))return MESSAGES.scope;
- if(/\b401\b|unauthori[sz]ed|authentication failed|invalid api key|expired token|sign.?in required|AUTH_REQUIRED/i.test(text))return MESSAGES.auth;
+ if(/SCOPE_MISMATCH|IDENTITY_MISMATCH|ACTOR_CHANGED|AUTH_STATE_CHANGED|MEMORY_SCOPE_CHANGED|does not belong to|Invalid conversation ID/i.test(text))return MESSAGES.scope;
+ if(/\b401\b|unauthori[sz]ed|authentication failed|authentication expired|please login again|invalid api key|expired token|sign.?in required|AUTH_REQUIRED/i.test(text))return MESSAGES.auth;
  if(/\b403\b|forbidden|permission denied|not authorized|access denied/i.test(text))return MESSAGES.permission;
  if(/\b404\b|conversation.*not found|agent.*not found|resource.*not found/i.test(text))return MESSAGES.missing;
  if(/Invalid model|unsupported model|model.*not supported|SDK_WORKER_INCOMPATIBLE|invalid request|validation failed/i.test(text))return MESSAGES.model;
