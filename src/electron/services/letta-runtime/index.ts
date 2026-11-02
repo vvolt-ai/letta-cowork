@@ -1,4 +1,5 @@
 import Letta from '@letta-ai/letta-client';
+import {waitForRead} from './read-deadline.js';
 
 import { getVeraCoworkApiClient } from '../../api/index.js';
 
@@ -40,15 +41,15 @@ function withBearerToken(
  * Fetch adapter for the Letta SDK. Vera access tokens can rotate while Cowork
  * is open, so retry one unauthorized request after BaseHttpClient refreshes it.
  */
-function createVeraRuntimeFetch(): typeof fetch {
-  const capturedApi = getVeraCoworkApiClient();
+export function createVeraRuntimeFetch(getApi = getVeraCoworkApiClient): typeof fetch {
+  const capturedApi = getApi();
   const actor = JSON.stringify([
     capturedApi.apiBaseUrl,
     capturedApi.currentUser?.id,
     capturedApi.currentUser?.organizationId,
   ]);
   const assertActor = () => {
-    const api = getVeraCoworkApiClient();
+    const api = getApi();
     if (
       !api.accessToken ||
       JSON.stringify([api.apiBaseUrl, api.currentUser?.id, api.currentUser?.organizationId]) !==
@@ -57,8 +58,10 @@ function createVeraRuntimeFetch(): typeof fetch {
       throw Error('LETTA_RUNTIME_ACTOR_CHANGED');
   };
   return async (input, init) => {
+    const signal = init?.signal ?? (typeof Request !== 'undefined' && input instanceof Request ? input.signal : undefined);
+    signal?.throwIfAborted();
     assertActor();
-    const api = getVeraCoworkApiClient();
+    const api = getApi();
     const firstToken = api.accessToken;
     if (!firstToken) {
       throw new Error('Sign in to Vera before using organization Letta accounts.');
@@ -66,7 +69,7 @@ function createVeraRuntimeFetch(): typeof fetch {
 
     const retryInput =
       typeof Request !== 'undefined' && input instanceof Request ? input.clone() : input;
-    let response = await fetch(input, withBearerToken(input, init, firstToken));
+    let response = await waitForRead(fetch(input, withBearerToken(input, init, firstToken)), signal);
     try {
       assertActor();
     } catch (error) {
@@ -77,13 +80,20 @@ function createVeraRuntimeFetch(): typeof fetch {
 
     // Any authenticated endpoint is enough to invoke BaseHttpClient's guarded
     // refresh-and-retry path. The refreshed token remains inside the API client.
-    await api.request('/auth/me', { suppressAuthExpired: true });
-    assertActor();
+    try {
+      await waitForRead(api.request('/auth/me', { suppressAuthExpired: true, signal: signal ?? undefined }), signal);
+      signal?.throwIfAborted();
+      assertActor();
+    } catch (error) {
+      void response.body?.cancel().catch(() => undefined);
+      throw error;
+    }
     const refreshedToken = api.accessToken;
     if (!refreshedToken || refreshedToken === firstToken) return response;
 
     await response.body?.cancel().catch(() => undefined);
-    response = await fetch(retryInput, withBearerToken(retryInput, init, refreshedToken));
+    signal?.throwIfAborted();
+    response = await waitForRead(fetch(retryInput, withBearerToken(retryInput, init, refreshedToken)), signal);
     try {
       assertActor();
     } catch (error) {

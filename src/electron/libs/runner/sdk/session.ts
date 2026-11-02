@@ -37,6 +37,7 @@ import {delegatedToolNames} from './tool-grants.js';
 import {ODOO_ATTACHMENT_TOOL} from '../../../services/client-tools/runners/_shared/attachmentApproval.js';
 import { classifyStreamTermination } from './terminal-stop.js';
 import {StartupTiming,abortableSetupRead} from './startup-timing.js';
+import {readWithDeadline} from '../../../services/letta-runtime/read-deadline.js';
 
 export interface DesktopSdkScope {
   config: LettaRuntimeConfig;
@@ -63,6 +64,7 @@ export interface DesktopSdkDependencies {
   createMemory?:typeof createScopedMemory;
   loadRuntimeEnv?:(agentId:string,signal:AbortSignal)=>Promise<Record<string,string>>;
   runtimeEnvTimeoutMs?:number;
+  conversationReadTimeoutMs?:number;
   runtimeActor?:()=>string;
   launch?: (options: DesktopNativeOptions) => Promise<DesktopNativeBinding>;
   open?: (
@@ -290,6 +292,17 @@ export class DesktopSdkSession {
       return agent.name||undefined;
     });
   }
+  private async readConversation(timeoutCode = 'SDK_CONVERSATION_LOOKUP_TIMEOUT') {
+    this.checkOpen();
+    const conversation = await readWithDeadline(
+      signal => this.scope!.client.conversations.retrieve(this._conversationId!, {signal}),
+      this.ctrl.signal,
+      this.dependencies.conversationReadTimeoutMs ?? 20000,
+      timeoutCode,
+    ).catch(error => { this.checkOpen(); throw error; });
+    this.checkOpen();
+    return conversation;
+  }
   initialize(): Promise<SDKInitMessage> {
     if (!this.init)
       this.init = this.timing.measure('initialization',()=>this.initializeOnce()).catch((error) => {
@@ -319,7 +332,7 @@ export class DesktopSdkSession {
       this._conversationId = created.id;
     }
     this.checkOpen();
-    const conversation = await this.timing.measure('conversation_lookup',()=>client.conversations.retrieve(this._conversationId!));
+    const conversation = await this.timing.measure('conversation_lookup',()=>this.readConversation());
     if (this._agentId && conversation.agent_id !== this._agentId)
       throw Error('SDK_CONVERSATION_AGENT_MISMATCH');
     this._agentId = conversation.agent_id;
@@ -338,7 +351,7 @@ export class DesktopSdkSession {
     if (this.options.model&&this.options.model!==conversation.model) {
       await this.timing.measure('model_update',()=>client.conversations.update(this._conversationId!, { model: this.options.model }));
       this.checkOpen();
-      const confirmed = await this.timing.measure('model_confirm',()=>client.conversations.retrieve(this._conversationId!));
+      const confirmed = await this.timing.measure('model_confirm',()=>this.readConversation('SDK_CONVERSATION_CONFIRMATION_TIMEOUT'));
       this.checkOpen();
       if (confirmed.model && confirmed.model !== this.options.model)
         throw Error('SDK_CONVERSATION_MODEL_NOT_CONFIRMED');

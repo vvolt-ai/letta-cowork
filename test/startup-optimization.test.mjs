@@ -52,6 +52,30 @@ test('display-name cache is actor/account-scoped and does not bypass current sco
 test('timing baseline is per request and telemetry never serializes failure detail',async()=>{
  let now=100;const events=[];const first=new StartupTiming(e=>events.push(e),()=>now);now=120;first.begin('conversation_lookup');now=145;first.finish('conversation_lookup');const end=events.at(-1);assert.equal(end.durationMs,25);assert.equal(end.elapsedMs,45);const second=new StartupTiming(e=>events.push(e),()=>now);now=150;second.mark('request_received');assert.notEqual(first.traceId,second.traceId);assert.equal(events.at(-1).elapsedMs,5);await assert.rejects(first.measure('native_ready',async()=>{throw Error('PRIVATE_FIXTURE_ERROR');}));assert(!JSON.stringify(events).includes('PRIVATE_FIXTURE_ERROR'));
 });
+test('hung conversation lookup has a phase-specific deadline and observes late failure without native launch',async()=>{
+ const pending=defer();let signal;const f=fixture({}, {conversationReadTimeoutMs:20});f.scope.client.conversations.retrieve=async(_id,options)=>{signal=options.signal;return pending.promise;};
+ try{await assert.rejects(f.session.initialize(),/SDK_CONVERSATION_LOOKUP_TIMEOUT/);await f.session.abort();assert(signal.aborted);assert(!f.calls.includes('launch'));assert(f.events.some(e=>e.stage==='conversation_lookup'&&e.outcome==='error'));pending.reject(Error('late fixture rejection'));await tick();assert(!f.calls.includes('launch'));}finally{pending.resolve({id:C,agent_id:A});await f.session.abort();}
+});
+test('abort while canonical lookup ignores cancellation settles without the old 30-second cleanup wait',async()=>{
+ const pending=defer();let signal;const f=fixture();f.scope.client.conversations.retrieve=async(_id,options)=>{signal=options.signal;return pending.promise;};
+ const init=f.session.initialize();await tick();const failed=assert.rejects(init,/SDK_SESSION_CLOSED/);const stop=f.session.abort();await Promise.all([failed,stop]);assert(signal.aborted);assert(!f.calls.includes('launch'));pending.resolve({id:C,agent_id:A,model:'fixture-model'});await tick();assert(!f.calls.includes('launch'));
+});
+test('late canonical lookup cannot initialize under a changed account',async()=>{
+ const pending=defer(),f=fixture();f.scope.client.conversations.retrieve=async()=>pending.promise;
+ const init=f.session.initialize();await tick();f.invalidate();pending.resolve({id:C,agent_id:A});await assert.rejects(init,/SDK_ACCOUNT_SCOPE_CHANGED/);await f.session.abort();assert(!f.calls.includes('launch'));
+});
+test('model confirmation read has a bounded deadline without repeating the model write',async()=>{
+ const pending=defer();let reads=0,signal;const f=fixture({model:'new-fixture-model'},{conversationReadTimeoutMs:20});f.scope.client.conversations.retrieve=async(_id,options)=>{if(++reads===1)return{id:C,agent_id:A,model:'old-fixture-model'};signal=options.signal;return pending.promise;};
+ await assert.rejects(f.session.initialize(),/SDK_CONVERSATION_CONFIRMATION_TIMEOUT/);await f.session.abort();assert(signal.aborted);assert.equal(reads,2);assert.equal(f.calls.filter(c=>c==='update').length,1);assert(!f.calls.includes('launch'));pending.resolve({id:C,agent_id:A,model:'new-fixture-model'});await tick();assert(!f.calls.includes('launch'));
+});
+test('repeated timed-out pre-input reads release only their own session slots',async()=>{
+ for(let i=0;i<18;i++){const f=fixture({}, {conversationReadTimeoutMs:1});f.scope.client.conversations.retrieve=async()=>new Promise(()=>{});await assert.rejects(f.session.initialize(),/LOOKUP_TIMEOUT/);await f.session.abort();assert(!f.calls.includes('launch'));}
+ const healthy=fixture();await healthy.session.initialize();assert(healthy.calls.includes('launch'));await healthy.session.abort();
+});
+test('installed Letta client cancels an actual hung loopback GET without retrying or launching native',async()=>{
+ const {createServer}=await import('node:http'),{default:Letta}=await import('@letta-ai/letta-client');const closed=defer();let requests=0;const server=createServer((_req,res)=>{requests++;res.on('close',()=>closed.resolve());});await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const f=fixture({}, {conversationReadTimeoutMs:250});f.scope.client=new Letta({apiKey:'fixture-only-not-real',baseURL:'http://127.0.0.1:'+server.address().port+'/v1'});
+ let timer;try{await assert.rejects(f.session.initialize(),/SDK_CONVERSATION_LOOKUP_TIMEOUT/);await f.session.abort();await Promise.race([closed.promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Fixture transport was not closed')),2000);})]);assert.equal(requests,1);assert(!f.calls.includes('launch'));}finally{clearTimeout(timer);await f.session.abort();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
+});
 test('aborted setup observes late rejection without replay',async()=>{
  const pending=defer(),controller=new AbortController();const work=abortableSetupRead(pending.promise,controller.signal);controller.abort();await assert.rejects(work,/SDK_SETUP_READ_ABORTED/);pending.reject(Error('late fixture'));await tick();
 });
