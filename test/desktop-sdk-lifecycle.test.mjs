@@ -120,7 +120,7 @@ async function fixture(tool = false, conflict = false) {
           request_id: m.request_id,
           success: true,
           backend: 'api',
-          letta_code_version: '0.34.26',
+          letta_code_version: '0.34.38',
           protocol_version: 1,
           capabilities: {
             agent_management: true,

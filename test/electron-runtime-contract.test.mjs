@@ -28,14 +28,14 @@ test('native ABI mapping recognizes Electron 45 and rebuild stays on the local B
   assert.equal(pkg.scripts.rebuild, 'bunx --no-install electron-rebuild -f');
 });
 test('SDK/CLI upgrade is explicitly pinned with matching peer and embedded Node requirements', () => {
-  assert.equal(pkg.dependencies['@letta-ai/letta-agent-sdk'], '0.8.55');
-  assert.equal(pkg.dependencies['@letta-ai/letta-code'], '0.34.26');
+  assert.equal(pkg.dependencies['@letta-ai/letta-agent-sdk'], '0.8.67');
+  assert.equal(pkg.dependencies['@letta-ai/letta-code'], '0.34.38');
   const installed = name => JSON.parse(readFileSync(new URL(`../node_modules/@letta-ai/${name}/package.json`, import.meta.url), 'utf8'));
   const sdk = installed('letta-agent-sdk'), cli = installed('letta-code');
-  assert.equal(sdk.version, '0.8.55');
-  assert.equal(cli.version, '0.34.26');
-  assert.equal(lock.workspaces[''].dependencies['@letta-ai/letta-agent-sdk'], '0.8.55');
-  assert.equal(lock.workspaces[''].dependencies['@letta-ai/letta-code'], '0.34.26');
+  assert.equal(sdk.version, '0.8.67');
+  assert.equal(cli.version, '0.34.38');
+  assert.equal(lock.workspaces[''].dependencies['@letta-ai/letta-agent-sdk'], '0.8.67');
+  assert.equal(lock.workspaces[''].dependencies['@letta-ai/letta-code'], '0.34.38');
   assert.equal(semver.satisfies(cli.version, sdk.peerDependencies['@letta-ai/letta-code']), true);
   assert.equal(semver.satisfies('24.22.1', cli.engines.node), true);
   assert.equal(semver.satisfies('24.22.0', cli.engines.node), false);

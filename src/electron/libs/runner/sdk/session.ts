@@ -124,7 +124,7 @@ async function openSdk(
     if (
       info.backend !== 'api' ||
       info.protocol_version !== 1 ||
-      info.letta_code_version !== '0.34.26' ||
+      info.letta_code_version !== '0.34.38' ||
       !info.capabilities.runtime_start
     )
       throw Error('SDK_NATIVE_HOST_INCOMPATIBLE');
