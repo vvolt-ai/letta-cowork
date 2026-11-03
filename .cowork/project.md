@@ -90,3 +90,7 @@ That added/registers:
 - `.cowork/memory/decisions.md`
 - `.cowork/memory/testing.md`
 - `.cowork/memory/current-work.md`
+
+## Local SDK process topology (2026-11-03)
+
+Desktop now uses a local persistent shared App Server pool, per trusted account/provider/connection and agent-scoped native-memory-off policy, rather than per-turn spawning. Per-conversation clients, permissions, CWD/env and stop proof remain isolated; explicit provider/remote routing is unchanged. See `docs/desktop-shared-app-server.md`. Local source/tests only; activation/restart and live acceptance are separate.

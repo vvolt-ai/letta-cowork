@@ -18,7 +18,6 @@ import {
   type LettaRuntimeConfig,
 } from '../../../services/letta-runtime/index.js';
 import {
-  startDesktopAppServer,
   type DesktopNativeBinding,
   type DesktopNativeOptions,
 } from '../../../services/letta-runtime/native-host.js';
@@ -38,6 +37,8 @@ import {ODOO_ATTACHMENT_TOOL} from '../../../services/client-tools/runners/_shar
 import { classifyStreamTermination } from './terminal-stop.js';
 import {StartupTiming,abortableSetupRead} from './startup-timing.js';
 import {readWithDeadline} from '../../../services/letta-runtime/read-deadline.js';
+import {desktopAppServers, type DesktopPoolRequest} from '../../../services/letta-runtime/desktop-app-server-pool.js';
+import {veraRuntimeActorIdentity} from '../../../services/letta-runtime/index.js';
 
 export interface DesktopSdkScope {
   config: LettaRuntimeConfig;
@@ -67,6 +68,7 @@ export interface DesktopSdkDependencies {
   conversationReadTimeoutMs?:number;
   runtimeActor?:()=>string;
   launch?: (options: DesktopNativeOptions) => Promise<DesktopNativeBinding>;
+  acquire?: (options: DesktopPoolRequest) => Promise<DesktopNativeBinding>;
   open?: (
     binding: DesktopNativeBinding,
     controls: DesktopNativeControls,
@@ -78,28 +80,21 @@ const schedulers = new WeakMap<DesktopSdkScope, SdkToolScheduler>();
 const displayNames=new Map<string,{name:string;at:number}>();
 function actor() {
   const api = getVeraCoworkApiClient();
-  return JSON.stringify([api.apiBaseUrl, api.currentUser?.id, api.currentUser?.organizationId]);
+  return veraRuntimeActorIdentity(api);
+}
+export function desktopSdkScopeKey(config: LettaRuntimeConfig, identity: string, connectionId?: string): string {
+  return createHash('sha256').update(JSON.stringify([
+    config.source, config.baseURL, getLettaConnectionScope(connectionId), identity,
+    config.source === 'local' ? config.apiKey : null,
+  ])).digest('hex');
 }
 export function captureDesktopSdkScope(connectionId?: string): DesktopSdkScope {
   const config = getLettaRuntimeConfig(connectionId);
   const identity = actor();
-  const key = createHash('sha256')
-    .update(
-      JSON.stringify([
-        config.source,
-        config.baseURL,
-        getLettaConnectionScope(connectionId),
-        config.source === 'local' ? config.apiKey : identity,
-      ]),
-    )
-    .digest('hex');
+  const key = desktopSdkScopeKey(config, identity, connectionId);
   const assertCurrent = () => {
     const current = getLettaRuntimeConfig(connectionId);
-    if (
-      current.source !== config.source ||
-      current.baseURL !== config.baseURL ||
-      (config.source === 'local' ? current.apiKey !== config.apiKey : actor() !== identity)
-    )
+    if (desktopSdkScopeKey(current, actor(), connectionId) !== key)
       throw Error('SDK_ACCOUNT_SCOPE_CHANGED');
   };
   assertCurrent();
@@ -382,7 +377,9 @@ export class DesktopSdkSession {
       this._conversationId!,
       this.options.maxTurns,
     );
-    this.binding = await this.timing.measure('native_launch',()=>(this.dependencies.launch ?? startDesktopAppServer)({
+    this.binding = await this.timing.measure('native_launch',()=>(this.dependencies.launch ?? this.dependencies.acquire ?? (request => desktopAppServers.acquire(request)))({
+      scopeKey: this.scope!.key,
+      controls: this.controls!,
       agentId: this._agentId!,
       conversationId: this._conversationId!,
       cwd: this.cwd,
@@ -400,6 +397,7 @@ export class DesktopSdkSession {
       signal: this.ctrl.signal,
     }));
     this.checkOpen();
+    if (this.binding.poolReused !== undefined) this.timing.mark(this.binding.poolReused ? 'pool_reused' : 'pool_cold_start');
     this.sdk = await this.timing.measure('native_connect',()=>(this.dependencies.open ?? openSdk)(this.binding!, this.controls!));
     this.checkOpen();
     this.native = this.sdk.resumeSession(this._conversationId!, {
@@ -787,6 +785,9 @@ export class DesktopSdkSession {
   }
   abort(): Promise<void> {
     if (this.stop) return this.stop;
+    // Normal terminal cleanup may already be closing this client's socket.
+    // Join it instead of issuing sync/cancel against a half-closed client.
+    if (this.shutdown) return this.shutdown;
     this.stopRequested = true;
     this.ctrl.abort();
     const operation = (async () => {
@@ -834,9 +835,16 @@ export class DesktopSdkSession {
     this.closed = true;
     this.shutdown = (async () => {
       if (this.proof) this.controls!.assertSnapshot(this.proof);
-      this.native?.close();
-      await this.sdk?.close();
-      await this.binding?.close();
+      let clientClosed = false;
+      try {
+        this.native?.close();
+        await this.sdk?.close();
+        if (this.proof) this.controls!.assertSnapshot(this.proof);
+        clientClosed = true;
+      } finally {
+        if (this.binding?.release) await this.binding.release(this.isVerified && clientClosed, clientClosed);
+        else await this.binding?.close();
+      }
       if (this.proof) this.controls!.assertSnapshot(this.proof);
       if (this.isVerified) {
         if (this.ownerKey && owners.get(this.ownerKey) === this) owners.delete(this.ownerKey);

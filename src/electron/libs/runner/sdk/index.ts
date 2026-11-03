@@ -1,4 +1,5 @@
 import { DesktopSdkSession, type DesktopSdkSessionOptions } from './session.js';
+import {desktopAppServers} from '../../../services/letta-runtime/desktop-app-server-pool.js';
 export { DesktopSdkSession, getOwnedDesktopSdkSessions } from './session.js';
 export type { DesktopSdkSessionOptions } from './session.js';
 export function createSdkSession(agentId: string | undefined, options: DesktopSdkSessionOptions) {
@@ -9,15 +10,19 @@ export function resumeSdkSession(conversationId: string, options: DesktopSdkSess
 }
 export async function shutdownDesktopSdkSessions(): Promise<void> {
   const { getOwnedDesktopSdkSessions } = await import('./session.js');
+  desktopAppServers.suspendAdmission();
   const results = await Promise.allSettled(
     getOwnedDesktopSdkSessions().map((session) => session.abort()),
   );
   const failed = results.filter(
     (result): result is PromiseRejectedResult => result.status === 'rejected',
   );
-  if (failed.length)
+  if (failed.length) {
+    desktopAppServers.resumeAdmission();
     throw new AggregateError(
       failed.map((result) => result.reason),
       'Some SDK executions could not be verified stopped.',
     );
+  }
+  await desktopAppServers.shutdown();
 }

@@ -1,5 +1,6 @@
 import Letta from '@letta-ai/letta-client';
 import {waitForRead} from './read-deadline.js';
+import {observeMetadataFetch} from './metadata-fetch.js';
 
 import { getVeraCoworkApiClient } from '../../api/index.js';
 
@@ -24,6 +25,14 @@ export function getLettaConnectionScope(connectionId?: string): string {
   return connectionId?.trim() || ORGANIZATION_DEFAULT_LETTA_CONNECTION;
 }
 
+const runtimeApiIdentities = new WeakMap<object, number>();
+let runtimeApiSequence = 0;
+export function veraRuntimeActorIdentity(api = getVeraCoworkApiClient()): string {
+  if (!runtimeApiIdentities.has(api)) runtimeApiIdentities.set(api, ++runtimeApiSequence);
+  return JSON.stringify([api.apiBaseUrl, api.currentUser?.id, api.currentUser?.organizationId,
+    runtimeApiIdentities.get(api), api.authContextRevision ?? 0]);
+}
+
 function withBearerToken(
   input: RequestInfo | URL,
   init: RequestInit | undefined,
@@ -43,17 +52,12 @@ function withBearerToken(
  */
 export function createVeraRuntimeFetch(getApi = getVeraCoworkApiClient): typeof fetch {
   const capturedApi = getApi();
-  const actor = JSON.stringify([
-    capturedApi.apiBaseUrl,
-    capturedApi.currentUser?.id,
-    capturedApi.currentUser?.organizationId,
-  ]);
+  const actor = veraRuntimeActorIdentity(capturedApi);
   const assertActor = () => {
     const api = getApi();
     if (
       !api.accessToken ||
-      JSON.stringify([api.apiBaseUrl, api.currentUser?.id, api.currentUser?.organizationId]) !==
-        actor
+      veraRuntimeActorIdentity(api) !== actor
     )
       throw Error('LETTA_RUNTIME_ACTOR_CHANGED');
   };
@@ -178,6 +182,6 @@ export function createLettaRuntimeClient(connectionId?: string): Letta {
     apiKey: config.apiKey,
     baseURL: config.baseURL,
     defaultHeaders: config.defaultHeaders,
-    fetch: config.fetch,
+    fetch: observeMetadataFetch(config.fetch ?? fetch, config.source),
   });
 }

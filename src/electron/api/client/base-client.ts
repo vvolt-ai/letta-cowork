@@ -35,6 +35,8 @@ export class BaseHttpClient {
   private refreshPromise: Promise<AuthTokens | null> | null = null;
   private refreshGeneration?: number;
   private authGeneration = 0;
+  /** Identity epoch, not token material. Same-actor token refresh leaves it stable. */
+  get authContextRevision(): number { return this.authGeneration; }
   private authRetired = false;
   retireAuthenticationContext(): void { this.authRetired = true; this.invalidateAuth(); }
   private lastAuthIdentity?: string;

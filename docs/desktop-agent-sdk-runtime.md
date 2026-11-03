@@ -2,9 +2,9 @@
 
 ## Current architecture
 
-Electron main runs **Letta Agent SDK 0.8.68 with Letta Code 0.34.39**, using a private native App Server's **API harness**. The SDK owns model turns, tool continuations, streaming and native retry policy. There is no custom REST/SSE model pump or legacy execution fallback.
+Electron main runs **Letta Agent SDK 0.8.68 with Letta Code 0.34.39**, using a pooled local native App Server's **API harness**. The main-owned pool persists hosts per trusted provider/account/connection and agent-scoped disabled-memory policy; conversations and later turns reuse them. See [local shared App Server design](desktop-shared-app-server.md). The SDK owns model turns, tool continuations, streaming and native retry policy. There is no custom REST/SSE model pump or legacy execution fallback.
 
-`libs/runner/session-manager.ts` selects the SDK adapter; `libs/runner/sdk/session.ts` supplies Cowork's UI/tool lifecycle. Chat, continuation and existing background callers continue through `runLetta`. Task/Agent use a protected parent capability to create another SDK session; the delegated manager supplies policy, not another model loop.
+`libs/runner/session-manager.ts` selects the SDK adapter; `libs/runner/sdk/session.ts` supplies Cowork's UI/tool lifecycle and owns a per-turn SDK client plus shared-host lease. `services/letta-runtime/desktop-app-server-pool.ts` owns process lifetime, runtime admission and fences. Chat, continuation and existing background callers continue through `runLetta`. Task/Agent use a protected parent capability to create another SDK session; the delegated manager supplies policy, not another model loop.
 
 The SDK's `backend: 'remote'` means its authenticated **loopback App Server transport**, not a selection of a Vera Remote computer. The native server's provider backend is `api`. Existing tool-specific local/remote execution selection remains authoritative.
 
@@ -33,6 +33,12 @@ November2 local checks:255 Node tests (including actual Electron/native cancella
 Existing-conversation lookup and post-model-update confirmation reads have a20s deadline and the owning session's AbortSignal. Phase-specific errors are SDK_CONVERSATION_LOOKUP_TIMEOUT and SDK_CONVERSATION_CONFIRMATION_TIMEOUT; existing SDK_SESSION_CLOSED cancellation semantics remain. The read wrapper observes late failures/results even if a transport ignores abort, so failed initialization settles without the old60s outer-watchdog plus30s cleanup wait and cannot launch a late native runtime or retain pre-input capacity slots. Scope is validated before/after the read. Conversation creation/model writes are not replayed by this helper; model/tool/approval execution deadlines and stop/ownership verification are unchanged.
 
 Vera's fetch adapter propagates either Request- or init-carried cancellation into the auth probe, stops waiting when that reader is cancelled and checks before any401 retry. Shared refresh may continue for other readers; caller cancellation does not cancel their work or bypass auth-generation/actor fences. This hardens a confirmed cancellation gap, not proof that the original network/auth/provider lookup stall is repaired. Tests use synthetic APIs and a hung loopback GET through the installed Letta client, not a replay of the user's prompt. Running Electron main must be safely rebuilt/reloaded to adopt source changes; no automatic restart or live run mutation.
+
+## Conversation HTTP diagnostics, November3
+
+`createLettaRuntimeClient` now observes only GET `/v1/conversations/<id>` metadata requests through the already selected direct/Vera fetch adapter. `[runtime-http]` records client correlation ID, attempt sequence, UUID-only conversation identifier (other/default IDs are classified without arbitrary text), source, start/headers/abort/error phase, elapsed milliseconds and HTTP status. No URL/query/header/key/body/prompt or arbitrary exception text is emitted; responses are returned untouched without cloning/reading their body. Each fetch call is observed, not retried by diagnostics. Sink failure cannot change request behavior.
+
+This is a diagnostic patch, not a repair or proof of the recurring live HTTP stall. Direct fresh-process/Electron metadata checks can succeed while the running app times out. After a controlled main-process reload, collect the original lookup phase plus its runtime-http events: start with no headers isolates a response wait; retryable HTTP statuses followed by attempts expose SDK recovery; headers200 followed by lookup timeout points to body/parsing or subsequent SDK handling. Header arrival alone is not successful parsing, turn completion or ownership proof. No source/credential fallback, dispatcher replacement, deadline increase, prompt replay or automatic app restart is introduced. The post-answer settlement/readback wait is a separate pending investigation.
 
 ## Scope and credentials
 

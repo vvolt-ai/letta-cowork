@@ -9,6 +9,7 @@ import type { Socket } from 'node:net';
 
 const require = createRequire(import.meta.url);
 export interface NativeProviderConfig {
+  source?: 'local' | 'vera';
   baseURL: string;
   apiKey: string;
   defaultHeaders?: Record<string, string>;
@@ -21,6 +22,7 @@ export interface DesktopNativeOptions {
   provider: NativeProviderConfig;
   assertCurrent(): void;
   authorizeCancellation?: (agentId: string, runIds: readonly string[]) => boolean;
+  authorizeRelayRequest?: (method: string, path: string, bytes: Buffer) => void;
   signal: AbortSignal;
   executablePath?: string;
   cliPath?: string;
@@ -31,6 +33,9 @@ export interface DesktopNativeBinding {
   authToken: string;
   secretValues?: readonly string[];
   close(): Promise<void>;
+  isAlive?(): boolean;
+  poolReused?: boolean;
+  release?(verified: boolean, clientClosed?: boolean): Promise<void>;
 }
 function listen(server: ReturnType<typeof createServer>): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -219,9 +224,10 @@ export async function startDesktopAppServer(
         if (size > 32 * 1024 * 1024) throw Error('SDK_RELAY_REQUEST_TOO_LARGE');
         chunks.push(Buffer.from(data));
       }
-      if (req.method === 'POST' && /\/messages$/.test(target.pathname) && options.signal.aborted)
+      if (options.authorizeRelayRequest) options.authorizeRelayRequest(req.method ?? 'GET', target.pathname, Buffer.concat(chunks));
+      if (!options.authorizeRelayRequest && req.method === 'POST' && /\/messages$/.test(target.pathname) && options.signal.aborted)
         throw Error('SDK_NEW_MODEL_INPUT_AFTER_STOP_DENIED');
-      if (/\/cancel$/.test(target.pathname)) {
+      if (!options.authorizeRelayRequest && /\/cancel$/.test(target.pathname)) {
         const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {};
         const agentMatch = /\/agents\/([^/]+)\/messages\/cancel$/.exec(target.pathname);
         const runMatch = /\/runs\/([^/]+)\/cancel$/.exec(target.pathname);
@@ -385,7 +391,8 @@ export async function startDesktopAppServer(
     options.signal.throwIfAborted();
     options.assertCurrent();
     options.signal.removeEventListener('abort', abortStartup);
-    return { url, authToken, secretValues: [relayToken, authToken], close };
+    return { url, authToken, secretValues: [relayToken, authToken], close,
+      isAlive: () => !closed && Boolean(child?.pid) && child?.exitCode === null && child?.signalCode === null };
   } catch (error) {
     await close();
     throw error;
