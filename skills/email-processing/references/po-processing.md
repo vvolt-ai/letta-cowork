@@ -1,184 +1,41 @@
-# Purchase Order Read-Only Fast Path
+# Purchase order verification
 
-Use this reference only after the PO attachment/body has been inspected and its exact identifiers/configurations are known.
+Use after inspecting the actual PO and relevant thread. All checks here are reads. Do not create contacts, orders, invoices, tags or mailbox drafts until the applicable action is explicitly authorized. Never send email.
 
-## Guardrail
+## Authorized transport
 
-All steps below are reads. Do not create contacts, companies, sales orders, invoices, or emails until the user approves the final summary.
+Use only the authorized configured Odoo connector through VeraMcpListTools and VeraMcpCallTool, following the core skill boundary. Explicitly select the intended connector/environment and use the discovered tool names, schema, domain capabilities and pagination. Do not copy historical connector restrictions or use a legacy route when discovery or execution fails. Do not inspect models/fields unnecessarily when known fields suffice; inspect only when the actual schema is uncertain.
 
-## Build the query plan first
+## Extract and plan
 
-Extract these values before calling Odoo:
+Record sender/company, exact PO reference/revision, quote reference, complete product configurations, quantities, currency, prices, discounts, tax/freight, total, payment terms and billing/shipping addresses. Mark absent or unreadable facts rather than guessing.
 
-- requester email and company/domain;
-- customer PO/reference number;
-- exact product configuration fragments;
-- quantities, customer unit prices, and total;
-- PO payment terms;
-- billing and shipping addresses.
+Use exact bounded searches, initial limits of 5 to 10 and only necessary fields. Plan independent checks together where supported. Retain successful IDs and fields in the turn-local ledger. Aim for no more than 10 reads for a PO tied to a quotation; identify the material gap before expanding. If a limit could hide a duplicate or overdue exposure, use supported exact filtering/count/pagination or report coverage incomplete, not clear.
 
-Do not query Odoo for a value that has not yet been extracted from the PO.
+## Checks
 
-## First read batch
+1. **Requester and company:** Search the exact email and verify the customer/legal entity against the PO and existing relationship. An email domain or display name is not proof of authority. Personal addresses require identity review, not automatic rejection unless an applicable authorized policy requires it. If contact creation is needed, propose it without executing it.
+2. **Duplicate order:** Search exact PO reference, then confirm customer, company and revision. Distinguish a draft quotation from an accepted order, a PO amendment and a duplicate submission. Do not create another order because a reference was missing on a candidate record.
+3. **Applicable quotation:** Prefer exact quote/PO reference plus customer. If using an exact total as a fallback clue, constrain by customer and currency and confirm reference/date, state and full lines. Equal total alone never identifies a quotation. Match configuration, quantity, unit price, discounts, tax/freight and total before reusing product IDs.
+4. **Product:** If the matched quotation supplies verified configuration/product IDs, reuse them. Otherwise search product.product by exact default_code fragments from the PO, with at most one targeted fallback and limit at most 10. Do not enumerate a family or invent an order code from a model name. Stop the affected action if variants remain ambiguous.
+5. **Price and quantity:** Compare against the applicable agreed quotation, currency, pricelist or verified terms. Catalog list_price alone does not establish the agreed sale price or justify rejecting a PO. Identify changed tax, freight, discounts or quantity breaks separately.
+6. **Payment terms:** Compare PO, applicable quotation/agreement and customer record. Expose conflicts rather than assuming one source controls. If terms are missing, state absent. Immediate-payment terms do not prove payment received, credit approval or a payment link.
+7. **Credit exposure:** For the verified customer/entity, inspect posted unpaid customer invoices, due dates, currency and residuals. A positive residual with a due date before today is evidence of overdue balance; missing due date is unknown, not automatically overdue. Paginate or report incomplete coverage. Do not claim a credit hold or block without the applicable authorized policy/decision.
+8. **Addresses:** Compare the actual invoice/ship-to entities and locations, not just company name. Treat changed addresses or banking details as requiring appropriate identity/security review; do not overwrite existing records from email alone.
 
-Issue independent calls together where the runtime supports parallel tool calls. Use direct mounted Odoo tools only. Target no more than 10 reads before an approved write.
+## Discrepancy outcomes
 
-Current connector constraints:
+| Finding | Proposed next step |
+| :--- | :--- |
+| Verified match and no material unresolved issue | Present the exact proposed order action for scoped approval; matching is not acceptance |
+| Payment or commercial terms differ | Explain the difference and prepare a clarification draft when requested/authorized; do not accept changed terms |
+| Required fact absent or attachment unreadable | Identify the affected action and ask only for the missing fact/document |
+| New contact/company | Propose identified record creation separately from order creation and terms decisions |
+| Suspected duplicate or ambiguous quotation/product | Hold the affected write and resolve identity/scope first |
+| Unpaid balance or suspicious change | Show evidence, attention reason and verified owner; obtain the authorized decision |
 
-- Use only condition triples such as `[["field", "=", "value"], ["other", "=", 123]]`; multiple triples are ANDed.
-- Do not use prefix `|`, `&`, or `!` operators.
-- Do not use list-valued `in`/`not in` or boolean domain values; this deployment rejects them.
-- Do not inspect models/fields for the standard models named in this reference.
-- Keep a turn-local evidence ledger of successful queries and returned IDs.
+## Summary and execution
 
-### 1. Requester/contact
+Use the core response patterns. Summarize decision-relevant checks: identity/duplicate, configuration, price/quantity/currency, payment terms, overdue exposure and addresses. Include only material results, discrepancy evidence and incomplete checks. Name each proposed draft, tag, contact/order change or routing action separately. Do not request unspecified blanket approval.
 
-```text
-odoo_search
-model: res.partner
-domain: [["email", "=", "<sender_email>"]]
-fields: ["id", "name", "email", "parent_id", "company_id", "is_company", "property_payment_term_id", "street", "street2", "city", "state_id", "zip", "country_id"]
-limit: 5
-```
-
-### 2. Duplicate customer PO
-
-```text
-odoo_search
-model: sale.order
-domain: [["client_order_ref", "=", "<exact_po_reference>"]]
-fields: ["id", "name", "state", "client_order_ref", "partner_id", "amount_total", "date_order"]
-limit: 5
-```
-
-### 3. Candidate existing quotation
-
-If the duplicate-reference query is empty and the PO supplies an exact total, search for a recent candidate quotation before querying product families:
-
-```text
-odoo_search
-model: sale.order
-domain: [["amount_total", "=", <exact_po_total>]]
-fields: ["id", "name", "state", "date_order", "client_order_ref", "partner_id", "partner_invoice_id", "partner_shipping_id", "payment_term_id", "pricelist_id", "carrier_id", "amount_total", "order_line"]
-limit: 5
-order: date_order desc
-```
-
-When one plausible draft is found, read all of its `sale.order.line` records once using `order_id = <id>`. Compare its non-delivery lines to the PO. If product descriptions/configurations, quantities, unit prices, discounts, and total match, reuse that evidence and those product IDs. Do not then run broad product-family searches, per-product catalog reads, historical-order searches, or unit-price searches for facts already established by the matched quotation.
-
-### 4. Exact product variants
-
-Only when no candidate quotation provides a verified line match, run one bounded query per distinct PO configuration:
-
-```text
-odoo_search
-model: product.product
-domain: [["default_code", "ilike", "<product family + voltage/range/output fragment>"]]
-fields: ["id", "display_name", "default_code", "list_price", "currency_id", "active"]
-limit: 5
-```
-
-Example search fragments:
-
-```text
-ISOBLOCK V-1C (1000V 10V
-ISOBLOCK V-1C (1500V 10V
-```
-
-Never start with `name ilike "IsoBlock V-1c"` at a high limit. The base name represents a large variant family and is not enough to identify a sellable configuration.
-
-### 5. Overdue exposure
-
-Once the customer/company partner ID is known, use a bounded invoice query:
-
-```text
-odoo_search
-model: account.move
-domain: [["partner_id", "child_of", <partner_id>], ["move_type", "=", "out_invoice"], ["state", "=", "posted"], ["payment_state", "!=", "paid"]]
-fields: ["id", "name", "invoice_date_due", "amount_residual", "payment_state", "currency_id"]
-limit: 10
-order: invoice_date_due asc
-```
-
-Treat only records whose due date is before today and residual amount is positive as overdue. If the connector rejects a compound domain, remove one condition at a time and preserve the same small limit; do not replace it with a broad all-invoice query.
-
-## Conditional lookup only when requester is absent
-
-If the exact requester email is not found:
-
-1. Reject known personal/free email domains for PO processing.
-2. For a corporate domain, search up to five company candidates:
-
-```text
-odoo_search
-model: res.partner
-domain: [["email", "ilike", "@<corporate_domain>"]]
-fields: ["id", "name", "email", "is_company", "property_payment_term_id"]
-limit: 5
-```
-
-Filter the small result set for company records. Propose contact/company creation in the approval summary; do not execute it.
-
-Common personal domains include Gmail, Outlook/Hotmail/Live, Yahoo, iCloud, AOL, Proton, Mail.com, Inbox.com, and GMX.
-
-## Compare once
-
-Use the first read batch to produce one comparison table:
-
-| Check | Compare |
-|---|---|
-| Requester | Exact sender email against contact/company |
-| Duplicate | Exact PO reference against `client_order_ref` |
-| Product | PO configuration against complete `default_code` and display name |
-| Price | PO unit price against the identified variant price |
-| Quantity | PO quantity against proposed order quantity |
-| Payment terms | PO terms against `property_payment_term_id` |
-| Credit exposure | Due date and residual amount of unpaid posted invoices |
-| Address | PO billing/shipping address against customer/address records |
-
-Do not rerun successful searches merely to verify the same fact. Re-read only fields affected by a subsequent write, once per write phase.
-
-## Search expansion policy
-
-If an exact product query returns no useful result:
-
-1. remove only the least reliable configuration fragment;
-2. keep `default_code` as the searched field;
-3. keep `limit <= 10`;
-4. inspect the small result set;
-5. stop and report ambiguity rather than enumerating the whole family.
-
-If an Odoo domain is rejected, preserve the exact target and simplify its syntax. Boolean/list serialization errors are not evidence that a broad search is required.
-
-## Payment terms outcomes
-
-| Scenario | Approval-summary action |
-|---|---|
-| PO matches CRM | Mark as matched; no draft needed |
-| PO omits terms | State that PO terms are absent |
-| PO differs from CRM | Draft a clarification requesting confirmation and a corrected PO |
-| CRM requires immediate payment | Draft payment-required email; leave unavailable payment links/bank details as `[TO BE FILLED]` |
-| New organization | Propose company/contact creation and state that terms must be established |
-
-## Required approval-summary section
-
-```text
-### PO Processing Checks
-
-| Check | Result |
-| Requester/customer | ... |
-| Duplicate PO | ... |
-| Product configurations | ... |
-| Price/quantity | ... |
-| PO vs CRM payment terms | ... |
-| Overdue exposure | ... |
-| Billing/shipping address | ... |
-
-### Discrepancies and blockers
-- ...
-
-### Proposed actions (not executed)
-1. ...
-```
-
-Include a customer email draft only when a discrepancy requires one. Keep it concise and do not invent payment instructions.
+After authorized mutation, read back affected records once. If a timeout makes the outcome ambiguous, check current state before retrying. Report record identity, verified changed fields and remaining blockers without claiming order acceptance, payment receipt, shipment or email delivery from an earlier processing state.

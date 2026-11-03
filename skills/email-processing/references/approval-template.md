@@ -1,172 +1,67 @@
-# Step 4: Approval Output Template
+# Response patterns
 
-Use this exact structure when presenting the approval summary to the user.
-Do NOT deviate from this format. Do NOT skip any section.
+Use the smallest structure that answers the reader's question and exposes material uncertainty. Sections below are conditional, not a mandatory form. Do not fill empty sections with None or ask approval for reading or informational conclusions.
 
----
+## Internal user summary
 
-## Template
+Lead with the supported conclusion or decision needed. Include only relevant fields:
 
-```
----
-## 📧 Email Processing Summary
-
-### Classification
-| Field | Value |
-|-------|-------|
-| **Category** | <CATEGORY> |
-| **Confidence** | High / Medium / Low |
-| **Reasoning** | <one sentence explaining why> |
-
----
-
-### Email Details
-| Field | Value |
-|-------|-------|
-| **Subject** | <subject> |
-| **From** | <sender name> <<sender email>> |
-| **To** | <recipient> |
-| **Date Received** | <date and time> |
-| **Urgency** | High / Normal / Low |
-| **Tone** | Formal / Urgent / Friendly / Complaint |
-
----
-
-### Key Information Extracted
-| Field | Value |
-|-------|-------|
-| **Action Requested** | <what sender is asking> |
-| **Key Entities** | <order numbers, PO numbers, product names, amounts, etc.> |
-| **Customer / Company** | <if identifiable> |
-| **Relevant Dates** | <delivery dates, due dates, etc.> |
-
----
-
-### Attachment
-| Field | Value |
-|-------|-------|
-| **Has Attachment** | Yes / No |
-| **Attachment Name(s)** | <names or "None"> |
-| **Attachment Type** | PDF / Excel / Image / Other / None |
-| **Key Data from Attachment** | <extracted summary or "No attachment" or "Content unavailable"> |
-
----
-
-### Proposed Next Action
-> <Clear, specific description of what you recommend doing next>
-> Example: "Route this email to the PO_Expert agent to create a Sales Order in Odoo for 2 pcs of ISOBAND V."
-
-**Confidence in proposed action:** High / Medium / Low
-
----
-
-### PO Processing Checks *(include only when category = "Placing a Purchase Order")*
-
-| Check | Result |
-|-------|--------|
-| **Sender in CRM** | Found: <name, company> / Not Found |
-| **Email type** | Corporate ✅ / Non-corporate ❌ (blocked) |
-| **Domain match in CRM** | Match: <company name> / No match / N/A |
-| **CRM Contact action** | Existing / Create contact / Create company + contact / N/A |
-| **PO Payment Terms** | <what PO states, or "Not specified"> |
-| **CRM Payment Terms** | <what CRM has, or "New contact — default"> |
-| **Payment Terms Status** | ✅ Match / ⚠️ Discrepancy / 🔴 Immediate Payment / ➖ N/A |
-
-### Draft Email *(if applicable — payment terms discrepancy or immediate payment)*
-
-```
-<Full draft email here, or "No draft required">
+```text
+Action required: <issue and consequence in one sentence>
+Request: <sender, subject/link and unresolved request>
+Verified: <material facts and concise sources>
+Open issue: <specific discrepancy or missing evidence>
+Owner: <verified owner, unassigned, or proposed owner clearly marked>
+Next action: <specific recommendation>
+Timing: <actual deadline/review date and timezone, if known>
+Proposed tags: <attention/reason/status; not applied>
+Approval needed: <each controlled action, target and scope>
+Execution: <no changes made, or verified action receipt>
 ```
 
----
+Include category/confidence only when useful for review or explicitly requested. Summarize attachment findings and access failures when material. A source link is useful; raw tool payloads, graph IDs and retrieval narration are not.
 
-### ⚠️ Awaiting Your Approval
+For multiple controlled actions, number them separately. A Yes may approve the clearly enumerated set, not unspecified downstream work. Explicitly exclude email sending. Respect existing scoped authorization; do not ask for the same permission again. For no proposed action, end with the conclusion rather than an approval menu.
 
-**Do you approve proceeding with the proposed action(s)?**
+### Illustrative PO summary
 
-- ✅ **Yes** — I will proceed with all proposed actions
-- ✏️ **Modify** — Tell me what to change and I will update the proposal
-- ❌ **Reject** — No action will be taken
-
-> Please reply with Yes, Modify, or Reject.
----
+```text
+Action required: The PO requests different payment terms from the matched quotation.
+Verified: Product configurations, currency and quantities match. Payment terms differ.
+Recommended next step: Prepare a clarification draft for the verified sales owner's review; do not accept the revised terms.
+Proposed tags: Action required; commercial-review; Awaiting approval. Not applied.
+Approval needed: Create the specified clarification draft in the authorized mailbox. Applying mailbox tags would require separate authorization.
+Execution: No draft, tags or order changes made.
 ```
 
----
+Do not report a draft as saved when only text has been prepared. Avoid assigning a CEO routine copied sales execution. Do not invent an owner, accepted handoff, response deadline or reminder.
 
-## Rules for Filling the Template
+## Customer reply draft
 
-1. **Every field is required.** If a field has no data, write "Not present" or "None".
-2. **Do NOT add extra fields** not in the template.
-3. **Key Entities** — list them as a comma-separated inline string, e.g.: `PO #5087227, ISOBAND V, 2 pcs, $312.00`
-4. **Proposed Next Action** — be specific. Include the agent name, system (Odoo), and exact action.
-5. **Confidence in proposed action** — set Low if classification was Low or email intent was ambiguous.
-6. **Attachment content** — extract only what was returned by the API. Never fabricate.
+Write for the actual recipient, relationship, language and thread:
 
----
+1. Give the direct supported answer first.
+2. Explain only what the customer needs to understand or act. Address each unresolved question.
+3. Keep assumptions beside calculations. Distinguish nominal results from specifications and installation approval. Attribute material claims to approved customer-safe sources; date historical guidance and preserve case conditions.
+4. Identify the precise remaining limitation without turning it into a generic checklist. Ask only for material information not already supplied.
+5. State the next step accurately without promising price, schedule, acceptance, engineering approval or a completed escalation.
 
-## Example (Filled)
+Do not show internal category, confidence, tags, private paths, source audit codes or unauthorized correspondence. Customer facing draft text may explain an evidence boundary naturally without exposing internal records.
 
+For a technical reply, use applicable product answering instructions and model sources. For payment discrepancies, do not invent bank details or links. For certificates, keep CoC, detailed calibration, accredited scope, traceability and safety/regulatory approval distinct.
+
+Before saving a requested draft, complete writer and critic reviews and verify recipient/CC, subject/thread, attachment references, source fidelity, tone, language and authorization. Preserve verified HTML font/signature/footer using the approved draft workflow. Never send, queue or schedule the email.
+
+## Execution receipt
+
+After authorized actions use compact, evidence based wording:
+
+```text
+Draft: created, read back as draft <reference>.
+Tags: <names> applied to <target>, read back; unrelated labels preserved.
+Order: not changed.
+Email sending: not performed.
+Remaining: <named blocker or unresolved issue, if any>.
 ```
----
-## 📧 Email Processing Summary
 
-### Classification
-| Field | Value |
-|-------|-------|
-| **Label** | CUSTOMER_SUPPORT |
-| **Confidence** | High |
-| **Reasoning** | Sender reports receiving wrong product variant for a confirmed PO |
-
----
-
-### Email Details
-| Field | Value |
-|-------|-------|
-| **Subject** | Fwd: Exc # 407722 PO #5087227 |
-| **From** | Kelly Gillund <kelly.gillund@digikey.com> |
-| **To** | ai.engineering@verivolt.com |
-| **Date Received** | Thu, 26 Feb 2026 15:26:05 -0500 |
-| **Urgency** | Normal |
-| **Tone** | Formal |
-
----
-
-### Key Information Extracted
-| Field | Value |
-|-------|-------|
-| **Action Requested** | Confirm whether ISOBAND_ABB V (10V 10V) is the same as ordered ISOBAND V (10V 10V) |
-| **Key Entities** | PO #5087227, Exc #407722, ISOBAND V, ISOBAND_ABB V, 2 pcs |
-| **Customer / Company** | DigiKey (Kelly Gillund - Supplier Quality Coordinator) |
-| **Relevant Dates** | Order date: not specified |
-
----
-
-### Attachment
-| Field | Value |
-|-------|-------|
-| **Has Attachment** | No |
-| **Attachment Name(s)** | None |
-| **Attachment Type** | None |
-| **Key Data from Attachment** | No attachment |
-
----
-
-### Proposed Next Action
-> Route to the support_agent with full email content and ask them to verify product equivalence between ISOBAND V and ISOBAND_ABB V and draft a reply to Kelly Gillund at DigiKey.
-
-**Confidence in proposed action:** High
-
----
-
-### ⚠️ Awaiting Your Approval
-
-**Do you approve proceeding with the proposed action?**
-
-- ✅ **Yes** — I will proceed with the proposed action
-- ✏️ **Modify** — Tell me what to change and I will update the proposed action
-- ❌ **Reject** — No action will be taken
-
-> Please reply with Yes, Modify, or Reject.
----
-```
+Use only applicable lines. Distinguish tool success from business resolution, saved draft from sent email, and routed work from accepted ownership. If readback is unavailable, mark it not checked; if a tool fails, state the failure and whether the outcome is ambiguous. Do not claim Completed while a material question or financial variance remains unresolved.
