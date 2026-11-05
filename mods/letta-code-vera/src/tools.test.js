@@ -20,6 +20,13 @@ function registeredTools(client) {
 }
 
 describe("Vera tools", () => {
+  test("discovers isolated sandbox tools in their explicit capability area", async () => {
+    const entries=[{name:"vera_sandbox_create",description:"Create isolated workspace",parameters:{type:"object",required:["requestKey"]}},{name:"vera_sandbox_exec",description:"Execute in sandbox",parameters:{type:"object",required:["sessionId","command"]}}];
+    const tools=registeredTools({async listMcpTools(){return entries;}});
+    const result=JSON.parse(await tools.get("vera_mcp_list_tools").run({args:{area:"sandbox",includeSchemas:true},signal:undefined}));
+    expect(result.tools.map(tool=>tool.name)).toEqual(entries.map(tool=>tool.name));
+    expect(result.tools.find(tool=>tool.name==="vera_sandbox_exec").parameters.required).toContain("sessionId");
+  });
   test("discovers processed-email registry tools in the email area", async () => {
     const entries=[{name:"vera_get_processed_email",description:"Read registry",parameters:{type:"object"}},{name:"vera_save_processed_email",description:"Save registry",parameters:{type:"object",required:["confirm"]}}];
     const tools=registeredTools({async listMcpTools(){return entries;}});
