@@ -40,6 +40,8 @@ const MCP_DISCOVERY_AREAS = {
     "vera_list_emails",
     "vera_search_emails",
     "vera_get_email",
+    "vera_get_processed_email",
+    "vera_save_processed_email",
     "vera_generate_email_draft",
     "vera_save_email_draft",
     "vera_list_email_attachments",

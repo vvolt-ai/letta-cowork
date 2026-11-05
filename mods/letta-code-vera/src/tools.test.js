@@ -20,6 +20,13 @@ function registeredTools(client) {
 }
 
 describe("Vera tools", () => {
+  test("discovers processed-email registry tools in the email area", async () => {
+    const entries=[{name:"vera_get_processed_email",description:"Read registry",parameters:{type:"object"}},{name:"vera_save_processed_email",description:"Save registry",parameters:{type:"object",required:["confirm"]}}];
+    const tools=registeredTools({async listMcpTools(){return entries;}});
+    const result=JSON.parse(await tools.get("vera_mcp_list_tools").run({args:{area:"email",includeSchemas:true},signal:undefined}));
+    expect(result.tools.map(tool=>tool.name)).toEqual(entries.map(tool=>tool.name));
+    expect(result.tools.find(tool=>tool.name==="vera_save_processed_email").parameters.required).toContain("confirm");
+  });
   test("discovers guided MCP capability areas with schemas and natural-language aliases", async () => {
     const tools = registeredTools({
       async fetchMcpTools() {
