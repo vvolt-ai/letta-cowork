@@ -1,6 +1,18 @@
 # Desktop Agent SDK execution
 
-## Publication validation — 2026-11-05
+## Paired SDK upgrade — 2026-11-05 (local, not activated)
+
+Current exact pair: SDK0.8.70 (f34cb1f9a2840523d87ac8313319ff57afb57d17) / Code0.34.41 (233c0034492b9782c9bec01002226b891e514745), verified against latest stable GitHub releases and npm integrity/peer metadata. SDK0.8.68→0.8.70 changes manifests/peer floor only; the public lifecycle API is unchanged. Code's engine floor is unchanged, so existing Electron45.1.0/Node24.22.1 remains supported. Package/Bun-lock pins, strict host-info check, fixtures and versioned shared-pool identity are updated together. No global CLI, Node or Electron upgrade.
+
+Upstream reviewed: named-run/same-OTID busy recovery; explicit/default permission persistence; attached-skill last-good fallback; unsupported ChatGPT model plan rotation; optional harness/fork_context delegation; managed sandbox exposure. Current SDK-owned stream/abort/queued-removal, scoped native callbacks, permissions and Task isolation remain. No automatic history sharing, external coding-worker routing, managed port publication, new model loop or extra approval/retry layer is added. Native mode_is_default is optional; we preserve the explicit requested Cowork mode rather than replacing it with an inherited default.
+
+One compatibility correction aligns backend terminal-state recognition with upstream: expired can settle exact owned Stop/cleanup verification without changing the authoritative SDK result into success. Regression includes an interrupted SDK result plus an expired backend run; pending/running/unknown work is not treated as terminal.
+
+Verified332 Node/native tests (318 supported embedded-Node fixtures plus14 ordinary-Node process-shim unit checks),62 Bun UI tests and full build. The existing whole-repo lint5 errors/format parser+style baseline remains, outside this focused upgrade. Source/build/native fixtures do not activate the running app or establish live provider/Windows/Linux/installer acceptance. Existing generated dist-react/index.html and test-results are preserved and excluded. Backend npm audit old/new lock counts are identical at49 (including2 critical); no unrelated force fix. No restart, real conversation/tool action, release, commit/push or deployment performed as part of this update.
+
+Sources: [SDK comparison](https://github.com/letta-ai/letta-agent-sdk/compare/v0.8.68...v0.8.70), [Code comparison](https://github.com/letta-ai/letta-code/compare/v0.34.39...v0.34.41). Rebuild/reload main only after current work is safely settled; do not replay an uncertain prior prompt.
+
+## Publication validation — 2026-11-05 (pre-upgrade snapshot)
 
 Current source validation supersedes the older baseline counts below:317 Node/native fixtures pass under Electron's supported embedded Node24.22.1,14 process-shim/CI unit checks pass under ordinary Node,62 Bun UI/source tests pass, and the complete desktop build passes. The two unit-only suites use process.execPath in generated shebangs or sanitized child environments and are not valid under an Electron executable substituted as plain Node. The obsolete email fast-path assertions now check the canonical configured-MCP/no-shell-fallback contract, not retired mounted Odoo/curl wording. The late raw-hint result test injects its control hint deterministically rather than racing socket disposal; no production delay or outcome rewrite was added.
 
@@ -8,7 +20,7 @@ Bundled email-processing1.3.2 matches the complete canonical VerivoltDev/Skills 
 
 ## Current architecture
 
-Electron main runs **Letta Agent SDK 0.8.68 with Letta Code 0.34.39**, using a pooled local native App Server's **API harness**. The main-owned pool persists hosts per trusted provider/account/connection and agent-scoped disabled-memory policy; conversations and later turns reuse them. See [local shared App Server design](desktop-shared-app-server.md). The SDK owns model turns, tool continuations, streaming and native retry policy. There is no custom REST/SSE model pump or legacy execution fallback.
+Electron main runs **Letta Agent SDK 0.8.70 with Letta Code 0.34.41**, using a pooled local native App Server's **API harness**. The main-owned pool persists hosts per trusted provider/account/connection and agent-scoped disabled-memory policy; conversations and later turns reuse them. See [local shared App Server design](desktop-shared-app-server.md). The SDK owns model turns, tool continuations, streaming and native retry policy. There is no custom REST/SSE model pump or legacy execution fallback.
 
 `libs/runner/session-manager.ts` selects the SDK adapter; `libs/runner/sdk/session.ts` supplies Cowork's UI/tool lifecycle and owns a per-turn SDK client plus shared-host lease. `services/letta-runtime/desktop-app-server-pool.ts` owns process lifetime, runtime admission and fences. Chat, continuation and existing background callers continue through `runLetta`. Task/Agent use a protected parent capability to create another SDK session; the delegated manager supplies policy, not another model loop.
 
@@ -50,7 +62,7 @@ This is a diagnostic patch, not a repair or proof of the recurring live HTTP sta
 
 SDK `result` is the authoritative terminal outcome, not send() completion, assistant fragments, loop status or native hints. Preserve SDK success/errorCode/errorDetail (with normal secret redaction); native hints cannot rewrite the result. UI final text prefers result.result ?? accumulated assistant text, supports result-only answers and deduplicates repeated same-client receipts. Failure presentation uses errorCode and errorDetail before legacy error; typed interrupted is not a five-minute retry diagnosis. Subsequent result-contract validation:38/38 SDK/native tests,54/54 UI tests and build pass; the full-suite baseline below predates these small result-presentation additions.
 
-The SDK0.8.68 session that sends a turn is also the session that owns cancellation. `send()` starts one internal `session.stream()` consumer; UI subscriptions read its recorded events and do not create competing SDK consumers. Tool cancellation does not terminate that consumer. Keep consuming the original SDK stream through its terminal result, drain owned callbacks/children, then close transport and release the client lease. `close()` is not cancellation; the adapter refuses to quietly abort an unverified owner from cleanup.
+The pinned SDK session that sends a turn is also the session that owns cancellation. `send()` starts one internal `session.stream()` consumer; UI subscriptions read its recorded events and do not create competing SDK consumers. Tool cancellation does not terminate that consumer. Keep consuming the original SDK stream through its terminal result, drain owned callbacks/children, then close transport and release the client lease. `close()` is not cancellation; the adapter refuses to quietly abort an unverified owner from cleanup.
 
 Active Stop uses public `session.abort()`, including the SDK's abort-request tracking. Raw `abort_message` loops with hand-picked run IDs are removed. Before invoking public abort, the private socket/relay boundaries still validate canonical runtime scope and OTID-correlated active run ownership. The relay refuses broad or unrelated backend cancellation, and new model submissions are blocked once stopped. If natural completion wins a Stop race, preserve the actual SDK result rather than fabricate an interruption.
 

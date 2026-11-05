@@ -1,6 +1,6 @@
 # letta-cowork / Vera Cowork Electron App
 
-**Last updated:** 2026-11-03
+**Last updated:** 2026-11-05
 **Owner/context:** Bhavesh / Verivolt internal Cowork desktop app
 **Repo:** standalone `letta-cowork` clone
 **Sensitivity:** Level 2 internal project context. No secrets stored here.
@@ -11,7 +11,7 @@ Electron desktop app wrapping the Letta Code agent runtime with Verivolt/Cowork 
 
 ## Stack
 
-- Electron 45.1.0 (Node24.22.1, ABI150; macOS13+); SDK0.8.68/Code0.34.39 exact pins (local paired upgrade2026-11-03; reload/deployment not implied)
+- Electron 45.1.0 (Node24.22.1, ABI150; macOS13+); SDK0.8.70/Code0.34.41 exact pins (local paired upgrade2026-11-05; reload/deployment not implied)
 - React 19.2
 - Vite 8
 - TypeScript 6

@@ -122,7 +122,7 @@ async function openSdk(
     if (
       info.backend !== 'api' ||
       info.protocol_version !== 1 ||
-      info.letta_code_version !== '0.34.39' ||
+      info.letta_code_version !== '0.34.41' ||
       !info.capabilities.runtime_start
     )
       throw Error('SDK_NATIVE_HOST_INCOMPATIBLE');
@@ -733,7 +733,7 @@ export class DesktopSdkSession {
     this.proof = snapshot;
   }
   private async waitBackendCancellation(): Promise<void> {
-    // Native 0.34.39 acknowledges abort before its backend cancel task settles.
+    // Native 0.34.41 acknowledges abort before its backend cancel task settles.
     // This is stop-only readback, never a second cancellation mechanism or a
     // gate on ordinary successful SDK results.
     await readWithDeadline(async signal => {
@@ -746,7 +746,7 @@ export class DesktopSdkSession {
         const runs=await waitForRead(Promise.all(ids.map(id=>this.scope!.client.runs.retrieve(id,{signal}))),signal);
         this.scope!.assertCurrent();
         if (runs.some((run,i)=>run.id!==ids[i]||(run.agent_id&&run.agent_id!==this._agentId)||(run.conversation_id&&run.conversation_id!==this._conversationId))) throw Error('SDK_STOP_SCOPE_UNAVAILABLE');
-        if (runs.every(run=>['completed','failed','cancelled'].includes(run.status??''))) return;
+        if (runs.every(run=>['completed','failed','cancelled','expired'].includes(run.status??''))) return;
         await waitForRead(new Promise<void>(resolve=>setTimeout(resolve,100)),signal);
       }
     },new AbortController().signal,10000,'SDK_BACKEND_CANCEL_UNVERIFIED');
