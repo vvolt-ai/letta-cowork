@@ -1,67 +1,83 @@
-# Response patterns
+# Email approval summary
 
-Use the smallest structure that answers the reader's question and exposes material uncertainty. Sections below are conditional, not a mandatory form. Do not fill empty sections with None or ask approval for reading or informational conclusions.
-
-## Internal user summary
-
-Lead with the supported conclusion or decision needed. Include only relevant fields:
+Present one concise evidence-backed summary. Use relevant sections below; do not invent information to fill every cell or force PO checks into unrelated mail. Distinguish absent, unknown, denied, failed, partial and not applicable. **Every email response is a draft; approval never authorizes sending/forwarding/scheduling/queueing email.**
 
 ```text
-Action required: <issue and consequence in one sentence>
-Request: <sender, subject/link and unresolved request>
-Verified: <material facts and concise sources>
-Open issue: <specific discrepancy or missing evidence>
-Owner: <verified owner, unassigned, or proposed owner clearly marked>
-Next action: <specific recommendation>
-Timing: <actual deadline/review date and timezone, if known>
-Proposed tags: <attention/reason/status; not applied>
-Approval needed: <each controlled action, target and scope>
-Execution: <no changes made, or verified action receipt>
+## Email processing summary (retained mail only)
+
+Conclusion / decision needed: <supported outcome first>
+Category / confidence / brief basis: <when material>
+Email: verified mailbox/source reference, sender, subject, received date and request
+Attachments: per-file listed / retrieval-not-attempted / attempted / downloaded /
+inspected-complete-or-partial ledger, actual attempted operation/result and remaining gate.
+Unusable masked IDs prevent a retrieval attempt; they do not establish reader failure.
+
+### Current company/account and applicable documents
+- Exact contact/commercial-company partner IDs, permitted relationship and how verified:
+- Stored context: catalog read/empty/not attempted/denied/failed; selected section keys,
+  versions/update dates and bodies actually read/partial/not retrieved:
+- Human-maintained guidance versus generated recommendations, provenance/conflicts:
+- Assembled/legacy report fallback used (if any), scope and freshness limitations:
+- Relevant current records/facts and verification date:
+- Applicable approved guide/product/process section/revision/date:
+- Historical leads revalidated (or explicitly still unknown):
+- Scope, coverage, access limits and conflicts:
+
+### Required business checks (only applicable categories)
+| Check | Source and current finding | Gate / limitation |
+| Requester/customer | ... | ... |
+| Duplicate / quotation identity | ... | ... |
+| Product/version, quantity, price/discount/currency/totals | ... | ... |
+| Terms/credit exposure (if required) | ... | ... |
+| Billing/shipping and source PDF (if required) | ... | ... |
+
+### Attention and ownership (when relevant)
+Attention: Routine / Action required / Urgent, with evidence and impact
+Reason tags: technical-review / commercial-review / financial-exception / security-review
+Status: Reviewed / Awaiting approval / Blocked / Waiting externally / Completed
+Owner: verified owner, unassigned, or clearly proposed owner
+Named action owner and separate internal information provider, with source:
+Exact request / expected return / customer follow through owner:
+Next action / known deadline or review date and timezone:
+Mailbox tags: proposed only, or exact authorized applied/read-back state
+
+### Proposed actions — not executed
+1. Specific business write, exact verified record/account target, changed fields,
+   owner/authority requirement, source dependencies and expected readback.
+2. Specific separate delegation/draft/attachment/shipping action only if required.
+
+### Draft reply (only when needed)
+<customer-safe proposed text; no invented commitments/payment instructions>
+
+### Blockers / unresolved decisions
+<what needs clarification, access, document review or designated human decision>
+
+<Only if an action still needs authorization:>
+Do you approve these specific proposed business actions?
+- Yes: execute only this scope when required evidence/authority/tool gates pass.
+- Modify: revise the proposal; obtain approval for changed material scope.
+- Reject: stop; no writes performed.
+Email remains draft-only. Missing gates are not overridden by approval.
 ```
 
-Include category/confidence only when useful for review or explicitly requested. Summarize attachment findings and access failures when material. A source link is useful; raw tool payloads, graph IDs and retrieval narration are not.
+Basic partner/bill/PO verification alone is not a completed stored-company review. A section catalog is not its body; a saved report is not current operational truth. If the company reference or relevant sections were not read, disclose that gap rather than claiming full review.
 
-For multiple controlled actions, number them separately. A Yes may approve the clearly enumerated set, not unspecified downstream work. Explicitly exclude email sending. Respect existing scoped authorization; do not ask for the same permission again. For no proposed action, end with the conclusion rather than an approval menu.
+Avoid claims of “no duplicate,” “no overdue” or “all attachments inspected” from partial/failed reads. Use actual supported action/record fields; do not name an unverified recipient agent or promise a successful workflow. Contact/account details stay in the approved private context and must not be copied to GitHub or unrelated people by default.
 
-### Illustrative PO summary
+For a routine informational conclusion with no proposed controlled action, omit the approval menu. For proposed tags specify account/message/thread, existing versus new tag and each intended application/removal; no inferred tagging authority or invented endpoint. See [attention rules](attention-and-status.md).
 
-```text
-Action required: The PO requests different payment terms from the matched quotation.
-Verified: Product configurations, currency and quantities match. Payment terms differ.
-Recommended next step: Prepare a clarification draft for the verified sales owner's review; do not accept the revised terms.
-Proposed tags: Action required; commercial-review; Awaiting approval. Not applied.
-Approval needed: Create the specified clarification draft in the authorized mailbox. Applying mailbox tags would require separate authorization.
-Execution: No draft, tags or order changes made.
-```
+## Output depth
 
-Do not report a draft as saved when only text has been prepared. Avoid assigning a CEO routine copied sales execution. Do not invent an owner, accepted handoff, response deadline or reminder.
+For Step 0 Ignore, do not produce this summary or an approval menu during unsolicited triage. If the user explicitly asks about the ignored message, give one short reason. Ignore does not mean deleting, archiving, marking read or unsubscribing. Use only a documented runtime no-action contract, not internal control tokens in user text.
 
-## Customer reply draft
+For Brief review, one useful changed fact is usually sufficient. For Investigate/action, provide the supported conclusion and concrete next action. On case specific operational advice identify named owner/provider, exact request, expected return and customer follow through; if sources cannot establish ownership, state the narrow gap after bounded lookup. Do not replace advice with a holding reply. Generic conceptual answers do not require named owners.
 
-Write for the actual recipient, relationship, language and thread:
+Only report follow up or reminders active after an authorized tracking destination/runtime has been verified. See [triage and follow up](triage-and-follow-up.md).
 
-1. Give the direct supported answer first.
-2. Explain only what the customer needs to understand or act. Address each unresolved question.
-3. Keep assumptions beside calculations. Distinguish nominal results from specifications and installation approval. Attribute material claims to approved customer-safe sources; date historical guidance and preserve case conditions.
-4. Identify the precise remaining limitation without turning it into a generic checklist. Ask only for material information not already supplied.
-5. State the next step accurately without promising price, schedule, acceptance, engineering approval or a completed escalation.
+## Customer draft
 
-Do not show internal category, confidence, tags, private paths, source audit codes or unauthorized correspondence. Customer facing draft text may explain an evidence boundary naturally without exposing internal records.
+Use direct answer, concise explanation, material assumptions/limits and only the missing information needed for the next step. Address every unresolved question. Keep exact model/configuration and units; cite material claims using approved customer-safe sources and date historical guidance. Do not expose internal tags, confidence scores, private paths, source audit codes or unauthorized correspondence. Do not promise approval, price, schedule or an accepted handoff.
 
-For a technical reply, use applicable product answering instructions and model sources. For payment discrepancies, do not invent bank details or links. For certificates, keep CoC, detailed calibration, accredited scope, traceability and safety/regulatory approval distinct.
+Complete writer and critic reviews before presenting or saving the draft: thread, recipient/language, evidence, commitments, disclosure, units, links, To/CC and attachment references. Use the authorized draft workflow and verified HTML font/signature/footer. Prepared text is not a saved draft. Never send, forward, queue or schedule email.
 
-Before saving a requested draft, complete writer and critic reviews and verify recipient/CC, subject/thread, attachment references, source fidelity, tone, language and authorization. Preserve verified HTML font/signature/footer using the approved draft workflow. Never send, queue or schedule the email.
-
-## Execution receipt
-
-After authorized actions use compact, evidence based wording:
-
-```text
-Draft: created, read back as draft <reference>.
-Tags: <names> applied to <target>, read back; unrelated labels preserved.
-Order: not changed.
-Email sending: not performed.
-Remaining: <named blocker or unresolved issue, if any>.
-```
-
-Use only applicable lines. Distinguish tool success from business resolution, saved draft from sent email, and routed work from accepted ownership. If readback is unavailable, mark it not checked; if a tool fails, state the failure and whether the outcome is ambiguous. Do not claim Completed while a material question or financial variance remains unresolved.
+After execution, report each item as verified complete, blocked, failed or outcome unknown, with returned record/source IDs where appropriate. A saved record does not prove a separate notification, PDF link, order confirmation, shipment or email delivery. Do not request the same approval again merely because the agent/context changed; retain the exact approved scope and re-check material changes.

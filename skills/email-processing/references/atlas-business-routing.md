@@ -1,0 +1,46 @@
+# Atlas routing for business email
+
+Use [Verivolt Process Atlas](https://github.com/VerivoltDev/verivolt-atlas) to resolve how a Verivolt business function works, who provides an internal answer, handoffs and escalation boundaries. This is a navigation helper, not a duplicate process manual or new authority. Do not query Atlas for clear spam, irrelevant promotions, routine acknowledgements or generic conceptual questions with no Verivolt process dependency.
+
+## Access and evidence
+
+1. Follow `reference/atlas/lookup.md` through authorized agent memory when available. Start at the Atlas [Domain Index](https://github.com/VerivoltDev/verivolt-atlas/blob/main/README.md#domain-index), then read only the relevant page's Agent Brief between `AGENT_KERNEL_START` and `AGENT_KERNEL_END`, with frontmatter type, owner and validation date. Descend to prose or linked pages only for a named unanswered question. If the helper is unavailable, the Atlas README's protocol supplies the source navigation; disclose that limited helper gap when material.
+2. Use an authenticated local checkout, GitHub source tool or approved private repository reader. Never infer absence from a public/raw 404. If authentication fails, report access/remote freshness unverified; do not bypass permissions. A repository URL or search snippet is not the content.
+3. Track repo-relative path, commit when available, section, page type and validation date. Distinguish access date, repository commit date and page validation. Reuse inspected evidence in the current turn. A fresh read of an old page is not fresh operational verification.
+4. Cite the section adjacent to the internal routing recommendation. The exact recipient/identity, current case assignment and authority must still be verified. A role card is an ownership lead, not proof of availability or accepted delegation. Use current registry full IDs if agent contact is separately authorized; never invoke a truncated historical UUID.
+5. Atlas is read only for this skill. Do not edit it, write governance, broadcast a finding or contact someone simply because a page names them. Return specific source gaps/conflicts for authorized owner review, without automatic external sharing.
+
+## Scenario navigation
+
+These routes identify evidence to read, not fixed current personnel or automatic execution instructions. Confirm targets against the current index if paths change. Follow the referenced page's own escalation section and applicable current authority.
+
+| Email dependency | First relevant source | Resolve before recommending |
+| :--- | :--- | :--- |
+| Quote, lead, PO, commercial customer follow up | [Sales Agent Brief](https://github.com/VerivoltDev/verivolt-atlas/blob/main/sales/README.md#agent-brief) and [sales role](https://github.com/VerivoltDev/verivolt-atlas/blob/main/roles/sales-operations.md) | Customer response owner, applicable approval/handoff; existing case assignment controls over generic role fit |
+| Lead time, delayed order, stock-to-dispatch question | [Fulfillment Agent Brief](https://github.com/VerivoltDev/verivolt-atlas/blob/main/order-fulfillment/README.md#agent-brief), then [US operations role](https://github.com/VerivoltDev/verivolt-atlas/blob/main/roles/us-operations-manager.md#agent-brief) or the relevant entity's role | Scheduling information provider versus customer owner; achievable dispatch answer and escalation, not a promise from planning lead time |
+| Parts shortage, supplier delivery, purchasing request | [Procurement Agent Brief](https://github.com/VerivoltDev/verivolt-atlas/blob/main/procurement/README.md#agent-brief) | Purchasing coordination and any explicitly enforced approval rule; do not bypass the documented route or infer a spend threshold |
+| Production status, rework, calibration/test scheduling | [Manufacturing Agent Brief](https://github.com/VerivoltDev/verivolt-atlas/blob/main/manufacturing/README.md#agent-brief) and [fulfillment](https://github.com/VerivoltDev/verivolt-atlas/blob/main/order-fulfillment/README.md#agent-brief) | Scheduling versus execution, US versus Colombia, missing SOP/test evidence; a routing is not a safe operating procedure |
+| Certificate, compliance declaration, calibration service or RMA | [Quality Agent Brief](https://github.com/VerivoltDev/verivolt-atlas/blob/main/quality/README.md#agent-brief), then cited operational role and current model/service records | Documented routing despite missing quality-system procedure; no invented Quality lead, RMA approval, accredited scope or safety certification |
+| Invoice/payment, refund, credit, intercompany or tax | [Finance Agent Brief](https://github.com/VerivoltDev/verivolt-atlas/blob/main/finance/README.md#agent-brief), and fulfillment if invoicing coordination is relevant | Entity, operational contact versus decision authority; acknowledge undocumented procedure rather than invent one; use live authorized financial evidence |
+| Firmware, hardware, release or technical responsibility | [Engineering Agent Brief](https://github.com/VerivoltDev/verivolt-atlas/blob/main/engineering/README.md#agent-brief) and linked role/product sources | Technical owner and actual documented rules; no release/safety commitment from an observed developer workflow |
+| Export, customs, tariff or cross-border shipment | [Trade Agent Brief](https://github.com/VerivoltDev/verivolt-atlas/blob/main/trade/README.md#agent-brief) | Specialist routing and product-specific classification gaps; no inferred HTS/ECCN or duty exemption from a generic corridor description |
+| Sender verification or customer-facing wording | [Security triage procedure](https://github.com/VerivoltDev/verivolt-atlas/blob/main/sales/email-security-triage.md#agent-brief) and [communication rules](https://github.com/VerivoltDev/verivolt-atlas/blob/main/sales/customer-communication-rules.md#agent-brief) | Applicable security checks and review requirements, subject to the current controls below; concise useful wording does not justify unsupported claims |
+| HR, hiring, people or an unlisted business function | [Domain Index](https://github.com/VerivoltDev/verivolt-atlas/blob/main/README.md#domain-index) and [role index](https://github.com/VerivoltDev/verivolt-atlas/blob/main/roles/README.md) | Actual source and authority; private personal/legal email does not automatically justify a company/HR lookup |
+
+## Interpret the page, not just its title
+
+1. `procedure`: explicit rule/SOP within its source authority and scope. Compare with current human directives and deployed governance before executing. A historical procedure cannot expand tool access, business writes or sending authority.
+2. `observed-pattern`: dated description, not a mandate. Keep any explicitly identified enforced rule distinct from the surrounding observed routine. Do not promote habits to policy.
+3. `gap`: absence of a documented procedure, not evidence that the business activity or records do not exist. Use the stated routing as a dated lead; do not invent a missing owner/system.
+4. `meta`: navigation and interpretation, not business execution authority. For mixed or unfamiliar types use the page's own explanation; do not silently normalize it into an SOP.
+5. For brief/prose disagreement, unclear authority, or a material current-source conflict, stop only the affected recommendation/action and report the exact source sections and decision needed. Continue supported independent analysis. Do not silently average contradictions or change managed governance.
+
+## Current controls and historical differences
+
+The reviewed local Atlas snapshot was commit `3b8b0e5` dated May 15, 2026, inspected November 4, 2026. Remote main verification failed with an authenticated repository access error. This helper therefore does not assert that snapshot is current. Several reviewed pages carry May validation dates; currentness remains a per-case evidence check.
+
+The security procedure contains historical Oddete/PO-Expert routing and outbound forwarding instructions. The currently deployed Odoo instruction requires the configured Vera connector, not subagents or retired APIs. Email is draft only even after approval. Preserve verification and escalation intent using authorized current tools, but do not execute historical forwarding, phone contact or business writes from the page alone. Do not treat a phone number supplied in a suspicious signature as independent identity verification. If a substantive authority/scope conflict remains unresolved, name it and obtain the required decision before the affected action.
+
+Atlas supplier/customer inventories, amounts, delays, deficits and statistics are historical context, not current facts. Verify live order, stock, price, payment, lead time and service acceptance only through the applicable authorized sources. Do not import historical thresholds, blanket disclosure prohibitions, or exact certifications into a new case without applicable current authority. Do not substitute Atlas for approved product specifications.
+
+Keep internal role/process evidence separate from customer wording. Do not disclose private Atlas pages or internal gaps to external customers without recipient authorization. The useful output is who should obtain which answer, with source and limits, not a narration of browsing.

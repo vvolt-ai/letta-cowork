@@ -12,22 +12,23 @@ const apiSkillUrl = new URL("../skills/cowork-emails/SKILL.md", import.meta.url)
 test("email workflow uses supplied identifiers before discovery", async () => {
   const content = await readFile(skillUrl, "utf8");
 
-  assert.match(content, /Do not list channels\/accounts\/folders/i);
-  assert.match(content, /do not also load `cowork-emails`/i);
-  assert.match(content, /curl\.exe/);
+  assert.match(content, /Reuse supplied full body, message\/account\/folder IDs/i);
+  assert.match(content, /Do not rediscover a known email/i);
+  assert.match(content, /Vera email\/attachment tools/i);
+  assert.doesNotMatch(content, /curl\.exe/);
   assert.ok(
-    content.indexOf("Inspect attachments before business verification") <
-      content.indexOf("Run only the required category checks"),
+    content.indexOf("## Step 2 — Inspect every relevant attachment") <
+      content.indexOf("## Step 4 — Bounded business verification"),
   );
 });
 
-test("PO workflow starts with exact bounded direct Odoo searches", async () => {
+test("PO workflow starts with exact bounded configured-MCP reads", async () => {
   const content = await readFile(poUrl, "utf8");
 
-  assert.match(content, /direct mounted Odoo tools only/i);
+  assert.match(content, /enabled configured MCP/i);
   assert.match(content, /default_code/);
-  assert.match(content, /limit: 5/);
-  assert.match(content, /Never start with `name ilike/);
+  assert.match(content, /limits 5–10/);
+  assert.match(content, /No broad family enumeration/i);
   assert.doesNotMatch(content, /\/odoo\/models\/search/);
   assert.doesNotMatch(content, /TOKEN=\$\(cat/);
 });
