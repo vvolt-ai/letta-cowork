@@ -16,20 +16,27 @@ export async function abortAllSessions(): Promise<void> {
       'SDK stop could not be verified for every execution.',
     );
 }
-export async function abortSessionById(conversationId: string): Promise<boolean> {
+export function findOwnedAbortTarget(conversationId: string): RunnerLettaSession | undefined {
   const session = getSession(conversationId);
   const owned = getOwnedDesktopSdkSessions(conversationId);
-  // A raw conversation ID alone must not choose between colliding account IDs.
-  if (owned.length > 1) return false;
-  const target = session ?? (owned.length === 1 ? owned[0] : undefined);
+  // Capture one concrete controller, never a different account on retry.
+  if (owned.length !== 1 || (session && session !== owned[0])) return undefined;
+  return owned[0];
+}
+export async function abortCapturedSession(conversationId: string, target: RunnerLettaSession): Promise<boolean> {
+  if (target.conversationId !== conversationId) return false;
+  await target.abort();
+  // Disposal removes the verified target from this registry. Neither an old
+  // state-map entry nor a replacement controller can count as stop proof.
+  if (getOwnedDesktopSdkSessions(conversationId).length) return false;
+  if (getSession(conversationId) === target) removeSession(conversationId);
+  return true;
+}
+export async function abortSessionById(conversationId: string): Promise<boolean> {
+  const target = findOwnedAbortTarget(conversationId);
   if (!target) return false;
-  try {
-    await target.abort();
-    if (getSession(conversationId) === target) removeSession(conversationId);
-    return true;
-  } catch {
-    return false;
-  }
+  try { return await abortCapturedSession(conversationId, target); }
+  catch { return false; }
 }
 export function createAbortHandler(
   sessionKey: string,

@@ -42,6 +42,7 @@ import { getVeraCoworkApiClient } from "../api/index.js";
 import { getStaticData, pollResources } from "../utils/test-helper.js";
 
 import type { ClientEvent } from "../types.js";
+import {observeClientEvent,safeClientEventFailure} from './observe-client-event.js';
 import type { BrowserWindow } from "electron";
 
 // Re-export session handlers for backward compatibility
@@ -88,7 +89,10 @@ async function handleClientEvent(event: ClientEvent): Promise<void> {
 export function registerAllIpcHandlers(mainWindow: BrowserWindow): void {
     // Register session handlers via ipcMain.on for client events
     ipcMain.on("client-event", (_: Electron.IpcMainEvent, event: ClientEvent) => {
-        handleClientEvent(event);
+        void observeClientEvent(event, handleClientEvent, (error, failedEvent) => {
+            const operation = failedEvent.type === 'session.stop' || failedEvent.type === 'session.stopAndContinue' ? failedEvent.type : 'client-event';
+            console.warn('[ipc] client-event rejected', {operation, code:safeClientEventFailure(error)});
+        });
     });
 
     // Static data handler

@@ -80,8 +80,9 @@ export type SessionInfo = {
 // Server -> Client events
 export type ServerEvent =
   | { type: "stream.message"; payload: { sessionId: string; message: StreamMessage } }
-  | { type: "stream.user_prompt"; payload: { sessionId: string; prompt: string; attachments?: ChatAttachment[]; content?: MessageContentItem[] } }
-  | { type: "session.status"; payload: { sessionId: string; status: SessionStatus; title?: string; cwd?: string; error?: string; agentName?: string; agentId?: string; lettaConnectionId?: string; model?: string; background?: boolean; isEmailSession?: boolean } }
+  | { type: "stream.user_prompt"; payload: { sessionId: string; prompt: string; attachments?: ChatAttachment[]; content?: MessageContentItem[]; afterStop?:boolean } }
+  | { type: "session.messageAdmission"; payload: {sessionId:string;requestId:string;state:'queued'|'dispatched'|'cancelled'} }
+  | { type: "session.status"; payload: { sessionId: string; status: SessionStatus; title?: string; cwd?: string; error?: string; agentName?: string; agentId?: string; lettaConnectionId?: string; model?: string; background?: boolean; isEmailSession?: boolean; stopState?: 'stopping' | 'verified' | 'unverified'; stopRequestId?: string } }
   | { type: "session.list"; payload: { sessions: SessionInfo[] } }
   | {
       type: "session.history";

@@ -108,7 +108,7 @@ export const ConversationViewer = memo(function ConversationViewer({
         </div>
 
         {/* Status Badge */}
-        <StatusBadge status={agentStatus} />
+        <StatusBadge status={agentStatus} verifyingCompletion={session?.ephemeral?.verifyingCompletion} stopState={session?.ephemeral?.stopState} />
 
         {/* Open in Letta Button */}
         {showOpenInLetta && session?.agentId && (
@@ -165,7 +165,7 @@ export const ConversationViewer = memo(function ConversationViewer({
 });
 
 // Status Badge Component
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({ status, verifyingCompletion, stopState }: { status: string; verifyingCompletion?: boolean; stopState?: 'stopping' | 'unverified' }) {
   const statusConfig: Record<string, { bg: string; text: string; dot: string; label: string }> = {
     idle: { bg: "bg-[var(--color-surface-secondary)]", text: "text-muted", dot: "bg-ink-400", label: "Idle" },
     thinking: { bg: "bg-amber-50", text: "text-amber-700", dot: "bg-amber-500", label: "Thinking" },
@@ -180,7 +180,7 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] px-2.5 py-1 text-[10px] font-semibold ${config.bg} ${config.text}`}>
       <span className={`h-1.5 w-1.5 rounded-full ${config.dot}`} />
-      {config.label}
+      {stopState === 'stopping' ? 'Stopping' : stopState === 'unverified' ? 'Stop unverified' : verifyingCompletion && status === 'generating' ? 'Verifying completion' : config.label}
     </span>
   );
 }

@@ -34,7 +34,7 @@ export function trackRunnerHandle(
         if (runnerHandles.get(conversationId) === handle) {
             runnerHandles.delete(conversationId);
         }
-    });
+    }).catch(() => undefined);
 }
 
 /**

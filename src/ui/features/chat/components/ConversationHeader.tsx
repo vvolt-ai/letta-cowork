@@ -8,6 +8,8 @@ interface ConversationHeaderProps {
   agentId?: string;
   sessionId?: string;
   status: AgentDisplayStatus;
+  verifyingCompletion?: boolean;
+  stopState?: 'stopping' | 'unverified';
   activityOpen?: boolean;
   projectOpen?: boolean;
   onToggleActivity?: () => void;
@@ -25,7 +27,7 @@ const STATUS_LABELS: Record<AgentDisplayStatus, { label: string; color: string }
   error: { label: "Error", color: "text-[var(--color-status-error)]" },
 };
 
-export const ConversationHeader = memo(function ConversationHeader({ title, agentName, agentId, sessionId, status, activityOpen = true, projectOpen = false, onToggleActivity, onToggleProject, onViewRuns }: ConversationHeaderProps) {
+export const ConversationHeader = memo(function ConversationHeader({ title, agentName, agentId, sessionId, status, verifyingCompletion, stopState, activityOpen = true, projectOpen = false, onToggleActivity, onToggleProject, onViewRuns }: ConversationHeaderProps) {
   const statusMeta = STATUS_LABELS[status] ?? STATUS_LABELS.idle;
   const toggleLabel = activityOpen ? "Hide activity" : "Show activity";
   const toggleAria = activityOpen ? "Hide activity panel" : "Show activity panel";
@@ -54,7 +56,7 @@ export const ConversationHeader = memo(function ConversationHeader({ title, agen
             </h2>
             <span className={`inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-0.5 text-[10px] font-medium ${statusMeta.color}`}>
               <span className="h-1.5 w-1.5 rounded-full bg-current" />
-              {statusMeta.label}
+              {stopState === 'stopping' ? 'Stopping' : stopState === 'unverified' ? 'Stop unverified' : verifyingCompletion && status === 'generating' ? 'Verifying completion' : statusMeta.label}
             </span>
           </div>
 

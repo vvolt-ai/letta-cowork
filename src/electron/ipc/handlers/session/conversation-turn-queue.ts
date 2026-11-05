@@ -9,6 +9,10 @@
 const conversationTurnTails = new Map<string, Promise<void>>();
 const conversationQueueGenerations = new Map<string, number>();
 
+export function conversationQueueVersion(conversationId: string): number {
+    return conversationQueueGenerations.get(conversationId) ?? 0;
+}
+
 export function cancelQueuedConversationTurns(conversationId: string): void {
     conversationQueueGenerations.set(
         conversationId,

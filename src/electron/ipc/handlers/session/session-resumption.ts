@@ -4,6 +4,7 @@
  */
 
 import { enqueueConversationTurn } from "./conversation-turn-queue.js";
+import {recordConversationMessageAdmission} from './verified-stop.js';
 import {StartupTiming} from '../../../libs/runner/sdk/startup-timing.js';
 import {
     runnerHandles,
@@ -35,6 +36,9 @@ export async function handleContinueSession(
         return;
     }
 
+    const admission=recordConversationMessageAdmission(conversationId);
+    emit({type:'session.messageAdmission',payload:{sessionId:conversationId,requestId:admission.requestId,state:'queued'}});
+    let dispatched=false;
     const previewPrompt = (prompt ?? "").slice(0, 50);
     debug("session.continue: continuing session", {
         conversationId, prompt: previewPrompt,
@@ -43,7 +47,7 @@ export async function handleContinueSession(
     });
 
     const timing=new StartupTiming();timing.begin('queue_wait');
-    await enqueueConversationTurn(conversationId, async (isCancelled) => {
+    try { await enqueueConversationTurn(conversationId, async (isCancelled) => {
         // A handle may predate the FIFO (for example, the initial session.start
         // turn). Its done promise is the ownership boundary: wait for actual
         // stream cleanup, not for the control handle to have been returned.
@@ -58,6 +62,8 @@ export async function handleContinueSession(
         // the previous owner to release the conversation.
         if (isCancelled()) {timing.finish('queue_wait','skipped');return;}
         timing.finish('queue_wait');
+        dispatched=true;
+        emit({type:'session.messageAdmission',payload:{sessionId:conversationId,requestId:admission.requestId,state:'dispatched'}});
 
         let runtimeSession = getSession(conversationId);
         if (!runtimeSession) {
@@ -120,6 +126,7 @@ export async function handleContinueSession(
         emit({
             type: "stream.user_prompt",
             payload: {
+                afterStop:admission.afterStop,
                 sessionId: conversationId,
                 prompt,
                 attachments,
@@ -233,5 +240,5 @@ export async function handleContinueSession(
             });
             if(activeHandle){try{await activeHandle.abort();}catch(cleanupError){log('session.continue: failed cleanup after error',{error:String(cleanupError)});}}
         }
-    });
+    }); } finally {if(!dispatched)emit({type:'session.messageAdmission',payload:{sessionId:conversationId,requestId:admission.requestId,state:'cancelled'}});}
 }

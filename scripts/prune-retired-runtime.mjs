@@ -4,6 +4,7 @@ import { lstat, rm } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 const retiredModules = [
   'ipc/handlers/session-handlers',
+  'libs/runner/completion-recovery',
   'emails/emailServerClient',
   'emails/lettaProxy',
   'emails/pdfConverter',

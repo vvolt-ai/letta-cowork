@@ -13,9 +13,12 @@ import {
     cancelAllRunners,
 } from "./session-creation.js";
 import { debug, createLettaClient } from "./utils.js";
-import { abortSessionById, abortAllSessions } from "../../../libs/runner/index.js";
+import { abortAllSessions } from "../../../libs/runner/index.js";
 import { deleteSession, updateSession, getSession } from "../../../libs/runtime-state.js";
 import { getStoredSessions, removeStoredSession, updateStoredSession, type StoredSession } from "../../../services/settings/index.js";
+import {findOwnedAbortTarget,abortCapturedSession} from '../../../libs/runner/abort-handler.js';
+import {getOwnedDesktopSdkSessions} from '../../../libs/runner/sdk/session.js';
+import {stopConversationVerified,findCanonicalStopHandle} from './verified-stop.js';
 
 /**
  * Handle session.stop event
@@ -23,71 +26,30 @@ import { getStoredSessions, removeStoredSession, updateStoredSession, type Store
  */
 export async function handleStopSession(sessionId: string): Promise<void> {
     debug("session.stop: stopping session", { sessionId, availableHandles: Array.from(runnerHandles.keys()) });
-    cancelQueuedConversationTurns(sessionId);
-
-    // Reflect the user's stop intent immediately. Actual stream/server abort can
-    // take seconds, especially while Letta/provider cancellation settles, but UI
-    // should not stay stuck on "running" during that cleanup.
-    const runtimeSession = getSession(sessionId);
-    runtimeSession?.pendingPermissions?.clear();
-    updateSession(sessionId, { status: "idle" });
-    emit({
-        type: "session.status",
-        payload: { sessionId, status: "idle" },
+    return stopConversationVerified(sessionId, {
+        capture: () => {
+            const handle = findCanonicalStopHandle(runnerHandles, sessionId);
+            if (handle) return {abort: async () => {
+                await handle.abort();
+                // Cancellation proof came from abort(); done is a cleanup
+                // boundary, not a requirement that the model itself succeeded.
+                await handle.done.catch(() => undefined);
+                const current = findCanonicalStopHandle(runnerHandles, sessionId);
+                if ((current && current !== handle) || getOwnedDesktopSdkSessions(sessionId).length) return false;
+                for (const [key, candidate] of runnerHandles) if (candidate === handle) runnerHandles.delete(key);
+                return true;
+            }};
+            const target = findOwnedAbortTarget(sessionId);
+            return target ? {abort: () => abortCapturedSession(sessionId, target)} : undefined;
+        },
+        publish: (stopState, stopRequestId, errorCode) => {
+            if (stopState === 'verified') getSession(sessionId)?.pendingPermissions?.clear();
+            emit({type:'session.status',payload:{sessionId,
+                status: stopState === 'verified' ? 'idle' : stopState === 'unverified' ? 'error' : 'running',
+                error: stopState === 'unverified' ? errorCode ?? 'SDK_STOP_NOT_VERIFIED' : undefined,
+                stopState,stopRequestId}});
+        },
     });
-
-    // Install a barrier before awaiting cancellation. Prompts arriving while
-    // Stop is settling are queued behind this operation, so the final idle
-    // status cannot overwrite a newer turn's running state.
-    let releaseStop!: () => void;
-    const stopSettled = new Promise<void>((resolve) => {
-        releaseStop = resolve;
-    });
-    const stopBarrier = enqueueConversationTurn(
-        sessionId,
-        async (isCancelled) => {
-            await stopSettled;
-            if (isCancelled()) return;
-
-            const runtimeSession = getSession(sessionId);
-            runtimeSession?.pendingPermissions?.clear();
-            updateSession(sessionId, { status: "idle" });
-            emit({
-                type: "session.status",
-                payload: { sessionId, status: "idle" },
-            });
-        }
-    );
-
-    let handle = runnerHandles.get(sessionId);
-
-    if (!handle) {
-        for (const [key, h] of runnerHandles) {
-            if (h.sessionId === sessionId) {
-                handle = h;
-                debug("session.stop: found handle by sessionId property", { key, sessionId: h.sessionId });
-                break;
-            }
-        }
-    }
-
-    try {
-        if (handle) {
-            debug("session.stop: aborting handle");
-            await handle.abort();
-            runnerHandles.delete(sessionId);
-            for (const [key, h] of runnerHandles) {
-                if (h.sessionId === sessionId) runnerHandles.delete(key);
-            }
-        } else {
-            debug("session.stop: no handle found in runnerHandles, trying direct abort via runner");
-            await abortSessionById(sessionId);
-        }
-    } finally {
-        releaseStop();
-    }
-
-    await stopBarrier;
 }
 
 /**

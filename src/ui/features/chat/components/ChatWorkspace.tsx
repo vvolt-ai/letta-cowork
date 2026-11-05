@@ -5,6 +5,7 @@ import { ConversationHeader } from "./ConversationHeader";
 import { PlanModePanel } from "./PlanModePanel";
 import { PromptInput } from "./PromptInput";
 import { useAppStore } from "../../../store/useAppStore";
+import {hasUnsettledStop,requestConversationStop} from '../../../utils/request-stop';
 import { DecisionPanel } from "../../system/components/DecisionPanel";
 
 import type { IndexedMessage } from "../../../hooks/useMessageWindow";
@@ -83,6 +84,8 @@ export const ChatWorkspace = memo(function ChatWorkspace({
   const activeSession = useAppStore((state) => (activeSessionId ? state.sessions[activeSessionId] : undefined));
   const showReasoningInChat = useAppStore((state) => state.showReasoningInChat);
   const errorMessage = activeSession?.ephemeral?.errorMessage;
+  const stopWarning=activeSession?.ephemeral?.stopWarning;
+  const queuedMessages=activeSession?.ephemeral?.queuedMessageRequests?.length??0;
   const recoveryMessage = activeSession?.ephemeral?.recoveryMessage;
   const setGlobalError = useAppStore((state) => state.setGlobalError);
   const [isCancellingRecoveredRun, setIsCancellingRecoveredRun] = useState(false);
@@ -129,6 +132,8 @@ export const ChatWorkspace = memo(function ChatWorkspace({
         agentId={agentId}
         sessionId={activeSessionId ?? undefined}
         status={agentStatus}
+        verifyingCompletion={activeSession?.ephemeral?.verifyingCompletion}
+        stopState={activeSession?.ephemeral?.stopState}
         activityOpen={activityOpen}
         projectOpen={projectOpen}
         onToggleActivity={onToggleActivity}
@@ -222,6 +227,8 @@ export const ChatWorkspace = memo(function ChatWorkspace({
               </div>
             </div>
           </div>
+          {stopWarning && stopWarning!==errorMessage ? <div role="status" className="mb-3 rounded-2xl border border-amber-300/70 bg-amber-50/80 px-4 py-3 text-sm text-amber-900"><div className="flex items-center justify-between gap-3"><strong>Previous request: stop not verified</strong><button type="button" aria-label="Dismiss previous stop warning" onClick={()=>{if(!activeSessionId)return;useAppStore.setState(state=>{const current=state.sessions[activeSessionId];return current?{sessions:{...state.sessions,[activeSessionId]:{...current,ephemeral:{...current.ephemeral,stopWarning:undefined}}}}:state;});}}>Dismiss</button></div><p className="mt-1 text-xs leading-5">{stopWarning}</p></div> : null}
+          {queuedMessages>0?<p role="status" className="mb-3 text-sm text-[var(--color-text-secondary)]">{queuedMessages} new {queuedMessages===1?'message':'messages'} accepted and queued. Waiting for the previous conversation owner to release.</p>:null}
           {errorMessage ? (
             <div role="alert" className="mb-4 rounded-2xl border border-[var(--color-status-error)]/30 bg-[var(--color-status-error)]/5 px-4 py-3 text-sm text-[var(--color-status-error)]">
               <div className="flex items-start gap-2">
@@ -232,6 +239,7 @@ export const ChatWorkspace = memo(function ChatWorkspace({
                 <div>
                   <div className="font-medium">Couldn’t complete this request</div>
                   <div className="mt-0.5 text-xs leading-5 opacity-90">{errorMessage}</div>
+                  {activeSessionId&&hasUnsettledStop(activeSession)?<button type="button" className="mt-2 rounded border px-2 py-1 text-xs" disabled={activeSession?.ephemeral.stopState==='stopping'} onClick={()=>requestConversationStop(activeSessionId,sendEvent)}>{activeSession?.ephemeral.stopState==='stopping'?'Stop verification pending':'Retry Stop verification'}</button>:null}
                 </div>
               </div>
             </div>
@@ -327,7 +335,7 @@ export const ChatWorkspace = memo(function ChatWorkspace({
         <PromptInput
           sendEvent={sendEvent}
           onSendMessage={onSendMessage}
-          disabled={agentStatus === "waiting_approval"}
+          disabled={agentStatus === "waiting_approval" && !hasUnsettledStop(activeSession) && !errorMessage}
           onOpenMemory={onOpenMemory}
         />
       </div>

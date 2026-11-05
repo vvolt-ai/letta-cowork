@@ -84,20 +84,23 @@ const A = 'agent-11111111-1111-1111-1111-111111111111',
   runtime = { agent_id: A, conversation_id: C };
 const conversation = { id: C, agent_id: A, model: 'fixture-model' };
 const tick = () => new Promise((resolve) => setImmediate(resolve));
-async function fixture(tool = false, conflict = false) {
+async function fixture(tool = false, conflict = false, terminalReason = 'end_turn', options = {}) {
   const server = new WebSocketServer({ host: '127.0.0.1', port: 0 });
   await once(server, 'listening');
   const frames = [],
     responses = [];
-  let submissions = 0,
-    status = 'completed';
+  let submissions = 0;
+  let finishActive, startActive, publishQueue, sendFrame;
+  let backendReads = 0, bindingCloses = 0;
   server.on('connection', (ws) => {
     let alias,
-      finished = false;
+      finished = false, abortSeen = false;
     const reply = (m) => ws.send(JSON.stringify(m));
     const finish = () => {
       if (finished) return;
       finished = true;
+      if (abortSeen && !options.abortFinishedRace) reply({type:'update_loop_status',runtime,loop_status:{status:'WAITING_ON_INPUT',active_run_ids:[],executing_tool_call_ids:[],client_message_ids_by_run_id:{}}});
+      if (options.idleOnly) return;
       reply({
         type: 'stream_delta',
         runtime,
@@ -108,9 +111,21 @@ async function fixture(tool = false, conflict = false) {
         runtime,
         run_id: R,
         turn_id: 'turn-fixture',
-        stop_reason: 'end_turn',
+        stop_reason: terminalReason,
       });
+      if (options.lateNativeErrorHint) reply({type:'turn_finished',runtime,run_id:R,turn_id:'turn-fixture',stop_reason:'llm_api_error'});
     };
+    const active = (messageId, foreign = false) => {
+      reply({type:'update_loop_status',runtime,loop_status:{status:'PROCESSING_API_RESPONSE',active_run_ids:foreign?['run-foreign']:[R],executing_tool_call_ids:[],client_message_ids_by_run_id:foreign?{'run-foreign':['foreign-input']}:{[R]:[messageId]}}});
+      if (!foreign) reply({type:'stream_delta',runtime,delta:{message_type:'reasoning_message',run_id:R,reasoning:'Fixture turn evidence'}});
+    };
+    const queue = (messageId) => reply({
+      type: 'update_queue', runtime,
+      queue: [
+        { id: 'queue-foreign', client_message_id: 'foreign-input', content: 'foreign' },
+        ...(options.foreignQueueOnly ? [] : [{ id: 'queue-owned', client_message_id: messageId, content: 'owned' }]),
+      ],
+    });
     ws.on('message', (bytes) => {
       const m = JSON.parse(bytes);
       frames.push(m);
@@ -149,20 +164,24 @@ async function fixture(tool = false, conflict = false) {
         });
       } else if (m.type === 'input') {
         submissions++;
-        reply({
-          type: 'update_loop_status',
-          runtime,
-          loop_status: {
-            status: 'PROCESSING_API_RESPONSE',
-            active_run_ids: [R],
-            executing_tool_call_ids: [],
-            client_message_ids_by_run_id: {
-              [R]: m.payload.messages.map((p) => p.client_message_id),
-            },
-          },
-        });
+        const messageId = m.payload.messages[0].client_message_id;
+        finishActive = finish;
+        startActive = () => active(messageId, options.foreignActive);
+        publishQueue = () => queue(messageId);
+        sendFrame = reply;
+        if (options.queued || options.foreignQueueOnly) {
+          if (options.foreignActive) active(messageId, true);
+          queue(messageId);
+          return;
+        }
+        startActive();
+        if (options.sdkEndBeforeNative) {
+          reply({type:'stream_delta',runtime,delta:{message_type:'assistant_message',run_id:R,content:'Fixture early answer'}});
+          reply({type:'stream_delta',runtime,delta:{message_type:'loop_error',run_id:R,is_terminal:true,stop_reason:'llm_api_error',message:'Fixture terminal error before native correlation'}});
+          return;
+        }
         if (!tool) {
-          finish();
+          if (!options.hold) finish();
           return;
         }
         for (const [i, target] of [
@@ -179,9 +198,18 @@ async function fixture(tool = false, conflict = false) {
           });
       } else if (m.type === 'external_tool_call_response') {
         responses.push(m);
-        if (responses.length === 2) finish();
-      } else if (m.type === 'sync')
+        if (responses.length === 2 && !options.hold) finish();
+      } else if (m.type === 'sync') {
         reply({ type: 'sync_response', request_id: m.request_id, success: true, runtime });
+      } else if (m.type === 'abort_message') {
+        abortSeen = true;
+        reply({ type: 'abort_message_response', request_id: m.request_id, success: true, runtime });
+        if (!options.ackOnly) finish();
+      } else if (m.type === 'remove_queue_item') {
+        if (options.removeRace) startActive();
+        reply({ type: 'remove_queue_item_response', request_id: m.request_id, runtime,
+          item_id: m.item_id, success: !options.removeRace });
+      }
       else if (m.request_id)
         reply({
           type: m.type + '_response',
@@ -197,17 +225,22 @@ async function fixture(tool = false, conflict = false) {
     assertCurrent: () => undefined,
     client: {
       conversations: { retrieve: async () => conversation, update: async () => conversation },
-      runs: { retrieve: async (id) => ({ id, status, agent_id: A, conversation_id: C }) },
+      runs: { retrieve: async id => {
+        backendReads++;
+        if (frames.some(frame=>frame.type==='abort_message')) return {id,status:options.abortFinishedRace?'completed':'cancelled',agent_id:A,conversation_id:C};
+        if (options.backendError) throw Error('Fixture backend unavailable');
+        return new Promise(() => {});
+      } },
     },
   };
   const dependencies = {
     launch: async () => ({
       url: 'ws://127.0.0.1:' + server.address().port,
       authToken: 'fixture-only-token',
-      close: async () => undefined,
+      close: async () => { bindingCloses++; },
     }),
   };
-  const make = (extra = {}) =>
+  const make = (extra = {}, overrides = {}) =>
     new DesktopSdkSession(
       {
         agentId: A,
@@ -219,7 +252,7 @@ async function fixture(tool = false, conflict = false) {
         canUseTool: async () => ({ behavior: 'allow' }),
         ...extra,
       },
-      dependencies,
+      { ...dependencies, stopTimeoutMs: 20, ...overrides },
     );
   return {
     make,
@@ -229,15 +262,334 @@ async function fixture(tool = false, conflict = false) {
     get submissions() {
       return submissions;
     },
-    setStatus: (value) => {
-      status = value;
-    },
+    get backendReads() { return backendReads; },
+    get bindingCloses() { return bindingCloses; },
+    finish: () => finishActive(),
+    start: () => startActive(),
+    queue: () => publishQueue(),
+    emit: (frame) => sendFrame(frame),
     close: async () => {
       for (const ws of server.clients) ws.terminate();
       await new Promise((resolve) => server.close(resolve));
     },
   };
 }
+const deferred = () => {
+  let resolve;
+  const promise = new Promise((yes) => { resolve = yes; });
+  return { promise, resolve };
+};
+async function until(predicate, message = 'Fixture condition not observed') {
+  const deadline = Date.now() + 2000;
+  while (!predicate()) {
+    assert.ok(Date.now() < deadline, message);
+    await new Promise((resolve) => setTimeout(resolve, 1));
+  }
+}
+async function collect(session) {
+  const events = [];
+  for await (const event of session.stream()) events.push(event);
+  return events;
+}
+function spyNative(session) {
+  const native = session.native;
+  const calls = { streams: 0, aborts: 0, closes: 0, sdkCloses: 0, order: [] };
+  const stream = native.stream, abort = native.abort, close = native.close;
+  const sdkClose = session.sdk.close;
+  native.stream = function (...args) {
+    assert.equal(this, native);
+    calls.streams++;
+    return stream.apply(this, args);
+  };
+  native.abort = function (...args) {
+    assert.equal(this, native);
+    assert.equal(args.length, 0, 'Use the installed public abort, not a private run-id control');
+    calls.aborts++;
+    calls.order.push('abort');
+    return abort.apply(this, args);
+  };
+  native.close = function (...args) {
+    calls.closes++;
+    calls.order.push('native-close');
+    if (!session.queueRemovalConfirmed) {
+      assert.equal(session.sdkTerminalSeen, true, 'Do not close before the SDK result');
+      assert.equal(session.pumpFinished, true, 'Do not close while the sole SDK pump is draining');
+    }
+    return close.apply(this, args);
+  };
+  session.sdk.close = function (...args) {
+    calls.sdkCloses++;
+    calls.order.push('sdk-close');
+    return sdkClose.apply(this, args);
+  };
+  return calls;
+}
+
+for (const backendError of [false, true]) {
+  test(`valid SDK terminal ignores ${backendError ? 'erroring' : 'hung'} backend reads without replay`, { timeout: 5000 }, async () => {
+    const f = await fixture(false, false, 'end_turn', { backendError });
+    const s = f.make();
+    try {
+      await s.initialize();
+      const calls = spyNative(s);
+      await s.send('fixture');
+      const events = await collect(s);
+      const results = events.filter((event) => event.type === 'result');
+      assert.equal(results.length, 1);
+      assert.equal(results[0].success, true);
+      assert.equal(results[0].clientRunId, s.controls.messageId);
+      assert.equal(s.isVerified, true);
+      await s.abort();
+      assert.equal(f.backendReads, 0);
+      assert.equal(f.submissions, 1);
+      assert.equal(calls.streams, 1);
+      assert.equal(calls.aborts, 0, 'Terminal cleanup is not cancellation');
+      assert.deepEqual(calls.order, ['native-close', 'sdk-close']);
+    } finally {
+      await s.abort().catch(() => undefined);
+      await f.close();
+    }
+  });
+}
+
+test('raw native hints do not rewrite the authoritative SDK result fields',async()=>{
+ const f=await fixture(false,false,'end_turn',{lateNativeErrorHint:true}),s=f.make();
+ try{await s.send('fixture');const result=(await collect(s)).find(m=>m.type==='result');
+ // Deliver the raw late hint deterministically: normal completion may already
+ // dispose the socket before a second wire frame reaches its listener.
+ s.controls.incoming(JSON.stringify({type:'turn_finished',runtime:{agent_id:A,conversation_id:C},run_id:R,turn_id:'turn-fixture',stop_reason:'llm_api_error'}));
+ assert.equal(result.success,true);assert.equal(result.stopReason,'end_turn');assert.equal(result.error,undefined);assert.equal(result.errorCode,undefined);assert.equal(s.controls.stopReason,'llm_api_error');await s.abort();assert.equal(f.submissions,1);}finally{await s.abort().catch(()=>{});await f.close();}
+});
+test('local callbacks drain before the original SDK terminal reaches UI or close', { timeout: 5000 }, async () => {
+  const f = await fixture(), s = f.make(), work = deferred();
+  try {
+    await s.initialize();
+    const calls = spyNative(s);
+    s.work.add(work.promise);
+    await s.send('fixture');
+    let delivered = false;
+    const events = collect(s).then((value) => { delivered = true; return value; });
+    await until(() => s.sdkTerminalSeen);
+    assert.equal(delivered, false);
+    assert.equal(s.isVerified, false);
+    const stop = s.abort();
+    await tick();
+    assert.equal(calls.closes, 0);
+    work.resolve();
+    const [messages] = await Promise.all([events, stop]);
+    assert.equal(messages.filter((m) => m.type === 'result').length, 1);
+    assert.equal(f.backendReads, 0);
+    assert.equal(calls.streams, 1);
+    assert.equal(calls.aborts, 0);
+    assert.equal(calls.closes, 1);
+    assert.equal(f.submissions, 1);
+  } finally {
+    work.resolve();
+    await s.abort().catch(() => undefined);
+    await f.close();
+  }
+});
+
+test('active Stop uses the exact public native instance and preserves interruption after tool signal abort', { timeout: 5000 }, async () => {
+  const f = await fixture(false, false, 'end_turn', { hold: true }), s = f.make();
+  try {
+    await s.initialize();
+    const calls = spyNative(s);
+    await s.send('fixture');
+    await until(() => s.controls.ownedRuns.has(R));
+    const firstUi = s.stream();
+    assert.equal((await firstUi.next()).done, false);
+    await firstUi.return();
+    // UI unsubscribe/re-subscribe must never create another native consumer.
+    const messages = collect(s);
+    const stop = s.abort();
+    assert.equal(s.ctrl.signal.aborted, true);
+    await stop;
+    const results = (await messages).filter((m) => m.type === 'result');
+    assert.equal(results.length, 1);
+    assert.equal(results[0].success, false);
+    assert.equal(results[0].stopReason, 'interrupted', 'SDK markAbortRequested overrides fixture end_turn');
+    assert.equal(calls.aborts, 1);
+    assert.equal(calls.streams, 1);
+    assert.deepEqual(calls.order, ['abort', 'native-close', 'sdk-close']);
+    const abortFrame = f.frames.find((m) => m.type === 'abort_message');
+    assert.deepEqual(abortFrame.runtime, runtime);
+    assert.equal('run_id' in abortFrame, false);
+    assert(f.backendReads > 0, 'Keep host alive until the native backend cancellation settles');
+    assert.equal(f.submissions, 1);
+  } finally {
+    await s.abort().catch(() => undefined);
+    await f.close();
+  }
+});
+
+test('SDK interruption receipt after abort and scoped idle needs no raw turn_finished but waits for backend cancel delivery',async()=>{
+ const f=await fixture(false,false,'end_turn',{hold:true,idleOnly:true}),s=f.make();
+ try{await s.initialize();const calls=spyNative(s);await s.send('fixture');await until(()=>s.controls.ownedRuns.has(R));const messages=collect(s);await s.abort();const result=(await messages).find(m=>m.type==='result');assert.equal(result.stopReason,'interrupted');assert.equal(result.success,false);assert(s.isVerified);assert.equal(calls.streams,1);assert.equal(calls.aborts,1);assert(f.backendReads>0);}finally{await s.abort().catch(()=>{});await f.close();}
+});
+test('SDK natural completion may win the Stop race and is not rewritten as interruption',async()=>{
+ const f=await fixture(false,false,'end_turn',{hold:true,abortFinishedRace:true}),s=f.make();
+ try{await s.initialize();const calls=spyNative(s);await s.send('fixture');await until(()=>s.controls.ownedRuns.has(R));s.close();assert.equal(calls.closes,0);assert.equal(calls.aborts,0);assert.equal(s.ctrl.signal.aborted,false);const messages=collect(s);await s.abort();const result=(await messages).find(m=>m.type==='result');assert.equal(result.success,true);assert.equal(result.stopReason,'end_turn');assert.equal(calls.aborts,1);assert.equal(f.submissions,1);}finally{await s.abort().catch(()=>{});await f.close();}
+});
+test('abort ACK alone times out, fences the next controller and closes only after late SDK terminal plus retry', { timeout: 5000 }, async () => {
+  const f = await fixture(false, false, 'end_turn', { hold: true, ackOnly: true }), s = f.make();
+  let newer, after;
+  try {
+    await s.initialize();
+    const calls = spyNative(s);
+    await s.send('fixture');
+    await until(() => s.controls.ownedRuns.has(R));
+    const messages = collect(s);
+    await assert.rejects(s.abort(), /SDK_TERMINAL_RESULT_TIMEOUT/);
+    assert.equal(s.ctrl.signal.aborted, true);
+    assert.equal(s.sdkTerminalSeen, false);
+    assert.equal(s.isVerified, false);
+    assert.equal(calls.closes, 0);
+    assert.equal(calls.sdkCloses, 0);
+    assert.equal(f.bindingCloses, 0);
+    newer = f.make();
+    await assert.rejects(newer.initialize(), /ALREADY_OWNED/);
+    await newer.abort();
+    f.finish();
+    const results = (await messages).filter((m) => m.type === 'result');
+    assert.equal(results.length, 1);
+    assert.equal(results[0].success, false);
+    assert.equal(results[0].stopReason, 'interrupted');
+    assert.equal(calls.closes, 0, 'Late terminal must not silently dispose the fenced owner');
+    await s.abort();
+    assert.equal(s.isVerified, true);
+    assert.equal(calls.aborts, 1, 'Retry drains original result, never aborts or sends again');
+    assert.equal(calls.streams, 1);
+    assert.equal(calls.closes, 1);
+    assert.equal(calls.sdkCloses, 1);
+    after = f.make();
+    await after.initialize();
+    await after.abort();
+    assert.equal(f.submissions, 1);
+    assert(f.backendReads > 0);
+  } finally {
+    if (f.submissions) f.finish();
+    await s.abort().catch(() => undefined);
+    await newer?.abort().catch(() => undefined);
+    await after?.abort().catch(() => undefined);
+    await f.close();
+  }
+});
+
+for (const foreignActive of [false, true]) {
+  test(`queued Stop removes exact own SDK item without abort${foreignActive ? ' while foreign work stays active' : ''}`, { timeout: 5000 }, async () => {
+    const f = await fixture(false, false, 'end_turn', { queued: true, foreignActive }), s = f.make();
+    try {
+      await s.initialize();
+      const calls = spyNative(s);
+      await s.send('fixture');
+      await until(() => s.controls.ownQueuedItem() === 'queue-owned');
+      // These are SDK-normalized camelCase items, received from real snake_case wire frames.
+      const update = s.events.find((m) => m.type === 'queue_update');
+      assert.equal(update.queue.find((q) => q.id === 'queue-owned').clientMessageId, s.controls.messageId);
+      await s.abort();
+      assert.equal(s.isVerified, true);
+      assert.equal(s.sdkTerminalSeen, false, 'Acknowledged queued removal needs no active-run terminal');
+      assert.equal(s.queueRemovalConfirmed, true);
+      assert.equal(calls.aborts, 0);
+      assert.equal(calls.streams, 1);
+      assert.equal(calls.closes, 1);
+      assert.deepEqual(f.frames.filter((m) => m.type === 'remove_queue_item').map((m) => m.item_id), ['queue-owned']);
+      assert.equal(f.frames.some((m) => m.type === 'abort_message'), false);
+      assert.equal(f.submissions, 1);
+      assert.equal(f.backendReads, 0);
+    } finally {
+      await s.abort().catch(() => undefined);
+      await f.close();
+    }
+  });
+}
+
+test('queued removal-start race rechecks owned active run before public abort', { timeout: 5000 }, async () => {
+  const f = await fixture(false, false, 'end_turn', { queued: true, removeRace: true }), s = f.make();
+  try {
+    await s.initialize();
+    const calls = spyNative(s);
+    await s.send('fixture');
+    await until(() => s.controls.ownQueuedItem() === 'queue-owned');
+    const messages = collect(s);
+    await s.abort();
+    const results = (await messages).filter((m) => m.type === 'result');
+    assert.equal(results.length, 1);
+    assert.equal(results[0].success, false);
+    assert.equal(results[0].stopReason, 'interrupted');
+    const controls = f.frames.filter((m) => ['sync', 'remove_queue_item', 'abort_message'].includes(m.type));
+    assert.deepEqual(controls.map((m) => m.type), ['sync', 'remove_queue_item', 'sync', 'abort_message']);
+    assert.equal(controls[1].item_id, 'queue-owned');
+    assert.equal(calls.aborts, 1);
+    assert.equal(calls.streams, 1);
+    assert.equal(f.submissions, 1);
+  } finally {
+    await s.abort().catch(() => undefined);
+    await f.close();
+  }
+});
+
+test('foreign queued input is never selected or broadly aborted; owner remains fenced', { timeout: 5000 }, async () => {
+  const f = await fixture(false, false, 'end_turn', { foreignQueueOnly: true }), s = f.make();
+  try {
+    await s.initialize();
+    const calls = spyNative(s);
+    await s.send('fixture');
+    await until(() => s.events.some((m) => m.type === 'queue_update'));
+    await assert.rejects(s.abort(), /SDK_ABORT_SCOPE_UNVERIFIED/);
+    assert.equal(calls.aborts, 0);
+    assert.equal(calls.closes, 0);
+    assert.equal(s.isVerified, false);
+    assert.equal(f.frames.some((m) => ['abort_message', 'remove_queue_item'].includes(m.type)), false);
+    // The owned input can later start independently; cleanup drains it, with no new send.
+    f.start();
+    await until(() => s.controls.ownedRuns.has(R));
+    f.finish();
+    const results = (await collect(s)).filter((m) => m.type === 'result');
+    assert.equal(results.length, 1);
+    await s.abort();
+    assert.equal(calls.aborts, 0);
+    assert.equal(f.submissions, 1);
+  } finally {
+    if (f.submissions) { f.start(); f.finish(); }
+    await s.abort().catch(() => undefined);
+    await f.close();
+  }
+});
+
+test('late native correlation after a consumed SDK result permits exact Stop cleanup without result replay',{timeout:5000},async()=>{
+ const f=await fixture(false,false,'llm_api_error',{sdkEndBeforeNative:true}),s=f.make();
+ try{
+   await s.initialize();const calls=spyNative(s);await s.send('fixture');
+   await assert.rejects(collect(s),/SDK_STOP_UNVERIFIED/);
+   assert(s.sdkTerminalSeen);assert(s.pumpFinished);assert.equal(s.isVerified,false);
+   const next=f.make();await assert.rejects(next.initialize(),/ALREADY_OWNED/);await next.abort();
+   f.finish();await until(()=>s.controls.hasTerminalProof());await s.abort();
+   assert(s.isVerified);assert.equal(calls.aborts,0);assert.equal(calls.streams,1);assert.equal(calls.closes,1);assert.equal(f.submissions,1);assert.equal(f.backendReads,0);
+ }finally{f.finish();await s.abort().catch(()=>{});await f.close();}
+});
+test('native error terminal remains failed without backend verification or model replay', { timeout: 5000 }, async () => {
+  const f = await fixture(false, false, 'llm_api_error'), s = f.make();
+  try {
+    await s.send('fixture');
+    const results = (await collect(s)).filter((m) => m.type === 'result');
+    assert.equal(results.length, 1);
+    assert.equal(results[0].success, false);
+    await s.abort();
+    assert.equal(f.backendReads, 0);
+    assert.equal(f.submissions, 1);
+  } finally {
+    await s.abort().catch(() => undefined);
+    await f.close();
+  }
+});
+
+test('terminal diagnostics are scoped, validate the frame and cannot affect ownership',()=>{
+ const stages=[],c=new DesktopNativeControls(A,C,undefined,stage=>stages.push(stage)),scope={agent_id:A,conversation_id:C};c.outgoing(JSON.stringify({type:'input',runtime:scope,request_id:'fixture',payload:{kind:'create_message',messages:[{client_message_id:c.messageId}]}}));
+ c.incoming(JSON.stringify({type:'turn_finished',runtime:{agent_id:A,conversation_id:'conv-foreign'},run_id:R,turn_id:'fixture',stop_reason:'end_turn'}));c.incoming(JSON.stringify({type:'turn_finished',runtime:scope,stop_reason:'end_turn'}));assert.deepEqual(stages,[]);c.incoming(JSON.stringify({type:'turn_finished',runtime:scope,run_id:R,turn_id:'fixture',stop_reason:'end_turn'}));assert.deepEqual(stages,['native_terminal_received']);assert.equal(c.hasTerminalProof(),false);
+});
+
 for (const conflict of [false, true])
   test(
     'SDK callback receipts prevent repeated effects' +
@@ -284,36 +636,6 @@ for (const conflict of [false, true])
       }
     },
   );
-test(
-  'requires_approval readback fences successors; failed stop is retryable without new input',
-  { timeout: 20000 },
-  async () => {
-    const f = await fixture(),
-      s = f.make();
-    f.setStatus('requires_approval');
-    try {
-      await s.send('fixture');
-      await assert.rejects(async () => {
-        for await (const _ of s.stream()) {
-        }
-      }, /NOT_VERIFIED_TERMINAL/);
-      const newer = f.make();
-      await assert.rejects(newer.initialize(), /ALREADY_OWNED/);
-      await newer.abort();
-      await assert.rejects(s.abort(), /NOT_VERIFIED_TERMINAL/);
-      f.setStatus('completed');
-      await s.abort();
-      assert.equal(f.submissions, 1);
-      const after = f.make();
-      await after.initialize();
-      await after.abort();
-    } finally {
-      f.setStatus('completed');
-      await s.abort().catch(() => undefined);
-      await f.close();
-    }
-  },
-);
 test('cancellation before initialization prevents any native launch or late send', async () => {
   let launch = 0;
   const s = new DesktopSdkSession(

@@ -202,18 +202,13 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
       // Check abort signal before starting stream
       if (signal.aborted) {
         debug("session aborted before stream started");
-        sendSessionStatus(currentSessionId, "idle", onEvent, agentName);
         return;
       }
 
       try {
         for await (const message of lettaSession.stream()) {
           // Check if abort was requested
-          if (signal.aborted) {
-            debug("stream aborted, stopping message processing");
-            sendSessionStatus(currentSessionId, "idle", onEvent, agentName);
-            break;
-          }
+          if (signal.aborted && message.type !== 'result') continue;
 
           messageCount++;
           logMessageDetails(message, messageCount);
@@ -225,7 +220,7 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
           // Successful result messages already drive the UI via stream.message;
           // sending a second session.status=completed here can race with a newer
           // user turn and make a busy/retrying conversation look completed.
-          if (message.type === "result" && !(message as { success?: boolean }).success) {
+          if (message.type === "result" && !(message as { success?: boolean }).success && !userStopRequested && !signal.aborted) {
             handleResultMessage(
               message as Parameters<typeof handleResultMessage>[0],
               currentSessionId,
@@ -240,7 +235,8 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
         // Check if this was an abort error
         if (wasUserCancellation(signal.aborted||userStopRequested,streamError)) {
           debug("stream aborted (caught error)");
-          sendSessionStatus(currentSessionId, "idle", onEvent, agentName);
+          // Stop's coordinator publishes Idle only after the SDK terminal
+          // receipt, owned drain and transport cleanup have completed.
         } else {
           throw streamError;
         }
@@ -269,7 +265,6 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
       // Check if this was an abort
       if (userCancelled) {
         debug("session aborted (caught)");
-        sendSessionStatus(currentSessionId, "idle", onEvent);
         return;
       }
 
@@ -278,7 +273,7 @@ export async function runLetta(options: RunnerOptions): Promise<RunnerHandle> {
         error: String(error),
         name: (error as Error).name,
         stack: (error as Error).stack,
-        agentId: targetAgentId || getCachedAgentId() || process.env.LETTA_AGENT_ID,
+        agentId: lettaSessionRef?.agentId ?? (resumeConversationId ? undefined : targetAgentId || getCachedAgentId() || process.env.LETTA_AGENT_ID),
         baseURL: process.env.LETTA_BASE_URL,
         localApiKeyConfigured: Boolean(process.env.LETTA_API_KEY?.trim()),
       };

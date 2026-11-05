@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { useAppStore } from "../../../../../store/useAppStore";
 import { generateSessionTitle } from "../../../../../utils/session";
 import { useSlashCommands } from "./useSlashCommands";
+import {isPromptTurnRunning,markStopRequested,requestConversationStop} from '../../../../../utils/request-stop';
 
 import type { ChatAttachment, ClientEvent, MessageContentItem } from "../../../../../types";
 
@@ -67,13 +68,7 @@ export function usePromptActions(
   // stale backend "running" after the visible turn is done, which leaves the
   // input stuck on the red stop button. stream.user_prompt/init/result drive
   // ephemeral.status for the live turn.
-  const agentStatus = activeSession?.ephemeral?.status;
-  const isRunning =
-    pendingStart ||
-    agentStatus === "thinking" ||
-    agentStatus === "running_tool" ||
-    agentStatus === "generating" ||
-    agentStatus === "waiting_approval";
+  const isRunning = isPromptTurnRunning(activeSession,pendingStart);
 
   const handleSend = useCallback(
     async (options?: SendMessageOptions) => {
@@ -154,35 +149,7 @@ export function usePromptActions(
       return;
     }
 
-    // Optimistically release the input immediately. Backend/server-side abort
-    // can take seconds while the stream/cancel API settles, but the user intent
-    // is already clear: stop this visible turn now.
-    useAppStore.setState((state) => {
-      const session = state.sessions[activeSessionId];
-      if (!session) return state;
-      return {
-        pendingStart: false,
-        globalError: null,
-        sessions: {
-          ...state.sessions,
-          [activeSessionId]: {
-            ...session,
-            status: "idle",
-            permissionRequests: [],
-            ephemeral: {
-              ...session.ephemeral,
-              status: "idle",
-              errorMessage: undefined,
-              pendingResultStatus: undefined,
-              pendingResultError: undefined,
-              lastUpdated: Date.now(),
-            },
-          },
-        },
-      };
-    });
-
-    sendEvent({ type: "session.stop", payload: { sessionId: activeSessionId } });
+    requestConversationStop(activeSessionId, sendEvent);
   }, [activeSessionId, pendingStart, sendEvent, setGlobalError, setPendingStart]);
 
   const handleQueueAfterResponse = useCallback(
@@ -230,30 +197,7 @@ export function usePromptActions(
         return item;
       });
 
-      useAppStore.setState((state) => {
-        const session = state.sessions[activeSessionId];
-        if (!session) return state;
-        return {
-          pendingStart: false,
-          globalError: null,
-          sessions: {
-            ...state.sessions,
-            [activeSessionId]: {
-              ...session,
-              status: "running",
-              permissionRequests: [],
-              ephemeral: {
-                ...session.ephemeral,
-                status: "thinking",
-                errorMessage: undefined,
-                pendingResultStatus: undefined,
-                pendingResultError: undefined,
-                lastUpdated: Date.now(),
-              },
-            },
-          },
-        };
-      });
+      if (!markStopRequested(activeSessionId, {queuedPrompt:combinedText,typedText:text})) return;
 
       sendEvent({
         type: "session.stopAndContinue",

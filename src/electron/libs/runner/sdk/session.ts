@@ -34,9 +34,8 @@ import { buildTurnReminders, createReminderState } from '../plan-mode/reminders.
 import { DesktopNativeControls } from './native-controls.js';
 import {delegatedToolNames} from './tool-grants.js';
 import {ODOO_ATTACHMENT_TOOL} from '../../../services/client-tools/runners/_shared/attachmentApproval.js';
-import { classifyStreamTermination } from './terminal-stop.js';
 import {StartupTiming,abortableSetupRead} from './startup-timing.js';
-import {readWithDeadline} from '../../../services/letta-runtime/read-deadline.js';
+import {readWithDeadline,waitForRead} from '../../../services/letta-runtime/read-deadline.js';
 import {desktopAppServers, type DesktopPoolRequest} from '../../../services/letta-runtime/desktop-app-server-pool.js';
 import {veraRuntimeActorIdentity} from '../../../services/letta-runtime/index.js';
 
@@ -66,6 +65,8 @@ export interface DesktopSdkDependencies {
   loadRuntimeEnv?:(agentId:string,signal:AbortSignal)=>Promise<Record<string,string>>;
   runtimeEnvTimeoutMs?:number;
   conversationReadTimeoutMs?:number;
+  /** Stop/drain receipt timeout only, never a model-turn deadline. */
+  stopTimeoutMs?:number;
   runtimeActor?:()=>string;
   launch?: (options: DesktopNativeOptions) => Promise<DesktopNativeBinding>;
   acquire?: (options: DesktopPoolRequest) => Promise<DesktopNativeBinding>;
@@ -202,6 +203,17 @@ export class DesktopSdkSession {
   private stopRequested = false;
   private stoppedVerified = false;
   private proof?: ReturnType<DesktopNativeControls['snapshot']>;
+  private settling?: Promise<void>;
+  private pump?: Promise<void>;
+  private pumpFinished = false;
+  private pumpFailure?: unknown;
+  private sdkTerminalSeen = false;
+  private sdkAbortSent = false;
+  private queueRemovalConfirmed = false;
+  private readonly events: SDKMessage[] = [];
+  private readonly eventWaiters = new Set<() => void>();
+  private resolveSdkTerminal!: () => void;
+  private readonly sdkTerminalArrival = new Promise<void>(resolve => { this.resolveSdkTerminal = resolve; });
   private closed = false;
   private sent = false;
   private streaming = false;
@@ -376,6 +388,7 @@ export class DesktopSdkSession {
       this._agentId,
       this._conversationId!,
       this.options.maxTurns,
+      stage => this.timing.markOnce(stage),
     );
     this.binding = await this.timing.measure('native_launch',()=>(this.dependencies.launch ?? this.dependencies.acquire ?? (request => desktopAppServers.acquire(request)))({
       scopeKey: this.scope!.key,
@@ -680,6 +693,7 @@ export class DesktopSdkSession {
       this.checkOpen();
       this.sent = true;
       await this.timing.measure('input_queued',()=>this.native!.send(payload, { otid: this.controls!.messageId }));
+      this.startPump();
       this.checkOpen();
     } finally {
       complete();
@@ -696,92 +710,111 @@ export class DesktopSdkSession {
       { responseType: 'sync_response', timeoutMs: 10000 },
     );
   }
-  private async verifyBackend(runs: readonly string[]): Promise<void> {
-    for (let attempt = 0; attempt < 10; attempt++) {
+  private settle(timeout = 30000): Promise<void> {
+    if (this.settling) return this.settling;
+    if (this.proof) {
       this.scope!.assertCurrent();
-      const states = await Promise.all(runs.map((id) => this.scope!.client.runs.retrieve(id)));
-      if (
-        states.every(
-          (run, i) =>
-            run.id === runs[i] && ['completed', 'failed', 'cancelled'].includes(run.status ?? ''),
-        )
-      )
-        return;
-      if (attempt < 9) await new Promise((resolve) => setTimeout(resolve, 250));
+      this.controls!.assertSnapshot(this.proof);
+      return Promise.resolve();
     }
-    throw Error('SDK_OWNED_RUNS_NOT_VERIFIED_TERMINAL');
+    const operation = this.settleOnce(timeout);
+    this.settling = operation;
+    void operation.finally(() => { if (this.settling === operation) this.settling = undefined; }).catch(() => undefined);
+    return operation;
   }
-  private async settle(timeout = 30000) {
-    if (!this.controls!.hasTerminalProof()) {
-      await this.sync();
-      await this.controls!.wait(true, timeout);
-    }
+  private async settleOnce(timeout: number): Promise<void> {
+    this.scope!.assertCurrent();
+    if (!this.sdkTerminalSeen && !this.queueRemovalConfirmed) throw Error('SDK_TERMINAL_RESULT_NOT_RECEIVED');
     const snapshot = this.controls!.snapshot();
-    await bounded(Promise.allSettled([...this.work]), timeout, 'SDK_TOOL_WORK_UNVERIFIED');
-    for (const child of this.children) {
-      if (!child.isVerified) throw Error('SDK_CHILD_WORK_UNVERIFIED');
-    }
-    if (!snapshot.rejected) await this.verifyBackend(snapshot.runs);
+    await this.timing.measure('completion_tools_wait',()=>bounded(Promise.allSettled([...this.work]), timeout, 'SDK_TOOL_WORK_UNVERIFIED'));
+    for (const child of this.children) if (!child.isVerified) throw Error('SDK_CHILD_WORK_UNVERIFIED');
+    this.scope!.assertCurrent();
     this.controls!.assertSnapshot(snapshot);
     this.proof = snapshot;
   }
+  private async waitBackendCancellation(): Promise<void> {
+    // Native 0.34.39 acknowledges abort before its backend cancel task settles.
+    // This is stop-only readback, never a second cancellation mechanism or a
+    // gate on ordinary successful SDK results.
+    await readWithDeadline(async signal => {
+      while (true) {
+        signal.throwIfAborted();
+        this.scope!.assertCurrent();
+        this.controls!.assertExclusive();
+        const ids=[...this.controls!.ownedRuns];
+        if (!ids.length) throw Error('SDK_ABORT_SCOPE_UNVERIFIED');
+        const runs=await waitForRead(Promise.all(ids.map(id=>this.scope!.client.runs.retrieve(id,{signal}))),signal);
+        this.scope!.assertCurrent();
+        if (runs.some((run,i)=>run.id!==ids[i]||(run.agent_id&&run.agent_id!==this._agentId)||(run.conversation_id&&run.conversation_id!==this._conversationId))) throw Error('SDK_STOP_SCOPE_UNAVAILABLE');
+        if (runs.every(run=>['completed','failed','cancelled'].includes(run.status??''))) return;
+        await waitForRead(new Promise<void>(resolve=>setTimeout(resolve,100)),signal);
+      }
+    },new AbortController().signal,10000,'SDK_BACKEND_CANCEL_UNVERIFIED');
+  }
+  private wakeStream() { for (const wake of this.eventWaiters) wake(); this.eventWaiters.clear(); }
+  private enqueue(message: SDKMessage) { this.events.push(message); this.wakeStream(); }
+  private startPump() {
+    if (this.pump) return;
+    this.pump = (async () => {
+      try { await this.consumeSdk(); }
+      catch (error) { this.pumpFailure=error; throw error; }
+      finally { this.pumpFinished=true; this.wakeStream(); }
+    })();
+    void this.pump.catch(() => undefined);
+  }
+  private async consumeSdk(): Promise<void> {
+    // Exactly one SDK consumer, independent of UI subscriptions and the tool
+    // cancellation signal. Stop must not discard the SDK interruption result.
+    for await (const message of this.native!.stream()) {
+      if (this.closed) { if (this.queueRemovalConfirmed) return; throw Error('SDK_SESSION_CLOSED'); }
+      this.scope!.assertCurrent();
+      this.timing.markOnce('first_stream_event');
+      const value = {...message,clientRunId:this.controls!.messageId,turnSeq:1} as SDKMessage & {clientRunId:string;turnSeq:number};
+      if (value.type === 'queue_update') this.controls!.observeQueue(value.queue);
+      if (value.type === 'assistant' && value.content?.trim()) this.timing.markOnce('first_assistant_text');
+      if (value.type === 'tool_call') { this.timing.markOnce('first_tool_call'); value.toolName=this.aliases.get(value.toolName) ?? value.toolName; }
+      for (const key of ['content','result','error','errorDetail','message'] as const) if (key in value && typeof (value as unknown as Record<string,unknown>)[key] === 'string') (value as unknown as Record<string,unknown>)[key]=this.safe((value as unknown as Record<string,string>)[key]);
+      if (value.type === 'result') {
+        this.controls!.validateSdkResult(value);
+        this.sdkTerminalSeen = true;
+        this.resolveSdkTerminal();
+        this.timing.markOnce('sdk_result_received');
+        this.enqueue({type:'loop_status',status:'PROCESSING_API_RESPONSE',activeRunIds:[...this.controls!.ownedRuns],completionPhase:'verifying',clientRunId:this.controls!.messageId,turnSeq:1} as SDKMessage);
+        try { this.controls!.confirmSdkTerminal(value,this.stopRequested); }
+        catch (error) {
+          if (!(error instanceof Error) || error.message !== 'SDK_STOP_UNVERIFIED') throw error;
+          await this.controls!.wait(true,this.dependencies.stopTimeoutMs ?? 30000);
+          this.controls!.confirmSdkTerminal(value,this.stopRequested);
+        }
+        await this.settle();
+        // SDK result.success/errorCode/errorDetail are authoritative. Raw
+        // native hints are correlation/cleanup evidence, not a second outcome.
+        this.timing.markOnce('turn_finished');
+        this.enqueue(value);
+        return;
+      }
+      this.enqueue(value);
+    }
+    if (!this.queueRemovalConfirmed) throw Error('SDK_STREAM_ENDED_WITHOUT_VERIFIED_RESULT');
+  }
   async *stream(): AsyncGenerator<SDKMessage> {
-    this.checkOpen();
     if (!this.sent || this.streaming) throw Error('SDK_STREAM_UNAVAILABLE');
     this.streaming = true;
-    let terminal = false;
-    let nativeFailure: string | undefined;
+    this.startPump();
     try {
-      for await (const message of this.native!.stream()) {
-        this.checkOpen();
-        this.timing.markOnce('first_stream_event');
-        if(message.type==='assistant'&&typeof message.content==='string'&&message.content.trim())this.timing.markOnce('first_assistant_text');
-        if(message.type==='tool_call')this.timing.markOnce('first_tool_call');
-        const value = { ...message } as SDKMessage & { clientRunId?: string; turnSeq?: number };
-        if (value.type === 'tool_call')
-          value.toolName = this.aliases.get(value.toolName) ?? value.toolName;
-        if ('content' in value && typeof value.content === 'string')
-          value.content = this.safe(value.content);
-        if ('error' in value && typeof value.error === 'string')
-          value.error = this.safe(value.error);
-        if ('errorDetail' in value && typeof value.errorDetail === 'string')
-          value.errorDetail = this.safe(value.errorDetail);
-        if ('message' in value && typeof value.message === 'string')
-          value.message = this.safe(value.message);
-        if (value.type === 'error') nativeFailure = value.message || value.errorDetail;
-        if (value.type === 'result') {
-          if (!value.success) nativeFailure = value.errorDetail || value.error || nativeFailure;
-          try {
-            await this.settle();
-          } catch (error) {
-            const verification = this.safe(
-              error instanceof Error ? error.message : 'SDK_STOP_UNVERIFIED',
-            );
-            throw Error(
-              nativeFailure
-                ? `${nativeFailure}; execution settlement unverified: ${verification}`
-                : verification,
-              { cause: error },
-            );
-          }
-          if (classifyStreamTermination(this.controls?.stopReason) === 'error') {
-            value.success = false;
-            value.errorCode =
-              this.controls?.stopReason === 'llm_api_error' ? 'llm_api_error' : 'error';
-            value.error = 'Native execution stopped: ' + this.controls?.stopReason;
-          }
-          terminal = true;
-          this.timing.markOnce('turn_finished');
+      while (true) {
+        this.scope!.assertCurrent();
+        const message = this.events.shift();
+        if (message) {
+          if (message.type === 'result') await this.pump;
+          yield message;
+          if (message.type === 'result') return;
+          continue;
         }
-        value.clientRunId = this.controls!.messageId;
-        value.turnSeq = 1;
-        yield value;
-        if (value.type === 'result') break;
+        if (this.pumpFinished) { if (this.pumpFailure) throw this.pumpFailure; return; }
+        await new Promise<void>(resolve => { this.eventWaiters.add(resolve); });
       }
-      if (!terminal) throw Error('SDK_STREAM_ENDED_WITHOUT_VERIFIED_RESULT');
-    } finally {
-      this.streaming = false;
-    }
+    } finally { this.streaming=false; }
   }
   abort(): Promise<void> {
     if (this.stop) return this.stop;
@@ -800,17 +833,45 @@ export class DesktopSdkSession {
       if (preparation) await bounded(preparation, 30000, 'SDK_SEND_SETTLEMENT_UNVERIFIED');
       for (const child of this.children) await child.abort();
       if (this.sent && this.controls?.hasSubmitted) {
-        await this.sync();
-        this.controls.assertExclusive();
-        if (!this.controls.hasTerminalProof()) {
-          await this.controls.wait(false);
-          for (const id of this.controls.ownedRuns)
-            await this.native!.sendCommand(
-              { type: 'abort_message', runtime: this.controls.scope, run_id: id },
-              { responseType: 'abort_message_response', timeoutMs: 10000 },
-            );
+        this.startPump();
+        if (!this.sdkTerminalSeen || !this.controls.hasTerminalProof()) {
+          await this.sync();
+          this.scope!.assertCurrent();
+          this.controls.assertExclusive();
+          const queued = this.controls.ownQueuedItem();
+          if (queued && !this.controls.ownedRuns.size) {
+            const removed = await this.native!.removeQueuedMessage(queued);
+            this.scope!.assertCurrent();
+            if (removed.itemId !== queued) throw Error('SDK_QUEUE_SCOPE_UNVERIFIED');
+            if (removed.removed) {
+              this.controls.confirmQueueRemoved(queued);
+              this.queueRemovalConfirmed = true;
+              this.timing.markOnce('sdk_queue_removed');
+              await this.settle();
+              this.stoppedVerified = true;
+              await this.dispose();
+              return;
+            }
+            await this.sync(); // It may have started; recheck exact run ownership.
+          }
+          if (!this.controls.hasTerminalProof() && (this.controls.hasActiveOwnedRun || !this.sdkTerminalSeen)) {
+            this.controls.assertCanAbort();
+            this.timing.markOnce('sdk_abort_requested');
+            this.sdkAbortSent = true;
+            try { await bounded(this.native!.abort(),10000,'SDK_ABORT_ACK_TIMEOUT'); }
+            catch (error) { if (!this.sdkTerminalSeen && !this.controls.hasTerminalProof()) throw error; }
+          }
+          await bounded(Promise.race([this.sdkTerminalArrival,this.pump!]),this.dependencies.stopTimeoutMs ?? 30000,'SDK_TERMINAL_RESULT_TIMEOUT');
+        }
+        try { await bounded(this.pump!,this.dependencies.stopTimeoutMs ?? 30000,'SDK_TERMINAL_DRAIN_TIMEOUT'); }
+        catch (error) {
+          // The SDK result may precede a late scoped native receipt or local
+          // drain. An explicit Stop can re-verify that exact stopped consumer;
+          // never restart it, replay a result, or close a still-running pump.
+          if (!this.pumpFinished || !this.sdkTerminalSeen || !this.controls.hasTerminalProof()) throw error;
         }
         await this.settle();
+        if (this.sdkAbortSent) await this.waitBackendCancellation();
       } else await bounded(Promise.allSettled([...this.work]), 30000, 'SDK_TOOL_WORK_UNVERIFIED');
       this.stoppedVerified = true;
       await this.dispose();
@@ -823,10 +884,9 @@ export class DesktopSdkSession {
     return attempt;
   }
   close() {
-    if (!this.isVerified) {
-      void this.abort().catch(() => undefined);
-      return;
-    }
+    // Cleanup is not cancellation. An unknown active owner must remain
+    // available to explicit Stop; never quietly abort from close().
+    if (!this.isVerified) return;
     void this.dispose().catch(() => undefined);
   }
   private shutdown?: Promise<void>;
@@ -839,6 +899,7 @@ export class DesktopSdkSession {
       try {
         this.native?.close();
         await this.sdk?.close();
+        if (this.queueRemovalConfirmed && this.pump) await bounded(this.pump,this.dependencies.stopTimeoutMs ?? 30000,'SDK_TERMINAL_DRAIN_TIMEOUT');
         if (this.proof) this.controls!.assertSnapshot(this.proof);
         clientClosed = true;
       } finally {

@@ -65,6 +65,14 @@ export type EphemeralState = {
   errorMessage?: string;
   /** A failed tool attempt while the run is still active/recovering. */
   recoveryMessage?: string;
+  /** Nonterminal SDK result received; owned completion is still being checked. */
+  verifyingCompletion?: boolean;
+  stopState?: 'stopping' | 'unverified';
+  stopRequestId?: string;
+  stopResumeDraft?: {queuedPrompt:string;typedText:string};
+  /** Historical warning only, never a lock on a new turn or composer. */
+  stopWarning?:string;
+  queuedMessageRequests?:string[];
   pendingResultStatus?: "completed" | "error";
   pendingResultError?: string;
 };
@@ -469,8 +477,16 @@ function updateAssistantDraft(ephemeral: EphemeralState, message: StreamMessage)
   };
 }
 
+function retainObservedDraft(messages: StreamMessage[], draft?: SDKAssistantMessage): StreamMessage[] {
+  if (!draft?.content) return messages;
+  const saved = withMessageTimestamp({...draft} as StreamMessage, Date.now());
+  const at = messages.findIndex(m => m.type === 'assistant' && 'uuid' in m && m.uuid === draft.uuid);
+  return at < 0 ? [...messages, saved] : messages.map((m,i) => i === at ? saved : m);
+}
 function clearEphemeral(_ephemeral: EphemeralState, status: AgentDisplayStatus = "idle", errorMessage?: string): EphemeralState {
   return {
+    stopWarning:_ephemeral.stopWarning,
+    queuedMessageRequests:_ephemeral.queuedMessageRequests,
     reasoning: [],
     tools: [],
     cliResults: [],
@@ -1177,7 +1193,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
               ...state.sessions,
               [sessionId]: {
                 ...existing,
-                status:existing.ephemeral.errorMessage?'error':status,
+                status:(existing.ephemeral.stopState || (existing.ephemeral.verifyingCompletion && existing.status === 'running')) ? existing.status : existing.ephemeral.errorMessage?'error':status,
                 messages: mergedMessages,
                 hydrated: true,
                 hasMoreHistory: hasMore,
@@ -1185,7 +1201,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
                 totalDisplayableCount,
                 oldestMessageId: oldestMessageId ?? null,
                 isLoadingHistory: false,
-                ephemeral: existing.ephemeral.errorMessage?existing.ephemeral:clearEphemeral(
+                ephemeral: (existing.ephemeral.stopState || existing.ephemeral.errorMessage || (existing.ephemeral.verifyingCompletion && existing.status === 'running'))?existing.ephemeral:clearEphemeral(
                   existing.ephemeral ?? initialEphemeralState(),
                   status === "completed" ? "completed" : "idle"
                 ),
@@ -1200,14 +1216,25 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
         break;
       }
 
+      case 'session.messageAdmission': {
+        const {sessionId,requestId,state:admissionState}=event.payload;
+        set(state=>{const current=state.sessions[sessionId];if(!current)return state;const queued=current.ephemeral.queuedMessageRequests??[];return {sessions:{...state.sessions,[sessionId]:{...current,ephemeral:{...current.ephemeral,queuedMessageRequests:admissionState==='queued'?[...new Set([...queued,requestId])]:queued.filter(id=>id!==requestId)}}}};});
+        break;
+      }
       case "session.status": {
-        const { sessionId, status, title, cwd, error, agentName, agentId, lettaConnectionId, model, background, isEmailSession } = event.payload;
+        const { sessionId, status, title, cwd, error, agentName, agentId, lettaConnectionId, model, background, isEmailSession, stopState, stopRequestId } = event.payload;
+        const prior = rootState.sessions[sessionId];
+        if ((stopState === 'verified' || stopState === 'unverified') && (!prior?.ephemeral.stopRequestId || prior.ephemeral.stopRequestId !== stopRequestId)) break;
+        if (prior?.ephemeral.stopState && (status === 'idle' || status === 'completed') && stopState !== 'verified') break;
+        if (prior?.ephemeral.stopState === 'stopping' && status === 'error' && !stopState) break;
+        const verificationDraft = (status === 'error' || stopState === 'verified') && (prior?.ephemeral.verifyingCompletion || prior?.ephemeral.stopState)
+          ? getAssistantDraft(sessionId) ?? rootState.sessions[sessionId]?.ephemeral.assistantDraft : undefined;
         if (status === "idle" || status === "error") {
           clearAssistantDraft(sessionId);
         }
         const existing = rootState.sessions[sessionId] ?? createSession(sessionId);
         const previousStatus = existing.status;
-        const hadPendingPermissions = (existing.permissionRequests?.length ?? 0) > 0;
+        const hadPendingPermissions = stopState !== 'verified' && (existing.permissionRequests?.length ?? 0) > 0;
 
         // Detect "Invalid model" CLI rejection — the Letta workspace catalog lists
         // models the underlying CLI runtime doesn't accept. Auto-recover by clearing
@@ -1230,12 +1257,16 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
         if(status==='error'&&!error)resolvedError=sessionErrorMessage(undefined);
         // An original timeout can be repeated by IPC after cleanup reports an
         // unverified stop. Do not replace that stronger safety warning.
-        if(status==='error'&&existing.ephemeral.errorMessage===sessionErrorMessage('SDK_STOP_NOT_VERIFIED'))resolvedError=existing.ephemeral.errorMessage;
+        if(status==='error'&&!error?.includes('SDK_STOP_SCOPE_UNAVAILABLE')&&(existing.ephemeral.stopState === 'unverified' || existing.ephemeral.errorMessage===sessionErrorMessage('SDK_STOP_NOT_VERIFIED')))resolvedError=existing.ephemeral.errorMessage;
 
         set((state) => {
           const current = state.sessions[sessionId] ?? createSession(sessionId);
           const nextEphemeral = { ...current.ephemeral };
-          const keepFailure=preserveSessionFailure(current.ephemeral.errorMessage,status);
+          if (status !== 'running') nextEphemeral.verifyingCompletion = undefined;
+          const keepFailure=stopState !== 'verified' && preserveSessionFailure(current.ephemeral.errorMessage,status);
+          if (stopState === 'stopping') { nextEphemeral.stopState='stopping'; nextEphemeral.stopRequestId=stopRequestId; nextEphemeral.pendingResultStatus=undefined; nextEphemeral.pendingResultError=undefined; }
+          if (stopState === 'unverified') nextEphemeral.stopState='unverified';
+          if (stopState === 'verified') { nextEphemeral.stopState=undefined; nextEphemeral.stopRequestId=undefined; nextEphemeral.errorMessage=undefined; nextEphemeral.pendingResultStatus=undefined; nextEphemeral.pendingResultError=undefined; }
           if (status === "completed"&&!keepFailure) {
             nextEphemeral.status = "completed";
             nextEphemeral.errorMessage = undefined;
@@ -1261,10 +1292,14 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
             nextEphemeral.status = "waiting_approval";
           }
           return {
+            ...(stopState === 'verified' && state.activeSessionId === sessionId && state.globalError === sessionErrorMessage('SDK_STOP_NOT_VERIFIED') ? {globalError:null} : {}),
+            ...(stopState === 'unverified' && state.activeSessionId === sessionId && !state.prompt && current.ephemeral.stopResumeDraft ? {prompt:current.ephemeral.stopResumeDraft.typedText} : {}),
             sessions: {
               ...state.sessions,
               [sessionId]: {
                 ...current,
+                messages: verificationDraft ? retainObservedDraft(current.messages, verificationDraft) : current.messages,
+                permissionRequests: stopState === 'verified' ? [] : current.permissionRequests,
                 status:keepFailure?'error':status,
                 title: title ?? current.title,
                 cwd: cwd ?? current.cwd,
@@ -1405,12 +1440,21 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
             });
             return state;
           }
+          const verificationProgress = message.type === 'loop_status' && (message as {completionPhase?:string}).completionPhase === 'verifying';
+          if (verificationProgress && (currentEphemeral.stopState || !messageClientRunId || messageClientRunId !== existing.latestClientRunId || existing.status !== 'running' || currentEphemeral.errorMessage)) return state;
           let messages = existing.messages;
           let ephemeral = currentEphemeral;
           let status: AgentDisplayStatus = currentEphemeral.status;
           const eventTimestamp = Date.now();
 
           switch (message.type) {
+            case 'loop_status': {
+              if (verificationProgress) {
+                ephemeral = {...currentEphemeral, verifyingCompletion:true};
+                status = existing.permissionRequests?.length ? 'waiting_approval' : 'generating';
+              }
+              break;
+            }
             case "reasoning": {
               ephemeral = updateReasoning(currentEphemeral, message);
               status = "thinking";
@@ -1514,8 +1558,18 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
               break;
             }
             case "result": {
-              if (message.success) {
-                const draft = getAssistantDraft(sessionId) ?? currentEphemeral.assistantDraft;
+              const resultError = message.success ? undefined : sessionErrorMessage([message.errorCode,message.errorDetail ?? message.error].filter(Boolean).join(': '));
+              if (message.success || currentEphemeral.verifyingCompletion || currentEphemeral.stopState) {
+                const committed = messageClientRunId ? messages.slice().reverse().find(m=>m.type==='assistant'&&extractClientRunId(m)===messageClientRunId) : undefined;
+                const streamed = getAssistantDraft(sessionId) ?? currentEphemeral.assistantDraft ?? (committed?.type==='assistant' ? committed : undefined);
+                const finalAnswer = message.success ? message.result ?? streamed?.content : streamed?.content;
+                const draft = finalAnswer === undefined ? undefined : {
+                  ...streamed,type:'assistant' as const,
+                  ...(messageClientRunId ? {clientRunId:messageClientRunId} : {}),
+                  ...(messageRunId ? {runId:messageRunId} : {}),
+                  uuid:streamed?.uuid ?? `sdk-result:${messageClientRunId ?? messageRunId ?? eventTimestamp}`,
+                  content:finalAnswer,
+                };
                 if (draft) {
                   const existingIndex = messages.findIndex(
                     (m) => m.type === "assistant" && "uuid" in m && "uuid" in draft && m.uuid === draft.uuid
@@ -1538,8 +1592,9 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
                 ephemeral = {
                   ...currentEphemeral,
                   assistantDraft: undefined,
+                  verifyingCompletion: undefined,
                   pendingResultStatus: message.success ? "completed" : "error",
-                  pendingResultError: message.success ? undefined : sessionErrorMessage(message.error),
+                  pendingResultError: resultError,
                 };
                 break;
               }
@@ -1552,7 +1607,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
                 };
               } else {
                 status = "error";
-                ephemeral = clearEphemeral(currentEphemeral, "error", sessionErrorMessage(message.error));
+                ephemeral = clearEphemeral(currentEphemeral, "error", resultError);
               }
               break;
             }
@@ -1576,8 +1631,14 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
             }
           }
 
+          if (message.type === 'result' && currentEphemeral.stopState) {
+            status = currentEphemeral.stopState === 'unverified' ? 'error' : currentEphemeral.status;
+            ephemeral = {...ephemeral,stopState:currentEphemeral.stopState,stopRequestId:currentEphemeral.stopRequestId,
+              stopResumeDraft:currentEphemeral.stopResumeDraft,errorMessage:currentEphemeral.errorMessage,
+              pendingResultStatus:undefined,pendingResultError:undefined,verifyingCompletion:undefined};
+          }
           const sessionStatus: SessionStatus =
-            message.type === "result"
+            message.type === 'result' && currentEphemeral.stopState ? existing.status : message.type === "result"
               ? (status === "error" ? "error" : status === "waiting_approval" ? existing.status : "completed")
               : existing.status;
 
@@ -1624,7 +1685,8 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
       }
 
       case "stream.user_prompt": {
-        const { sessionId, prompt, attachments, content } = event.payload;
+        const { sessionId, prompt, attachments, content, afterStop } = event.payload;
+        if (rootState.sessions[sessionId]?.ephemeral.stopState && !afterStop) break;
         clearAssistantDraft(sessionId);
         set((state) => {
           const existing = state.sessions[sessionId] ?? createSession(sessionId);
@@ -1633,7 +1695,9 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
             withMessageTimestamp({ type: "user_prompt" as const, prompt, attachments, content }, Date.now()),
           ];
           const nextEphemeral = clearEphemeral(existing.ephemeral ?? initialEphemeralState(), "thinking");
+          nextEphemeral.stopWarning=existing.ephemeral.stopWarning??(existing.ephemeral.stopState==='unverified'||existing.ephemeral.errorMessage===sessionErrorMessage('SDK_STOP_NOT_VERIFIED')?existing.ephemeral.errorMessage:undefined);
           return {
+            ...(state.activeSessionId===sessionId&&state.globalError===sessionErrorMessage('SDK_STOP_NOT_VERIFIED')?{globalError:null}:{}),
             sessions: {
               ...state.sessions,
               [sessionId]: {
