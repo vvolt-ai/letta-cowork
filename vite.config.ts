@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv, type UserConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+import { resolveAppBuildMode } from './scripts/app-build-mode.mjs';
 
 export default defineConfig(({ mode }): UserConfig => {
 	const env = loadEnv(mode, process.cwd(), '');
@@ -33,6 +34,7 @@ export default defineConfig(({ mode }): UserConfig => {
 			strictPort: true,
 		},
 		define: {
+            'REMOTE_APP_ONLY': JSON.stringify(resolveAppBuildMode(mode).remoteAppOnly),
 			'SHOW_CHANNELS': JSON.stringify(env.SHOW_CHANNELS === 'true'),
 			'SHOW_EMAIL_OPTION': JSON.stringify(env.SHOW_EMAIL_OPTION === 'true'),
 		},

@@ -39,6 +39,9 @@ import { SessionNotifications } from "./features/system/components/SessionNotifi
 import {AppUpdateNotice,AppUpdatesPanel} from './features/updates/DesktopUpdates';
 import { SettingsWorkspace, type SettingsSection } from "./features/settings/components/SettingsWorkspace";
 
+import { IS_REMOTE_APP_ONLY } from './app-mode';
+import { RemoteOnlyApp } from './features/remote-only/RemoteOnlyApp';
+
 const SCROLL_THRESHOLD = 50;
 const SESSION_CHANGE_SCROLL_DELAY_MS = 100;
 const LOAD_EARLIER_SCROLL_THRESHOLD_PX = 240;
@@ -54,6 +57,10 @@ const isNearBottom = (container: HTMLDivElement) => {
   return scrollTop + clientHeight >= scrollHeight - SCROLL_THRESHOLD;
 };
 function App() {
+  return IS_REMOTE_APP_ONLY ? <RemoteOnlyApp /> : <FullApp />;
+}
+
+function FullApp() {
   // Authentication
   const { isAuthenticated, isLoading: isAuthLoading, checkAuth, user, switchOrganization, logout, handleAuthError } = useAuth();
 

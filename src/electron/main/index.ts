@@ -6,6 +6,7 @@
 import path from "path";
 
 import { app } from "electron";
+import { REMOTE_APP_ONLY } from '../app-mode.js';
 import {shouldLaunchHidden,supportsLoginItems} from './startup-policy.js';
 
 // Initialize environment before importing other modules
@@ -130,11 +131,11 @@ app.on("ready", () => {
     // Register all IPC handlers
     registerAllIpcHandlers(mainWindow);
 
-    // Start express server for email operations
-    expressServer(mainWindow);
-
-    // Initialize channel bridges
-    void initializeBridges();
+    // Remote-only builds must not revive hidden email/channel automation.
+    if (!REMOTE_APP_ONLY) {
+        expressServer(mainWindow);
+        void initializeBridges();
+    }
 
     // Initialize API IPC handlers for vera-cowork-server
     initializeApiIpcHandlers();

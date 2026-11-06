@@ -18,6 +18,10 @@ Vera Cowork is an Electron desktop GUI for [Letta Code](https://github.com/letta
 
 See [per-agent memory checkout, shared mounts and freshness](docs/agent-memory-runtime.md) for the current scoped desktop memory behavior and read-only Vera download transport.
 
+### Remote-only build
+
+Set `REMOTE_APP_ONLY=true` at build time to show only **Profile** and **Remote Access**, without mounting the full chat/email workspace or starting local email/channel/scheduler automation. GitHub Actions → **Build Electron App** → **Run workflow** exposes a `remote_app_only` checkbox; unchecked/push/PR builds remain full Cowork. See [build flag, CI artifacts and compatibility](docs/remote-app-only.md).
+
 ### Native Agent SDK runtime
 
 The SDK owns chat and delegated-agent model execution, while Cowork preserves its tools, UI approvals, selected account, memory access and remote routing. The copied WS/SSE execution engine is removed; there is no legacy execution fallback.
