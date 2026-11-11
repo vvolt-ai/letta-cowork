@@ -18,13 +18,13 @@ test('manual launches stay visible; macOS login launches and explicit hidden fla
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const lock = parse(readFileSync(new URL('../bun.lock', import.meta.url), 'utf8'));
 test('Electron 45 is exactly pinned in package and Bun lock metadata', () => {
-  assert.equal(pkg.devDependencies.electron, '45.1.0');
-  assert.equal(lock.workspaces[''].devDependencies.electron, '45.1.0');
-  assert.equal(lock.packages.electron[0], 'electron@45.1.0');
+  assert.equal(pkg.devDependencies.electron, '45.3.0');
+  assert.equal(lock.workspaces[''].devDependencies.electron, '45.3.0');
+  assert.equal(lock.packages.electron[0], 'electron@45.3.0');
 });
 test('native ABI mapping recognizes Electron 45 and rebuild stays on the local Bun toolchain', () => {
   assert.equal(pkg.overrides['node-abi'], '4.40.0');
-  assert.equal(String(getAbi('45.1.0', 'electron')), '150');
+  assert.equal(String(getAbi('45.3.0', 'electron')), '150');
   assert.equal(pkg.scripts.rebuild, 'bunx --no-install electron-rebuild -f');
 });
 test('SDK/CLI upgrade is explicitly pinned with matching peer and embedded Node requirements', () => {

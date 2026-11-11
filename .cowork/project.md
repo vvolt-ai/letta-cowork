@@ -11,13 +11,15 @@ Electron desktop app wrapping the Letta Code agent runtime with Verivolt/Cowork 
 
 ## Stack
 
-- Electron 45.1.0 (Node24.22.1, ABI150; macOS13+); SDK0.8.81/Code0.34.51 exact pins (local paired upgrade2026-11-11; reload/deployment not implied)
-- React 19.2
+- Electron 45.3.0 (Node24.22.2, ABI150; macOS13+); SDK0.8.81/Code0.34.51 exact pins (local paired upgrade2026-11-11; reload/deployment not implied)
+- React 19.3
 - Vite 8
 - TypeScript 6
 - Tailwind 4
 - Zustand 5
 - Bun package manager
+
+Dependency maintenance and held major migrations: `docs/dependency-maintenance.md` (2026-11-11).
 
 ## Local commands
 
