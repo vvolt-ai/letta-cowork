@@ -86,7 +86,6 @@ function FullApp() {
   const [showSettings, setShowSettings] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("profile");
   const [runsPresetConversationId, setRunsPresetConversationId] = useState<string | undefined>(undefined);
-  const [scheduleAgents, setScheduleAgents] = useState<Array<{ id: string; name: string; description?: string | null; }>>([]);
   const [skillDownloadOpen, setSkillDownloadOpen] = useState(false);
   const [isSwitchingOrganization, setIsSwitchingOrganization] = useState(false);
   const [organizationSwitchError, setOrganizationSwitchError] = useState<string | null>(null);
@@ -293,14 +292,6 @@ function FullApp() {
     status: activeSession?.status,
     agentId: activeSession?.agentId,
   });
-
-  // Pre-load agents list for the Schedules panel when it opens
-  useEffect(() => {
-    if (!showSchedules) return;
-    window.electron.listLettaAgents()
-      .then((agents: Array<{ id: string; name: string; }>) => setScheduleAgents(agents ?? []))
-      .catch(console.warn);
-  }, [showSchedules]);
 
   // Wrapped handleStartSessionClick for Sidebar - opens a fresh composer directly.
   const handleStartSessionClickWithEnv = useCallback((agentId?: string) => {
@@ -633,7 +624,7 @@ function FullApp() {
           ) : showSuperAdmin ? (
             <SuperAdminPanel onClose={() => setShowSuperAdmin(false)} />
           ) : showSchedules ? (
-            <SchedulesPanel agents={scheduleAgents} onClose={() => setShowSchedules(false)} />
+            <SchedulesPanel onClose={() => setShowSchedules(false)} />
           ) : showSkills ? (
             <SkillsPanel onClose={() => setShowSkills(false)} />
           ) : showConfiguration ? (
@@ -738,7 +729,7 @@ function FullApp() {
           ) : settingsSection === "skills" ? (
             <SkillsPanel onClose={() => setShowSettings(false)} />
           ) : settingsSection === "schedules" ? (
-            <SchedulesPanel agents={scheduleAgents} onClose={() => setShowSettings(false)} />
+            <SchedulesPanel onClose={() => setShowSettings(false)} />
           ) : settingsSection === "administration" ? (
             <SuperAdminPanel onClose={() => setShowSettings(false)} />
           ) : settingsSection === "mcp-servers" ? (

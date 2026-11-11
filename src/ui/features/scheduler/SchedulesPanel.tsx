@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
 
-interface LettaAgent { id: string; name: string; }
 import { CreateScheduleDialog } from "./CreateScheduleDialog";
 import { ScheduleRunsDrawer } from "./ScheduleRunsDrawer";
 import { buildCronExpression } from "./types";
@@ -9,7 +8,6 @@ import { InnerPageLayout } from "../layout/components/InnerPageLayout";
 import type { ScheduledTask, CreateScheduledTaskForm } from "./types";
 
 interface Props {
-  agents: LettaAgent[];
   onClose?: () => void;
 }
 
@@ -44,7 +42,7 @@ function StatusDot({ enabled }: { enabled: boolean }) {
   );
 }
 
-export function SchedulesPanel({ agents, onClose }: Props) {
+export function SchedulesPanel({ onClose }: Props) {
   const [tasks, setTasks] = useState<ScheduledTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"recurring" | "one_off">("recurring");
@@ -265,7 +263,6 @@ export function SchedulesPanel({ agents, onClose }: Props) {
       {/* Dialogs */}
       <CreateScheduleDialog
         open={showCreate}
-        agents={agents}
         onClose={() => setShowCreate(false)}
         onSave={handleCreate}
         mode="create"
@@ -274,7 +271,6 @@ export function SchedulesPanel({ agents, onClose }: Props) {
       {editTask && (
         <CreateScheduleDialog
           open={!!editTask}
-          agents={agents}
           onClose={() => setEditTask(null)}
           onSave={handleEdit}
           mode="edit"

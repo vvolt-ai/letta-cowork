@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 
-interface LettaAgent { id: string; name: string; }
+import { AgentDropdown } from "../chat/components/AgentDropdown";
 
 import {
   type CreateScheduledTaskForm,
@@ -13,7 +13,6 @@ import {
 
 interface Props {
   open: boolean;
-  agents: LettaAgent[];
   onClose: () => void;
   onSave: (form: CreateScheduledTaskForm) => Promise<void>;
   initialValues?: Partial<CreateScheduledTaskForm>;
@@ -29,7 +28,7 @@ const EMPTY_FORM: CreateScheduledTaskForm = {
 const inputClass = "w-full rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 py-2.5 text-xs text-ink-900 outline-none transition placeholder:text-muted focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-subtle)]";
 const labelClass = "mb-1.5 block text-[11px] font-semibold text-ink-700";
 
-export function CreateScheduleDialog({ open, agents, onClose, onSave, initialValues, mode = "create" }: Props) {
+export function CreateScheduleDialog({ open, onClose, onSave, initialValues, mode = "create" }: Props) {
   const [form, setForm] = useState<CreateScheduledTaskForm>({ ...EMPTY_FORM, ...initialValues });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -104,7 +103,7 @@ export function CreateScheduleDialog({ open, agents, onClose, onSave, initialVal
           <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-soft)]">
             <div className="mb-4"><h3 className="text-xs font-semibold text-ink-900">Agent and execution</h3><p className="mt-0.5 text-[10px] text-muted">Choose who runs this task and where it executes.</p></div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <div><label className={labelClass}>Agent</label><select className={inputClass} value={form.agentId} onChange={(e) => set("agentId", e.target.value)}><option value="">Select an agent…</option>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></div>
+              <AgentDropdown value={form.agentId} onChange={(agentId) => set("agentId", agentId)} disabled={saving} />
               <div><label className={labelClass}>Run on</label><Segment values={["cowork", "server"] as const} value={form.executionTarget} labels={{ cowork: "Cowork app", server: "Server" }} onChange={(next) => set("executionTarget", next)} /></div>
               <div className="sm:col-span-2"><label className={labelClass}>Target conversation</label><Segment values={["default", "specific"] as const} value={form.conversationId ? "specific" : "default"} labels={{ default: "Default conversation", specific: "Specific conversation" }} onChange={(next) => set("conversationId", next === "specific" ? "specific" : "")} />{form.conversationId ? <input className={`${inputClass} mt-2 font-mono`} placeholder="conv-…" value={form.conversationId === "specific" ? "" : form.conversationId} onChange={(e) => set("conversationId", e.target.value)} autoFocus /> : null}</div>
             </div>
