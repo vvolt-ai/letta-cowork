@@ -122,7 +122,7 @@ async function openSdk(
     if (
       info.backend !== 'api' ||
       info.protocol_version !== 1 ||
-      info.letta_code_version !== '0.34.41' ||
+      info.letta_code_version !== '0.34.51' ||
       !info.capabilities.runtime_start
     )
       throw Error('SDK_NATIVE_HOST_INCOMPATIBLE');
@@ -768,6 +768,9 @@ export class DesktopSdkSession {
     for await (const message of this.native!.stream()) {
       if (this.closed) { if (this.queueRemovalConfirmed) return; throw Error('SDK_SESSION_CLOSED'); }
       this.scope!.assertCurrent();
+      // SDK server-initiated turns must not be relabelled as this UI request.
+      if (message.type === 'result' && message.origin !== undefined) continue;
+      if ('runId' in message && typeof message.runId === 'string' && !this.controls!.ownedRuns.has(message.runId)) continue;
       this.timing.markOnce('first_stream_event');
       const value = {...message,clientRunId:this.controls!.messageId,turnSeq:1} as SDKMessage & {clientRunId:string;turnSeq:number};
       if (value.type === 'queue_update') this.controls!.observeQueue(value.queue);

@@ -1,6 +1,6 @@
 # Local shared App Server pool
 
-Cowork now defaults to a persistent Electron-main-owned pool instead of starting a native App Server for each logical request. Hosting stays on this computer, using Electron-as-Node and the pinned SDK0.8.70/Code0.34.41 API harness. This does not move desktop tools onto Vera server, change the selected model provider, or create a worker thread for every chat.
+Cowork now defaults to a persistent Electron-main-owned pool instead of starting a native App Server for each logical request. Hosting stays on this computer, using Electron-as-Node and the pinned SDK0.8.81/Code0.34.51 API harness. This does not move desktop tools onto Vera server, change the selected model provider, or create a worker thread for every chat.
 
 ## Boundaries and lifetime
 

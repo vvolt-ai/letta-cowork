@@ -1,6 +1,16 @@
 # Desktop Agent SDK execution
 
-## Paired SDK upgrade — 2026-11-05 (local, not activated)
+## Current pair — 2026-11-11 (local, not activated)
+
+Exact pins: SDK **0.8.81** (`05c91862453eb6023666b81e2f43d37a57f9ced4`) / Code **0.34.51** (`0aed9a613f647debd881d0b033ecfc5c1450e69a`). SDK peer range is `>=0.34.51 <0.35.0`. Existing Electron45.1.0 / embedded Node24.22.1 remains compatible. Package/Bun lock, strict handshake, fixtures and versioned local pool identity are aligned; no global CLI/Node/Electron upgrade.
+
+Reviewed runtime tool-policy negotiation and external callback changes, SDK unsolicited server-turn results, activity-based turn timeout handling, and native stop/background/memory updates. The request adapter excludes unsolicited result origins and foreign run-ID content instead of relabelling them as the active UI turn. Per-input ownership, permission/plan checks, exact Stop proof and selected execution routes remain. Optional shared registerTools/registerComputer, conversation-wide Stop and extra background execution are not enabled merely by upgrading. No fresh-server conflict workaround or previous-prompt replay is introduced.
+
+Validated:338 Node/native tests (324 on supported Electron Node24.22.1 +14 ordinary-Node CI/process fixtures),65 Bun UI tests and full build. The two process/shebang suites cannot run under an Electron executable substituted for plain Node; the correctly partitioned run passes. Vera's paired validation is1808 unit tests/220 suites +10 installed SDK/native tests and build. npm backend reports48 advisories including2 critical; no unrelated audit fix. Dependency lifecycle scripts were disabled. Desktop build regenerates dist-react/index.html; that already-dirty generated file and existing test-results remain outside source publication scope. No live model/business action, app reload, installer, deployment or claimed repair of the previous settings conflict.
+
+[SDK source comparison](https://github.com/letta-ai/letta-agent-sdk/compare/v0.8.70...v0.8.81); [Code comparison](https://github.com/letta-ai/letta-code/compare/v0.34.41...v0.34.51). Historical version/count sections below reflect prior work, not the current dependency pair. Build/tests are not app activation, provider acceptance, installer publication or proof that the previous Vera startup conflict is fixed.
+
+## Historical paired SDK upgrade — 2026-11-05 (local validation at that date)
 
 Current exact pair: SDK0.8.70 (f34cb1f9a2840523d87ac8313319ff57afb57d17) / Code0.34.41 (233c0034492b9782c9bec01002226b891e514745), verified against latest stable GitHub releases and npm integrity/peer metadata. SDK0.8.68→0.8.70 changes manifests/peer floor only; the public lifecycle API is unchanged. Code's engine floor is unchanged, so existing Electron45.1.0/Node24.22.1 remains supported. Package/Bun-lock pins, strict host-info check, fixtures and versioned shared-pool identity are updated together. No global CLI, Node or Electron upgrade.
 

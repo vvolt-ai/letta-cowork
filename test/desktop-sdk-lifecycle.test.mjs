@@ -135,7 +135,7 @@ async function fixture(tool = false, conflict = false, terminalReason = 'end_tur
           request_id: m.request_id,
           success: true,
           backend: 'api',
-          letta_code_version: '0.34.41',
+          letta_code_version: '0.34.51',
           protocol_version: 1,
           capabilities: {
             agent_management: true,
@@ -359,6 +359,16 @@ test('raw native hints do not rewrite the authoritative SDK result fields',async
  // dispose the socket before a second wire frame reaches its listener.
  s.controls.incoming(JSON.stringify({type:'turn_finished',runtime:{agent_id:A,conversation_id:C},run_id:R,turn_id:'turn-fixture',stop_reason:'llm_api_error'}));
  assert.equal(result.success,true);assert.equal(result.stopReason,'end_turn');assert.equal(result.error,undefined);assert.equal(result.errorCode,undefined);assert.equal(s.controls.stopReason,'llm_api_error');await s.abort();assert.equal(f.submissions,1);}finally{await s.abort().catch(()=>{});await f.close();}
+});
+test('unsolicited SDK results and foreign run content do not complete or label the current UI turn',async()=>{
+ const f=await fixture(),s=f.make();try{
+  await s.initialize();const original=s.native.stream.bind(s.native);
+  s.native.stream=async function*(){yield{type:'assistant',content:'foreign output',runId:'run-foreign'};yield{type:'result',success:true,origin:'cron'};yield* original();};
+  await s.send('fixture');const events=await collect(s);
+  assert(!events.some(event=>event.type==='assistant'&&event.content==='foreign output'));
+  assert.equal(events.filter(event=>event.type==='result').length,1);
+  assert.equal(events.find(event=>event.type==='result').success,true);
+ }finally{await s.abort().catch(()=>{});await f.close();}
 });
 test('an expired owned backend run settles Stop without converting interruption into success',async()=>{const f=await fixture(false,false,'end_turn',{hold:true,backendTerminalStatus:'expired'}),s=f.make();try{await s.initialize();await s.send('fixture');await until(()=>s.controls.ownedRuns.has(R));const collected=collect(s);await s.abort();const result=(await collected).find(m=>m.type==='result');assert.equal(result.success,false);assert.equal(result.stopReason,'interrupted');assert.equal(s.isVerified,true);assert(f.backendReads>0);assert.equal(f.submissions,1);}finally{await s.abort().catch(()=>{});await f.close();}});
 test('local callbacks drain before the original SDK terminal reaches UI or close', { timeout: 5000 }, async () => {

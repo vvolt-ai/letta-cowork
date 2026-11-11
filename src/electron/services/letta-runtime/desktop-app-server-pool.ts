@@ -28,7 +28,7 @@ export function desktopPoolBoundary(request: DesktopPoolRequest): string {
   return digest([request.scopeKey, providerBase(request.provider.baseURL), request.provider.source ?? 'local',
     request.provider.source === 'vera' ? null : digest(request.provider.apiKey),
     new Headers(request.provider.defaultHeaders).get('x-letta-connection-id'),
-    request.agentId, 'desktop-stateless-memfs-off-v1', '0.34.41']);
+    request.agentId, 'desktop-stateless-memfs-off-v1', '0.34.51']);
 }
 function runtimeKey(request: DesktopPoolRequest) {
   return digest([providerBase(request.provider.baseURL), request.agentId, request.conversationId]);
