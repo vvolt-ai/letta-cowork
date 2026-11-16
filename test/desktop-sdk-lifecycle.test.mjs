@@ -135,7 +135,7 @@ async function fixture(tool = false, conflict = false, terminalReason = 'end_tur
           request_id: m.request_id,
           success: true,
           backend: 'api',
-          letta_code_version: '0.34.51',
+          letta_code_version: '0.34.63',
           protocol_version: 1,
           capabilities: {
             agent_management: true,

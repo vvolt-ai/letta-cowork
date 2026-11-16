@@ -1,6 +1,18 @@
 # Desktop Agent SDK execution
 
-## Current pair — 2026-11-11 (local, not activated)
+## Current pair — 2026-11-16 (local, not activated)
+
+Exact pins: SDK **0.8.90** (`088b1585d6d8065f80311214863e42bd87185031`) / Code **0.34.63** (`eadef1c6c3594d1bf81517efd4b68fce54644ad4`). Registry latest metadata, Git tags and SDK peer range `>=0.34.60 <0.35.0` were verified. Electron45.3.0 / embedded Node24.22.2 is unchanged and supported; no global CLI/Node/Electron installation. Package/Bun lock, strict handshake, lifecycle fixture and versioned shared-pool identity move together. The CLI's nested SDK0.8.38 is its own upstream dependency, not the desktop adapter's direct SDK pin.
+
+Reviewed SDK local config-directory isolation and Cloud single-use WebSocket tickets; Code listener handshake cleanup, parallel runtime identity retrieval, external-tool turn timestamp and memory/approval/subagent updates. Existing explicit loopback/header transport and manual scoped host ownership remain; no cloud query-token fallback, optional native Monitor/Cron/subagent feature port, new retry loop or fresh-server settings workaround is enabled. SDK-managed local spawning uses its isolated config root; Cowork's manually hosted pool keeps its existing private HOME and native-memory-off policy.
+
+Validated: full Electron/renderer build,328 tests under supported embedded Node +14 ordinary-Node process/shebang fixtures (342 total),68 Bun UI tests; paired Vera build +1828 unit tests/221 suites +10 actual installed SDK/native fixtures. Unit/native tests use fake APIs and temporary data, not live conversations, business writes or real agent memory. Install lifecycle scripts were disabled; frozen Bun installation passes. Existing generated dist-react/index.html and test-results stay outside source scope. Source validation is not a running-app reload, installer or production acceptance. Changed desktop runtime files pass scoped lint; whole-repo lint still has5 existing errors and format:check retains existing parser/style failures. No broad cleanup was applied.
+
+**Paired backend rollout gate:** Code0.34.63 listener `memfs-sync.ts` can remove a scoped checkout on explicit HTTP403 without an explicit dirty-worktree check. Agent retrieval happens before Git sync checks, so do not assume dirty drafts protect that path. Desktop's forced native-memory-off policy is unchanged, but MemFS-enabled Vera workers need an approved preservation/guard decision before activation. No real memory cleanup was run and this migration does not silently disable memory or relocate existing drafts.
+
+Sources: [SDK delta](https://github.com/letta-ai/letta-agent-sdk/compare/v0.8.81...v0.8.90), [Code delta](https://github.com/letta-ai/letta-code/compare/v0.34.51...v0.34.63), upstream403 cleanup commit `7febb30154d7ee14a0faa4386e190b54678714ae`. No commit/push, app reload, production worker restart, event replay or deployment is implied.
+
+## Historical pair — 2026-11-11 (validation at that date)
 
 Exact pins: SDK **0.8.81** (`05c91862453eb6023666b81e2f43d37a57f9ced4`) / Code **0.34.51** (`0aed9a613f647debd881d0b033ecfc5c1450e69a`). SDK peer range is `>=0.34.51 <0.35.0`. Existing Electron45.1.0 / embedded Node24.22.1 remains compatible. Package/Bun lock, strict handshake, fixtures and versioned local pool identity are aligned; no global CLI/Node/Electron upgrade.
 
@@ -30,7 +42,7 @@ Bundled email-processing1.3.2 matches the complete canonical VerivoltDev/Skills 
 
 ## Current architecture
 
-Electron main runs **Letta Agent SDK 0.8.70 with Letta Code 0.34.41**, using a pooled local native App Server's **API harness**. The main-owned pool persists hosts per trusted provider/account/connection and agent-scoped disabled-memory policy; conversations and later turns reuse them. See [local shared App Server design](desktop-shared-app-server.md). The SDK owns model turns, tool continuations, streaming and native retry policy. There is no custom REST/SSE model pump or legacy execution fallback.
+Electron main runs **Letta Agent SDK 0.8.90 with Letta Code 0.34.63**, using a pooled local native App Server's **API harness**. The main-owned pool persists hosts per trusted provider/account/connection and agent-scoped disabled-memory policy; conversations and later turns reuse them. See [local shared App Server design](desktop-shared-app-server.md). The SDK owns model turns, tool continuations, streaming and native retry policy. There is no custom REST/SSE model pump or legacy execution fallback.
 
 `libs/runner/session-manager.ts` selects the SDK adapter; `libs/runner/sdk/session.ts` supplies Cowork's UI/tool lifecycle and owns a per-turn SDK client plus shared-host lease. `services/letta-runtime/desktop-app-server-pool.ts` owns process lifetime, runtime admission and fences. Chat, continuation and existing background callers continue through `runLetta`. Task/Agent use a protected parent capability to create another SDK session; the delegated manager supplies policy, not another model loop.
 

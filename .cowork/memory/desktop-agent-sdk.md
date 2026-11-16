@@ -151,3 +151,7 @@ Updated package/Bun lock, strict handshake, versioned private pool key and fixtu
 ## 2026-11-11 current dependency baseline
 
 Exact pair SDK0.8.81 / Code0.34.51; matching peer, lock and handshake/desktop pool identity. Electron45.1.0 / Node24.22.1 unchanged. Current review and validation: docs/desktop-agent-sdk-runtime.md. Request adapter excludes SDK server-origin results and foreign run-ID content; no new background registration, backend fallback or fresh-server conflict workaround. The earlier Vera settings conflict is not proven fixed. Dependencies/build installed locally; running app reload, installer, commit/push and deployment are separate states. Process/shebang CI/scoped-memory suites use plain Node; SDK/native tests use supported Electron-as-Node with a temporary test-only child-launch flag shim.
+
+## 2026-11-16 paired package migration (local only)
+
+Current pins SDK0.8.90/Code0.34.63 supersede earlier versions; package/Bun lock, strict handshake, pool boundary and fixtures align. Maintained source/validation: docs/desktop-agent-sdk-runtime.md. Build +342 Node/native +68 Bun UI pass; no app reload, global CLI install, commit/push or deployment. Backend MemFS-enabled activation needs review of upstream403 scoped-checkout removal without an explicit dirty guard; do not silently disable memory, move roots, clear drafts or claim rollout approval. Existing generated HTML/test-results remain excluded from source scope.

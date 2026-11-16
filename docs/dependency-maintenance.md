@@ -1,6 +1,10 @@
 # Dependency maintenance
 
-## 2026-11-11 local upgrade
+## 2026-11-16 paired SDK migration
+
+Direct exact pins are now SDK0.8.90 / Code0.34.63; Bun lock and installed package/peer/handshake checks agree. The old latest-tag downgrade warning below is historical, not the current registry state. Code's required pi-ai1.5.2 brings its matching pi-schema/pi-telemetry and Anthropic SDK0.129.0 transitives; other desktop dependencies, Electron45.3.0 and TypeScript6.0.3 are unchanged. Full build,342 Node/native checks,68 Bun UI tests and frozen Bun install pass. No global runtime installation or live app activation. See [current runtime pair and MemFS-enabled backend rollout gate](desktop-agent-sdk-runtime.md).
+
+## Historical 2026-11-11 dependency sweep
 
 Bun is the authoritative package manager; package.json and bun.lock move together. No npm lockfile is generated. Existing Letta SDK0.8.81/Code0.34.51 and TypeScript6.0.3 are preserved. The registry's Code latest tag pointed to older0.34.23; do not downgrade the verified pair.
 
