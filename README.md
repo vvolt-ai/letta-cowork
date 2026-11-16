@@ -28,6 +28,7 @@ The SDK owns chat and delegated-agent model execution, while Cowork preserves it
 
 See [desktop SDK architecture, cancellation, packaging and checks](docs/desktop-agent-sdk-runtime.md).
 Read your own database-backed Vera audit events with [`SafetyAuditListOwn`](docs/own-safety-audit.md).
+Upload explicitly approved workspace deliverables with [`FileManagerUpload`](docs/file-manager-tools.md); download links are returned only after byte/hash verification and are not claimed private or expiring.
 
 **Key concepts:**
 - **Agent** (`agentId`): Persistent entity with memory that survives across sessions

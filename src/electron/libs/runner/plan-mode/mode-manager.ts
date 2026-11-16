@@ -31,6 +31,7 @@ export interface ModeOverrideResult {
 const PLAN_MODE_ALLOWED_TOOLS: ReadonlySet<string> = new Set([
     "ProjectContext",
     "Read",
+    "FileManagerHealth",
     "Glob",
     "Grep",
     "LS",

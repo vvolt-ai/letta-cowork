@@ -9,6 +9,7 @@ import type { CanUseToolResponse } from '@letta-ai/letta-agent-sdk';
 export type SendPermissionRequest = (toolUseId: string, toolName: string, input: unknown) => void;
 const READ_ONLY_TOOLS = new Set([
   'Read',
+  'FileManagerHealth',
   'ReadLSP',
   'Glob',
   'Grep',
@@ -76,7 +77,10 @@ export function createCanUseToolHandler(
     if (signal?.aborted) return { behavior: 'deny', message: 'Cancelled.' };
     // Neither Full Access nor prior grants authorize a question answer or an
     // original-attachment business write. Both need a fresh exact human reply.
-    const alwaysHuman = toolName === 'AskUserQuestion' || toolName === ODOO_ATTACHMENT_TOOL;
+    const alwaysHuman =
+      toolName === 'AskUserQuestion' ||
+      toolName === ODOO_ATTACHMENT_TOOL ||
+      toolName === 'FileManagerUpload';
     const granted =
       !alwaysHuman &&
       Boolean(

@@ -15,6 +15,7 @@ import { agentMemoryTool } from './runners/agentMemory.js';
 import { setWorkingDirectoryTool } from "./runners/setWorkingDirectory.js";
 import { bashTool } from "./runners/bash.js";
 import { browserTools } from "./runners/browser.js";
+import { fileManagerTools } from "./runners/fileManager.js";
 import { codingTools } from "./runners/coding.js";
 import { lettaCodeTools } from "./runners/letta_tools/index.js";
 import { productivityTools } from "./runners/productivity.js";
@@ -79,6 +80,7 @@ for (const tool of codingTools) register(tool);
 for (const tool of veraMcpTools) register(tool);
 register(safetyAuditListOwnTool);
 for (const tool of browserTools) register(tool);
+for (const tool of fileManagerTools) register(tool);
 register(toolTraceSearchTool);
 register(runTimelineTool);
 
