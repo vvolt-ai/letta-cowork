@@ -1,0 +1,344 @@
+.agentWorkspaceShell {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  color: var(--color-ink-900, inherit);
+  background: var(--color-sidebar);
+}
+.agentRail {
+  width: 58px;
+  flex: 0 0 58px;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  border-right: 1px solid var(--color-border);
+  padding: 38px 5px 10px;
+  gap: 8px;
+  min-height: 0;
+}
+.agentRail button {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.agentRail svg {
+  width: 20px;
+  height: 20px;
+}
+.agentRail button:hover {
+  background: var(--color-sidebar-hover);
+}
+.agentRail button:focus-visible,
+.agent-nav-action:focus-visible,
+.agentPanelHeader button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.agentRail button[aria-pressed='true']::before {
+  position: absolute;
+  content: '';
+  width: 3px;
+  background: currentColor;
+  left: -5px;
+  top: 7px;
+  bottom: 7px;
+  border-radius: 3px;
+}
+.agentRailList {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  width: 100%;
+  align-items: center;
+  scrollbar-width: thin;
+  padding: 4px 0;
+}
+.agentRail .agentRailLoadMore {
+  height: 28px;
+  min-height: 28px;
+  font-size: 11px;
+  color: inherit;
+  background: var(--color-sidebar-hover);
+}
+.agentLoadMoreChats {
+  margin: 4px 10px 8px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.agentLoadMoreChats:hover {
+  background: var(--color-sidebar-hover);
+}
+.agentLoadMoreChats:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.agentLoadMoreChats span {
+  opacity: 0.65;
+}
+.agentRailItem span {
+  display: flex;
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 650;
+  color: white;
+  letter-spacing: 0.02em;
+}
+.agentRailItem[aria-pressed='true'] span {
+  box-shadow:
+    0 0 0 2px var(--color-sidebar),
+    0 0 0 3px var(--color-border-hover);
+}
+.agentConversationPanel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  border-right: 1px solid var(--color-border);
+  overflow: hidden;
+}
+.agentPanelHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 34px 13px 14px;
+  min-height: 72px;
+}
+.agentPanelHeader h2 {
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin: 0;
+}
+.agentPanelHeader button {
+  flex-shrink: 0;
+  padding: 2px 5px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 5px;
+  font-size: 18px;
+}
+.agentActions {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 8px 10px;
+}
+.agent-nav-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 35px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 20px;
+  transition: background 0.12s;
+}
+.agent-nav-action svg {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 17px;
+  opacity: 0.8;
+}
+.agent-nav-action:hover {
+  background: var(--color-sidebar-hover);
+}
+.agent-nav-action:disabled,
+.agentRail button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+.agent-nav-action.agentNewChat {
+  background: var(--color-sidebar-active, var(--color-surface-hover));
+  margin-top: 6px;
+  font-weight: 500;
+}
+.agentChatHeading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 17px 6px;
+  color: var(--color-ink-500, #6b7280);
+  font-size: 11px;
+}
+.agentChatHeading span:first-child {
+  flex: 1;
+}
+.agentChatHeading button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 17px;
+}
+.agentListFilter {
+  display: block;
+  padding: 0 12px 9px;
+}
+.agentListFilter select {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: inherit;
+  font-size: 11px;
+}
+.agentNavSearch {
+  display: block;
+  padding: 0 12px 8px;
+  min-width: 0;
+}
+.agentNavSearch input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  padding: 6px 8px;
+  font-size: 11px;
+  color: inherit;
+  outline-offset: 2px;
+}
+.agentNavFeedback {
+  font-size: 11px;
+  padding: 0 13px;
+  line-height: 18px;
+  color: var(--color-ink-500, #6b7280);
+}
+.agentNavFeedback:empty {
+  display: none;
+}
+.agentNavFeedback button {
+  border: 0;
+  background: transparent;
+  text-decoration: underline;
+  cursor: pointer;
+  color: inherit;
+}
+.agentChatList {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 2px 0 10px;
+  scrollbar-width: thin;
+}
+.agentChatList [role='button'] {
+  border-radius: 6px;
+  box-shadow: none;
+  outline-offset: -2px;
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+.agentChatList [role='button']:hover {
+  box-shadow: none;
+}
+.agentChatList [role='button'] .truncate {
+  font-size: 12px;
+  font-weight: 450;
+}
+.agentChatList [role='button'] [aria-label='Conversation menu'] {
+  border: 0;
+  box-shadow: none;
+  border-radius: 5px;
+}
+.agentAccountFooter {
+  flex-shrink: 0;
+  border-top: 1px solid var(--color-border);
+}
+.agentAccountControls {
+  padding: 9px 11px;
+  font-size: 10px;
+}
+.agentAccountControls select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  background: var(--color-surface);
+  color: inherit;
+  padding: 5px;
+  font-size: 10px;
+}
+.agentAccountIdentity {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 7px;
+  color: var(--color-ink-500, #6b7280);
+}
+.agentAccountIdentity span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.agentAccountIdentity button {
+  border: 0;
+  background: transparent;
+  font-size: 10px;
+  color: inherit;
+  cursor: pointer;
+}
+@media (max-width: 900px) {
+  .agentRail {
+    width: 50px;
+    flex-basis: 50px;
+  }
+  .agentRail button {
+    width: 36px;
+    height: 36px;
+  }
+  .agentRailItem span {
+    width: 33px;
+    height: 33px;
+  }
+  .agentPanelHeader {
+    padding-left: 10px;
+    padding-right: 8px;
+  }
+  .agent-nav-action {
+    padding-left: 8px;
+    gap: 7px;
+  }
+}

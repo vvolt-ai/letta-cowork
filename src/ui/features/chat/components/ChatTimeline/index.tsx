@@ -211,6 +211,7 @@ export function ChatTimeline({
   showReasoning = false,
   errorMessage,
 }: ChatTimelineProps) {
+  const navigationAgentId = useAppStore((state) => state.newConversationAgentId);
   const timeline = useChatTimeline({
     messages,
     activeSessionId,
@@ -240,9 +241,9 @@ export function ChatTimeline({
               <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
             </svg>
           </div>
-          <div className="text-sm font-semibold text-ink-900">Start a conversation</div>
+          <div className="text-xl font-medium text-ink-900">{!activeSessionId && navigationAgentId ? `Hi, I'm ${agentName || 'Vera'}` : 'Start a conversation'}</div>
           <div className="mt-1.5 text-sm leading-6 text-muted">Ask for work, upload files, or use slash commands. Reasoning and tool activity will stay compact here.</div>
-          {!activeSessionId ? <NewConversationAgentSelector /> : null}
+          {!activeSessionId && !navigationAgentId ? <NewConversationAgentSelector /> : null}
         </div>
       ) : (
         timeline.map((entry) => (

@@ -46,7 +46,7 @@ const SCROLL_THRESHOLD = 50;
 const SESSION_CHANGE_SCROLL_DELAY_MS = 100;
 const LOAD_EARLIER_SCROLL_THRESHOLD_PX = 240;
 const SIDEBAR_WIDTH_STORAGE_KEY = "sidebar_width_px";
-const DEFAULT_SIDEBAR_WIDTH = 280;
+const DEFAULT_SIDEBAR_WIDTH = 336;
 const MIN_SIDEBAR_WIDTH = 220;
 const MAX_SIDEBAR_WIDTH = 420;
 
@@ -102,11 +102,17 @@ function FullApp() {
     resetForm: resetSkillForm,
   } = useDownloadSkill();
   const [isMemoryOpen, setIsMemoryOpen] = useState(false);
+  const navigationScope = `${user?.id??''}:${user?.organizationId??''}`;
+  const [navigationAgentName, setNavigationAgentName] = useState<string | undefined>();
+  const [navigationAgentOwner, setNavigationAgentOwner] = useState('');
+  const [memoryTarget, setMemoryTarget] = useState<{agentId?:string;connectionId?:string;scope?:string}>({});
+  const handleNavigationAgent = useCallback((_id: string, name?: string) => { setNavigationAgentName(name); setNavigationAgentOwner(navigationScope); }, [navigationScope]);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     if (typeof window === "undefined") {
       return DEFAULT_SIDEBAR_WIDTH;
     }
-    const stored = Number(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY));
+    const savedWidth = localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY);
+    const stored = savedWidth === null ? NaN : Number(savedWidth);
     return Number.isFinite(stored) ? clampSidebarWidth(stored) : DEFAULT_SIDEBAR_WIDTH;
   });
   const handleServerEvent = useAppStore((s) => s.handleServerEvent);
@@ -570,7 +576,13 @@ function FullApp() {
         onSidebarWidthChange={handleSidebarWidthChange}
         sidebar={
           <Sidebar
+            key={`${user?.id??''}:${user?.organizationId??''}`}
             connected={connected}
+            onAgentSelection={handleNavigationAgent}
+            onShowChat={() => { setShowSettings(false); setShowConfiguration(false); setShowSkills(false); setShowSchedules(false); setShowRuns(false); setShowSuperAdmin(false); }}
+            onOpenMemory={(agentId) => { setMemoryTarget({agentId,connectionId:activeSession?.agentId===agentId?activeSession.lettaConnectionId:undefined,scope:navigationScope}); setIsMemoryOpen(true); }}
+            onOpenSchedules={() => { setShowSettings(false); setShowConfiguration(false); setShowSkills(false); setShowRuns(false); setShowSuperAdmin(false); setShowSchedules(true); }}
+            onOpenRemoteAccess={() => { setSettingsSection('remote-access'); setShowSettings(true); }}
             onNewSession={handleStartSessionClickWithEnv}
             lettaEnvOpen={lettaEnvOpen}
             onLettaEnvOpenChange={setLettaEnvOpen}
@@ -660,7 +672,7 @@ function FullApp() {
           ) : (
             <ChatWorkspace
               title={activeSession?.title}
-              agentName={activeSession?.agentName}
+              agentName={activeSession ? activeSession.agentName : navigationAgentOwner===navigationScope?navigationAgentName:undefined}
               agentId={activeSession?.agentId}
               activeSessionId={activeSessionId}
               visibleMessages={visibleMessages}
@@ -688,7 +700,7 @@ function FullApp() {
               projectOpen={isProjectOpen}
               onToggleActivity={handleToggleActivityPanel}
               onToggleProject={activeSession?.cwd ? handleToggleProjectPanel : undefined}
-              onOpenMemory={() => setIsMemoryOpen(true)}
+              onOpenMemory={() => { setMemoryTarget({agentId:activeSession?.agentId,connectionId:activeSession?.lettaConnectionId,scope:navigationScope}); setIsMemoryOpen(true); }}
               onViewRuns={activeSessionId ? () => {
                 setRunsPresetConversationId(activeSessionId);
                 setShowRuns(true);
@@ -817,7 +829,7 @@ function FullApp() {
         onOpenChange={setShowCoworkSettings}
         onAuthError={handleAuthError}
       />
-      <MemoryDialog key={`${user?.id ?? ''}:${user?.organizationId ?? ''}:${activeSession?.agentId ?? ''}:${activeSession?.lettaConnectionId ?? ''}`} open={isMemoryOpen} onOpenChange={setIsMemoryOpen} agentId={activeSession?.agentId} lettaConnectionId={activeSession?.lettaConnectionId} />
+      <MemoryDialog key={`${user?.id ?? ''}:${user?.organizationId ?? ''}:${memoryTarget.agentId ?? ''}:${memoryTarget.connectionId ?? ''}`} open={isMemoryOpen && memoryTarget.scope===navigationScope} onOpenChange={setIsMemoryOpen} agentId={memoryTarget.agentId} lettaConnectionId={memoryTarget.connectionId} />
 
       {/* Skill Download Dialog */}
       <SkillDownloadDialog

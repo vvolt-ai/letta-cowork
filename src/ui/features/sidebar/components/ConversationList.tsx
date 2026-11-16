@@ -111,6 +111,7 @@ interface ConversationListProps {
   getSessionTitle?: (session: ConversationListSession) => string;
   getSessionSubtitle?: (session: ConversationListSession) => string | undefined;
   maxVisible?: number;
+  canManageSession?: (session: ConversationListSession) => boolean;
 }
 
 function formatRelativeTime(ts: number | null | undefined): string {
@@ -140,6 +141,7 @@ export function ConversationList({
   getSessionTitle,
   getSessionSubtitle,
   maxVisible = 4,
+  canManageSession,
 }: ConversationListProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
@@ -269,8 +271,8 @@ export function ConversationList({
             </span>
 
             {/* Context menu — appears on hover */}
-            {!isEditing && (
-              <div className="absolute right-2 opacity-0 transition-opacity group-hover:opacity-100">
+            {!isEditing && canManageSession?.(session) !== false && (
+              <div className="absolute right-2 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
                 <DropdownMenu.Root>
                   <DropdownMenu.Trigger asChild>
                     <button

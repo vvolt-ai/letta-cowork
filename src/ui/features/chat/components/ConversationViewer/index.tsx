@@ -114,7 +114,7 @@ export const ConversationViewer = memo(function ConversationViewer({
         {showOpenInLetta && session?.agentId && (
           <button
             onClick={() => {
-              const lettaUrl = `https://app.letta.com/projects/default-project/agents/${session.agentId}?conversation=${sessionId}`;
+              const lettaUrl = `https://chat.letta.com/projects/default-project/agents/${session.agentId}?conversation=${sessionId}`;
               window.electron.openExternal(lettaUrl);
             }}
             className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-000)] px-2.5 text-[11px] font-semibold text-ink-600 transition hover:bg-[var(--color-surface-secondary)] hover:text-ink-900 sm:px-3"

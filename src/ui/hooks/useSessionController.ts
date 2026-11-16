@@ -133,6 +133,7 @@ export function useSessionController({ connected, sendEvent }: UseSessionControl
     }
 
     if (trimmedAgentId) {
+      useAppStore.getState().setNewConversationAgentId(trimmedAgentId);
       try {
         const currentEnv = await window.electron.getLettaEnv();
         if (currentEnv.LETTA_AGENT_ID !== trimmedAgentId) {

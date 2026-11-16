@@ -79,7 +79,7 @@ export const ChatWorkspace = memo(function ChatWorkspace({
   onOpenMemory,
   onViewRuns,
 }: ChatWorkspaceProps) {
-  const resolvedTitle = title || "Untitled conversation";
+  const resolvedTitle = title || (activeSessionId ? "Untitled conversation" : "New chat");
   const resolvedAgentName = agentName || "Vera";
   const activeSession = useAppStore((state) => (activeSessionId ? state.sessions[activeSessionId] : undefined));
   const showReasoningInChat = useAppStore((state) => state.showReasoningInChat);

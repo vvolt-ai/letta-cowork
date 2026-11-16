@@ -36,7 +36,7 @@ export const ConversationHeader = memo(function ConversationHeader({ title, agen
 
   const handleOpenInLetta = () => {
     if (agentId && sessionId) {
-      const lettaUrl = `https://app.letta.com/projects/default-project/agents/${agentId}?conversation=${sessionId}`;
+      const lettaUrl = `https://chat.letta.com/projects/default-project/agents/${agentId}?conversation=${sessionId}`;
       window.electron.openExternal(lettaUrl);
     }
   };

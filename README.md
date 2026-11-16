@@ -27,6 +27,7 @@ Set `REMOTE_APP_ONLY=true` at build time to show only **Profile** and **Remote A
 The SDK owns chat and delegated-agent model execution, while Cowork preserves its tools, UI approvals, selected account, memory access and remote routing. The copied WS/SSE execution engine is removed; there is no legacy execution fallback.
 
 See [desktop SDK architecture, cancellation, packaging and checks](docs/desktop-agent-sdk-runtime.md).
+The [agent-first workspace](docs/agent-workspace-navigation.md) provides a compact agent rail, complete conversation navigation and direct Memory/Schedules/Remote Access/Emails actions.
 Read your own database-backed Vera audit events with [`SafetyAuditListOwn`](docs/own-safety-audit.md).
 Upload explicitly approved workspace deliverables with [`FileManagerUpload`](docs/file-manager-tools.md); download links are returned only after byte/hash verification and are not claimed private or expiring.
 
@@ -175,7 +176,7 @@ Current extension capabilities:
 ## Prerequisites
 
 - [Bun](https://bun.sh/) or Node.js 22+
-- Letta API key from [app.letta.com/settings](https://app.letta.com/settings)
+- Letta API key from [chat.letta.com/settings](https://chat.letta.com/settings)
 - (Optional) [letta-code-sdk](https://github.com/letta-ai/letta-code-sdk) cloned locally at `../letta-code-sdk` (temporary - will be published to npm)
 
 ---

@@ -128,7 +128,7 @@ interface Window {
       isActive: boolean;
       lettaBaseUrl?: string | null;
     }>>;
-    listLettaAgents: (queryText?: string, connectionId?: string) => Promise<any>;
+    listLettaAgents: (queryText?: string, connectionId?: string, favoritesOnly?: boolean) => Promise<any>;
     /** Clone an existing agent as letta_v1_agent for runtime client_tools support. */
     lettaMigrateAgent: (opts: { sourceAgentId: string; newName?: string; baseTools?: string[]; }) => Promise<
       | { ok: true; data: { sourceAgentId: string; newAgentId: string; newAgentName: string; blocksCopied: number; skippedBlocks: Array<{ label: string; reason: string; }>; }; }

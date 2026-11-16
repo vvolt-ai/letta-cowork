@@ -659,6 +659,8 @@ export interface AppState {
   activeSessionId: string | null;
   emailSessionId: string | null;
   prompt: string;
+  /** In-memory composer drafts scoped to a conversation or new-chat agent. */
+  composerDrafts: Record<string, string>;
   cwd: string;
   pendingStart: boolean;
   globalError: string | null;
@@ -709,6 +711,10 @@ export interface AppState {
   appendCliResult: (sessionId: string, result: CliResultMessage) => void;
 }
 
+function composerDraftKey(state: Pick<AppState, 'activeSessionId' | 'newConversationAgentId'>): string {
+  return state.activeSessionId ? `chat:${state.activeSessionId}` : `new:${state.newConversationAgentId}`;
+}
+
 function createSession(id: string): SessionView {
   return {
     id,
@@ -728,6 +734,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
   activeSessionId: null,
   emailSessionId: null,
   prompt: "",
+  composerDrafts: {},
   cwd: "",
   pendingStart: false,
   globalError: null,
@@ -758,6 +765,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
       activeSessionId: null,
       emailSessionId: null,
       prompt: "",
+      composerDrafts: {},
       pendingStart: false,
       globalError: null,
       sessionsLoaded: false,
@@ -815,7 +823,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
     }
   },
 
-  setPrompt: (prompt) => set({ prompt }),
+  setPrompt: (prompt) => set((state) => ({ prompt, composerDrafts: { ...state.composerDrafts, [composerDraftKey(state)]: prompt } })),
   setCwd: (cwd) => set({ cwd }),
   setPendingStart: (pendingStart) => set({ pendingStart }),
   setGlobalError: (globalError) => set({ globalError }),
@@ -848,7 +856,9 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
         }
       }
 
-      return { activeSessionId: id, sessions: updatedSessions };
+      const composerDrafts = { ...state.composerDrafts, [composerDraftKey(state)]: state.prompt };
+      const nextKey = id ? `chat:${id}` : `new:${state.newConversationAgentId}`;
+      return { activeSessionId: id, sessions: updatedSessions, composerDrafts, prompt: composerDrafts[nextKey] ?? "" };
     });
 
     if (id) {
@@ -993,7 +1003,11 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
   },
 
   setNewConversationAgentId: (newConversationAgentId) => {
-    set({ newConversationAgentId, selectedModel: "" });
+    set((state) => {
+      if (state.activeSessionId) return { newConversationAgentId, selectedModel: "" };
+      const composerDrafts = { ...state.composerDrafts, [composerDraftKey(state)]: state.prompt };
+      return { newConversationAgentId, selectedModel: "", composerDrafts, prompt: composerDrafts[`new:${newConversationAgentId}`] ?? "" };
+    });
   },
 
 
@@ -1340,6 +1354,8 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
         // Switch to this session if it's the one we were waiting for
         if (rootState.pendingStart && !background) {
           if (status === "running") {
+            // Consume the new-chat draft only once startup is confirmed.
+            get().setPrompt("");
             get().setActiveSessionId(sessionId);
             set({ pendingStart: false, showStartModal: false, prompt: "", globalError: null });
           } else {
@@ -1375,8 +1391,12 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
         nextHistoryRequested.delete(sessionId);
 
         const hasRemaining = Object.keys(nextSessions).length > 0;
+        const composerDrafts = { ...state.composerDrafts };
+        delete composerDrafts[`chat:${sessionId}`];
+        if (state.activeSessionId === sessionId) get().setPrompt("");
 
         set({
+          composerDrafts,
           sessions: nextSessions,
           historyRequested: nextHistoryRequested,
           showStartModal: !hasRemaining,

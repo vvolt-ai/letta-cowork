@@ -91,8 +91,8 @@ electron.contextBridge.exposeInMainWorld("electron", {
     electron.ipcRenderer.invoke("get-letta-env"),
   listLettaConnections: () =>
     electron.ipcRenderer.invoke("list-letta-connections"),
-  listLettaAgents: (queryText?: string, connectionId?: string) =>
-    electron.ipcRenderer.invoke("list-letta-agents", queryText, connectionId),
+  listLettaAgents: (queryText?: string, connectionId?: string, favoritesOnly?: boolean) =>
+    electron.ipcRenderer.invoke("list-letta-agents", queryText, connectionId, favoritesOnly),
   listLettaModels: (connectionId?: string) =>
     electron.ipcRenderer.invoke("list-letta-models", connectionId),
   getLettaAgent: (agentId: string, connectionId?: string) =>

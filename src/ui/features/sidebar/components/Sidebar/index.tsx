@@ -1,19 +1,18 @@
-import { memo, useCallback, useEffect, useState } from "react";
-
-import { useAppStore } from "../../../../store/useAppStore";
-import { EmailInboxModal } from "../../../email/components/EmailInboxModal";
-import { ResumeSessionDialog } from "../index";
-
-// veraLogo kept for future use
-// import veraLogo from "../../../../assets/vera-logo.svg";
-import { SessionsTab } from "../SessionsTab";
-
-import type { ZohoEmail } from "../../../../types";
+import { memo, useCallback, useEffect, useState } from 'react';
+import { EmailInboxModal } from '../../../email/components/EmailInboxModal';
+import { ResumeSessionDialog } from '../index';
+import { AgentWorkspaceNavigation } from '../AgentWorkspaceNavigation';
+import type { ZohoEmail } from '../../../../types';
 
 export interface SidebarProps {
   connected: boolean;
   onNewSession: (agentId?: string) => void;
   onOpenSettings?: () => void;
+  onOpenMemory?: (agentId: string) => void;
+  onOpenSchedules?: () => void;
+  onOpenRemoteAccess?: () => void;
+  onShowChat?: () => void;
+  onAgentSelection?: (agentId: string, name?: string) => void;
   lettaEnvOpen: boolean;
   onLettaEnvOpenChange: (open: boolean) => void;
   onDeleteSession: (sessionId: string) => void;
@@ -32,225 +31,112 @@ export interface SidebarProps {
   processingEmailId?: string | null;
   awaitingConversationEmailId?: string | null;
   errorEmailId?: string | null;
-  newlyCreatedConversations?: Map<string, { conversationId: string; agentId?: string; }>;
-  // Pagination props
+  newlyCreatedConversations?: Map<string, { conversationId: string; agentId?: string }>;
   hasMoreEmails?: boolean;
   isLoadingMoreEmails?: boolean;
   onLoadMoreEmails?: () => void;
-  // Auth props
   userEmail?: string;
-  organizations?: Array<{ id: string; name: string; role: string; }>;
+  organizations?: Array<{ id: string; name: string; role: string }>;
   currentOrganizationId?: string;
   isSwitchingOrganization?: boolean;
   organizationSwitchError?: string | null;
-  onOrganizationChange?: (organizationId: string) => void | Promise<void>;
+  onOrganizationChange?: (id: string) => void | Promise<void>;
   onLogout?: () => void;
 }
-
-export const Sidebar = memo(function Sidebar({
-  connected,
-  onNewSession,
-  lettaEnvOpen: _lettaEnvOpen,
-  onLettaEnvOpenChange: _onLettaEnvOpenChange,
-  onDeleteSession,
-  onConnectEmail: _onConnectEmail,
-  onDisconnectEmail: _onDisconnectEmail,
-  isEmailConnected,
-  refetchEmails,
-  emails,
-  onUseEmailAsInput,
-  isProcessingEmailInput,
-  isFetchingEmails,
-  accountId,
-  folderId,
-  selectedAgentId,
-  onProcessEmailToAgent,
-  processingEmailId,
-  awaitingConversationEmailId,
-  errorEmailId,
-  newlyCreatedConversations,
-  onOpenSettings,
-  hasMoreEmails,
-  isLoadingMoreEmails,
-  onLoadMoreEmails,
-  userEmail,
-  organizations = [],
-  currentOrganizationId,
-  isSwitchingOrganization = false,
-  organizationSwitchError,
-  onOrganizationChange,
-  onLogout,
-}: SidebarProps) {
-  const coworkSettings = useAppStore((state) => state.coworkSettings);
-
+export const Sidebar = memo(function Sidebar(props: SidebarProps) {
   const [resumeSessionId, setResumeSessionId] = useState<string | null>(null);
-  const [showEmailView, setShowEmailView] = useState(false);
-
+  const [showEmailView, setShowEmailView] = useState(false),
+    [selectedAgent, setSelectedAgent] = useState(props.selectedAgentId ?? '');
   useEffect(() => {
-    if (!isEmailConnected) {
-      setShowEmailView(false);
-    }
-  }, [isEmailConnected]);
-
-  // unreadCount kept for potential future use in sidebar badges
-  const _unreadCount = emails.filter((email) => {
-    const status = String(email.status ?? "").toLowerCase();
-    const status2 = String(email.status2 ?? "").toLowerCase();
-    return (
-      status.includes("unread") ||
-      status2.includes("unread") ||
-      status === "0" ||
-      status2 === "0"
-    );
-  }).length;
-  void _unreadCount;
-
-  const handleOpenEmailView = useCallback(() => {
-    setShowEmailView(true);
-  }, []);
-
-  return (
-    <aside className="flex h-full w-full flex-col border-r border-[var(--color-border)] bg-[var(--color-sidebar)]/98 backdrop-blur-sm">
-
-      {/* Consolidated settings entry (below traffic lights) */}
-      <div className="px-3 pb-3 pt-8">
-        <div className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">Cowork</div>
-        <div className="space-y-2">
-          <button
-            onClick={onOpenSettings}
-            className="group flex w-full items-center gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]/80 p-3 text-left shadow-sm transition hover:border-[var(--color-border-hover)] hover:bg-[var(--color-surface-hover)] hover:shadow-md"
+    if (!props.isEmailConnected) setShowEmailView(false);
+  }, [props.isEmailConnected]);
+  const handleAgent = useCallback(
+    (id: string, name?: string) => {
+      setSelectedAgent(id);
+      props.onAgentSelection?.(id, name);
+    },
+    [props.onAgentSelection],
+  );
+  const footer = (
+    <div className='agentAccountControls'>
+      {(props.organizations?.length ?? 0) > 0 ? (
+        <label>
+          <span className='sr-only'>Active workspace</span>
+          <select
+            aria-label='Active workspace'
+            value={props.currentOrganizationId ?? ''}
+            disabled={props.isSwitchingOrganization || (props.organizations?.length ?? 0) < 2}
+            onChange={(event) => void props.onOrganizationChange?.(event.target.value)}
           >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
-              <svg className="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.75">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[13.5px] font-semibold text-ink-800">Settings</span>
-              <span className="mt-0.5 block text-[10px] text-muted">Skills, schedules and integrations</span>
-            </span>
-            <svg className="h-4 w-4 text-muted transition group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="m9 18 6-6-6-6" /></svg>
-          </button>
-          <button
-            type="button"
-            onClick={handleOpenEmailView}
-            className="group flex w-full items-center gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]/80 p-3 text-left shadow-sm transition hover:border-[var(--color-border-hover)] hover:bg-[var(--color-surface-hover)] hover:shadow-md"
-          >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
-              <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-                <rect x="3" y="5" width="18" height="14" rx="2" />
-                <path d="m4 7 8 6 8-6" />
-              </svg>
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[13.5px] font-semibold text-ink-800">Emails</span>
-              <span className="mt-0.5 block text-[10px] text-muted">Open your connected inbox</span>
-            </span>
-            <svg className="h-4 w-4 text-muted transition group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="m9 18 6-6-6-6" /></svg>
-          </button>
+            {props.organizations?.map((org) => (
+              <option key={org.id} value={org.id}>
+                {org.name} · {org.role}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+      {props.isSwitchingOrganization ? <p role='status'>Switching workspace…</p> : null}
+      {props.organizationSwitchError ? <p role='alert'>{props.organizationSwitchError}</p> : null}
+      {props.userEmail ? (
+        <div className='agentAccountIdentity'>
+          <span title={props.userEmail}>{props.userEmail}</span>
+          {props.onLogout ? (
+            <button type='button' onClick={props.onLogout}>
+              Logout
+            </button>
+          ) : null}
         </div>
-      </div>
-
-      {/* Conversations list — scrollable */}
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        <SessionsTab
-          onNewSession={onNewSession}
-          onDeleteSession={onDeleteSession}
-          onResumeSession={setResumeSessionId}
-          onOpenEmailView={handleOpenEmailView}
-          coworkSettings={coworkSettings}
-          emails={emails}
-        />
-      </div>
-
+      ) : null}
+    </div>
+  );
+  return (
+    <>
+      <AgentWorkspaceNavigation
+        connected={props.connected}
+        scopeKey={`${props.userEmail ?? ''}:${props.currentOrganizationId ?? ''}`}
+        suspended={props.isSwitchingOrganization}
+        footer={footer}
+        onNewChat={props.onNewSession}
+        onDeleteSession={props.onDeleteSession}
+        onResumeSession={setResumeSessionId}
+        onOpenSettings={props.onOpenSettings}
+        onOpenMemory={(id) => props.onOpenMemory?.(id)}
+        onOpenSchedules={() => props.onOpenSchedules?.()}
+        onOpenRemote={() => props.onOpenRemoteAccess?.()}
+        onOpenEmails={() => setShowEmailView(true)}
+        onShowChat={() => props.onShowChat?.()}
+        onSelectedAgentChange={handleAgent}
+      />
       <ResumeSessionDialog
         open={!!resumeSessionId}
         resumeSessionId={resumeSessionId}
-        onOpenChange={(open: boolean) => {
-          if (!open) {
-            setResumeSessionId(null);
-          }
+        onOpenChange={(open) => {
+          if (!open) setResumeSessionId(null);
         }}
       />
-
-      {/* User Section */}
-      {userEmail && (
-        <div className="mt-auto flex-shrink-0 border-t border-[var(--color-border)] p-3">
-          {organizations.length > 0 && (
-            <div className="mb-2">
-              <label className="mb-1 block px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
-                Workspace
-              </label>
-              <select
-                aria-label="Active workspace"
-                value={currentOrganizationId ?? ""}
-                disabled={isSwitchingOrganization || organizations.length < 2}
-                onChange={(event) => void onOrganizationChange?.(event.target.value)}
-                className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs font-medium text-ink-900 outline-none transition focus:border-[var(--color-accent)] disabled:cursor-default disabled:opacity-70"
-              >
-                {organizations.map((organization) => (
-                  <option key={organization.id} value={organization.id}>
-                    {organization.name} · {organization.role}
-                  </option>
-                ))}
-              </select>
-              {isSwitchingOrganization && (
-                <p className="mt-1 px-1 text-[10px] text-muted">Switching workspace…</p>
-              )}
-              {organizationSwitchError && (
-                <p className="mt-1 px-1 text-[10px] text-red-600">{organizationSwitchError}</p>
-              )}
-            </div>
-          )}
-          <div className="flex items-center justify-between rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]/80 px-3 py-2 shadow-sm">
-            <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-full bg-[var(--color-accent)] flex items-center justify-center text-white text-sm font-medium">
-                {userEmail.charAt(0).toUpperCase()}
-              </div>
-              <div className="flex flex-col">
-                <span className="text-xs font-medium text-ink-900 truncate max-w-[150px]">
-                  {userEmail}
-                </span>
-                <span className="text-[10px] text-ink-500">Logged in</span>
-              </div>
-            </div>
-            {onLogout && (
-              <button
-                onClick={onLogout}
-                className="rounded px-2 py-1 text-xs text-ink-500 transition hover:bg-[var(--color-surface-hover)] hover:text-ink-700"
-                title="Logout"
-              >
-                Logout
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Email Inbox Modal */}
       <EmailInboxModal
         open={showEmailView}
         onOpenChange={setShowEmailView}
-        emails={emails}
-        isServerConnected={connected}
-        isEmailConnected={isEmailConnected}
-        isFetching={isFetchingEmails}
-        onUseEmailAsInput={onUseEmailAsInput}
-        isProcessingEmailInput={isProcessingEmailInput}
-        selectedAgentId={selectedAgentId}
-        onProcessEmailToAgent={onProcessEmailToAgent}
-        processingEmailId={processingEmailId}
-        awaitingConversationEmailId={awaitingConversationEmailId}
-        errorEmailId={errorEmailId}
-        newlyCreatedConversations={newlyCreatedConversations}
-        onRefresh={refetchEmails}
-        hasMore={hasMoreEmails}
-        isLoadingMore={isLoadingMoreEmails}
-        onLoadMore={onLoadMoreEmails}
-        accountId={accountId || undefined}
-        folderId={folderId || undefined}
+        emails={props.emails}
+        isServerConnected={props.connected}
+        isEmailConnected={props.isEmailConnected}
+        isFetching={props.isFetchingEmails}
+        onUseEmailAsInput={props.onUseEmailAsInput}
+        isProcessingEmailInput={props.isProcessingEmailInput}
+        selectedAgentId={selectedAgent}
+        onProcessEmailToAgent={props.onProcessEmailToAgent}
+        processingEmailId={props.processingEmailId}
+        awaitingConversationEmailId={props.awaitingConversationEmailId}
+        errorEmailId={props.errorEmailId}
+        newlyCreatedConversations={props.newlyCreatedConversations}
+        onRefresh={props.refetchEmails}
+        hasMore={props.hasMoreEmails}
+        isLoadingMore={props.isLoadingMoreEmails}
+        onLoadMore={props.onLoadMoreEmails}
+        accountId={props.accountId || undefined}
+        folderId={props.folderId || undefined}
       />
-    </aside>
+    </>
   );
 });

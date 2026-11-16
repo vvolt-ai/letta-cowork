@@ -1,4 +1,6 @@
 import type { Letta } from "@letta-ai/letta-client";
+import { loadConversationPages } from "./conversation-pages.js";
+import { loadFavoriteAgents } from './favorite-agents.js';
 import { getVeraCoworkApiClient } from "../../api/index.js";
 import { createLettaRuntimeClient, getLettaRuntimeConfig } from "../letta-runtime/index.js";
 
@@ -16,6 +18,7 @@ export interface LettaAgent {
   name: string;
   description?: string | null;
   createdAt?: string | null;
+  lastUsedAt?: string | null;
   metadata?: Record<string, unknown> | null;
   tags?: string[];
   model?: string | null;
@@ -91,6 +94,7 @@ function mapLettaAgent(agent: any): LettaAgent | null {
     name: agent.name || agent.display_name || id,
     description: agent.description ?? null,
     createdAt: agent.created_at ?? null,
+    ...(typeof agent.last_run_completion === 'string' ? { lastUsedAt: agent.last_run_completion } : {}),
     metadata: agent.metadata ?? null,
     tags: Array.isArray(agent.tags) ? agent.tags : undefined,
     model: agent.model ?? null,
@@ -216,7 +220,17 @@ export async function listLettaConnections(): Promise<LettaConnection[]> {
   return connections.filter((connection) => connection.isActive);
 }
 
-export async function listLettaAgents(queryText = "", connectionId?: string): Promise<LettaAgent[]> {
+export async function listLettaAgents(queryText = "", connectionId?: string, favoritesOnly = false): Promise<LettaAgent[]> {
+  if (typeof favoritesOnly !== 'boolean') throw Error('Invalid favourites filter.');
+  if (favoritesOnly) {
+    try {
+      const rows = await loadFavoriteAgents(createLettaClient(connectionId), queryText);
+      return rows.map(mapLettaAgent).filter((agent): agent is LettaAgent => agent !== null);
+    } catch {
+      // Do not log metadata/user responses, credentials or raw upstream errors.
+      throw Error('Unable to load favourites for the configured Letta account. No alternate account was tried.');
+    }
+  }
   const normalizedQuery = queryText.trim();
   console.log("[lettaAgents] listLettaAgents called", { queryText: normalizedQuery });
 
@@ -319,19 +333,7 @@ export async function listLettaConversations(agentId: string, connectionId?: str
   const client = createLettaClient(connectionId);
 
   try {
-    const response = await client.conversations.list({
-      agent_id: agentId,
-      archive_status: "unarchived",
-      limit: 100,
-      order: "desc",
-      order_by: "last_message_at",
-    } as any);
-    const conversations = await response;
-    const items = Array.isArray((conversations as any).items)
-      ? (conversations as any).items
-      : Array.isArray(conversations)
-        ? conversations
-        : [];
+    const items = await loadConversationPages(client, agentId);
 
     return items.map((conversation: any) => ({
       id: conversation.id,

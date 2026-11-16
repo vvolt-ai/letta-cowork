@@ -341,7 +341,7 @@ export function useEmailInbox({
     const session = sessions[conversationId];
     const effectiveAgentId = agentId || session?.agentId;
     if (!effectiveAgentId) return;
-    const lettaUrl = `https://app.letta.com/projects/default-project/agents/${effectiveAgentId}?conversation=${conversationId}`;
+    const lettaUrl = `https://chat.letta.com/projects/default-project/agents/${effectiveAgentId}?conversation=${conversationId}`;
     window.electron.openExternal(lettaUrl);
   }, [sessions]);
 
