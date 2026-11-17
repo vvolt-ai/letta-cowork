@@ -1,10 +1,68 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { RuntimeSecretCache } from '../dist-electron/api/client/runtime-secret-cache.js';
+import { RuntimeSecretCache, logRuntimeSecretEvent } from '../dist-electron/api/client/runtime-secret-cache.js';
 import { VeraCoworkApiClient } from '../dist-electron/api/client/letta-client.js';
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
 
+async function captureDiagnostics(work) {
+  const original = console.log, events = [];
+  console.log = (prefix, payload) => {
+    if (prefix === '[runtime-secrets]') events.push(JSON.parse(payload));
+    else original(prefix, payload);
+  };
+  try { await work(events); } finally { console.log = original; }
+}
+test('diagnostics prove miss/fetch then hit without a second request and explain invalidation', async () => {
+  await captureDiagnostics(async events => {
+    const cache = new RuntimeSecretCache(); let calls = 0;
+    const traceId = '11111111-1111-4111-8111-111111111111';
+    const load = async () => { calls++; return { PRIVATE_FIXTURE_NAME: 'private-fixture-value' }; };
+    await cache.get('private-actor-context', 'private-agent-and-connection', load, { traceId });
+    await cache.get('private-actor-context', 'private-agent-and-connection', load, { traceId });
+    cache.clear('auth_context_changed');
+    assert.equal(calls, 1);
+    assert.deepEqual(events.map(x => x.event), ['cache_created', 'cache_miss', 'fetch_started', 'fetch_succeeded', 'cache_hit', 'cache_cleared']);
+    const miss = events.find(x => x.event === 'cache_miss'), hit = events.find(x => x.event === 'cache_hit');
+    assert.equal(miss.cacheId, hit.cacheId); assert.equal(miss.entryId, hit.entryId);
+    assert.equal(hit.traceId, traceId); assert.equal(events.at(-1).reason, 'auth_context_changed');
+    assert(events.find(x => x.event === 'fetch_succeeded').durationMs >= 0);
+    assert(!/PRIVATE_FIXTURE_NAME|private-fixture-value|private-actor-context|private-agent-and-connection/.test(JSON.stringify(events)));
+  });
+});
+test('joined diagnostics correlate two request traces to one fetch', async () => {
+  await captureDiagnostics(async events => {
+    const cache = new RuntimeSecretCache(), pending = deferred();
+    const first = cache.get('actor', 'agent', async () => pending.promise, { traceId: '11111111-1111-4111-8111-111111111111' });
+    const second = cache.get('actor', 'agent', async () => { throw Error('unexpected second fetch'); }, { traceId: '22222222-2222-4222-8222-222222222222' });
+    pending.resolve({}); await Promise.all([first, second]);
+    assert.equal(events.filter(x => x.event === 'fetch_started').length, 1);
+    const miss = events.find(x => x.event === 'cache_miss'), joined = events.find(x => x.event === 'cache_joined');
+    assert.equal(miss.entryId, joined.entryId); assert.notEqual(miss.traceId, joined.traceId);
+    cache.clear();
+  });
+});
+test('failed-fetch diagnostics omit raw errors and reject unexpected diagnostic fields', async () => {
+  await captureDiagnostics(async events => {
+    const cache = new RuntimeSecretCache();
+    await assert.rejects(cache.get('actor', 'agent', async () => { throw Error('PRIVATE_FIXTURE_ERROR_BODY'); }));
+    assert.equal(events.find(x => x.event === 'fetch_failed').reason, 'read_failed');
+    logRuntimeSecretEvent('cache_hit', { reason: 'PRIVATE_REASON', cacheId: 'PRIVATE_ACCOUNT', traceId: 'PRIVATE_TRACE', secret: 'PRIVATE_VALUE' });
+    assert.deepEqual(events.at(-1), { event: 'cache_hit' });
+    const before = events.length; logRuntimeSecretEvent('PRIVATE_EVENT'); assert.equal(events.length, before);
+    assert(!JSON.stringify(events).includes('PRIVATE_')); cache.clear();
+  });
+});
+test('a broken diagnostic sink never breaks cache reuse', async () => {
+  const original = console.log; let calls = 0;
+  console.log = () => { throw Error('synthetic logging failure'); };
+  try {
+    const cache = new RuntimeSecretCache();
+    const load = async () => { calls++; return {}; };
+    await cache.get('actor', 'agent', load); await cache.get('actor', 'agent', load);
+    assert.equal(calls, 1); cache.clear();
+  } finally { console.log = original; }
+});
 test('successful environments and empty results are fetched once and caller mutations cannot poison RAM', async () => {
   for (const value of [{ FIXTURE: 'synthetic value' }, {}]) {
     const cache = new RuntimeSecretCache(), outcomes = []; let calls = 0;

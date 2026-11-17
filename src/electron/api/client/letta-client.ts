@@ -6,7 +6,7 @@
  */
 
 import { BaseHttpClient } from "./base-client.js";
-import { RuntimeSecretCache, type RuntimeSecretCacheOutcome } from './runtime-secret-cache.js';
+import { RuntimeSecretCache, logRuntimeSecretEvent, type RuntimeSecretCacheOutcome } from './runtime-secret-cache.js';
 import { ChannelEndpoints } from "../endpoints/channels.js";
 import { ConnectorEndpoints } from "../endpoints/connectors.js";
 import { EmailEndpoints } from "../endpoints/emails.js";
@@ -54,7 +54,7 @@ export class VeraCoworkApiClient extends BaseHttpClient {
   private runtimeSecretEnvCache?: RuntimeSecretCache;
 
   protected override onAuthContextInvalidated(): void {
-    this.runtimeSecretEnvCache?.clear();
+    this.runtimeSecretEnvCache?.clear('auth_context_changed');
   }
 
   private runtimeSecretContext(): string | undefined {
@@ -293,20 +293,21 @@ export class VeraCoworkApiClient extends BaseHttpClient {
 
   async listAgentSecrets(): Promise<AgentSecret[]> {
     // Opening/refreshing secret settings is also an explicit cache refresh.
-    this.runtimeSecretEnvCache?.clear();
+    this.runtimeSecretEnvCache?.clear('settings_refresh');
     try { return await this.request<AgentSecret[]>("/agent-secrets"); }
-    finally { this.runtimeSecretEnvCache?.clear(); }
+    finally { this.runtimeSecretEnvCache?.clear('settings_refresh'); }
   }
 
   async upsertAgentSecret(input: UpsertAgentSecretInput): Promise<AgentSecret> {
-    this.runtimeSecretEnvCache?.clear();
+    this.runtimeSecretEnvCache?.clear('secret_write');
     try {
       return await this.request<AgentSecret>("/agent-secrets", { method: "POST", body: input });
-    } finally { this.runtimeSecretEnvCache?.clear(); }
+    } finally { this.runtimeSecretEnvCache?.clear('secret_write'); }
   }
 
   async getAgentSecretRuntimeEnv(agentId: string, options: {
     signal?: AbortSignal;
+    traceId?: string;
     connectionId?: string;
     onCacheOutcome?: (outcome: RuntimeSecretCacheOutcome) => void;
   } = {}): Promise<Record<string, string>> {
@@ -319,23 +320,33 @@ export class VeraCoworkApiClient extends BaseHttpClient {
       return result.env ?? {};
     };
     if (!context) {
-      this.runtimeSecretEnvCache?.clear();
-      return load(options.signal);
+      this.runtimeSecretEnvCache?.clear('missing_verified_context');
+      logRuntimeSecretEvent('cache_bypassed', { traceId: options.traceId, reason: 'missing_verified_context' });
+      const started = performance.now();
+      logRuntimeSecretEvent('fetch_started', { traceId: options.traceId });
+      try {
+        const env = await load(options.signal);
+        logRuntimeSecretEvent('fetch_succeeded', { traceId: options.traceId, durationMs: performance.now() - started });
+        return env;
+      } catch (error) {
+        logRuntimeSecretEvent('fetch_failed', { traceId: options.traceId, reason: 'read_failed', durationMs: performance.now() - started });
+        throw error;
+      }
     }
     this.runtimeSecretEnvCache ??= new RuntimeSecretCache();
     const env = await this.runtimeSecretEnvCache.get(context,
       JSON.stringify([agentId, options.connectionId?.trim() || 'organization-default']),
-      load, { signal: options.signal, onOutcome: options.onCacheOutcome });
+      load, { signal: options.signal, traceId: options.traceId, onOutcome: options.onCacheOutcome });
     options.signal?.throwIfAborted();
     if (this.runtimeSecretContext() !== context) throw Error('API_AUTH_STATE_CHANGED');
     return env;
   }
 
   async deleteAgentSecret(id: string): Promise<{ success: boolean; }> {
-    this.runtimeSecretEnvCache?.clear();
+    this.runtimeSecretEnvCache?.clear('secret_delete');
     try {
       return await this.request<{ success: boolean }>(`/agent-secrets/${encodeURIComponent(id)}`, { method: "DELETE" });
-    } finally { this.runtimeSecretEnvCache?.clear(); }
+    } finally { this.runtimeSecretEnvCache?.clear('secret_delete'); }
   }
 
   // ============================================

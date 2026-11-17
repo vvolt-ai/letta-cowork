@@ -38,6 +38,7 @@ import {StartupTiming,abortableSetupRead} from './startup-timing.js';
 import {readWithDeadline,waitForRead} from '../../../services/letta-runtime/read-deadline.js';
 import {desktopAppServers, type DesktopPoolRequest} from '../../../services/letta-runtime/desktop-app-server-pool.js';
 import {veraRuntimeActorIdentity} from '../../../services/letta-runtime/index.js';
+import {logRuntimeSecretEvent} from '../../../api/client/runtime-secret-cache.js';
 
 export interface DesktopSdkScope {
   config: LettaRuntimeConfig;
@@ -279,17 +280,18 @@ export class DesktopSdkSession {
   private async prepareRuntimeEnv():Promise<void>{
     try{await this.timing.measure('runtime_env',async()=>{
       this.checkOpen();const inherited=this.options.inheritedContext?.runtimeEnv;
-      if(inherited!==undefined){this.runtimeEnv=Object.freeze({...inherited});return;}
+      if(inherited!==undefined){logRuntimeSecretEvent('inherited_env',{traceId:this.timing.traceId});this.runtimeEnv=Object.freeze({...inherited});return;}
       const api=this.dependencies.loadRuntimeEnv?undefined:getVeraCoworkApiClient();
       const currentActor=this.dependencies.runtimeActor??actor;const identity=currentActor();
-      if(!this.dependencies.loadRuntimeEnv&&!api?.accessToken){this.runtimeEnv=Object.freeze({});return;}
+      if(!this.dependencies.loadRuntimeEnv&&!api?.accessToken){logRuntimeSecretEvent('skipped_no_vera_session',{traceId:this.timing.traceId});this.runtimeEnv=Object.freeze({});return;}
       const timeout=this.dependencies.runtimeEnvTimeoutMs??10000;
       if(!Number.isSafeInteger(timeout)||timeout<1||timeout>30000)throw Error('INVALID_SETUP_READ_DEADLINE');
       const signal=AbortSignal.any([this.ctrl.signal,AbortSignal.timeout(timeout)]);
-      const loaded=await abortableSetupRead(this.dependencies.loadRuntimeEnv?this.dependencies.loadRuntimeEnv(this._agentId!,signal):api!.getAgentSecretRuntimeEnv(this._agentId!,{signal,connectionId:this.options.lettaConnectionId,onCacheOutcome:outcome=>this.timing.mark(`runtime_env_cache_${outcome}`)}),signal);
+      const loaded=await abortableSetupRead(this.dependencies.loadRuntimeEnv?this.dependencies.loadRuntimeEnv(this._agentId!,signal):api!.getAgentSecretRuntimeEnv(this._agentId!,{signal,traceId:this.timing.traceId,connectionId:this.options.lettaConnectionId,onCacheOutcome:outcome=>this.timing.mark(`runtime_env_cache_${outcome}`)}),signal);
       this.checkOpen();if(currentActor()!==identity)throw Error('SDK_RUNTIME_ENV_ACTOR_CHANGED');
       this.runtimeEnv=Object.freeze({...loaded});
-    });}catch{this.runtimeEnv=Object.freeze({});}
+      logRuntimeSecretEvent('runtime_env_applied',{traceId:this.timing.traceId});
+    });}catch{logRuntimeSecretEvent('runtime_env_unavailable',{traceId:this.timing.traceId});this.runtimeEnv=Object.freeze({});}
   }
   async getDisplayName():Promise<string|undefined>{
     return this.timing.measure('agent_name',async()=>{

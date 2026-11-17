@@ -139,6 +139,12 @@ Login/logout, API-client retirement/replacement and known account/organization c
 
 `runtime_env_cache_hit`, `runtime_env_cache_miss` and `runtime_env_cache_joined` are fixed, value-free performance milestones under the existing `runtime_env` phase. Fixtures in `test/runtime-secret-cache.test.mjs` exercise actual API-client caching with synthetic requests, not credential files or live services. Rebuild/restart is required for activation; no live latency savings are claimed from fixture timings.
 
+### Confirm cache reuse in the desktop terminal
+
+The value-free `[runtime-secrets]` prefix now logs `cache_created`, `cache_miss`, `fetch_started`, `fetch_succeeded` (durationMs), then `runtime_env_applied` for a successful first load. A later turn should show `cache_hit` followed by `runtime_env_applied`, **without another fetch_started**. `cache_joined` means the caller waited on an existing shared read. Random cacheId/entryId values identify the in-process cache and anonymous slot; the request traceId correlates with `[performance]`. They are not account/agent/secret identifiers.
+
+`cache_cleared` gives a fixed reason: auth_context_changed, actor_context_changed, settings_refresh, secret_write or secret_delete; capacity eviction has cache_evicted. Different cacheId values can indicate a new API-client cache/process. `inherited_env` means the parent supplied the environment; `skipped_no_vera_session` means no fetch was attempted; cache_bypassed/missing_verified_context means the authenticated identity is insufficient for caching. `fetch_failed` and runtime_env_unavailable report no raw error details. Logs contain no environment names/values, lookup keys, principal IDs, URLs or credential material. Logging failures cannot change caching behavior.
+
 ## Progressive renderer updates
 
 Typed SDK assistant deltas are accumulated once in a per-conversation draft store. Chat views subscribe with `useSyncExternalStore`; publication is batched at50ms without replacing Zustand's global sessions tree for every token. The main chat and embedded conversation viewer use the same snapshot, including when mounted mid-turn. OTID lineage preserves chunks across fallback UUID changes without merging distinct API runs. Final results commit canonical text once and clear transient publication/timers.
