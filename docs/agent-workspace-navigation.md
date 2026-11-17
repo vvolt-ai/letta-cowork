@@ -34,6 +34,10 @@ Main chat, model/CWD controls, permission/Stop/queue flows, email processing, se
 
 The2026-11-17 sidebar follow-up removes selector-only state/styles and the Memory shortcut. The browser fixture now asserts these controls are absent and no favourites/Memory requests occur, while preserving recency, paging/search, draft restoration, workspace isolation, running-state preservation and remaining shortcuts. No memory deletion or favourite-tag mutation is part of this change.
 
+## Composer controls placement (2026-11-17)
+
+At Bhavesh's screenshot-based request, the composer footer keeps its approval selector on the left and places Reasoning immediately before the model selector on the right, outside the rounded input box. The model popup opens upwards, right-aligned to and width-bounded by the footer so narrow/full-width embedded composers remain in the viewport. Model/provider selection, reasoning visibility, approval state, draft and Send/Stop handlers are unchanged. `test/prompt-controls.browser.mjs` renders the actual PromptInput with mocked metadata to verify ordering, state callbacks, draft preservation, BYOK selection, Escape and320/380/600/1440px plus embedded-width layout; it sends no live model/provider request.
+
 ## Files and validation
 
 Feature code: src/ui/features/sidebar/navigation.ts, components/AgentWorkspaceNavigation.tsx, agent-workspace.css and Sidebar/index.tsx. App/layout entry callbacks, ConversationList management gating, useSessionController selected-agent handling and narrow draft-state changes in useAppStore complete the integration. Legacy SessionsTab/AgentGroup sources are not destructively cleaned up by this work.

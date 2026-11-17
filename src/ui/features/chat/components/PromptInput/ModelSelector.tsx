@@ -138,11 +138,29 @@ export const ModelSelector = memo(function ModelSelector({
     : selectedModel || "Default (agent model)";
 
   return (
-    <div className="mb-1 flex items-center justify-between gap-2 text-xs text-ink-500">
-      <div ref={rootRef} className="relative min-w-0">
+    <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2 text-xs text-ink-500" role="group" aria-label="Model and reasoning">
+      {modelsLoading ? <span className="text-muted">Loading…</span> : null}
+      <button
+        type="button"
+        onClick={onToggleReasoning}
+        className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] transition ${
+          showReasoningInChat
+            ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
+            : "border-[var(--color-border)] bg-[var(--color-bg-000)]/60 text-ink-600"
+        }`}
+        aria-pressed={showReasoningInChat}
+      >
+        <span
+          className={`h-2 w-2 rounded-full ${
+            showReasoningInChat ? "bg-[var(--color-accent)]" : "bg-ink-400"
+          }`}
+        />
+        Reasoning
+      </button>
+      <div ref={rootRef} className="min-w-0 max-w-full w-[min(260px,calc(100vw-3rem))]">
         <button
           type="button"
-          className="flex h-7 min-w-[190px] max-w-[580px] items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-bg-000)]/60 px-3 text-left text-[11px] text-ink-600 transition hover:border-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex h-7 w-full min-w-0 max-w-full items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-bg-000)]/60 px-3 text-left text-[11px] text-ink-600 transition hover:border-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-60"
           onClick={() => setOpen((current) => !current)}
           disabled={modelsLoading}
           aria-haspopup="listbox"
@@ -163,7 +181,7 @@ export const ModelSelector = memo(function ModelSelector({
         </button>
 
         {open ? (
-          <div className="absolute bottom-full left-0 z-[80] mb-2 w-[min(720px,calc(100vw-3rem))] overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl">
+          <div className="absolute bottom-full right-0 z-[80] mb-2 w-[720px] max-w-full overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl">
             <div className="p-2 pb-0">
               <label className="flex h-10 items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-000)] px-3 focus-within:border-[var(--color-accent)]">
                 <svg
@@ -313,24 +331,6 @@ export const ModelSelector = memo(function ModelSelector({
         ) : null}
       </div>
 
-      {modelsLoading ? <span className="mr-auto text-muted">Loading…</span> : null}
-      <button
-        type="button"
-        onClick={onToggleReasoning}
-        className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] transition ${
-          showReasoningInChat
-            ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
-            : "border-[var(--color-border)] bg-[var(--color-bg-000)]/60 text-ink-600"
-        }`}
-        aria-pressed={showReasoningInChat}
-      >
-        <span
-          className={`h-2 w-2 rounded-full ${
-            showReasoningInChat ? "bg-[var(--color-accent)]" : "bg-ink-400"
-          }`}
-        />
-        Reasoning
-      </button>
     </div>
   );
 });

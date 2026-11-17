@@ -261,9 +261,6 @@ export const PromptInput = memo(function PromptInput({
     >
       <div className={`${fullWidth ? "w-full min-w-0" : "mx-auto w-full max-w-[920px]"} rounded-[1.75rem] border border-[var(--color-border)] bg-[var(--color-surface)]/88 px-3.5 py-3 shadow-[var(--shadow-card)] backdrop-blur-sm transition ${dragActive ? "border-[var(--color-accent)] bg-[var(--color-accent-light)]/60 ring-2 ring-[var(--color-accent)]/15" : ""}`}>
         <AttachmentPreview attachments={attachments} onRemove={removeAttachment} />
-        <ModelSelector models={models} selectedModel={selectedModel} hasSelectedModelOption={hasSelectedModelOption} modelsLoading={modelsLoading} showReasoningInChat={showReasoningInChat}
-          onSelectModel={(model) => { setModelTouched(true); setSelectedModel(model); }}
-          onToggleReasoning={() => setShowReasoningInChat(!showReasoningInChat)} />
         <SlashCommandSuggestions suggestions={slashSuggestions} selectedIndex={selectedSlashIndex} onSelect={applySlashSuggestion} />
         {micError && <p className="px-1 text-xs text-red-500">{micError}</p>}
         <PromptTextArea prompt={prompt} disabled={disabled} isRunning={isRunning} isUploading={isUploading} canSend={canSend}
@@ -275,8 +272,8 @@ export const PromptInput = memo(function PromptInput({
           onMicToggle={toggleMic} isMicListening={isMicListening}
           interimTranscript={interimTranscript} isMicSupported={isMicSupported} />
       </div>
-      <div className={`${fullWidth ? "w-full min-w-0" : "mx-auto w-full max-w-[920px]"} mt-2 flex items-center px-2`}>
-        <label className="group relative inline-flex items-center gap-2 text-xs text-muted">
+      <div className={`${fullWidth ? "w-full min-w-0" : "mx-auto w-full max-w-[920px]"} promptControls relative mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 px-2`}>
+        <label className="group relative inline-flex shrink-0 items-center gap-2 text-xs text-muted">
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
             <path d="M12 3 5 6v5c0 4.7 2.8 8.1 7 10 4.2-1.9 7-5.3 7-10V6l-7-3Z" />
             <path d="m9.5 12 1.6 1.6 3.6-3.8" />
@@ -297,6 +294,9 @@ export const PromptInput = memo(function PromptInput({
             <path d="m7 10 5 5 5-5" />
           </svg>
         </label>
+        <ModelSelector models={models} selectedModel={selectedModel} hasSelectedModelOption={hasSelectedModelOption} modelsLoading={modelsLoading} showReasoningInChat={showReasoningInChat}
+          onSelectModel={(model) => { setModelTouched(true); setSelectedModel(model); }}
+          onToggleReasoning={() => setShowReasoningInChat(!showReasoningInChat)} />
       </div>
       <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileInputChange} />
     </section>
