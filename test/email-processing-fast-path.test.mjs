@@ -7,7 +7,7 @@ const poUrl = new URL(
   "../skills/email-processing/references/po-processing.md",
   import.meta.url,
 );
-const apiSkillUrl = new URL("../skills/cowork-emails/SKILL.md", import.meta.url);
+const apiSkillUrl = new URL("../skills/vera-mcp/SKILL.md", import.meta.url);
 
 test("email workflow uses supplied identifiers before discovery", async () => {
   const content = await readFile(skillUrl, "utf8");
@@ -33,9 +33,18 @@ test("PO workflow starts with exact bounded configured-MCP reads", async () => {
   assert.doesNotMatch(content, /TOKEN=\$\(cat/);
 });
 
-test("email API skill exposes the local identifier fast path first", async () => {
+test("email API skill preserves identifier reuse through current scoped Vera tools", async () => {
   const content = await readFile(apiSkillUrl, "utf8");
 
-  assert.ok(content.indexOf("## Fast path before discovery") < content.indexOf("## Base URL"));
-  assert.match(content, /Do \*\*not\*\* list remote channels\/accounts\/folders first/);
+  assert.match(content, /Prefer Vera-native tools already mounted/i);
+  assert.match(content, /Reuse supplied source content and already verified task\/channel\/account\/folder\/message IDs/i);
+  assert.match(content, /Do not restart an identified email task/i);
+  assert.match(content, /Never claim an email was reviewed from its subject or snippet alone/i);
+  assert.match(content, /Never replace a denied operation with raw HTTP\/database access or another principal\/connector/i);
+  assert.doesNotMatch(content, /http:\/\/localhost:4321\/(?:fetchEmail|downloadAttachment|searchEmails)/i);
+  await assert.rejects(
+    readFile(new URL("../skills/cowork-emails/SKILL.md", import.meta.url), "utf8"),
+    { code: "ENOENT" },
+    "The retired local-mail skill must not be restored to satisfy CI",
+  );
 });

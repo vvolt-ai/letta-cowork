@@ -60,6 +60,10 @@ These entries did not establish a retired integration in this scope. Retention i
 
 No maintained `VerivoltDev/Skills` files, another agent's private files/memory, shared server copies, containers, login caches or live grants were changed. Canonical retirement notices can remain as historical source; a future package sync could restore installed copies, so do not reinstall these obsolete procedures blindly. Publishing project deletions is a separate commit/push operation.
 
+## CI follow-up — 2026-11-17
+
+The first cleanup missed `test/email-processing-fast-path.test.mjs`, which still opened the deleted `cowork-emails/SKILL.md`; Windows CI correctly failed with ENOENT. Its contract now checks current `vera-mcp` identifier reuse, native-first access, body verification and no denial bypass, while explicitly asserting that the retired local-mail skill remains absent. Windows/Linux/macOS runtime steps now include the native-client and retired-catalog regression files, with a workflow test guarding that coverage. The exact expanded runtime command passes 72 tests locally; the hosted Windows build has not been rerun by this change. No legacy skill or endpoint was restored.
+
 ## Validation
 
 - Re-listed actual skills after archiving: **23 visible names**; all eight retired names absent from both active roots.

@@ -43,6 +43,20 @@ test('Windows/Linux remain build-only and Apple Silicon follows both successful 
   assert.deepEqual(workflow.jobs['build-macos-arm64'].needs, ['build-windows', 'build-linux']);
 });
 
+test('all platform runtime checks cover the current email route and skill retirement', () => {
+  for (const job of Object.values(workflow.jobs)) {
+    const step = job.steps.find((entry) => entry.name === 'Verify repaired runtime contracts');
+    assert.ok(step, 'Every platform must run runtime contract checks');
+    for (const file of [
+      'test/email-processing-fast-path.test.mjs',
+      'skills/tests/mcp-skill-clients.test.mjs',
+      'skills/tests/retired-skill-catalog.test.mjs',
+    ]) {
+      assert.ok(step.run.includes(file), `${file} must run on ${job['runs-on']}`);
+    }
+  }
+});
+
 const root = fileURLToPath(new URL('..', import.meta.url));
 test('all installer commands disable electron-builder implicit CI publishing without credentials', () => {
   const result = spawnSync(
