@@ -129,6 +129,16 @@ Display-name lookup uses the captured SDK account and a bounded scope+agent labe
 
 Use cold/subsequent-turn live traces to identify the remaining critical path before adding scoped host pooling or broader caching. Synthetic overlap/cancellation/refresh tests and native local-API fixtures validate behavior, not savings on a live provider or the previously observed21.94s initialization gap. Rebuild/reload is required; no live model request is sent as a performance test.
 
+### Runtime-secret RAM cache — 2026-11-17
+
+User-directed update: successful runtime environments, including empty environments, are reused across chat turns in Electron main-process RAM. The cache is private to the Vera API-client instance and scoped by server, authentication epoch, user, organization and known role/membership snapshot; entries additionally separate agent and selected Letta connection. No secret values are persisted, logged, injected into global `process.env`, or added to agent memory. At most128 entries are retained with LRU eviction; there is no periodic refresh or time-based expiry of successful entries.
+
+Concurrent first reads share one bounded10s transport read. A cancelled caller stops waiting without cancelling another reader; if it was the only reader, the read may finish and fill this same authenticated cache. Auth/cache invalidation and the shared deadline still reject late data. Failed, malformed and timed-out reads never populate the cache and can be tried again on the next explicit chat turn. Existing per-turn actor validation, empty-environment degradation and child inheritance remain.
+
+Login/logout, API-client retirement/replacement and known account/organization changes invalidate reuse. Local secret create/update/delete attempts clear before and after settlement, even on uncertain failures. Opening/refreshing Secret settings also clears values. **Edits/revocations from the web or another device are not pushed into this cache:** refresh Secret settings or restart/re-authenticate Cowork before relying on those changes. Active turns retain their original environment snapshot; this is not a retroactive cancellation/revocation mechanism or proof of current upstream permission.
+
+`runtime_env_cache_hit`, `runtime_env_cache_miss` and `runtime_env_cache_joined` are fixed, value-free performance milestones under the existing `runtime_env` phase. Fixtures in `test/runtime-secret-cache.test.mjs` exercise actual API-client caching with synthetic requests, not credential files or live services. Rebuild/restart is required for activation; no live latency savings are claimed from fixture timings.
+
 ## Progressive renderer updates
 
 Typed SDK assistant deltas are accumulated once in a per-conversation draft store. Chat views subscribe with `useSyncExternalStore`; publication is batched at50ms without replacing Zustand's global sessions tree for every token. The main chat and embedded conversation viewer use the same snapshot, including when mounted mid-turn. OTID lineage preserves chunks across fallback UUID changes without merging distinct API runs. Final results commit canonical text once and clear transient publication/timers.

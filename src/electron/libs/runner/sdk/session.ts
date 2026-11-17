@@ -286,7 +286,7 @@ export class DesktopSdkSession {
       const timeout=this.dependencies.runtimeEnvTimeoutMs??10000;
       if(!Number.isSafeInteger(timeout)||timeout<1||timeout>30000)throw Error('INVALID_SETUP_READ_DEADLINE');
       const signal=AbortSignal.any([this.ctrl.signal,AbortSignal.timeout(timeout)]);
-      const loaded=await abortableSetupRead(this.dependencies.loadRuntimeEnv?this.dependencies.loadRuntimeEnv(this._agentId!,signal):api!.getAgentSecretRuntimeEnv(this._agentId!,{signal}),signal);
+      const loaded=await abortableSetupRead(this.dependencies.loadRuntimeEnv?this.dependencies.loadRuntimeEnv(this._agentId!,signal):api!.getAgentSecretRuntimeEnv(this._agentId!,{signal,connectionId:this.options.lettaConnectionId,onCacheOutcome:outcome=>this.timing.mark(`runtime_env_cache_${outcome}`)}),signal);
       this.checkOpen();if(currentActor()!==identity)throw Error('SDK_RUNTIME_ENV_ACTOR_CHANGED');
       this.runtimeEnv=Object.freeze({...loaded});
     });}catch{this.runtimeEnv=Object.freeze({});}

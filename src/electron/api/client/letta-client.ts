@@ -6,6 +6,7 @@
  */
 
 import { BaseHttpClient } from "./base-client.js";
+import { RuntimeSecretCache, type RuntimeSecretCacheOutcome } from './runtime-secret-cache.js';
 import { ChannelEndpoints } from "../endpoints/channels.js";
 import { ConnectorEndpoints } from "../endpoints/connectors.js";
 import { EmailEndpoints } from "../endpoints/emails.js";
@@ -50,6 +51,21 @@ import type {
  * Provides a unified interface for all Vera Cowork server API operations.
  */
 export class VeraCoworkApiClient extends BaseHttpClient {
+  private runtimeSecretEnvCache?: RuntimeSecretCache;
+
+  protected override onAuthContextInvalidated(): void {
+    this.runtimeSecretEnvCache?.clear();
+  }
+
+  private runtimeSecretContext(): string | undefined {
+    const user = this.currentUser;
+    const org = user?.currentOrganization?.organizationId ?? user?.organizationId;
+    if (!this.accessToken || !user?.id || !org) return undefined;
+    return JSON.stringify([this.apiBaseUrl, this.authContextRevision, user.id, org,
+      user.role, user.currentOrganization?.role, user.currentOrganization?.isActive,
+      user.memberships?.map(member => [member.organizationId, member.role, member.isActive])]);
+  }
+
   // ============================================
   // Authentication
   // ============================================
@@ -276,32 +292,50 @@ export class VeraCoworkApiClient extends BaseHttpClient {
   }
 
   async listAgentSecrets(): Promise<AgentSecret[]> {
-    return this.request<AgentSecret[]>("/agent-secrets");
+    // Opening/refreshing secret settings is also an explicit cache refresh.
+    this.runtimeSecretEnvCache?.clear();
+    try { return await this.request<AgentSecret[]>("/agent-secrets"); }
+    finally { this.runtimeSecretEnvCache?.clear(); }
   }
 
   async upsertAgentSecret(input: UpsertAgentSecretInput): Promise<AgentSecret> {
-    return this.request<AgentSecret>("/agent-secrets", {
-      method: "POST",
-      body: input,
-    });
+    this.runtimeSecretEnvCache?.clear();
+    try {
+      return await this.request<AgentSecret>("/agent-secrets", { method: "POST", body: input });
+    } finally { this.runtimeSecretEnvCache?.clear(); }
   }
 
-  async getAgentSecretRuntimeEnv(agentId: string,options:{signal?:AbortSignal}={}): Promise<Record<string, string>> {
-    const result = await this.request<{ env: Record<string, string>; }>(
-      "/agent-secrets/runtime-env",
-      {
-        method: "POST",
-        body: { agentId },
-        signal:options.signal,
-      },
-    );
-    return result.env ?? {};
+  async getAgentSecretRuntimeEnv(agentId: string, options: {
+    signal?: AbortSignal;
+    connectionId?: string;
+    onCacheOutcome?: (outcome: RuntimeSecretCacheOutcome) => void;
+  } = {}): Promise<Record<string, string>> {
+    const context = this.runtimeSecretContext();
+    const load = async (signal?: AbortSignal) => {
+      const result = await this.request<{ env: Record<string, string> }>(
+        "/agent-secrets/runtime-env", { method: "POST", body: { agentId }, signal },
+      );
+      if (this.runtimeSecretContext() !== context) throw Error('API_AUTH_STATE_CHANGED');
+      return result.env ?? {};
+    };
+    if (!context) {
+      this.runtimeSecretEnvCache?.clear();
+      return load(options.signal);
+    }
+    this.runtimeSecretEnvCache ??= new RuntimeSecretCache();
+    const env = await this.runtimeSecretEnvCache.get(context,
+      JSON.stringify([agentId, options.connectionId?.trim() || 'organization-default']),
+      load, { signal: options.signal, onOutcome: options.onCacheOutcome });
+    options.signal?.throwIfAborted();
+    if (this.runtimeSecretContext() !== context) throw Error('API_AUTH_STATE_CHANGED');
+    return env;
   }
 
   async deleteAgentSecret(id: string): Promise<{ success: boolean; }> {
-    return this.request<{ success: boolean; }>(`/agent-secrets/${encodeURIComponent(id)}`, {
-      method: "DELETE",
-    });
+    this.runtimeSecretEnvCache?.clear();
+    try {
+      return await this.request<{ success: boolean }>(`/agent-secrets/${encodeURIComponent(id)}`, { method: "DELETE" });
+    } finally { this.runtimeSecretEnvCache?.clear(); }
   }
 
   // ============================================

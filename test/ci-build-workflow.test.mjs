@@ -51,6 +51,9 @@ test('all platform runtime checks cover the current email route and skill retire
       'test/email-processing-fast-path.test.mjs',
       'skills/tests/mcp-skill-clients.test.mjs',
       'skills/tests/retired-skill-catalog.test.mjs',
+      'test/runtime-secret-cache.test.mjs',
+      'test/startup-optimization.test.mjs',
+      'test/auth-refresh-generation.test.mjs',
     ]) {
       assert.ok(step.run.includes(file), `${file} must run on ${job['runs-on']}`);
     }

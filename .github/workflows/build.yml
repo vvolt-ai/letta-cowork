@@ -51,7 +51,7 @@ jobs:
       - name: Build Windows app
         run: bun run dist:win
       - name: Verify repaired runtime contracts
-        run: node --test test/odoo-attachment-adapter.test.mjs test/permission-handler.test.mjs test/native-tool-prerequisites.test.mjs test/windows-shell-contract.test.mjs test/runtime-context-isolation.test.mjs test/email-processing-fast-path.test.mjs test/electron-runtime-contract.test.mjs test/dead-code-cleanup.test.mjs test/desktop-updates.test.mjs test/remote-app-only.test.mjs skills/tests/mcp-skill-clients.test.mjs skills/tests/retired-skill-catalog.test.mjs
+        run: node --test test/odoo-attachment-adapter.test.mjs test/permission-handler.test.mjs test/native-tool-prerequisites.test.mjs test/windows-shell-contract.test.mjs test/runtime-context-isolation.test.mjs test/email-processing-fast-path.test.mjs test/electron-runtime-contract.test.mjs test/dead-code-cleanup.test.mjs test/desktop-updates.test.mjs test/remote-app-only.test.mjs skills/tests/mcp-skill-clients.test.mjs skills/tests/retired-skill-catalog.test.mjs test/runtime-secret-cache.test.mjs test/startup-optimization.test.mjs test/auth-refresh-generation.test.mjs
       - name: Verify remote-only UI policy
         run: bun test test/remote-app-only.test.tsx
       - name: Upload Windows installer
@@ -97,7 +97,7 @@ jobs:
       - name: Build Linux app
         run: bun run dist:linux
       - name: Verify repaired runtime contracts
-        run: node --test test/odoo-attachment-adapter.test.mjs test/permission-handler.test.mjs test/native-tool-prerequisites.test.mjs test/windows-shell-contract.test.mjs test/runtime-context-isolation.test.mjs test/email-processing-fast-path.test.mjs test/electron-runtime-contract.test.mjs test/dead-code-cleanup.test.mjs test/desktop-updates.test.mjs test/remote-app-only.test.mjs skills/tests/mcp-skill-clients.test.mjs skills/tests/retired-skill-catalog.test.mjs
+        run: node --test test/odoo-attachment-adapter.test.mjs test/permission-handler.test.mjs test/native-tool-prerequisites.test.mjs test/windows-shell-contract.test.mjs test/runtime-context-isolation.test.mjs test/email-processing-fast-path.test.mjs test/electron-runtime-contract.test.mjs test/dead-code-cleanup.test.mjs test/desktop-updates.test.mjs test/remote-app-only.test.mjs skills/tests/mcp-skill-clients.test.mjs skills/tests/retired-skill-catalog.test.mjs test/runtime-secret-cache.test.mjs test/startup-optimization.test.mjs test/auth-refresh-generation.test.mjs
       - name: Verify remote-only UI policy
         run: bun test test/remote-app-only.test.tsx
       - name: Upload Linux installers
@@ -146,7 +146,7 @@ jobs:
           node scripts/verify-macos-bundle.mjs "dist/mac-arm64/Vera Cowork.app"
           hdiutil verify dist/*.dmg
       - name: Verify repaired runtime contracts
-        run: node --test test/odoo-attachment-adapter.test.mjs test/permission-handler.test.mjs test/native-tool-prerequisites.test.mjs test/windows-shell-contract.test.mjs test/runtime-context-isolation.test.mjs test/email-processing-fast-path.test.mjs test/electron-runtime-contract.test.mjs test/dead-code-cleanup.test.mjs test/desktop-updates.test.mjs test/remote-app-only.test.mjs skills/tests/mcp-skill-clients.test.mjs skills/tests/retired-skill-catalog.test.mjs
+        run: node --test test/odoo-attachment-adapter.test.mjs test/permission-handler.test.mjs test/native-tool-prerequisites.test.mjs test/windows-shell-contract.test.mjs test/runtime-context-isolation.test.mjs test/email-processing-fast-path.test.mjs test/electron-runtime-contract.test.mjs test/dead-code-cleanup.test.mjs test/desktop-updates.test.mjs test/remote-app-only.test.mjs skills/tests/mcp-skill-clients.test.mjs skills/tests/retired-skill-catalog.test.mjs test/runtime-secret-cache.test.mjs test/startup-optimization.test.mjs test/auth-refresh-generation.test.mjs
       - name: Verify remote-only UI policy
         run: bun test test/remote-app-only.test.tsx
       - name: Upload macOS installer

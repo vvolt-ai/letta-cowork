@@ -41,7 +41,9 @@ export class BaseHttpClient {
   retireAuthenticationContext(): void { this.authRetired = true; this.invalidateAuth(); }
   private lastAuthIdentity?: string;
   private authIdentity(user = this.tokens?.user): string { return JSON.stringify([this.baseUrl, user?.id ?? null, user?.currentOrganization?.organizationId ?? user?.organizationId ?? null]); }
-  private invalidateAuth(): void { this.authGeneration = (this.authGeneration ?? 0) + 1; this.refreshPromise = null; this.refreshGeneration = undefined; }
+  /** Drop subclass-owned sensitive session state on login/logout/account changes. */
+  protected onAuthContextInvalidated(): void {}
+  private invalidateAuth(): void { this.authGeneration = (this.authGeneration ?? 0) + 1; this.refreshPromise = null; this.refreshGeneration = undefined; this.onAuthContextInvalidated(); }
   private _onAuthExpired: (() => void) | null = null;
 
   constructor(baseUrl?: string) {
