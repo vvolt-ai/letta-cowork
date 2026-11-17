@@ -59,27 +59,13 @@ try {
     await page.getByRole('button', { name: /Load more conversations/ }).click();
   }
   await page.getByText('Research conversation 119', { exact: true }).waitFor();
-  const beforeFavouriteView = await page.evaluate(() => window.navigationFixture.snapshot());
-  await page.getByLabel('Agent list', { exact: true }).selectOption('favorites');
-  await page.waitForFunction(() => window.navigationFixture.calls.includes('list-favourites:one'));
-  await page.waitForFunction(() => document.querySelectorAll('.agentRailItem').length === 10);
-  assert.equal(
-    await choose('AndrOptimus Prime').count(),
-    0,
-    'Non-favourite cached agents must not leak into Favourites',
-  );
-  await page.getByRole('button', { name: 'Load more agents', exact: true }).click();
-  assert.equal(await page.locator('.agentRailItem').count(), 13);
-  assert.equal(
-    (await page.evaluate(() => window.navigationFixture.snapshot())).active,
-    beforeFavouriteView.active,
-  );
-  await page.getByLabel('Agent list', { exact: true }).selectOption('recent');
-  await page.waitForFunction(() => document.querySelectorAll('.agentRailItem').length === 10);
+  assert.equal(await page.getByRole('combobox', { name: 'Agent list', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Memory', exact: true }).count(), 0);
+  assert.equal(await page.locator('.agentListFilter').count(), 0);
   const actions = await page.locator('.agentActions button').allTextContents();
   assert.deepEqual(
     actions.map((s) => s.trim()),
-    ['Memory', 'Schedules', 'Remote Access', 'Emails', 'New chat'],
+    ['Schedules', 'Remote Access', 'Emails', 'New chat'],
   );
   await chat.fill('Draft on active research');
   await choose('Shelly').click();
@@ -100,8 +86,6 @@ try {
   await page.getByRole('button', { name: 'New chat', exact: true }).click();
   assert.equal(await page.evaluate(() => window.navigationFixture.snapshot().modelCalls), 0);
   assert((await page.evaluate(() => window.navigationFixture.calls)).includes('new-chat:agent-b'));
-  await page.getByRole('button', { name: 'Memory', exact: true }).click();
-  assert((await page.evaluate(() => window.navigationFixture.calls)).includes('memory:agent-b'));
   for (const view of ['Schedules', 'Remote Access', 'Emails']) {
     await page.getByRole('button', { name: view, exact: true }).click();
     await page.getByRole('heading', { name: view, exact: true }).waitFor();
@@ -141,6 +125,7 @@ try {
     calls.some((v) => v.startsWith('FORBIDDEN:')),
     false,
   );
+  assert.equal(calls.some((value) => value.startsWith('list-favourites:') || value.startsWith('memory:')), false);
   assert.equal(calls.includes('ipc:session.stop'), false);
   assert.equal(calls.includes('ipc:session.start'), false);
   assert.deepEqual(outside, []);
@@ -156,23 +141,10 @@ try {
   await page.getByLabel('Search conversations', { exact: true }).fill('Research conversation 119');
   await page.getByText('Research conversation 119', { exact: true }).waitFor();
   assert.equal(await page.locator('.agentChatList [role="button"]').count(), 1);
-  await page.goto(origin + '/test/agent-navigation.fixture.html?favorites-failure');
-  await choose('Shelly').waitFor();
-  await page.getByLabel('Agent list', { exact: true }).selectOption('favorites');
-  await page
-    .getByRole('alert')
-    .filter({ hasText: 'Could not load favourites for the current Letta account.' })
-    .waitFor();
-  assert.equal(await page.locator('.agentRailItem').count(), 0);
-  await page.goto(origin + '/test/agent-navigation.fixture.html?favorites-empty');
-  await choose('Shelly').waitFor();
-  await page.getByLabel('Agent list', { exact: true }).selectOption('favorites');
-  await page.getByText('No favourite agents in this Letta account.', { exact: true }).waitFor();
-  assert.equal(await page.locator('.agentRailItem').count(), 0);
   await page.goto(origin + '/test/agent-navigation.fixture.html?empty');
   await page.getByText('No agents available.', { exact: true }).waitFor();
   assert.equal(await page.locator('.agentRailItem').count(), 0);
-  assert.equal(await page.getByRole('button', { name: 'Memory', exact: true }).isDisabled(), true);
+  assert.equal(await page.getByRole('button', { name: 'Memory', exact: true }).count(), 0);
   assert.equal(
     await page.evaluate(() =>
       window.navigationFixture.calls.some(
@@ -193,7 +165,8 @@ try {
         'selected-agent new chat without premature creation',
         'conversation/new-agent draft restoration',
         'background work retained',
-        'selected-agent memory target',
+        'Memory shortcut and agent-list dropdown absent',
+        'recent-only navigation without favourites queries',
         'direct feature actions',
         'stale agent response discarded',
         'workspace isolation',

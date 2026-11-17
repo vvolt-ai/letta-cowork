@@ -35,11 +35,6 @@ type Props = {
 function Icon({ name }: { name: string }) {
   const paths: Record<string, ReactNode> = {
     chats: <path d='M21 15a3 3 0 0 1-3 3H8l-5 3V6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3Z' />,
-    memory: (
-      <>
-        <path d='M9 4a3 3 0 0 0-5 3 3 3 0 0 0-1 5 3 3 0 0 0 2 5 3 3 0 0 0 5 3V5a2 2 0 0 0-1-1ZM15 4a3 3 0 0 1 5 3 3 3 0 0 1 1 5 3 3 0 0 1-2 5 3 3 0 0 1-5 3V5a2 2 0 0 1 1-1Z' />
-      </>
-    ),
     schedules: (
       <>
         <circle cx='12' cy='12' r='9' />
@@ -129,8 +124,7 @@ export function AgentWorkspaceNavigation(props: Props) {
     [chatQuery, setChatQuery] = useState(''),
     [searchOpen, setSearchOpen] = useState(false),
     [revision, setRevision] = useState(0);
-  const [agentListMode, setAgentListMode] = useState<'recent' | 'favorites'>('recent');
-  const [loadedAgentMode, setLoadedAgentMode] = useState<'recent' | 'favorites' | null>(null);
+  const [agentsLoaded, setAgentsLoaded] = useState(false);
   const knownAgents = useRef(new Map<string, NavigationAgent>());
   let preferenceStorage: Storage | undefined;
   try {
@@ -173,23 +167,19 @@ export function AgentWorkspaceNavigation(props: Props) {
     const timer = setTimeout(
       () => {
         void window.electron
-          .listLettaAgents(agentQuery.trim(), undefined, agentListMode === 'favorites')
+          .listLettaAgents(agentQuery.trim(), undefined, false)
           .then((items) => {
             if (current) {
               if (!Array.isArray(items)) throw Error('Invalid agent response');
               setAgents(items);
-              setLoadedAgentMode(agentListMode);
+              setAgentsLoaded(true);
               for (const item of items)
                 if (item && typeof item.id === 'string') knownAgents.current.set(item.id, item);
             }
           })
           .catch(() => {
             if (current)
-              setAgentError(
-                agentListMode === 'favorites'
-                  ? 'Could not load favourites for the current Letta account.'
-                  : 'Could not load agents.',
-              );
+              setAgentError('Could not load agents.');
           })
           .finally(() => {
             if (current) setAgentLoading(false);
@@ -201,7 +191,7 @@ export function AgentWorkspaceNavigation(props: Props) {
       current = false;
       clearTimeout(timer);
     };
-  }, [props.connected, props.suspended, props.scopeKey, agentQuery, revision, agentListMode]);
+  }, [props.connected, props.suspended, props.scopeKey, agentQuery, revision]);
   useEffect(() => {
     let current = true;
     setChatError('');
@@ -235,12 +225,12 @@ export function AgentWorkspaceNavigation(props: Props) {
   const available = useMemo(
     () =>
       navigationAgents(
-        loadedAgentMode === agentListMode ? agents : [],
-        agentListMode === 'favorites' ? [] : local,
+        agentsLoaded ? agents : [],
+        local,
         usageRef.current.scope === props.scopeKey ? agentUsage : {},
         selected,
       ),
-    [agents, local, agentUsage, selected, props.scopeKey, loadedAgentMode, agentListMode],
+    [agents, local, agentUsage, selected, props.scopeKey, agentsLoaded],
   );
   const filteredAgents = available.filter(
     (a) =>
@@ -388,24 +378,6 @@ export function AgentWorkspaceNavigation(props: Props) {
             ···
           </button>
         </div>
-        <label className='agentListFilter'>
-          <span className='sr-only'>Agent list</span>
-          <select
-            aria-label='Agent list'
-            value={agentListMode}
-            disabled={navigationDisabled || !props.connected}
-            onChange={(event) => {
-              setAgentLoading(true);
-              setAgentError('');
-              setAgentListMode(event.target.value as 'recent' | 'favorites');
-              setAgentLimit(NAVIGATION_PAGE_SIZE);
-              setAgentQuery('');
-            }}
-          >
-            <option value='recent'>Recent agents</option>
-            <option value='favorites'>★ Favourites</option>
-          </select>
-        </label>
         {searchOpen ? (
           <label className='agentNavSearch'>
             <span className='sr-only'>Search agents</span>
@@ -426,15 +398,10 @@ export function AgentWorkspaceNavigation(props: Props) {
               {agentError} <button onClick={() => setRevision((v) => v + 1)}>Retry</button>
             </span>
           ) : !available.length ? (
-            <span>
-              {agentListMode === 'favorites'
-                ? 'No favourite agents in this Letta account.'
-                : 'No agents available.'}
-            </span>
+            <span>No agents available.</span>
           ) : null}
         </div>
         <nav className='agentActions' aria-label='Workspace navigation'>
-          {action('Memory', 'memory', () => props.onOpenMemory(selected), !selected || allChats)}
           {action('Schedules', 'schedules', props.onOpenSchedules)}
           {action('Remote Access', 'remote', props.onOpenRemote)}
           {action('Emails', 'emails', props.onOpenEmails)}
