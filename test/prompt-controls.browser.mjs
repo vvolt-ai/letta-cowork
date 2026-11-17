@@ -24,20 +24,33 @@ try{
  await reasoning.click();assert.equal(await reasoning.getAttribute('aria-pressed'),'false');await reasoning.click();
  await permission.selectOption('standard');assert.equal((await page.evaluate(()=>window.promptFixture.snapshot())).permission,'standard');await permission.selectOption('unrestricted');
  await model.click();await page.getByRole('tab',{name:/BYOK/}).click();
+ const engineering=page.getByRole('button',{name:'EngineeringChatGPT account (1 model)',exact:true});
+ const personal=page.getByRole('button',{name:'chatgpt-plus-pro account (1 model)',exact:true});
+ assert.equal(await engineering.getAttribute('aria-expanded'),'false');
+ await engineering.click();assert.equal(await engineering.getAttribute('aria-expanded'),'true');
  await page.getByRole('option').filter({hasText:'Fixture model B'}).click();
- assert.equal((await page.evaluate(()=>window.promptFixture.snapshot())).model,'fixture/model-b');
+ assert.equal((await page.evaluate(()=>window.promptFixture.snapshot())).model,'EngineeringChatGPT/gpt-6.1-sol');
  assert.equal(await model.getAttribute('aria-expanded'),'false');assert.equal(await prompt.inputValue(),'Keep this draft while controls change');
- await model.click();await page.keyboard.press('Escape');assert.equal(await page.getByRole('listbox',{name:'Available models'}).count(),0);
+ await model.click();assert.equal(await engineering.getAttribute('aria-expanded'),'true');assert.equal(await personal.getAttribute('aria-expanded'),'false');
+ await mkdir('test-results/prompt-controls',{recursive:true});await page.screenshot({path:'test-results/prompt-controls/account-groups.png',fullPage:true});
+ await personal.click();assert.equal(await personal.getAttribute('aria-expanded'),'true');await engineering.click();assert.equal(await engineering.getAttribute('aria-expanded'),'false');
+ const search=page.getByPlaceholder('Search models or accounts');await search.fill('Fixture model B');assert.equal(await engineering.getAttribute('aria-expanded'),'true');assert.equal(await personal.count(),0);
+ await search.press('Enter');assert.equal((await page.evaluate(()=>window.promptFixture.snapshot())).model,'EngineeringChatGPT/gpt-6.1-sol');
+ await model.click();await search.fill('chatgpt-plus-pro');await page.getByRole('option').filter({hasText:'Personal model Sol'}).click();assert.equal((await page.evaluate(()=>window.promptFixture.snapshot())).model,'chatgpt-plus-pro/gpt-6.1-sol');
+ await model.click();await search.fill('');assert.equal(await personal.getAttribute('aria-expanded'),'true');assert.equal(await engineering.getAttribute('aria-expanded'),'false');
+ await page.getByRole('tab',{name:/Hosted/}).click();assert.equal(await engineering.count(),0);await page.getByRole('option').filter({hasText:'Fixture model A'}).click();assert.equal((await page.evaluate(()=>window.promptFixture.snapshot())).model,'fixture/model-a');
+ assert.equal(await prompt.inputValue(),'Keep this draft while controls change');
+ await model.click();await page.keyboard.press('Escape');assert.equal(await page.getByRole('region',{name:'Available models'}).count(),0);
  await mkdir('test-results/prompt-controls',{recursive:true});await page.screenshot({path:'test-results/prompt-controls/wide.png',fullPage:true});
  for(const width of [600,380,320]){
   await page.setViewportSize({width,height:900});
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false);
-  await model.click();const box=await page.getByRole('listbox',{name:'Available models'}).boundingBox();assert(box.x>=-1);assert(box.x+box.width<=width+1);await page.keyboard.press('Escape');
+  await model.click();const box=await page.getByRole('region',{name:'Available models'}).boundingBox();assert(box.x>=-1);assert(box.x+box.width<=width+1);await page.keyboard.press('Escape');
  }
  await page.screenshot({path:'test-results/prompt-controls/narrow.png',fullPage:true});
  await page.setViewportSize({width:1440,height:900});await page.goto(origin+'/test/prompt-controls.fixture.html?panel');await model.waitFor();await model.click();
- const menu=await page.getByRole('listbox',{name:'Available models'}).boundingBox();assert(menu.x>=-1);assert(menu.x+menu.width<=1441);
+ const menu=await page.getByRole('region',{name:'Available models'}).boundingBox();assert(menu.x>=-1);assert(menu.x+menu.width<=1441);
  await page.keyboard.press('Escape');
  assert.deepEqual(await page.evaluate(()=>window.promptFixture.snapshot().calls),[]);assert.deepEqual(errors,[]);assert.deepEqual(outside,[]);
- console.log(JSON.stringify({fixtureOnly:true,verified:['Full access left; Reasoning then model right','real PromptInput controls below input','reasoning and model state unchanged','permission selection retained','draft preserved','upward menu in viewport at wide/narrow/fullWidth sizes','Escape closes menu','no model/provider/IPC sends']}));
+ console.log(JSON.stringify({fixtureOnly:true,verified:['Full access left; Reasoning then model right','real PromptInput controls below input','reasoning and model state unchanged','permission selection retained','draft preserved','upward menu in viewport at wide/narrow/fullWidth sizes','Escape closes menu','distinct account groups with counts and selected-account expansion','expand/collapse and account/model search','same-provider account handle preservation','Hosted/BYOK grouping','no model/provider/IPC sends']}));
 }finally{await browser?.close();try{process.kill(-server.pid,'SIGTERM');}catch{server.kill('SIGTERM');}}

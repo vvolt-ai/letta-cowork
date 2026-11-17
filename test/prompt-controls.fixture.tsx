@@ -3,8 +3,9 @@ import '../src/ui/index.css';
 import {PromptInput} from '../src/ui/features/chat/components/PromptInput';
 import {useAppStore} from '../src/ui/store/useAppStore';
 const models = [
-  {name:'fixture/model-a',display_name:'Fixture model A',provider_type:'openai',provider_category:'base'},
-  {name:'fixture/model-b',display_name:'Fixture model B',provider_type:'openai',provider_category:'byok'},
+  {name:'fixture/model-a',display_name:'Fixture model A',provider_type:'openai',provider_name:'Hosted OpenAI',provider_category:'base'},
+  {name:'EngineeringChatGPT/gpt-6.1-sol',display_name:'Fixture model B',provider_type:'openai',provider_name:'EngineeringChatGPT',provider_category:'byok'},
+  {name:'chatgpt-plus-pro/gpt-6.1-sol',display_name:'Personal model Sol',provider_type:'openai',provider_name:'chatgpt-plus-pro',provider_category:'byok'},
 ];
 const calls: string[]=[];
 window.electron={

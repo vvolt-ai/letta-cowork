@@ -2,7 +2,8 @@
  * Searchable Letta-style model picker and reasoning toggle.
  */
 
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useId, useMemo, useRef, useState } from "react";
+import { groupModelsByAccount, modelAccountIdentity } from './model-account-groups';
 
 export interface ModelOption {
   /** Fully qualified model handle used for runtime selection. */
@@ -38,7 +39,7 @@ function getModelLabel(model: ModelOption): string {
 }
 
 function getProviderLabel(model: ModelOption): string {
-  return model.provider_name?.trim() || model.provider_type?.trim() || "Other";
+  return modelAccountIdentity(model).label;
 }
 
 function ModelBadge({ category }: { category: ModelCategory }) {
@@ -68,6 +69,8 @@ export const ModelSelector = memo(function ModelSelector({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ModelFilter>("all");
+  const [expandedAccounts, setExpandedAccounts] = useState<Set<string> | null>(null);
+  const accountListId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -106,6 +109,12 @@ export const ModelSelector = memo(function ModelSelector({
         return providerOrder || getModelLabel(left).localeCompare(getModelLabel(right));
       });
   }, [filter, models, query]);
+
+  const accountGroups = useMemo(() => groupModelsByAccount(visibleModels), [visibleModels]);
+  const selectedAccount = selectedOption ? modelAccountIdentity(selectedOption).key : undefined;
+  const defaultAccount = accountGroups.find(group => group.key === selectedAccount)?.key ?? accountGroups[0]?.key;
+  const isAccountExpanded = (key: string) => expandedAccounts ? expandedAccounts.has(key) : Boolean(query.trim()) || key === defaultAccount;
+  const keyboardModels = accountGroups.filter(group => isAccountExpanded(group.key)).flatMap(group => group.models);
 
   useEffect(() => {
     if (!open) return;
@@ -161,9 +170,10 @@ export const ModelSelector = memo(function ModelSelector({
         <button
           type="button"
           className="flex h-7 w-full min-w-0 max-w-full items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-bg-000)]/60 px-3 text-left text-[11px] text-ink-600 transition hover:border-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-60"
-          onClick={() => setOpen((current) => !current)}
+          onClick={() => { if (!open) setExpandedAccounts(null); setOpen((current) => !current); }}
           disabled={modelsLoading}
-          aria-haspopup="listbox"
+          title={selectedOption?.name || triggerLabel}
+          aria-haspopup="dialog"
           aria-expanded={open}
           aria-label="Select model"
         >
@@ -181,7 +191,7 @@ export const ModelSelector = memo(function ModelSelector({
         </button>
 
         {open ? (
-          <div className="absolute bottom-full right-0 z-[80] mb-2 w-[720px] max-w-full overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl">
+          <div className="absolute bottom-full right-0 z-[80] mb-2 w-[720px] max-w-full overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl" role="dialog" aria-label="Choose a model">
             <div className="p-2 pb-0">
               <label className="flex h-10 items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-000)] px-3 focus-within:border-[var(--color-accent)]">
                 <svg
@@ -197,20 +207,20 @@ export const ModelSelector = memo(function ModelSelector({
                 <input
                   ref={searchRef}
                   value={query}
-                  onChange={(event) => setQuery(event.target.value)}
+                  onChange={(event) => { setQuery(event.target.value); setExpandedAccounts(null); }}
                   onKeyDown={(event) => {
-                    if (event.key === "Enter" && visibleModels[0]) {
+                    if (event.key === "Enter" && keyboardModels[0]) {
                       event.preventDefault();
-                      selectModel(visibleModels[0].name);
+                      selectModel(keyboardModels[0].name);
                     }
                   }}
-                  placeholder="Search models or providers"
+                  placeholder="Search models or accounts"
                   className="min-w-0 flex-1 bg-transparent text-sm text-ink-800 outline-none placeholder:text-muted"
                 />
                 {query ? (
                   <button
                     type="button"
-                    onClick={() => setQuery("")}
+                    onClick={() => { setQuery(""); setExpandedAccounts(null); }}
                     className="rounded p-1 text-muted transition hover:bg-[var(--color-bg-100)] hover:text-ink-700"
                     aria-label="Clear model search"
                   >
@@ -233,7 +243,7 @@ export const ModelSelector = memo(function ModelSelector({
                   type="button"
                   role="tab"
                   aria-selected={filter === value}
-                  onClick={() => setFilter(value)}
+                  onClick={() => { setFilter(value); setExpandedAccounts(null); }}
                   className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
                     filter === value
                       ? "bg-[var(--color-bg-200)] text-ink-900"
@@ -245,7 +255,8 @@ export const ModelSelector = memo(function ModelSelector({
               ))}
             </div>
 
-            <div className="max-h-[440px] overflow-y-auto p-2" role="listbox" aria-label="Available models">
+            <div className="max-h-[440px] overflow-y-auto p-2" role="region" aria-label="Available models">
+              <div role="listbox" aria-label="Agent model options">
               {!query && filter === "all" ? (
                 <button
                   type="button"
@@ -286,7 +297,31 @@ export const ModelSelector = memo(function ModelSelector({
                 </button>
               ) : null}
 
-              {visibleModels.map((model) => {
+              </div>
+              {accountGroups.map((group, groupIndex) => {
+                const expanded = isAccountExpanded(group.key);
+                const optionsId = `${accountListId}-account-${groupIndex}`;
+                return (
+                  <section key={group.key} className="mb-1">
+                    <button
+                      type="button"
+                      aria-expanded={expanded}
+                      aria-controls={optionsId}
+                      aria-label={`${group.label} account (${group.models.length} ${group.models.length === 1 ? 'model' : 'models'})`}
+                      onClick={() => setExpandedAccounts(current => {
+                        const next = new Set(current ?? accountGroups.filter(account => Boolean(query.trim()) || account.key === defaultAccount).map(account => account.key));
+                        if (next.has(group.key)) next.delete(group.key); else next.add(group.key);
+                        return next;
+                      })}
+                      className="flex w-full min-w-0 items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-ink-800 transition hover:bg-[var(--color-bg-100)]"
+                    >
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[var(--color-border)] text-[10px] uppercase text-muted" aria-hidden="true">{group.models[0].provider_type.slice(0, 2)}</span>
+                      <span className="min-w-0 flex-1 truncate">{group.label} <span className="text-muted">({group.models.length})</span></span>
+                      <ModelBadge category={getModelCategory(group.models[0])} />
+                      <svg viewBox="0 0 20 20" className={`h-3.5 w-3.5 shrink-0 text-muted transition ${expanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m7 5 5 5-5 5" /></svg>
+                    </button>
+                    <div id={optionsId} role="listbox" aria-label={`${group.label} models`} hidden={!expanded} className="ml-3 border-l border-[var(--color-border)] pl-1">
+                    {group.models.map((model) => {
                 const category = getModelCategory(model);
                 const isSelected = model.name === selectedModel;
                 return (
@@ -318,6 +353,10 @@ export const ModelSelector = memo(function ModelSelector({
                       </svg>
                     ) : null}
                   </button>
+                );
+                    })}
+                    </div>
+                  </section>
                 );
               })}
 
