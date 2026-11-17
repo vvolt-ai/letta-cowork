@@ -27,7 +27,7 @@ export const skillTool: ClientToolDefinition = {
         "Load a skill's instructions on demand. Skills are markdown documents " +
         "(SKILL.md) under ~/.letta/skills/<name>/ or <project>/skills/<name>/. " +
         "Call this when the user's request maps to a known skill (e.g. " +
-        "'cowork-server-api', 'email-processing', 'cowork-emails'). The returned " +
+        "'cowork-server-api', 'email-processing', 'vera-mcp'). The returned " +
         "text contains the workflow you should follow. Call list_skills() first " +
         "if you don't know what's available.",
     parameters: {

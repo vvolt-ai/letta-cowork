@@ -7,9 +7,6 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
-const neo4jClient = fileURLToPath(
-  new URL('../neo4j-mcp/scripts/call-mcp.mjs', import.meta.url),
-);
 const veraClient = fileURLToPath(
   new URL('../vera-mcp/scripts/call-mcp.mjs', import.meta.url),
 );
@@ -50,18 +47,6 @@ async function startMcpServer(toolError = false) {
       body,
     });
 
-    if (request.url === '/neo4j-mcp') {
-      response.writeHead(200, { 'Content-Type': 'text/event-stream' });
-      response.end(
-        `event: message\ndata: ${JSON.stringify({
-          jsonrpc: '2.0',
-          id: 1,
-          result: { content: [{ type: 'text', text: '[{"slug":"graph"}]' }] },
-        })}\n\n`,
-      );
-      return;
-    }
-
     if (request.url === '/mcp' && toolError) {
       response.writeHead(200, { 'Content-Type': 'application/json' });
       response.end(
@@ -96,7 +81,7 @@ async function startMcpServer(toolError = false) {
   };
 }
 
-test('bundled clients call their stateless MCP endpoints with VERA_TOKEN', async (t) => {
+test('current Vera fallback calls its native MCP endpoint with a scoped token', async (t) => {
   const mock = await startMcpServer();
   t.after(mock.close);
 
@@ -104,23 +89,13 @@ test('bundled clients call their stateless MCP endpoints with VERA_TOKEN', async
     VERA_TOKEN: 'test-token',
     VERA_SERVER_URL: `${mock.url}/ignored/base/path`,
   };
-  const [vera, neo4j] = await Promise.all([
-    runClient(veraClient, 'vera_whoami', '{}', env),
-    runClient(
-      neo4jClient,
-      'neo4j_read',
-      JSON.stringify({ instance: 'graph', cypher: 'RETURN $value', parameters: { value: 1 } }),
-      env,
-    ),
-  ]);
+  const vera = await runClient(veraClient, 'vera_whoami', '{}', env);
 
   assert.equal(vera.code, 0, vera.stderr);
   assert.equal(vera.stdout, '{"user":"test"}\n');
-  assert.equal(neo4j.code, 0, neo4j.stderr);
-  assert.equal(neo4j.stdout, '[{"slug":"graph"}]\n');
   assert.deepEqual(
     mock.requests.map((entry) => entry.url).sort(),
-    ['/mcp', '/neo4j-mcp'],
+    ['/mcp'],
   );
 
   for (const request of mock.requests) {
@@ -132,17 +107,6 @@ test('bundled clients call their stateless MCP endpoints with VERA_TOKEN', async
   assert.deepEqual(
     mock.requests.find((entry) => entry.url === '/mcp').body.params,
     { name: 'vera_whoami', arguments: {} },
-  );
-  assert.deepEqual(
-    mock.requests.find((entry) => entry.url === '/neo4j-mcp').body.params,
-    {
-      name: 'neo4j_read',
-      arguments: {
-        instance: 'graph',
-        cypher: 'RETURN $value',
-        parameters: { value: 1 },
-      },
-    },
   );
 });
 
@@ -222,14 +186,14 @@ test('clients reject missing secrets, unknown tools, and invalid argument JSON',
   assert.equal(missingToken.code, 1);
   assert.match(missingToken.stderr, /No Cowork-managed or standalone Vera token is available/);
 
-  const unknownTool = await runClient(neo4jClient, 'vera_whoami', '{}', {
+  const unknownTool = await runClient(veraClient, 'not_a_supported_native_tool', '{}', {
     VERA_TOKEN: 'do-not-print',
   });
   assert.equal(unknownTool.code, 1);
   assert.match(unknownTool.stderr, /Usage:/);
   assert.doesNotMatch(unknownTool.stderr, /do-not-print/);
 
-  const invalidJson = await runClient(neo4jClient, 'neo4j_read', '{oops', {
+  const invalidJson = await runClient(veraClient, 'vera_whoami', '{oops', {
     VERA_TOKEN: 'do-not-print',
   });
   assert.equal(invalidJson.code, 1);
