@@ -20,6 +20,17 @@ function registeredTools(client) {
 }
 
 describe("Vera tools", () => {
+  test("discovers account-scoped processed-email list and nullable note update", async () => {
+    const entries = [
+      {name: "vera_list_processed_emails", description: "List registry", parameters: {type: "object", required: ["accountId", "organizationId", "channelId"]}},
+      {name: "vera_update_processed_email_note", description: "Update summary", parameters: {type: "object", required: ["note", "confirm"]}},
+    ];
+    const tools = registeredTools({async listMcpTools() {return entries;}});
+    const result = JSON.parse(await tools.get("vera_mcp_list_tools").run({args: {area: "email", includeSchemas: true}, signal: undefined}));
+    expect(result.tools.map(tool => tool.name)).toEqual(entries.map(tool => tool.name));
+    expect(result.tools[0].parameters.required).toContain("organizationId");
+    expect(result.tools[1].parameters.required).toContain("confirm");
+  });
   test("discovers destructive conversation deletion with its required confirmation schema", async () => {
     const entries = [{name: "vera_delete_conversation", description: "Delete a verified conversation", parameters: {type: "object", required: ["agentId", "conversationId", "confirm"]}}];
     const tools = registeredTools({async listMcpTools() {return entries;}});
