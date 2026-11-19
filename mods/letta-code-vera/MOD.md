@@ -1,5 +1,9 @@
 # Vera mod
 
+## Conversation deletion
+
+Discover `area: "conversations", includeSchemas: true` for `vera_delete_conversation`. Requires an explicitly authorized exact `agentId`/`conversationId`, `confirm: true`, and fresh organization owner/admin access. Supply `lettaConnectionId` for a selected organization account; omission deliberately uses the organization default. Never switch accounts after failure. The server verifies ownership, refuses active/current server-runtime conversations, and reads back absence after deletion. Inspect `status`, `code` and `writeState`; never blindly retry an uncertain deletion. This does not delete agents, memory, emails or registry/automation mappings. The supporting server must be deployed; local discovery changes alone do not add the capability.
+
 ## Purpose and source of truth
 
 This mod is the local Letta Code integration for Vera. It is the agent-facing source of truth for Vera authentication, native Vera MCP, governed Neo4j knowledge graphs, configured MCP connectors, messaging channels, remote environments, organization agents, and Master Clio operations. Do not depend on a separately installed `vera-mcp` skill.

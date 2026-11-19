@@ -49,6 +49,7 @@ const MCP_DISCOVERY_AREAS = {
     "vera_get_email_attachment",
     "vera_read_artifact",
   ],
+  conversations: ["vera_delete_conversation"],
   responses: ["vera_respond"],
   schedules: [
     "vera_list_schedules",
@@ -93,6 +94,11 @@ const MCP_DISCOVERY_AREAS = {
 };
 
 const MCP_DISCOVERY_WORKFLOWS = {
+  conversations: [
+    "Verify exact organization Letta connection, agentId and conversationId; never switch accounts after failure",
+    "vera_delete_conversation requires organization owner/admin access, explicit deletion authorization and confirm=true; active/current server-runtime conversations are rejected",
+    "Inspect deletion acceptance and absence verification; do not retry uncertain writes blindly",
+  ],
   email: [
     "vera_list_channels (choose provider=email)",
     "vera_list_email_accounts",
