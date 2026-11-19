@@ -2,6 +2,7 @@ import { getAssistantDraft, setAssistantDraft, clearAssistantDraft } from './ass
 import { create } from 'zustand';
 import {sessionErrorMessage,preserveSessionFailure} from '../../electron/libs/runner/session-error-display.js';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { createPreferenceStorage } from './preferenceStorage';
 
 import { truncateInput } from "../utils/chat";
 import { mergeConversationHistory, getConversationMessageId, type ConversationStreamMessage } from "../utils/conversation";
@@ -1810,7 +1811,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
   }
 }), {
   name: APP_PREFERENCES_STORAGE_KEY,
-  storage: createJSONStorage(() => localStorage),
+  storage: createJSONStorage(() => createPreferenceStorage(() => localStorage)),
   partialize: (state) => ({
     selectedModel: state.selectedModel,
     newConversationAgentId: state.newConversationAgentId,

@@ -126,6 +126,15 @@ export const PromptInput = memo(function PromptInput({
     setSelectedModel,
   });
 
+  const handleSelectModel = useCallback((model: string) => {
+    setModelTouched(true);
+    setSelectedModel(model);
+  }, [setModelTouched, setSelectedModel]);
+
+  const handleToggleReasoning = useCallback(() => {
+    setShowReasoningInChat(!showReasoningInChat);
+  }, [setShowReasoningInChat, showReasoningInChat]);
+
   // Attachments hook
   const {
     attachments, attachmentsRef, dragActive, isUploading: attachmentsUploading,
@@ -295,8 +304,8 @@ export const PromptInput = memo(function PromptInput({
           </svg>
         </label>
         <ModelSelector models={models} selectedModel={selectedModel} hasSelectedModelOption={hasSelectedModelOption} modelsLoading={modelsLoading} showReasoningInChat={showReasoningInChat}
-          onSelectModel={(model) => { setModelTouched(true); setSelectedModel(model); }}
-          onToggleReasoning={() => setShowReasoningInChat(!showReasoningInChat)} />
+          onSelectModel={handleSelectModel}
+          onToggleReasoning={handleToggleReasoning} />
       </div>
       <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileInputChange} />
     </section>

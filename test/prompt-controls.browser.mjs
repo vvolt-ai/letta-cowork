@@ -20,9 +20,30 @@ try{
  assert(Math.abs(modelBox.y-reasoningBox.y)<12);
  assert.equal(await model.evaluate(el=>Boolean(el.closest('.promptControls'))),true);
  assert.equal(await page.locator('textarea').evaluate(el=>Boolean(el.closest('.promptControls'))),false);
- const prompt=page.getByPlaceholder('Ask Vera anything…');await prompt.fill('Keep this draft while controls change');
+ const prompt=page.getByPlaceholder('Ask Vera anything…');
+ // Count real synchronous storage writes and layout measurements on the input path.
+ await prompt.evaluate(el=>{
+   window.typingMetrics={writes:0,measurements:0};
+   const setItem=Storage.prototype.setItem;
+   Storage.prototype.setItem=function(...args){window.typingMetrics.writes++;return setItem.apply(this,args);};
+   const scrollHeight=Object.getOwnPropertyDescriptor(Element.prototype,'scrollHeight').get;
+   Object.defineProperty(el,'scrollHeight',{get(){window.typingMetrics.measurements++;return scrollHeight.call(this);}});
+ });
+ await prompt.pressSequentially('Typing should stay responsive');
+ await page.waitForTimeout(100);
+ const typingMetrics=await page.evaluate(()=>window.typingMetrics);
+ assert.equal(typingMetrics.writes,0,'typing must not persist unchanged preferences');
+ assert(typingMetrics.measurements>0 && typingMetrics.measurements<='Typing should stay responsive'.length,'at most one resize measurement per keystroke');
+ await prompt.fill('line\n'.repeat(30));await page.waitForTimeout(100);
+ assert.equal(await prompt.evaluate(el=>el.style.overflowY),'auto');
+ assert.equal(await prompt.evaluate(el=>parseFloat(el.style.height)),252);
+ await prompt.fill('Keep this draft while controls change');await page.waitForTimeout(100);
+ assert.equal(await prompt.evaluate(el=>el.style.overflowY),'hidden');
+ assert(await prompt.evaluate(el=>parseFloat(el.style.height)<252));
  await reasoning.click();assert.equal(await reasoning.getAttribute('aria-pressed'),'false');await reasoning.click();
  await permission.selectOption('standard');assert.equal((await page.evaluate(()=>window.promptFixture.snapshot())).permission,'standard');await permission.selectOption('unrestricted');
+ assert((await page.evaluate(()=>window.typingMetrics.writes))>0,'actual preference changes must still persist');
+ console.log(JSON.stringify({typingMetrics,verified:['no preference writes while typing','single resize path','multiline grows and shrinks','changed preferences still persist']}));
  await model.click();await page.getByRole('tab',{name:/BYOK/}).click();
  const engineering=page.getByRole('button',{name:'EngineeringChatGPT account (1 model)',exact:true});
  const personal=page.getByRole('button',{name:'chatgpt-plus-pro account (1 model)',exact:true});

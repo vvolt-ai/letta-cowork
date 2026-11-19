@@ -2,7 +2,7 @@
  * PromptTextArea component - textarea with attach, mic, and send buttons.
  */
 
-import { memo, useCallback } from "react";
+import { memo } from "react";
 
 export interface PromptTextAreaProps {
   prompt: string;
@@ -28,8 +28,6 @@ export interface PromptTextAreaProps {
   isMicSupported?: boolean;
 }
 
-const MAX_HEIGHT = 12 * 21;
-
 export const PromptTextArea = memo(function PromptTextArea({
   prompt,
   disabled,
@@ -52,19 +50,6 @@ export const PromptTextArea = memo(function PromptTextArea({
   interimTranscript = "",
   isMicSupported = false,
 }: PromptTextAreaProps) {
-  const handleInput = useCallback((event: React.FormEvent<HTMLTextAreaElement>) => {
-    const target = event.currentTarget;
-    target.style.height = "auto";
-    const scrollHeight = target.scrollHeight;
-    if (scrollHeight > MAX_HEIGHT) {
-      target.style.height = `${MAX_HEIGHT}px`;
-      target.style.overflowY = "auto";
-    } else {
-      target.style.height = `${scrollHeight}px`;
-      target.style.overflowY = "hidden";
-    }
-  }, []);
-
   return (
     <div className="mt-1 flex flex-col gap-1">
       {/* Interim transcript ghost text */}
@@ -116,7 +101,6 @@ export const PromptTextArea = memo(function PromptTextArea({
           value={prompt}
           onChange={(e) => onPromptChange(e.target.value)}
           onKeyDown={onKeyDown}
-          onInput={handleInput}
           onPaste={onPaste}
           ref={promptRef}
           disabled={disabled && !isRunning}
