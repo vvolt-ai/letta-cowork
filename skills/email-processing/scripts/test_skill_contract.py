@@ -8,10 +8,22 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class ContractTests(unittest.TestCase):
     def setUp(self):
-        self.main = (ROOT / 'SKILL.md').read_text()
+        self.entry = (ROOT / 'SKILL.md').read_text()
+        self.workflow = (ROOT / 'references/investigation-workflow.md').read_text()
+        # Detailed safeguards remain required, but are loaded only on the relevant route.
+        self.main = self.workflow + '\n' + self.entry
         self.po = (ROOT / 'references/po-processing.md').read_text()
         self.company = (ROOT / 'references/company-and-doc-review.md').read_text()
         self.execution = (ROOT / 'references/approved-sales-execution.md').read_text()
+
+    def test_small_entry_and_progressive_disclosure(self):
+        self.assertLess(len(self.entry), 8000)
+        self.assertIn('Do not load it for ignore or routine brief review', self.entry)
+        self.assertIn('references/investigation-workflow.md', self.entry)
+        self.assertIn('python3', self.entry)
+        self.assertIn('next_offset', self.entry)
+        self.assertIn('never binary', self.entry.lower())
+        self.assertIn('exit **0**', self.entry)
 
     def test_current_company_docs_before_business_checks(self):
         self.assertLess(self.main.index('## Step 3'), self.main.index('## Step 4'))
@@ -101,7 +113,7 @@ class ContractTests(unittest.TestCase):
         self.assertIn('blocks only work that actually depends on its contents', self.company)
 
     def test_configured_only_routing_and_version(self):
-        self.assertIn('version: "1.3.2"', self.main)
+        self.assertIn('version: "1.4.0"', self.entry)
         for text in (self.main, self.company):
             self.assertIn('VeraMcpListTools and VeraMcpCallTool', text)
             self.assertNotIn('Prefer direct mounted Odoo reads when available', text)

@@ -1,7 +1,7 @@
 # Approved sales execution: documents and shipping
 
-Use after the human approves the specific proposed writes. Keep email draft-only;
-approval cannot authorize agent email sending. Apply the customer's current
+Local PDF reading below is read-only and needs no business-write approval.
+Use the business-write sections only after the human approves the specific proposed writes. Keep email draft-only; approval cannot authorize agent email sending. Apply the customer's current
 guide and existing order gates. These steps do not grant new business authority.
 
 ## Local PDF reading
@@ -11,7 +11,7 @@ failure is not proof that the host cannot extract a PDF. Reuse already-visible
 pages/text first. Otherwise run this skill's installed local helper:
 
 ```text
-python "<skill-directory>/scripts/extract_local_pdf.py" "<downloaded-pdf>"
+python3 "<skill-directory>/scripts/extract_local_pdf.py" "<downloaded-pdf>"
 ```
 
 Use the actual directory reported by the loaded skill, not a guessed global
@@ -22,7 +22,7 @@ $reader = Join-Path $env:MEMORY_DIR 'skills\email-processing\scripts\extract_loc
 python $reader '<downloaded-pdf>'
 ```
 
-In Bash, use `python "$MEMORY_DIR/skills/email-processing/scripts/extract_local_pdf.py" "<downloaded-pdf>"`.
+On Linux/macOS use the deployed `python3` interpreter and the actual loaded skill directory. On Windows use the installed `python` or `py -3` launcher. Verify interpreter availability once at deployment, not by repeated failed commands for every email.
 Do not wrap this call in inline `python -c` code. Windows native-command quoting
 can remove the code's internal quotes before Python sees it; a direct script
 invocation avoids that failure. Do not spend the turn budget searching for
@@ -31,11 +31,8 @@ global copies when the loaded skill already provides its path.
 The helper uses existing `pdftotext -layout`, or installed `pypdf` if the former
 is absent. It does not install, download, contact an OCR service, or send private
 documents elsewhere. It returns page count, SHA-256, text, and completeness.
-Exit 2 means blocked or partial; inspect the JSON rather than claiming success.
-Empty/scanned pages need supported visual/OCR review. Truncated text is not a
-complete inspection. Do not infer a PO reference from the filename.
-`complete` means every reported page yielded text without output clipping;
-it does not verify graphical tables, signatures, images, or commercial facts.
+Exit 0 means a valid extracted/partial chunk; exit 2 means blocked. Default output is 6000 text characters, bounded to 16000 serialized JSON characters; `--max-chars` supports 1–12000. Follow `next_offset` with `--offset` and the first `--expected-sha256` when more text is material. File changes fail closed. Do not inspect helper source, binary Read the PDF or switch extraction commands for a valid partial result.
+Empty/scanned pages need supported visual/OCR review. Unread/truncated text is not a complete inspection. Do not infer a PO reference from the filename. `complete` means a single response covered all text with no empty pages; for multiple chunks track contiguous coverage from offset 0 to eof. A later eof alone does not establish full inspection. Text extraction does not verify graphical tables, signatures, images, or commercial facts.
 Perform supported visual inspection where the requested fact depends on them.
 
 Pass the same helper/fixture route to an extraction delegate. Do not delegate to

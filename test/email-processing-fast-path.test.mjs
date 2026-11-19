@@ -12,13 +12,18 @@ const apiSkillUrl = new URL("../skills/vera-mcp/SKILL.md", import.meta.url);
 test("email workflow uses supplied identifiers before discovery", async () => {
   const content = await readFile(skillUrl, "utf8");
 
-  assert.match(content, /Reuse supplied full body, message\/account\/folder IDs/i);
-  assert.match(content, /Do not rediscover a known email/i);
-  assert.match(content, /Vera email\/attachment tools/i);
+  assert.ok(content.length < 8000, "Keep the always-loaded entry lean");
+  assert.match(content, /Reuse supplied exact IDs and complete content/i);
+  assert.match(content, /Do not restart discovery or refetch successful current-turn evidence/i);
+  assert.match(content, /Do not load it for ignore or routine brief review/i);
   assert.doesNotMatch(content, /curl\.exe/);
+  const detailed = await readFile(new URL("../skills/email-processing/references/investigation-workflow.md", import.meta.url), "utf8");
+  assert.match(detailed, /Reuse supplied full body, message\/account\/folder IDs/i);
+  assert.match(detailed, /Do not rediscover a known email/i);
+  assert.match(detailed, /Vera email\/attachment tools/i);
   assert.ok(
-    content.indexOf("## Step 2 — Inspect every relevant attachment") <
-      content.indexOf("## Step 4 — Bounded business verification"),
+    detailed.indexOf("## Step 2 — Inspect every relevant attachment") <
+      detailed.indexOf("## Step 4 — Bounded business verification"),
   );
 });
 

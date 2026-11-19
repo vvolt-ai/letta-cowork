@@ -1,5 +1,7 @@
 """Synthetic offline tests; no customer documents or business systems."""
 import importlib.util
+import io
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -35,6 +37,52 @@ class Tests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.pdf = Path(self.tmp.name) / "file with spaces & text.pdf"
         self.pdf.write_bytes(fixture_pdf())
+
+    def test_resumable_chunks_reassemble_without_gaps_or_false_complete(self):
+        pages = ['first ' * 2000, 'second ' * 2000]
+        offset, chunks = 0, []
+        while True:
+            result = READER.finish(pages, 'fixture', 'a' * 64, 12000, offset)
+            self.assertLessEqual(len(json.dumps(result, ensure_ascii=False)), READER.MAX_JSON_CHARS)
+            self.assertEqual(result['offset'], offset)
+            self.assertTrue(result['chunk_complete'])
+            self.assertFalse(result['complete'])
+            chunks.append(result['text'])
+            if result['eof']:
+                self.assertIsNone(result['next_offset'])
+                break
+            self.assertGreater(result['next_offset'], offset)
+            offset = result['next_offset']
+        self.assertEqual(''.join(chunks), '\n'.join(f'--- Page {i+1} ---\n{p}' for i, p in enumerate(pages)))
+
+    def test_json_escaping_does_not_exceed_shell_output_budget(self):
+        result = READER.finish(['\x01' * 12000], 'fixture', 'a' * 64, 12000)
+        self.assertLessEqual(len(json.dumps(result, ensure_ascii=False)), READER.MAX_JSON_CHARS)
+        self.assertGreater(result['next_offset'], 0)
+        self.assertFalse(result['complete'])
+
+    @patch.object(READER.shutil, 'which', return_value='pdftotext')
+    @patch.object(READER.subprocess, 'run')
+    def test_changed_source_and_offset_fail_closed(self, run, _):
+        result = READER.extract(self.pdf, expected_sha256='a' * 64)
+        self.assertEqual(result['reason'], 'source_changed_or_checksum_mismatch')
+        run.assert_not_called()
+        run.return_value = types.SimpleNamespace(returncode=0, stdout=b'Fixture page\f')
+        self.assertEqual(READER.extract(self.pdf, offset=1000)['reason'], 'offset_out_of_range')
+
+    @patch.object(READER, 'extract')
+    def test_partial_cli_is_success_not_debuggable_command_failure(self, extract):
+        extract.return_value = {'status': 'partial', 'complete': False, 'text': 'chunk'}
+        with patch.object(sys, 'argv', ['reader', str(self.pdf)]), patch.object(sys, 'stdout', io.StringIO()) as out:
+            self.assertEqual(READER.main(), 0)
+            self.assertEqual(json.loads(out.getvalue())['status'], 'partial')
+
+    @patch.object(READER, 'extract')
+    def test_cli_continuation_requires_original_digest(self, extract):
+        with patch.object(sys, 'argv', ['reader', str(self.pdf), '--offset', '1']), patch.object(sys, 'stderr', io.StringIO()):
+            with self.assertRaises(SystemExit):
+                READER.main()
+        extract.assert_not_called()
 
     def test_missing_and_wrong_type(self):
         self.assertEqual(READER.extract(self.pdf.with_suffix(".missing"))["reason"], "local_file_not_found")
