@@ -20,6 +20,13 @@ function registeredTools(client) {
 }
 
 describe("Vera tools", () => {
+  test("discovers email tag creation/application in the email area with confirmation schema", async () => {
+    const entries = [{name: "vera_ensure_email_tag", description: "Create missing email tag and apply", parameters: {type: "object", required: ["channelId", "accountId", "folderId", "messageId", "confirm"]}}];
+    const tools = registeredTools({async listMcpTools() {return entries;}});
+    const result = JSON.parse(await tools.get("vera_mcp_list_tools").run({args: {area: "email", query: "tag", includeSchemas: true}, signal: undefined}));
+    expect(result.tools.map(tool => tool.name)).toEqual(["vera_ensure_email_tag"]);
+    expect(result.tools[0].parameters.required).toContain("confirm");
+  });
   test("discovers isolated sandbox tools in their explicit capability area", async () => {
     const entries=[{name:"vera_sandbox_create",description:"Create isolated workspace",parameters:{type:"object",required:["requestKey"]}},{name:"vera_sandbox_exec",description:"Execute in sandbox",parameters:{type:"object",required:["sessionId","command"]}}];
     const tools=registeredTools({async listMcpTools(){return entries;}});

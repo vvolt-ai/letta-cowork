@@ -79,6 +79,8 @@ Do not use channel history as a substitute for live mailbox access.
 6. Search uses Zoho syntax, for example `entire: inventory`, `content: requested parts`, `sender: user@example.com`, or `subject: invoice::has:attachment`; combine conditions with `::`.
 7. Call `vera_get_email` using the exact returned `accountId`, `folderId`, and message ID. A bare message ID is not enough.
 8. Call `vera_list_email_attachments` before `vera_get_email_attachment`. Small files may return base64; larger supported files return a short-lived artifact ID, integrity digest and download path. Follow the artifact workflow below; retrieving a server artifact does not mean it was saved locally.
+For separately human-authorized mailbox tagging, discover `area: "email", query: "tag", includeSchemas: true` and invoke the returned `vera_ensure_email_tag` schema with exact channel/account/folder/message IDs and `confirm: true`. It reuses the exact tag or creates it if missing, then applies it only to that email. The default is `AI Processed`, not `Processed`. Registry saves do not tag emails. Inspect `tagState`, `application` and `status`; unknown outcomes require authorized read-back before any retry. Requires provider tag-create/message-update scopes and mailbox write access. Availability requires a supporting deployed Vera server; discovery does not grant authorization.
+
 9. Use `vera_generate_email_draft` for draft text. Review the exact mailbox, recipients, subject, body, and format before `vera_save_email_draft` with `confirm: true`.
 
 Email rules:

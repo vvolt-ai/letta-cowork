@@ -42,6 +42,7 @@ const MCP_DISCOVERY_AREAS = {
     "vera_get_email",
     "vera_get_processed_email",
     "vera_save_processed_email",
+    "vera_ensure_email_tag",
     "vera_generate_email_draft",
     "vera_save_email_draft",
     "vera_list_email_attachments",
@@ -101,6 +102,8 @@ const MCP_DISCOVERY_WORKFLOWS = {
     "vera_list_email_attachments before vera_get_email_attachment",
     "For artifact:true use the local vera_download_artifact helper when available; MCP-only sessions can read vera_read_artifact chunks through the same authenticated MCP connection and save/verify decoded bytes without a remote machine or a separate Bearer token",
     "vera_generate_email_draft, then review and optionally vera_save_email_draft with confirm=true; email sending is not supported",
+    "For separately authorized tagging, vera_ensure_email_tag with exact channel/account/folder/message IDs and confirm=true creates the named tag only if missing, then applies it. Default AI Processed is not Processed. Inspect tagState/application; never blindly retry unknown outcomes",
+
   ],
   channels: [
     "vera_list_channels",
