@@ -26,6 +26,7 @@ const MCP_DISCOVERY_AREAS = {
     "vera_start_channel",
     "vera_stop_channel",
     "vera_send_channel_message",
+    "vera_create_discord_thread",
     "vera_delete_channel",
     "vera_list_channel_shares",
     "vera_share_channel",

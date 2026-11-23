@@ -20,6 +20,13 @@ function registeredTools(client) {
 }
 
 describe("Vera tools", () => {
+  test("discovers authorized Discord thread creation in the channels area", async () => {
+    const entries=[{name:"vera_create_discord_thread",description:"Create/reuse a question thread",parameters:{type:"object",required:["channelId","parentChannelId","messageId","confirm"]}}];
+    const tools=registeredTools({async listMcpTools(){return entries;}});
+    const result=JSON.parse(await tools.get("vera_mcp_list_tools").run({args:{area:"channels",query:"thread",includeSchemas:true},signal:undefined}));
+    expect(result.tools.map(tool=>tool.name)).toEqual(["vera_create_discord_thread"]);
+    expect(result.tools[0].parameters.required).toContain("confirm");
+  });
   test("discovers account-scoped processed-email list and nullable note update", async () => {
     const entries = [
       {name: "vera_list_processed_emails", description: "List registry", parameters: {type: "object", required: ["accountId", "organizationId", "channelId"]}},
