@@ -44,7 +44,8 @@ export interface CreateScheduledTaskDto {
   description?: string;
   prompt: string;
   agentId: string;
-  conversationId?: string;
+  // Omit to leave a partial update unchanged; null explicitly resets the binding.
+  conversationId?: string | null;
   scheduleType: "recurring" | "one_off";
   executionTarget?: "cowork" | "server";
   cronExpression: string;

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 
 import { CreateScheduleDialog } from "./CreateScheduleDialog";
 import { ScheduleRunsDrawer } from "./ScheduleRunsDrawer";
-import { buildCronExpression } from "./types";
+import { buildCronExpression, normalizeScheduleConversationId } from "./types";
 import { InnerPageLayout } from "../layout/components/InnerPageLayout";
 
 import type { ScheduledTask, CreateScheduledTaskForm } from "./types";
@@ -73,7 +73,7 @@ export function SchedulesPanel({ onClose }: Props) {
       description: form.description || undefined,
       prompt: form.prompt,
       agentId: form.agentId,
-      conversationId: form.conversationId || undefined,
+      conversationId: normalizeScheduleConversationId(form.conversationId),
       scheduleType: form.scheduleType,
       executionTarget: form.executionTarget,
       cronExpression: cron,
@@ -91,7 +91,7 @@ export function SchedulesPanel({ onClose }: Props) {
       description: form.description || undefined,
       prompt: form.prompt,
       agentId: form.agentId,
-      conversationId: form.conversationId || undefined,
+      conversationId: normalizeScheduleConversationId(form.conversationId),
       scheduleType: form.scheduleType,
       executionTarget: form.executionTarget,
       cronExpression: cron,

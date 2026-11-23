@@ -47,6 +47,11 @@ export interface CreateScheduledTaskForm {
   enabled: boolean;
 }
 
+/** Full form saves must explicitly clear a binding; undefined is omitted from PATCH JSON. */
+export function normalizeScheduleConversationId(conversationId: string): string | null {
+  return conversationId.trim() || null;
+}
+
 /** Convert form frequency + time fields into a cron expression */
 export function buildCronExpression(form: CreateScheduledTaskForm): string {
   if (form.frequency === "custom") return form.cronExpression;
