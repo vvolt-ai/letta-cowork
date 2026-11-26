@@ -2,7 +2,7 @@
 name: creating-email-jev-webhooks
 description: Creates email automation inbound webhooks with TypeSafe JEV using Vera's existing native tools. Collects mailbox/event and routing requirements, authors prompts and schema-v2 configuration, creates a disabled owner-scoped webhook, and guides private URL copying, Zoho/provider setup and separately approved activation/testing. Use for email webhook automation, JEV email classification, important-mail routing or agent-assisted webhook setup. No scripts or raw API fallback.
 metadata:
-  version: "1.0.0"
+  version: "1.0.1"
 ---
 
 # Create email automation webhooks with JEV
@@ -30,6 +30,28 @@ Establish:
 - **Action boundaries:** review/report/draft only by default; determine any separately authorized tagging, record updates or private non-email alerts. Do not copy another user's personal tags, recipients or alert preferences.
 
 If actual email body/summary is required for a useful classification, resolve its availability before claiming readiness. Zoho Limited Data events can omit `summary`/`html`. Do not map a field merely because it appeared in one full-payload example, treat strings as nested objects, or classify from subject alone without an agreed limitation. Native email reads require the actual authorized source identity; webhook message/thread IDs are not automatically provider message IDs.
+
+### Zoho Mail default fields
+
+Reuse a field list the user already supplied for the identified automation as source-shape evidence. Do **not** ask them to repeat it, demand the same UI listing again, or block solely because native field inspection is unavailable. For that supplied full-payload shape, start with this content mapping unless the user's saved configuration or requirements call for another choice:
+
+```json
+{"email.subject":"body.subject","email.summary":"body.summary","email.html":"body.html"}
+```
+
+The supplied field catalog (names/types, not content or fixed byte lengths) is:
+
+| Paths | Type |
+|---|---|
+| `body`, `query` | object |
+| `body.IntegIdList`, `body.folderId`, `body.fromAddress` | string |
+| `body.hasAttachment`, `body.html`, `body.messageId`, `body.messageIdString` | string |
+| `body.sender`, `body.subject`, `body.summary`, `body.threadId`, `body.toAddress` | string |
+| `body.Mode`, `body.receivedTime`, `body.sentDateInGMT`, `body.size`, `body.zuid` | number |
+
+Preserve casing and types: `hasAttachment` was a string, not a Boolean; numeric fields remain numbers. Add identity/other mappings only when needed and verified; these names do not establish native provider-ID equivalence. Do not automatically send all metadata, the whole body object, query parameters or a token to JEV. The UI's **Add Zoho Mail defaults** explicitly adds subject/summary/HTML without overwriting existing rows and exposes the full catalog as suggestions.
+
+This preset is grounded in the user's 2026-11-26 full-payload field listing, not a guarantee for every Zoho producer or future event. For another source verify applicability; Limited Data can omit summary/HTML. Missing values remain a fail-closed review, not an excuse to fabricate content or silently weaken mappings. No new field inspection is needed merely to repeat the already supplied names for the same task.
 
 ## 3. Prepare background when requested
 
@@ -65,7 +87,8 @@ Use the following only as a structural illustration. The agent must replace the 
     "model": "jev-1.13.0",
     "stateMapping": {
       "email.subject": "body.subject",
-      "email.summary": "body.summary"
+      "email.summary": "body.summary",
+      "email.html": "body.html"
     },
     "questions": {
       "route": {
@@ -130,4 +153,4 @@ Finish with a concise receipt: task ID/name; **created/read back**; **disabled/e
 
 ## Source and maintenance
 
-Maintained source: `VerivoltDev/Skills/creating-email-jev-webhooks/SKILL.md`. Version 1.0.0, authored 2026-11-26 from Vera backend native creation/setup schemas and `services/vera-cowork-server/docs/jev-webhook-operation.md` at ai-platform commit `f2b0ab7`, with Vera mod schedules discovery at letta-cowork commit `26106c6`. Recheck live discovery and maintained docs before acting; these revisions establish the source contract, not current deployment. Keep distributed copies synchronized. This skill is Markdown-only: no helper scripts, packaged artifact, installation, live webhook or activation is implied by creating this file.
+Maintained source: `VerivoltDev/Skills/creating-email-jev-webhooks/SKILL.md`. Version 1.0.1, updated 2026-11-26 with the user's observed Zoho payload field preset and reuse-of-supplied-evidence instruction; originally authored 2026-11-26 from Vera backend native creation/setup schemas and `services/vera-cowork-server/docs/jev-webhook-operation.md` at ai-platform commit `f2b0ab7`, with Vera mod schedules discovery at letta-cowork commit `26106c6`. Recheck live discovery and maintained docs before acting; these revisions establish the source contract, not current deployment. Keep distributed copies synchronized. This skill is Markdown-only: no helper scripts, packaged artifact, installation, live webhook or activation is implied by creating this file.
