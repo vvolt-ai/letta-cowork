@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import {CALLER_SESSION_ONLY_TOOLS} from '../dist-electron/services/remote-access/caller-session-tools.js';
 import { remoteFileExportDefinition } from '../dist-electron/services/remote-access/remoteFileExport.js';
 
 // White-box registration method harness: no Electron startup, network or settings writes.
@@ -16,10 +17,11 @@ const register = new Function(
   'os',
   'process',
   'remoteFileExportDefinition',
+  'CALLER_SESSION_ONLY_TOOLS',
   body,
 );
 test('unsupported Windows export and caller-owned audit are not advertised as remote capabilities', () => {
-  const tools = [{ name: 'DesktopOnly', description: 'fixture', parameters: { type: 'object' } },{name:'SafetyAuditListOwn',description:'caller only',parameters:{type:'object'}}];
+  const tools = [{ name: 'DesktopOnly', description: 'fixture', parameters: { type: 'object' } },...['SafetyAuditListOwn','VeraMcpListTools','VeraMcpCallTool'].map(name=>({name,description:'caller only',parameters:{type:'object'}}))];
   let payload;
   register.call(
     {
@@ -37,9 +39,10 @@ test('unsupported Windows export and caller-owned audit are not advertised as re
     { hostname: () => 'fixture-host' },
     { cwd: () => 'C:\\fixture', platform: 'win32', arch: 'x64', env: {} },
     remoteFileExportDefinition,
+    CALLER_SESSION_ONLY_TOOLS,
   );
   assert.deepEqual(payload.capabilities, ['DesktopOnly']);
-  assert.deepEqual(payload.toolDefinitions, tools.filter(tool=>tool.name!=='SafetyAuditListOwn'));
+  assert.deepEqual(payload.toolDefinitions, tools.filter(tool=>!CALLER_SESSION_ONLY_TOOLS.has(tool.name)));
 });
 
 test('runner advertises schema and capabilities from one immutable catalog snapshot', () => {
@@ -61,6 +64,7 @@ test('runner advertises schema and capabilities from one immutable catalog snaps
     { hostname: () => 'fixture-host' },
     { cwd: () => '/fallback', platform: 'fixture', arch: 'fixture', env: {} },
     remoteFileExportDefinition,
+    CALLER_SESSION_ONLY_TOOLS,
   );
   assert.equal(reads, 1);
   assert.equal(payload.type, 'runner.register');

@@ -307,6 +307,7 @@ export class BaseHttpClient {
       "Content-Type": "application/json",
     };
 
+    if(options.accept)headers.Accept=options.accept;
     if (requireAuth && this.tokens?.accessToken) {
       headers["Authorization"] = `Bearer ${this.tokens.accessToken}`;
     }
@@ -318,16 +319,18 @@ export class BaseHttpClient {
 
     const response = await fetch(url, {
       signal,
+      redirect:options.rejectRedirects?'error':undefined,
       method,
       headers,
       body: body ? JSON.stringify(body) : undefined,
     });
 
+    if(this.authGeneration!==requestGeneration||this.authRetired)throw Error('API_AUTH_STATE_CHANGED');
     // Handle 401 - try to refresh token
     if (response.status === 401) {
       if (this.authGeneration !== requestGeneration) throw Error('API_AUTH_STATE_CHANGED');
       // Try to refresh if we have a refresh token
-      if (this.tokens?.refreshToken) {
+      if (options.retryAuthentication!==false&&this.tokens?.refreshToken) {
         signal?.throwIfAborted();
         const newTokens = this.tokens?.accessToken !== sentToken ? this.tokens : await this.refreshAccessToken(requestGeneration);
         if (this.authGeneration !== requestGeneration) throw Error('API_AUTH_STATE_CHANGED');
@@ -337,15 +340,19 @@ export class BaseHttpClient {
           headers["Authorization"] = `Bearer ${newTokens.accessToken}`;
           const retryResponse = await fetch(url, {
             signal,
+            redirect:options.rejectRedirects?'error':undefined,
             method,
             headers,
             body: body ? JSON.stringify(body) : undefined,
           });
+          if(this.authGeneration!==requestGeneration||this.authRetired)throw Error('API_AUTH_STATE_CHANGED');
           if (!retryResponse.ok) {
             const error = await retryResponse.text();
-            throw new Error(`API error: ${retryResponse.status} - ${error}`);
+            throw Object.assign(new Error(`API error: ${retryResponse.status} - ${error}`),{httpStatus:retryResponse.status});
           }
-          return retryResponse.status === 204 ? (undefined as unknown as T) : retryResponse.json();
+          const result=retryResponse.status===204?undefined:await retryResponse.json();
+          if(this.authGeneration!==requestGeneration||this.authRetired)throw Error('API_AUTH_STATE_CHANGED');
+          return result as T;
         }
       }
       if (this.authGeneration !== requestGeneration) throw Error('API_AUTH_STATE_CHANGED');
@@ -354,18 +361,20 @@ export class BaseHttpClient {
         this.clearTokens();
         this._onAuthExpired?.();
       }
-      throw new Error("Authentication expired. Please login again.");
+      throw Object.assign(new Error("Authentication expired. Please login again."),{httpStatus:401});
     }
 
     if (!response.ok) {
       const error = await response.text();
-      throw new Error(`API error: ${response.status} - ${error}`);
+      throw Object.assign(new Error(`API error: ${response.status} - ${error}`),{httpStatus:response.status});
     }
 
     // 204 No Content — return undefined (e.g. DELETE responses)
     if (response.status === 204) return undefined as unknown as T;
 
-    return response.json();
+    const result=await response.json();
+    if(this.authGeneration!==requestGeneration||this.authRetired)throw Error('API_AUTH_STATE_CHANGED');
+    return result;
   }
 
   private async refreshAccessToken(generation = this.authGeneration): Promise<AuthTokens | null> {

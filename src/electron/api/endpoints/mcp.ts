@@ -10,6 +10,7 @@
  * the previously-saved token back.
  */
 
+import {fetchVeraTools,callVeraTool,type VeraDiscoveryInput} from './vera-native.js';
 import type { BaseHttpClient } from "../client/base-client.js";
 
 // ─── Wire types ────────────────────────────────────────────────────────────
@@ -163,12 +164,10 @@ export class McpEndpoints {
    */
   static async fetchVisibleTools(
     client: BaseHttpClient,
-    input: { serverSlug?: string; query?: string; limit?: number; searchAllConnectors?: boolean; offset?: number },
+    input: VeraDiscoveryInput,
+    signal?:AbortSignal,
   ): Promise<McpToolRunResult> {
-    return client.request<McpToolRunResult>("/mcp/tools/fetch", {
-      method: "POST",
-      body: input,
-    });
+    return fetchVeraTools(client,input,args=>client.request<McpToolRunResult>('/mcp/tools/fetch',{method:'POST',body:args,signal}),signal);
   }
 
   /** Invoke a connector tool within the authenticated Vera scope. */
@@ -176,11 +175,9 @@ export class McpEndpoints {
     client: BaseHttpClient,
     toolName: string,
     args: Record<string, unknown>,
+    signal?:AbortSignal,
   ): Promise<McpToolRunResult> {
-    return client.request<McpToolRunResult>("/mcp/tools/invoke", {
-      method: "POST",
-      body: { toolName, args },
-    });
+    return callVeraTool(client,toolName,args,()=>client.request<McpToolRunResult>('/mcp/tools/invoke',{method:'POST',body:{toolName,args},retryAuthentication:false,rejectRedirects:true,signal}),signal);
   }
 
   // Legacy agent attachments

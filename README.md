@@ -28,6 +28,7 @@ The SDK owns chat and delegated-agent model execution, while Cowork preserves it
 
 See [desktop SDK architecture, cancellation, packaging and checks](docs/desktop-agent-sdk-runtime.md).
 The [agent-first workspace](docs/agent-workspace-navigation.md) provides a compact agent rail, complete conversation navigation and direct Memory/Schedules/Remote Access/Emails actions.
+Discover native Vera, governed graph and configured connector tools with [authenticated catalog coverage and access diagnostics](docs/vera-native-tool-access.md). Authentication does not bypass resource permissions, sharing, confirmation or remote-machine readiness.
 Read your own database-backed Vera audit events with [`SafetyAuditListOwn`](docs/own-safety-audit.md).
 Upload explicitly approved workspace deliverables with [`FileManagerUpload`](docs/file-manager-tools.md); download links are returned only after byte/hash verification and are not claimed private or expiring.
 

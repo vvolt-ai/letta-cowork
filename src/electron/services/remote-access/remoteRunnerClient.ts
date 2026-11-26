@@ -22,6 +22,7 @@ const RECONNECT_MAX_MS = 30_000;
 
 export type StateListener = (state: RemoteAccessState) => void;
 
+import {CALLER_SESSION_ONLY_TOOLS} from './caller-session-tools.js';
 export class RemoteRunnerClient {
   private socket: WebSocket | null = null;
   private heartbeat: NodeJS.Timeout | null = null;
@@ -144,7 +145,7 @@ export class RemoteRunnerClient {
 
   private register(): void {
     const cwd = this.settings.allowedDirectories[0] || process.cwd();
-    const toolDefinitions = [...getClientToolsForWire().filter(tool=>tool.name!=='SafetyAuditListOwn'), ...(process.platform==='win32'?[]:[remoteFileExportDefinition])];
+    const toolDefinitions = [...getClientToolsForWire().filter(tool=>!CALLER_SESSION_ONLY_TOOLS.has(tool.name)), ...(process.platform==='win32'?[]:[remoteFileExportDefinition])];
     this.send({
       type: "runner.register",
       environmentName: this.settings.environmentName || os.hostname() || "cowork-desktop",

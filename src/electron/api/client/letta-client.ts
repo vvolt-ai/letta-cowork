@@ -801,20 +801,22 @@ export class VeraCoworkApiClient extends BaseHttpClient {
   }
 
   async mcpFetchVisibleTools(input: {
+    area?:'all'|'native'|'configured_connectors'|'remote'|'channels'|'email'|'schedules'|'knowledge'|'graph'|'identity';
     serverSlug?: string;
     query?: string;
     limit?: number;
     searchAllConnectors?: boolean;
     offset?: number;
-  }): Promise<McpToolRunResult> {
-    return McpEndpoints.fetchVisibleTools(this, input);
+  },signal?:AbortSignal): Promise<McpToolRunResult> {
+    return McpEndpoints.fetchVisibleTools(this, input,signal);
   }
 
   async mcpInvokeVisibleTool(
     toolName: string,
     args: Record<string, unknown>,
+    signal?:AbortSignal,
   ): Promise<McpToolRunResult> {
-    return McpEndpoints.invokeVisibleTool(this, toolName, args);
+    return McpEndpoints.invokeVisibleTool(this, toolName, args,signal);
   }
 
   async mcpListAttachments(agentId: string): Promise<McpAttachment[]> {

@@ -20,6 +20,7 @@ const SECRET_OUTPUT_PATTERNS: Array<[RegExp, string]> = [
   [/(Bearer\s+)[A-Za-z0-9._-]+/gi, "$1[REDACTED]"],
 ];
 
+import {CALLER_SESSION_ONLY_TOOLS} from './caller-session-tools.js';
 export class RemoteToolDispatcher {
   constructor(private readonly settings: RemoteAccessSettings) {}
 
@@ -38,6 +39,7 @@ export class RemoteToolDispatcher {
     if (!this.settings.autoApprove) {
       return { status: "error", output: "Remote access manual approval is not implemented in Phase 1." };
     }
+    if(input.toolName!=='SafetyAuditListOwn'&&CALLER_SESSION_ONLY_TOOLS.has(input.toolName))return{status:'error',output:JSON.stringify({code:'VERIFIED_CALLER_SESSION_REQUIRED',toolName:input.toolName,executed:false,detail:'Invoke Vera API tools from the authenticated caller runtime, not through a remote machine owner login.'})};
     if(input.toolName==='SafetyAuditListOwn')return{status:'error',output:'Own audit logs must use the verified caller session, never a remote machine owner\'s login.'};
     if (!isClientTool(input.toolName) && input.toolName!==REMOTE_FILE_EXPORT_TOOL) {
       return { status: "error", output: `Client tool '${input.toolName}' is not registered on this device.` };

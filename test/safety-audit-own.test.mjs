@@ -178,4 +178,5 @@ test('shared remote execution cannot borrow the remote owner audit session', asy
   });
   assert.equal(result.status, 'error');
   assert.match(result.output, /verified caller session/);
+  for(const toolName of ['VeraMcpListTools','VeraMcpCallTool']){const blocked=await dispatcher.runTool({requestId:'native-fixture',toolName,args:{toolName:'vera_run_remote_tool',args:{}}});assert.equal(blocked.status,'error');assert.equal(JSON.parse(blocked.output).code,'VERIFIED_CALLER_SESSION_REQUIRED');assert.equal(JSON.parse(blocked.output).executed,false);}
 });

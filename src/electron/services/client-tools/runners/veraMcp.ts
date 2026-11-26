@@ -30,7 +30,7 @@ interface VeraMcpFetchPayload {
 function namespacedFetchOutput(output: string): string {
   try {
     const payload = JSON.parse(output) as VeraMcpFetchPayload;
-    if (Array.isArray(payload.connectors)) {
+    if (Array.isArray(payload.connectors)&&!Array.isArray(payload.tools)) {
       return JSON.stringify({
         ...payload,
         connectors: payload.connectors,
@@ -63,7 +63,7 @@ function namespacedFetchOutput(output: string): string {
       truncated: payload.truncated === true,
       instruction: payload.selectionRequired
         ? "Confirm the intended connector/account before using an exact returned namespaced name. Discovery suggestions never authorize rerouting."
-        : "Call VeraMcpCallTool with the exact namespaced name and args matching its parameters schema.",
+        : "Call VeraMcpCallTool with the exact returned toolName and schema. Native tools are unprefixed vera_* or neo4j_*; configured connector names remain namespaced. Inspect catalog coverage diagnostics before concluding a capability is unavailable.",
     }, null, 2);
   } catch {
     return output;
@@ -78,13 +78,14 @@ function namespacedFetchOutput(output: string): string {
 const veraMcpListTools: ClientToolDefinition = {
   name: "VeraMcpListTools",
   description:
-    "List visible Vera MCP connectors, or search enabled tools on one connector or across authorized connectors. Namespaced input is supported for SEARCH only. Use the exact returned toolName and schema for invocation; explicitly select the connector/environment, never infer prod/stage from suggestions.",
+    "Discover Vera native, governed graph and configured-connector tools under the signed-in user. Default: all catalogs with coverage diagnostics. Use area=remote for native remote computers, area=email/channels/schedules/knowledge/identity/native/graph, or area=configured_connectors with serverSlug for connectors. Listed tools are not resource access grants; ACLs, agent policy, sharing, confirmation and offline-machine checks still apply. No match is not an access denial. Use exact returned toolName/schema; never infer prod/stage or switch identity after a denial.",
   parameters: {
     type: "object",
     properties: {
+      area:{type:'string',enum:['all','native','configured_connectors','remote','channels','email','schedules','knowledge','graph','identity'],description:'Catalog/capability area. Defaults to all, or configured_connectors for an explicit non-native serverSlug.'},
       serverSlug: {
         type: "string",
-        description: "Optional connector slug returned by this tool. Omit it to list connectors.",
+        description: "Exact configured connector slug, or vera_native/vera_graph. Omit to discover catalogs; area=configured_connectors lists only connectors.",
       },
       query: {
         type: "string",
@@ -110,6 +111,7 @@ const veraMcpListTools: ClientToolDefinition = {
   },
   async run(args: Record<string, unknown>, _ctx: ToolRunContext): Promise<ToolRunResult> {
     const input = {
+      area: ['all','native','configured_connectors','remote','channels','email','schedules','knowledge','graph','identity'].includes(String(args.area))?args.area as 'all':undefined,
       serverSlug: typeof args.serverSlug === "string" && args.serverSlug.trim()
         ? args.serverSlug.trim()
         : undefined,
@@ -125,7 +127,7 @@ const veraMcpListTools: ClientToolDefinition = {
     };
 
     try {
-      const result = await getVeraCoworkApiClient().mcpFetchVisibleTools(input);
+      const result = await getVeraCoworkApiClient().mcpFetchVisibleTools(input,_ctx.signal);
       return {
         isError: Boolean(result.isError),
         output: result.isError ? result.output : namespacedFetchOutput(result.output ?? ""),
@@ -133,7 +135,7 @@ const veraMcpListTools: ClientToolDefinition = {
     } catch (error) {
       return {
         isError: true,
-        output: `Failed to fetch Vera MCP tools: ${error instanceof Error ? error.message : String(error)}`,
+        output: JSON.stringify({code:'VERA_DISCOVERY_UNAVAILABLE',phase:'discovery',reason:(error as {httpStatus?:number})?.httpStatus===401?'not_authenticated':(error as {httpStatus?:number})?.httpStatus===403?'permission_or_policy_denied':'server_or_network_error',httpStatus:(error as {httpStatus?:number})?.httpStatus,executed:false}),
       };
     }
   },
@@ -142,7 +144,7 @@ const veraMcpListTools: ClientToolDefinition = {
 const veraMcpCallTool: ClientToolDefinition = {
   name: "VeraMcpCallTool",
   description:
-    "Call an MCP tool whose configuration and secrets are stored on Vera server. First use VeraMcpListTools to find the exact namespaced toolName and input schema, then pass toolName and args here.",
+    "Invoke an exact tool returned by VeraMcpListTools under the signed-in user. Native vera_* tools use /mcp; native neo4j_* use governed /neo4j-mcp; configured tools retain exact connector__tool names. No arbitrary endpoint/identity fallback. Existing server ACL, sharing, agent policy and confirmations remain enforced. Never retry an uncertain send/write; inspect its original receipt.",
   parameters: {
     type: "object",
     properties: {
@@ -170,7 +172,7 @@ const veraMcpCallTool: ClientToolDefinition = {
       : {};
 
     try {
-      const result = await getVeraCoworkApiClient().mcpInvokeVisibleTool(toolName, toolArgs);
+      const result = await getVeraCoworkApiClient().mcpInvokeVisibleTool(toolName, toolArgs,_ctx.signal);
       return {
         isError: Boolean(result.isError),
         output: result.output ?? "",
@@ -178,7 +180,7 @@ const veraMcpCallTool: ClientToolDefinition = {
     } catch (error) {
       return {
         isError: true,
-        output: `Failed to run Vera MCP tool '${toolName}': ${error instanceof Error ? error.message : String(error)}`,
+        output: JSON.stringify({code:'VERA_TOOL_ACCESS_UNCONFIRMED',toolName,phase:'invocation',reason:(error as {httpStatus?:number})?.httpStatus===401?'not_authenticated':(error as {httpStatus?:number})?.httpStatus===403?'permission_or_policy_denied':'server_or_network_error',httpStatus:(error as {httpStatus?:number})?.httpStatus,execution:'unconfirmed',retried:false}),
       };
     }
   },

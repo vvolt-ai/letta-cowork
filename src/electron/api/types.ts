@@ -325,6 +325,11 @@ export interface ProcessedEmailRecord {
 // ============================================
 
 export interface RequestOptions {
+  /** Internal protocol negotiation; never supplied by tool arguments. */
+  accept?:string;
+  rejectRedirects?:boolean;
+  /** Do not replay a non-idempotent request after an authentication failure. */
+  retryAuthentication?:boolean;
   signal?:AbortSignal;
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
