@@ -1,6 +1,14 @@
 # Dependency maintenance
 
-## Current review — 2026-11-26
+## Applied compatible updates — 2026-11-26
+
+Bun-owned package.json/bun.lock now include compatible updates: ws8.23.0 (direct pin/override aligned), Playwright1.65.1 (no browser installation), @types/node26.6.11, @types/react19.3.3, react-refresh lint plugin0.5.8, typescript-eslint8.74.0 and explicit Prettier3.10.1. Compatible fresh transitive resolution removed the reported Undici/brace-expansion/Hono high/low findings without forcing one major across their consumers. An interrupted partial lock needed re-resolution; final frozen Bun install passes without changes. No npm lock was introduced.
+
+Fresh Bun audit: **2 moderate,0 high/critical/low** advisory records, remaining in glob/minimatch. The previous17-high/24-moderate/6-low record below is pre-update, not current. These remaining majors were not forced. Electron45.3.0/embedded Node24.22.2/ABI150, SDK0.8.90/Code0.34.63, TypeScript6.0.3 and its LSP alias remain exact; Electron45.5/Code0.34.71 and held framework/lint majors are not claimed adopted.
+
+Validation: full TypeScript/Vite build staged outside the existing generated renderer; supported shell Node24.22.3 broad suite **412 pass,2 skip**; selected Electron-native dependency/PTy/Sharp/auth/isolation tests **25 pass**; renderer TSX tests **18 pass**; frozen Bun install passes. A monolithic all-tests run under Electron timed out and was not counted as passing; no remaining test process was observed. The mixed Bun TS/TSX invocation produced55 failures, dominated by absent browser localStorage in store helpers (38 pass); no unrelated persistence/test-harness refactor is included. Do not advertise all UI tests clean or infer exploitation/production acceptance from advisory counts. Native model/process fixtures use temporary data only; no app restart, installer, real provider/message/ERP action or live memory change occurred.
+
+## Pre-update review — 2026-11-26
 
 Source: current manifest/installed graph, read-only npm outdated (metadata comparison only), Bun audit and fresh registry peer/version queries. Bun remains the authoritative installer/lock owner. No npm lock was created; no packages, overrides, lockfiles or global runtimes were changed. Older install/test receipts below are historical, not validation of new candidates.
 

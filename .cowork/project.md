@@ -19,7 +19,7 @@ Electron desktop app wrapping the Letta Code agent runtime with Verivolt/Cowork 
 - Zustand 5
 - Bun package manager
 
-Dependency maintenance and held major migrations: `docs/dependency-maintenance.md` (current review2026-11-26). Registry latest Code0.34.71 is a candidate, not adopted; SDK0.8.90/Code0.34.63 remain exact pins. Check fresh metadata rather than accepting an older cached latest tag. TypeScript7/ESLint10 remain peer-blocked; security audit findings and candidate updates are stored in that guide, not treated as resolved.
+Dependency maintenance and held major migrations: `docs/dependency-maintenance.md` (current review2026-11-26). Registry latest Code0.34.71 is a candidate, not adopted; SDK0.8.90/Code0.34.63 remain exact pins. Check fresh metadata rather than accepting an older cached latest tag. TypeScript7/ESLint10 remain peer-blocked; compatible package/transitive updates are applied in the working dependency graph; fresh audit has2 moderate and0 high/critical/low records. Remaining majors, test limitations and exact validation states are stored in that guide; no app adoption is inferred.
 
 ## Local commands
 
