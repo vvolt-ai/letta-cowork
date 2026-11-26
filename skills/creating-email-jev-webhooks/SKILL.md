@@ -2,7 +2,7 @@
 name: creating-email-jev-webhooks
 description: Creates email automation inbound webhooks with TypeSafe JEV using Vera's existing native tools. Collects mailbox/event and routing requirements, authors prompts and schema-v2 configuration, creates a disabled owner-scoped webhook, and guides private URL copying, Zoho/provider setup and separately approved activation/testing. Use for email webhook automation, JEV email classification, important-mail routing or agent-assisted webhook setup. No scripts or raw API fallback.
 metadata:
-  version: "1.0.3"
+  version: "1.0.5"
 ---
 
 # Create email automation webhooks with JEV
@@ -36,7 +36,7 @@ If actual email body/summary is required for a useful classification, resolve it
 Reuse a field list the user already supplied for the identified automation as source-shape evidence. Do **not** ask them to repeat it, demand the same UI listing again, or block solely because native field inspection is unavailable. For that supplied full-payload shape, start with this content mapping unless the user's saved configuration or requirements call for another choice:
 
 ```json
-{"email.subject":"body.subject","email.summary":"body.summary","email.html":"body.html"}
+{"email.subject":"body.subject","email.summary":"body.summary"}
 ```
 
 The supplied field catalog (names/types, not content or fixed byte lengths) is:
@@ -49,7 +49,7 @@ The supplied field catalog (names/types, not content or fixed byte lengths) is:
 | `body.sender`, `body.subject`, `body.summary`, `body.threadId`, `body.toAddress` | string |
 | `body.Mode`, `body.receivedTime`, `body.sentDateInGMT`, `body.size`, `body.zuid` | number |
 
-Preserve casing and types: `hasAttachment` was a string, not a Boolean; numeric fields remain numbers. Add identity/other mappings only when needed and verified; these names do not establish native provider-ID equivalence. Do not automatically send all metadata, the whole body object, query parameters or a token to JEV. The UI's **Add Zoho Mail defaults** explicitly adds subject/summary/HTML without overwriting existing rows and exposes the full catalog as suggestions.
+Preserve casing and types: `hasAttachment` was a string, not a Boolean; numeric fields remain numbers. Add identity/other mappings only when needed and verified; these names do not establish native provider-ID equivalence. Do not automatically send all metadata, the whole body object, query parameters or a token to JEV. The UI's **Add Zoho Mail defaults** explicitly adds **subject and summary only** without overwriting existing rows and exposes the full catalog as suggestions.
 
 This preset is grounded in the user's 2026-11-26 full-payload field listing, not a guarantee for every Zoho producer or future event. For another source verify applicability; Limited Data can omit summary/HTML. Missing values remain a fail-closed review, not an excuse to fabricate content or silently weaken mappings. No new field inspection is needed merely to repeat the already supplied names for the same task.
 
@@ -77,6 +77,8 @@ For schema version 2:
 - For each Run route provide its own saved `prompt`, verified `agentId`, `conversationId` (`null` for New) and authorized `lettaConnectionId` when applicable. Skip/Review routes do not need an agent execution.
 - Agree the confidence threshold; do not silently lower it to force execution. Use fail-closed `unknownOrMissingAnswer: review_required`. A low/missing confidence can hold a Run route. A policy `reviewQuestion` is a deliberate human-review gate, not automatically the same as personal attention YES.
 - Use the current supported model from the discovered schema/settings; do not switch provider, accept a key in chat or invent a model upgrade. Organization integration/data/cost approval is separate. Missing organization JEV configuration does not prevent creating a disabled draft.
+- Default to **subject + summary only**. Do not map `body.html`, full body objects, raw MIME or attachment bytes into JEV by default. HTML remains an opt-in source only if explicitly needed, authorized and within the current byte budget. A Run agent may retrieve the exact full message/attachments later through authorized email tools; do not claim the JEV gate read content it did not receive. If summary is insufficient, route to review rather than inventing facts.
+- For an existing flow's oversize error, first distinguish `value_too_large` (a mapped value), `state_too_large`/combined state/questions/background, and HTTP ingress size rejection. Under the owner's edit authorization, read its latest revision and propose replacing HTML/full-body mappings with subject + summary, preserving route prompts/targets, policy, background binding and enabled state unless separately asked. Send `expectedFlowRevision`, read back, and never replay a paid/uncertain old delivery automatically. Existing mappings are not silently rewritten by a preset update. Even subject/summary can exceed limits; inspect diagnostics and avoid raising limits or silently truncating text. Reducing JEV mappings does not shrink the original Zoho HTTP request or guarantee an ingress-size error is fixed.
 - Keep mapped state, questions and the enabled saved background within the server's current size limits. Do not silently truncate material facts, send raw mailbox archives or map event content into the reserved `decisionContext` root.
 
 Use the following only as a structural illustration. The agent must replace the sample mappings, criteria, agent ID and prompt from verified requirements; do not submit placeholders. The example does not prove either payload field exists:
@@ -90,8 +92,7 @@ Use the following only as a structural illustration. The agent must replace the 
     "decisionContext": { "kind": "saved_user_background" },
     "stateMapping": {
       "email.subject": "body.subject",
-      "email.summary": "body.summary",
-      "email.html": "body.html"
+      "email.summary": "body.summary"
     },
     "questions": {
       "route": {
@@ -136,13 +137,33 @@ If creation is uncertain, list/read the original owned task before any retry. Do
 
 ## 6. Guide the owner through private URL and provider setup
 
-Use the returned setup instructions and current UI labels. The raw trigger URL/token is intentionally withheld from agent output and cannot be recovered from its hash; absence of a URL is not a failed creation.
+Provide **clickable navigation links plus concrete steps**, not only a menu hierarchy. Public setup-page links are safe to share; the private trigger URL/token is not. Its absence from agent output is intentional and not failed creation.
 
-1. Have the owner open **Automation → Schedules → Inbound webhook**, select the exact task, then **Edit**. For a newly created unconfigured task, explicitly obtain a URL with **Rotate URL**, then **Show URL / Copy URL** once. Rotation invalidates an older URL: coordinate existing producers instead of automatically rotating an established workflow.
-2. Keep the secret URL private. Do not ask the owner to paste it into chat, screenshots, prompts, shared documents or logs. Have them copy directly into the authorized provider's destination field.
-3. For Zoho, guide them to **Settings → Integrations → Developer Space → Outgoing Webhooks** (verify current UI labels/access), choose Mail, narrow the conditions, and configure the required payload fields. Expanding Limited Data/full content is a data-transfer decision, not an automatic fix. Other providers require their current documented payload/authentication configuration.
-4. Verify producer method, payload shape, authentication/signature and registration-probe behavior against current Vera/provider documentation. Do not assume an HMAC header is enforced or invent a configuration tool/header. Use documented idempotency support where available; do not fabricate event identities. No scripts or raw requests are required by this skill.
-5. Keep the task disabled during setup. Valid paused requests may acknowledge without processing and are **not replayed** when enabled. A provider's registration/HTTP200 does not prove a JEV decision or agent execution. Do not promise retries of a held/uncertain original delivery.
+### Links to include in the answer
+
+- **Vera:** [Open Vera Automations](https://app-vera.ngrok.app/workspace/schedules) for the current deployment's UI alias explicitly recognized by Vera's `VeraExpertPanel` renderer. Prefer `vera_get_webhook_setup` → `setup.webUrl` when provided for a different configured deployment (trusted Vera **web UI** base). The verified UI route is `/workspace/schedules`; in Vera web chat a same-origin [Open Vera Automations](/workspace/schedules) link is supported. If needed construct an absolute link from a verified current Vera web origin plus that path. Outside Vera web chat, if no trusted UI base is known, ask for only the nonsecret Vera website address once; do not invent a host or use the API/secret trigger URL as the frontend origin. The route opens the owned automation list, not a task edit modal: provide the exact task name/UUID separately. Do not invent `?taskId=` deep links that the UI does not implement.
+- **Zoho:** [Open Zoho Outgoing Webhooks](https://mail.zoho.com/zm/#settings/webhooks/outgoingwebhooks). This exact link was supplied by the user. Open it in the correct signed-in mailbox. For another data-center deployment use its verified Zoho Mail host with the appropriate settings route; do not silently switch accounts/regions.
+
+Do not respond that no usable link exists merely because the secret URL is withheld or a task-specific edit URL is unavailable. Reuse the verified list-page route and the returned nonsecret link. Never put a bearer token or private `/schedules/inbound-webhooks/...` destination in the navigation link.
+
+### A. Copy the private destination from Vera
+
+1. Open **Vera Automations** using the link above. Select **Inbound webhook** and the exact task name/UUID, then **Edit**. Keep **Enabled off** during producer registration; the default skill-created JEV binding keeps saved background on without a separate approval screen.
+2. If the private URL is still present from this creation, use **Copy URL** (or **Show URL** then copy manually). For a new, unconfigured saved task whose raw URL is no longer visible, explicitly use **Rotate URL**, then **Show URL / Copy URL**. A manually created unsaved task instead uses **Generate draft URL** and must be saved before producer registration; its inactive draft expires.
+3. Rotation invalidates an older URL immediately. Do not rotate an established workflow just to recover a link unless the owner authorized coordination with its producer. Never promise an old raw URL can be recovered from its hash.
+4. Copy the **complete** private destination directly into Zoho, preserving its query token. Do not ask the owner to paste it into chat, screenshots, prompts, shared documents or logs. The Vera page navigation link is not the value for Zoho's Webhook URL field.
+
+### B. Configure Zoho using the supplied UI
+
+1. Open **Zoho Outgoing Webhooks** from the direct link above. Create/open the relevant **Outgoing Webhook Bot** configuration; do not delete an existing bot to start over.
+2. In **Webhook URL**, paste the complete private Vera destination copied from its UI.
+3. Under **Select entity**, choose **Mail**, not **Task** or **Streams Post**.
+4. Under **Select mail conditions → Condition type**, choose the intended scope. For explicitly authorized all-mail triage, choose **No conditions. All emails.** as shown in the screenshot. Otherwise configure the agreed **Any of these conditions (OR)**, **All the conditions (AND)**, **Advanced conditions (AND / OR)** or **Tagged emails** scope. Do not broaden to all emails by default or claim incoming-only behavior beyond the verified producer configuration.
+5. Under **Limited Data List**, leave **Post only the Limited Data list such as subject, from, to, and time details of the email** **unchecked** when needed for the agreed **subject + summary** preset; HTML is **not mapped to JEV by default** even if Zoho includes it in the received payload. The user-supplied full payload contained `body.summary`; Limited Data can omit it and cause a pre-JEV mapping hold. Do not add an HTML mapping just because that field is present. Full-content transfer must be authorized. If only limited fields are permitted, agree compatible mappings before enabling rather than silently collecting full mail or pretending those content fields exist.
+6. Leave **Custom Function / Write Function** unused for this native Zoho payload. It is optional; no script is needed and a wrapper/rename could break the saved source paths.
+7. Click **Save**. The supplied Zoho screen states that **the first save initiates a POST and succeeds only when HTTP200 is received**. Keep Vera disabled so a registration/probe event does not cause a paid JEV decision or agent run. If Save is disabled, check required inputs, validation and whether an existing config has any pending change; do not automatically remove the bot or rotate a working URL to force the button active.
+8. Check Zoho's **Enabled** state only as part of the separately authorized producer configuration. Zoho Enabled, Save success or HTTP200 is not proof of Vera enablement, correct mapping, JEV classification or agent execution.
+9. Verify actual payload shape and current authentication/signature/idempotency requirements. Screenshots do not prove HMAC enforcement; do not invent a signing/header option or event identity. Valid paused Vera requests may acknowledge without processing and are **not replayed** when enabled. Do not promise retries of a held/uncertain original delivery. Other providers require their own current documented configuration.
 
 Do not claim the provider was configured unless the actual authorized operation/readback was verified. Guide the human for settings not exposed through approved tools; do not invent mailbox-management capabilities or silently fall back to shell credentials.
 
@@ -156,4 +177,4 @@ Finish with a concise receipt: task ID/name; **created/read back**; **disabled/e
 
 ## Source and maintenance
 
-Maintained source: `VerivoltDev/Skills/creating-email-jev-webhooks/SKILL.md`. Version 1.0.3, updated 2026-11-26 per the user's instruction to remove manual background approval and allow authorized agent saves to become usable immediately; keeps default background ON and creation-time reads; retains the observed Zoho field preset and reuse-of-supplied-evidence instruction; originally authored 2026-11-26 from Vera backend native creation/setup schemas and `services/vera-cowork-server/docs/jev-webhook-operation.md` at ai-platform commit `f2b0ab7`, with Vera mod schedules discovery at letta-cowork commit `26106c6`. Recheck live discovery and maintained docs before acting; these revisions establish the source contract, not current deployment. Keep distributed copies synchronized. This skill is Markdown-only: no helper scripts, packaged artifact, installation, live webhook or activation is implied by creating this file.
+Maintained source: `VerivoltDev/Skills/creating-email-jev-webhooks/SKILL.md`. Version 1.0.5, updated 2026-11-26 per the user's oversize-error report to map only subject + summary by default, leave HTML opt-in, and distinguish JEV/ingress size failures; retains screenshot-grounded clickable Vera/Zoho setup links and exact configuration steps; retains removal of manual background approval and immediately usable authorized agent saves; keeps default background ON and creation-time reads; retains the observed Zoho field preset and reuse-of-supplied-evidence instruction; originally authored 2026-11-26 from Vera backend native creation/setup schemas and `services/vera-cowork-server/docs/jev-webhook-operation.md` at ai-platform commit `f2b0ab7`, with Vera mod schedules discovery at letta-cowork commit `26106c6`. Recheck live discovery and maintained docs before acting; these revisions establish the source contract, not current deployment. Keep distributed copies synchronized. This skill is Markdown-only: no helper scripts, packaged artifact, installation, live webhook or activation is implied by creating this file.
