@@ -14,12 +14,12 @@ Electron desktop app wrapping the Letta Code agent runtime with Verivolt/Cowork 
 - Electron 45.3.0 (Node24.22.2, ABI150; macOS13+); SDK0.8.90/Code0.34.63 exact pins (local paired upgrade2026-11-16; reload/deployment not implied; MemFS-enabled backend rollout gate in docs/desktop-agent-sdk-runtime.md)
 - React 19.3
 - Vite 8
-- TypeScript 6
+- TypeScript 6.0.3 (compiler and typescript-lsp alias stay paired)
 - Tailwind 4
 - Zustand 5
 - Bun package manager
 
-Dependency maintenance and held major migrations: `docs/dependency-maintenance.md` (2026-11-11).
+Dependency maintenance and held major migrations: `docs/dependency-maintenance.md` (current review2026-11-26). Registry latest Code0.34.71 is a candidate, not adopted; SDK0.8.90/Code0.34.63 remain exact pins. Check fresh metadata rather than accepting an older cached latest tag. TypeScript7/ESLint10 remain peer-blocked; security audit findings and candidate updates are stored in that guide, not treated as resolved.
 
 ## Local commands
 
@@ -49,7 +49,7 @@ Client tools live under:
 - `src/electron/services/client-tools/index.ts`
 - `src/electron/services/client-tools/runners/letta_tools/`
 - `src/electron/services/client-tools/runners/productivity.ts`
-- `src/electron/services/client-tools/runners/veraMcp.ts` — configured MCP connectors, including Odoo; legacy mounted Odoo transports are removed.
+- `src/electron/services/client-tools/runners/veraMcp.ts` — native Vera/remote, governed graph and configured MCP discovery under the current signed-in user; Odoo remains configured-MCP only. See `docs/vera-native-tool-access.md`. Source/reload/native catalog access/resource execution are distinct states.
 - `src/electron/services/client-tools/runners/coding.ts`
 
 Recent coding-tool commit:
