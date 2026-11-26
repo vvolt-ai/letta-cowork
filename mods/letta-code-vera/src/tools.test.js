@@ -20,6 +20,7 @@ function registeredTools(client) {
 }
 
 describe("Vera tools", () => {
+  test("discovers Direct/JEV webhook creation and setup guidance in schedules area",async()=>{const names=['vera_create_webhook','vera_create_jev_webhook','vera_get_webhook_setup'];const tools=registeredTools({async listMcpTools(){return names.map(name=>({name,description:'Webhook automation',parameters:{type:'object'}}));}});const result=JSON.parse(await tools.get('vera_mcp_list_tools').run({args:{area:'schedules',query:'webhook',includeSchemas:true},signal:undefined}));expect(result.tools.map(tool=>tool.name)).toEqual(names);});
   test("discovers authorized Discord thread creation in the channels area", async () => {
     const entries=[{name:"vera_create_discord_thread",description:"Create/reuse a question thread",parameters:{type:"object",required:["channelId","parentChannelId","messageId","confirm"]}}];
     const tools=registeredTools({async listMcpTools(){return entries;}});
